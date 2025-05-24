@@ -33,8 +33,8 @@ class Wavelength(float):
     def to_freq(self) -> Frequency:
         return Frequency(C_MS / self, "Hz")
 
-    def to_omega(self) -> Omega:
-        return Omega(2 * PI * C_MS / self, "rad/s")
+    def to_omega(self) -> AngularFrequency:
+        return AngularFrequency(2 * PI * C_MS / self, "rad/s")
 
 
 class Frequency(float):
@@ -74,11 +74,11 @@ class Frequency(float):
     def to_wl(self) -> Wavelength:
         return Wavelength(C_MS / self, "m")
 
-    def to_omega(self) -> Omega:
-        return Omega(2 * PI * self.as_Hz, "rad/s")
+    def to_omega(self) -> AngularFrequency:
+        return AngularFrequency(2 * PI * self.as_Hz, "rad/s")
 
 
-class Omega(float):
+class AngularFrequency(float):
     def __new__(cls, value: float, unit: Literal["rad/s", "rad/ps"] = "rad/s") -> Self:
         if unit == "rad/ps":
             value *= 1e-12  # Convert from rad/ps to rad/s
@@ -134,8 +134,8 @@ class WavelengthArray(np.ndarray):
     def to_freq(self) -> FrequencyArray:
         return FrequencyArray(C_MS / self, "Hz")
 
-    def to_omega(self) -> OmegaArray:
-        return OmegaArray(2 * PI * C_MS / self, "rad/s")
+    def to_omega(self) -> AngularFrequencyArray:
+        return AngularFrequencyArray(2 * PI * C_MS / self, "rad/s")
 
 
 class FrequencyArray(np.ndarray):
@@ -177,11 +177,11 @@ class FrequencyArray(np.ndarray):
     def to_wl(self) -> WavelengthArray:
         return WavelengthArray(C_MS / self, "m")
 
-    def to_omega(self) -> OmegaArray:
-        return OmegaArray(2 * PI * self.as_Hz, "rad/s")
+    def to_omega(self) -> AngularFrequencyArray:
+        return AngularFrequencyArray(2 * PI * self.as_Hz, "rad/s")
 
 
-class OmegaArray(np.ndarray):
+class AngularFrequencyArray(np.ndarray):
     def __new__(
         cls, value: NDArray, unit: Literal["rad/s", "rad/ps"] = "rad/s"
     ) -> Self:

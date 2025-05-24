@@ -37,7 +37,7 @@ class Wavelength(float):
         """Convert wavelength to frequency."""
         ...
 
-    def to_omega(self) -> Omega:
+    def to_omega(self) -> AngularFrequency:
         """Convert wavelength to angular frequency."""
         ...
 
@@ -83,14 +83,16 @@ class Frequency(float):
         """Convert frequency to wavelength."""
         ...
 
-    def to_omega(self) -> Omega:
+    def to_omega(self) -> AngularFrequency:
         """Convert frequency to angular frequency."""
         ...
 
-class Omega(float):
+class AngularFrequency(float):
     """Represents a scalar angular frequency value with unit conversion methods."""
 
-    def __new__(cls, value: float, unit: Literal["rad/s", "rad/ps"] = "rad/s") -> Omega:
+    def __new__(
+        cls, value: float, unit: Literal["rad/s", "rad/ps"] = "rad/s"
+    ) -> AngularFrequency:
         """Create a new angular frequency instance.
 
         Args:
@@ -98,7 +100,7 @@ class Omega(float):
             unit: The unit of angular frequency ('rad/s' or 'rad/ps').
 
         Returns:
-            A normalized Omega object in rad/s.
+            A normalized AngularFrequency object in rad/s.
         """
         ...
 
@@ -153,7 +155,7 @@ class WavelengthArray(np.ndarray):
         """Convert wavelengths to frequency array."""
         ...
 
-    def to_omega(self) -> OmegaArray:
+    def to_omega(self) -> AngularFrequencyArray:
         """Convert wavelengths to angular frequency array."""
         ...
 
@@ -199,24 +201,24 @@ class FrequencyArray(np.ndarray):
         """Convert frequencies to wavelength array."""
         ...
 
-    def to_omega(self) -> OmegaArray:
+    def to_omega(self) -> AngularFrequencyArray:
         """Convert frequencies to angular frequency array."""
         ...
 
-class OmegaArray(np.ndarray):
+class AngularFrequencyArray(np.ndarray):
     """Numpy array wrapper for multiple angular frequency values with unit conversions."""
 
     def __new__(
         cls, value: NDArray, unit: Literal["rad/s", "rad/ps"] = "rad/s"
-    ) -> OmegaArray:
-        """Create a new OmegaArray instance.
+    ) -> AngularFrequencyArray:
+        """Create a new AngularFrequencyArray instance.
 
         Args:
             value: An array of angular frequency values.
             unit: The unit of each value ('rad/s' or 'rad/ps').
 
         Returns:
-            An OmegaArray object with values in rad/s.
+            An AngularFrequencyArray object with values in rad/s.
         """
         ...
 
