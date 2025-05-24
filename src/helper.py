@@ -16,12 +16,11 @@ class Wavelength(float):
             value *= 1e-9
         elif unit == "um":
             value *= 1e-6
+        elif unit == "m":
+            pass  # Already in meters, no conversion needed
         else:
             raise ValueError(f"Unsupported unit: {unit} use 'nm', 'um', or 'm'")
         return super().__new__(cls, value)
-
-    def __repr__(self) -> str:
-        return f"Wavelength -> {self.as_m} m"
 
     @property
     def as_m(self) -> float:
@@ -32,7 +31,7 @@ class Wavelength(float):
         return self * 1e9
 
     def to_freq(self) -> Frequency:
-        return Frequency(C_MS / self)
+        return Frequency(C_MS / self, "Hz")
 
     def to_omega(self) -> Omega:
         return Omega(2 * PI * C_MS / self, "rad/s")
@@ -48,14 +47,13 @@ class Frequency(float):
             value *= 1e9
         elif unit == "MHz":
             value *= 1e6
+        elif unit == "Hz":
+            pass  # Already in Hz, no conversion needed
         else:
             raise ValueError(
                 f"Unsupported unit: {unit} use 'THz', 'GHz', 'MHz' or 'Hz'"
             )
         return super().__new__(cls, value)
-
-    def __repr__(self) -> str:
-        return f"Frequency -> {self.as_Hz} Hz"
 
     @property
     def as_Hz(self):
@@ -83,21 +81,26 @@ class Frequency(float):
 class Omega(float):
     def __new__(cls, value: float, unit: Literal["rad/s", "rad/ps"] = "rad/s") -> Self:
         if unit == "rad/ps":
-            value *= 1e-12
+            value *= 1e-12  # Convert from rad/ps to rad/s
+        elif unit == "rad/s":
+            pass  # Already in rad/s, no conversion needed
         else:
             raise ValueError(f"Unsupported unit: {unit} use 'rad/s' or 'rad/ps'")
         return super().__new__(cls, value)
 
     def __repr__(self) -> str:
-        return f"Angular Frequency -> {self.as_rad_s} rad/s"
+        # Use float() to avoid recursion when converting self to string
+        return f"Angular Frequency -> {float(self)} rad/s"
 
     @property
     def as_rad_s(self) -> float:
-        return self
+        # Use float() to avoid recursion when accessing value
+        return float(self)
 
     @property
     def as_rad_ps(self) -> float:
-        return self * 1e-12
+        # Use float() to avoid recursion in multiplication
+        return float(self) * 1e12  # Convert from rad/s to rad/ps
 
     def to_wl(self) -> Wavelength:
         return Wavelength((2 * PI) * C_MS / self, "m")
@@ -108,16 +111,17 @@ class Omega(float):
 
 class WavelengthArray(np.ndarray):
     def __new__(cls, value: NDArray, unit: Literal["nm", "um", "m"] = "nm") -> Self:
+        # Convert input array to float type
+        value = np.array(value, dtype=float)
         if unit == "nm":
             value *= 1e-9
         elif unit == "um":
             value *= 1e-6
+        elif unit == "m":
+            pass  # Already in meters, no conversion needed
         else:
             raise ValueError(f"Unsupported unit: {unit} use 'nm', 'um', or 'm'")
-        return super().__new__(cls, value)
-
-    def __repr__(self) -> str:
-        return f"Wavelength -> {self.as_m} m"
+        return super().__new__(cls, value.shape, dtype=float, buffer=value)
 
     @property
     def as_m(self) -> NDArray:
@@ -128,7 +132,7 @@ class WavelengthArray(np.ndarray):
         return self * 1e9
 
     def to_freq(self) -> FrequencyArray:
-        return FrequencyArray(C_MS / self)
+        return FrequencyArray(C_MS / self, "Hz")
 
     def to_omega(self) -> OmegaArray:
         return OmegaArray(2 * PI * C_MS / self, "rad/s")
@@ -138,20 +142,21 @@ class FrequencyArray(np.ndarray):
     def __new__(
         cls, value: NDArray, unit: Literal["THz", "GHz", "MHz", "Hz"] = "Hz"
     ) -> Self:
+        # Convert input array to float type
+        value = np.array(value, dtype=float)
         if unit == "THz":
             value *= 1e12
         elif unit == "GHz":
             value *= 1e9
         elif unit == "MHz":
             value *= 1e6
+        elif unit == "Hz":
+            pass  # Already in Hz, no conversion needed
         else:
             raise ValueError(
                 f"Unsupported unit: {unit} use 'THz', 'GHz', 'MHz' or 'Hz'"
             )
-        return super().__new__(cls, value)
-
-    def __repr__(self) -> str:
-        return f"Frequency -> {self.as_Hz} Hz"
+        return super().__new__(cls, value.shape, dtype=float, buffer=value)
 
     @property
     def as_Hz(self) -> NDArray:
@@ -180,14 +185,15 @@ class OmegaArray(np.ndarray):
     def __new__(
         cls, value: NDArray, unit: Literal["rad/s", "rad/ps"] = "rad/s"
     ) -> Self:
+        # Convert input array to float type
+        value = np.array(value, dtype=float)
         if unit == "rad/ps":
-            value *= 1e-12
+            value *= 1e-12  # Convert from rad/ps to rad/s
+        elif unit == "rad/s":
+            pass  # Already in rad/s, no conversion needed
         else:
             raise ValueError(f"Unsupported unit: {unit} use 'rad/s' or 'rad/ps'")
-        return super().__new__(cls, value)
-
-    def __repr__(self) -> str:
-        return f"Angular Frequency -> {self.as_rad_s} rad/s"
+        return super().__new__(cls, value.shape, dtype=float, buffer=value)
 
     @property
     def as_rad_s(self) -> NDArray:
