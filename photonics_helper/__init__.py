@@ -1,3 +1,22 @@
-from .helper import Wavelength, Frequency, AngularFrequency  # and any others
+from .helper import (
+    Wavelength,
+    Frequency,
+    AngularFrequency,
+    WavelengthArray,
+    FrequencyArray,
+    AngularFrequencyArray,
+    PI,
+    C_MS,
+)
 
-__all__ = ["Wavelength", "Frequency", "AngularFrequency"]
+
+__all__ = [
+    "Wavelength",
+    "Frequency",
+    "AngularFrequency",
+    "WavelengthArray",
+    "FrequencyArray",
+    "AngularFrequencyArray",
+    "PI",
+    "C_MS",
+]
