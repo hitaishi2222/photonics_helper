@@ -10,7 +10,7 @@ C_MS: float
 class Wavelength(float):
     """Represents a scalar wavelength value with unit conversion methods."""
 
-    def __new__(cls, value: float, unit: Literal["nm", "um", "m"] = "nm") -> Wavelength:
+    def __new__(cls, value: float, unit: Literal["nm", "um", "m"]) -> Wavelength:
         """Create a new wavelength instance.
 
         Args:
@@ -45,7 +45,7 @@ class Frequency(float):
     """Represents a scalar frequency value with unit conversion methods."""
 
     def __new__(
-        cls, value: float, unit: Literal["THz", "GHz", "MHz", "Hz"] = "Hz"
+        cls, value: float, unit: Literal["THz", "GHz", "MHz", "Hz"]
     ) -> Frequency:
         """Create a new frequency instance.
 
@@ -91,7 +91,7 @@ class AngularFrequency(float):
     """Represents a scalar angular frequency value with unit conversion methods."""
 
     def __new__(
-        cls, value: float, unit: Literal["rad/s", "rad/ps"] = "rad/s"
+        cls, value: float, unit: Literal["rad/s", "rad/ps"]
     ) -> AngularFrequency:
         """Create a new angular frequency instance.
 
@@ -126,9 +126,7 @@ class AngularFrequency(float):
 class WavelengthArray(np.ndarray):
     """Numpy array wrapper for multiple wavelength values with unit conversions."""
 
-    def __new__(
-        cls, value: NDArray, unit: Literal["nm", "um", "m"] = "nm"
-    ) -> WavelengthArray:
+    def __new__(cls, value: NDArray, unit: Literal["nm", "um", "m"]) -> WavelengthArray:
         """Create a new WavelengthArray instance.
 
         Args:
@@ -163,7 +161,7 @@ class FrequencyArray(np.ndarray):
     """Numpy array wrapper for multiple frequency values with unit conversions."""
 
     def __new__(
-        cls, value: NDArray, unit: Literal["THz", "GHz", "MHz", "Hz"] = "Hz"
+        cls, value: NDArray, unit: Literal["THz", "GHz", "MHz", "Hz"]
     ) -> FrequencyArray:
         """Create a new FrequencyArray instance.
 
@@ -209,7 +207,7 @@ class AngularFrequencyArray(np.ndarray):
     """Numpy array wrapper for multiple angular frequency values with unit conversions."""
 
     def __new__(
-        cls, value: NDArray, unit: Literal["rad/s", "rad/ps"] = "rad/s"
+        cls, value: NDArray, unit: Literal["rad/s", "rad/ps"]
     ) -> AngularFrequencyArray:
         """Create a new AngularFrequencyArray instance.
 

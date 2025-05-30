@@ -8,3 +8,6 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Notes for devs
+notes.md

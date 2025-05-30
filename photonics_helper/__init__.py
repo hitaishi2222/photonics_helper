@@ -1,4 +1,4 @@
-from .helper import (
+from .base import (
     Wavelength,
     Frequency,
     AngularFrequency,
@@ -8,6 +8,8 @@ from .helper import (
     PI,
     C_MS,
 )
+
+from .materials import RefractiveIndex
 
 
 __all__ = [
@@ -19,4 +21,5 @@ __all__ = [
     "AngularFrequencyArray",
     "PI",
     "C_MS",
+    "RefractiveIndex",
 ]

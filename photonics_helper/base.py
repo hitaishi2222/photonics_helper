@@ -11,7 +11,7 @@ C_MS: float = sp.constants.c
 
 
 class Wavelength(float):
-    def __new__(cls, value: float, unit: Literal["nm", "um", "m"] = "nm") -> Self:
+    def __new__(cls, value: float, unit: Literal["nm", "um", "m"]) -> Self:
         if unit == "nm":
             value *= 1e-9
         elif unit == "um":
@@ -110,7 +110,7 @@ class AngularFrequency(float):
 
 
 class WavelengthArray(np.ndarray):
-    def __new__(cls, value: NDArray, unit: Literal["nm", "um", "m"] = "nm") -> Self:
+    def __new__(cls, value: NDArray, unit: Literal["nm", "um", "m"]) -> Self:
         # Convert input array to float type
         value = np.array(value, dtype=float)
         if unit == "nm":

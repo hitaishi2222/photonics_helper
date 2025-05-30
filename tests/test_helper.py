@@ -1,12 +1,12 @@
 import pytest
 import numpy as np
-from helper import (
+from photonics_helper import (
     Wavelength,
     Frequency,
-    Omega,
+    AngularFrequency,
     WavelengthArray,
     FrequencyArray,
-    OmegaArray,
+    AngularFrequencyArray,
     C_MS,
     PI,
 )
@@ -30,11 +30,11 @@ def test_wavelength_to_freq():
     assert pytest.approx(freq.as_Hz) == C_MS / 1.55e-6
 
 
-def test_wavelength_to_omega():
+def test_wavelength_to_angular_frequency():
     wl = Wavelength(1, "um")
     omega = wl.to_omega()
     expected = 2 * PI * C_MS / 1e-6
-    assert isinstance(omega, Omega)
+    assert isinstance(omega, AngularFrequency)
     assert pytest.approx(omega.as_rad_s) == expected
 
 
@@ -58,24 +58,24 @@ def test_frequency_to_wl():
 
 
 def test_omega_scalar():
-    omega = Omega(628, "rad/ps")
+    omega = AngularFrequency(628, "rad/ps")
     assert pytest.approx(omega.as_rad_s) == 628e-12
 
 
 def test_omega_invalid_unit():
     with pytest.raises(ValueError):
-        Omega(1, "deg/s")
+        AngularFrequency(1, "deg/s")
 
 
 def test_omega_to_freq():
-    omega = Omega(2 * PI * 1e12, "rad/s")
+    omega = AngularFrequency(2 * PI * 1e12, "rad/s")
     freq = omega.to_freq()
     assert isinstance(freq, Frequency)
     assert pytest.approx(freq.as_Hz) == 1e12
 
 
 def test_omega_to_wl():
-    omega = Omega(2 * PI * C_MS / 1.55e-6, "rad/s")
+    omega = AngularFrequency(2 * PI * C_MS / 1.55e-6, "rad/s")
     wl = omega.to_wl()
     assert isinstance(wl, Wavelength)
     assert pytest.approx(wl.as_m) == 1.55e-6
@@ -85,19 +85,19 @@ def test_array_wavelength():
     data = np.array([1550, 1310])
     wl_arr = WavelengthArray(data, "nm")
     assert isinstance(wl_arr.to_freq(), FrequencyArray)
-    assert isinstance(wl_arr.to_omega(), OmegaArray)
+    assert isinstance(wl_arr.to_omega(), AngularFrequencyArray)
 
 
 def test_array_frequency():
     data = np.array([100, 200])
     f_arr = FrequencyArray(data, "GHz")
     assert isinstance(f_arr.to_wl(), WavelengthArray)
-    assert isinstance(f_arr.to_omega(), OmegaArray)
+    assert isinstance(f_arr.to_omega(), AngularFrequencyArray)
 
 
 def test_array_omega():
     data = np.array([628e12, 314e12])
-    omega_arr = OmegaArray(data, "rad/s")
+    omega_arr = AngularFrequencyArray(data, "rad/s")
     assert isinstance(omega_arr.to_freq(), FrequencyArray)
     assert isinstance(omega_arr.to_wl(), WavelengthArray)
 

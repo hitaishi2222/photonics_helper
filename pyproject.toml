@@ -18,6 +18,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Physics",
 ]
 dependencies = [
+    "matplotlib>=3.10.3",
     "numpy>=2.2.6",
     "scipy>=1.15.3",
 ]
