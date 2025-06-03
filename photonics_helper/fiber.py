@@ -20,6 +20,9 @@ class Dispersion:
         self._wavelengths = wavelengths
         self._unit = "s/m^2"
 
+    def __repr__(self):
+        return f"Dispersion: from wl: {self._wavelengths.min()} to {self._wavelengths.max()}"
+
     @property
     def as_ps_nm_km(self) -> NDArray:
         return self._values * 1e-6
@@ -32,12 +35,14 @@ class Dispersion:
         return self._wavelengths
 
     @classmethod
-    def from_neff(cls, neff: NDArray, wavelengths: WavelengthArray):
+    def from_neff(cls, neff: NDArray, wavelengths: WavelengthArray) -> Self:
         # -lambda / C_MS * (d^2 neff/ d lambda^2)
-        spline = make_splrep(wavelengths, neff)
+        wl = wavelengths.to_equally_spaced()
+        interp = make_splrep(wavelengths.as_m, neff)(wl)
+        spline = make_splrep(interp, wl)
         diff_2 = spline.derivative(2)
-        dispersion = -wavelengths.as_m / C_MS * diff_2(wavelengths)
-        return cls(values=dispersion, wavelengths=wavelengths, unit="s/m^2")
+        dispersion: NDArray = -wavelengths.as_m / C_MS * diff_2(wavelengths.as_m)
+        return cls(wavelengths=wavelengths, values=dispersion, unit="s/m^2")
 
 
 class Betas:

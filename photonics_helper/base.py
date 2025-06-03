@@ -24,7 +24,7 @@ class Wavelength(float):
 
     @property
     def as_m(self) -> float:
-        return self
+        return float(self)
 
     @property
     def as_um(self) -> float:
@@ -60,19 +60,19 @@ class Frequency(float):
         return super().__new__(cls, value)
 
     @property
-    def as_Hz(self):
-        return self
+    def as_Hz(self) -> float:
+        return float(self)
 
     @property
-    def as_THz(self):
+    def as_THz(self) -> float:
         return self * 1e-12
 
     @property
-    def as_GHz(self):
+    def as_GHz(self) -> float:
         return self * 1e-9
 
     @property
-    def as_MHz(self):
+    def as_MHz(self) -> float:
         return self * 1e-6
 
     def to_wl(self) -> Wavelength:
@@ -129,21 +129,26 @@ class WavelengthArray(np.ndarray):
 
     @property
     def as_m(self) -> NDArray:
-        return self
+        return np.array(self)
 
     @property
     def as_um(self) -> NDArray:
-        return self * 1e6
+        return np.array(self) * 1e6
 
     @property
     def as_nm(self) -> NDArray:
-        return self * 1e9
+        return np.array(self) * 1e9
 
     def to_freq(self) -> FrequencyArray:
-        return FrequencyArray(C_MS / self, "Hz")
+        return FrequencyArray(C_MS / self.as_m, "Hz")
 
     def to_omega(self) -> AngularFrequencyArray:
-        return AngularFrequencyArray(2 * PI * C_MS / self, "rad/s")
+        return AngularFrequencyArray(2 * PI * C_MS / self.as_m, "rad/s")
+
+    def to_equally_spaced(self, points=51) -> NDArray:
+        min = self.as_m.min()
+        max = self.as_m.max()
+        return np.linspace(min, max, points)
 
 
 class FrequencyArray(np.ndarray):
@@ -168,25 +173,30 @@ class FrequencyArray(np.ndarray):
 
     @property
     def as_Hz(self) -> NDArray:
-        return self
+        return np.array(self)
 
     @property
     def as_THz(self) -> NDArray:
-        return self * 1e-12
+        return np.array(self) * 1e-12
 
     @property
     def as_GHz(self) -> NDArray:
-        return self * 1e-9
+        return np.array(self) * 1e-9
 
     @property
     def as_MHz(self) -> NDArray:
-        return self * 1e-6
+        return np.array(self) * 1e-6
 
     def to_wl(self) -> WavelengthArray:
         return WavelengthArray(C_MS / self, "m")
 
     def to_omega(self) -> AngularFrequencyArray:
         return AngularFrequencyArray(2 * PI * self.as_Hz, "rad/s")
+
+    def to_equally_spaced(self, points=51) -> NDArray:
+        min = self.as_Hz.min()
+        max = self.as_Hz.max()
+        return np.linspace(min, max, points)
 
 
 class AngularFrequencyArray(np.ndarray):
@@ -205,14 +215,19 @@ class AngularFrequencyArray(np.ndarray):
 
     @property
     def as_rad_s(self) -> NDArray:
-        return self
+        return np.array(self)
 
     @property
     def as_rad_ps(self) -> NDArray:
-        return self * 1e-12
+        return np.array(self) * 1e-12
 
     def to_wl(self) -> WavelengthArray:
         return WavelengthArray((2 * PI) * C_MS / self, "m")
 
     def to_freq(self) -> FrequencyArray:
         return FrequencyArray(self / (2 * PI), "Hz")
+
+    def to_equally_spaced(self, points=51) -> NDArray:
+        min = self.as_rad_s.min()
+        max = self.as_rad_s.max()
+        return np.linspace(min, max, points)
