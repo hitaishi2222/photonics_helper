@@ -1,7 +1,7 @@
 import numpy as np
 
-from photonics_helper.helper import WavelengthArray
-from photonics_helper.materials import RefractiveIndex
+from photonics_helper import WavelengthArray
+from photonics_helper import RefractiveIndex
 
 
 def main():
