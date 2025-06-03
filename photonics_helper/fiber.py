@@ -35,8 +35,9 @@ class Dispersion:
     def from_neff(cls, neff: NDArray, wavelengths: WavelengthArray):
         # -lambda / C_MS * (d^2 neff/ d lambda^2)
         spline = make_splrep(wavelengths, neff)
-        # diff_2 = spline.derivative(2)
-        return spline(wavelengths)
+        diff_2 = spline.derivative(2)
+        dispersion = -wavelengths.as_m / C_MS * diff_2(wavelengths)
+        return cls(values=dispersion, wavelengths=wavelengths, unit="s/m^2")
 
 
 class Betas:

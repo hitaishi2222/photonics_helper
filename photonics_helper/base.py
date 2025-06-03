@@ -27,6 +27,10 @@ class Wavelength(float):
         return self
 
     @property
+    def as_um(self) -> float:
+        return self * 1e6
+
+    @property
     def as_nm(self) -> float:
         return self * 1e9
 
@@ -126,6 +130,10 @@ class WavelengthArray(np.ndarray):
     @property
     def as_m(self) -> NDArray:
         return self
+
+    @property
+    def as_um(self) -> NDArray:
+        return self * 1e6
 
     @property
     def as_nm(self) -> NDArray:
