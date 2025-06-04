@@ -125,7 +125,12 @@ class WavelengthArray(np.ndarray):
             pass  # Already in meters, no conversion needed
         else:
             raise ValueError(f"Unsupported unit: {unit} use 'nm', 'um', or 'm'")
-        return super().__new__(cls, value.shape, dtype=float, buffer=value)
+        obj = np.asarray(value).view(cls)
+        return obj
+
+    def __array_finalize__(self, obj):
+        if obj is None:
+            return
 
     @property
     def as_m(self) -> NDArray:
@@ -169,7 +174,12 @@ class FrequencyArray(np.ndarray):
             raise ValueError(
                 f"Unsupported unit: {unit} use 'THz', 'GHz', 'MHz' or 'Hz'"
             )
-        return super().__new__(cls, value.shape, dtype=float, buffer=value)
+        obj = np.asarray(value).view(cls)
+        return obj
+
+    def __array_finalize__(self, obj):
+        if obj is None:
+            return
 
     @property
     def as_Hz(self) -> NDArray:
@@ -211,7 +221,12 @@ class AngularFrequencyArray(np.ndarray):
             pass  # Already in rad/s, no conversion needed
         else:
             raise ValueError(f"Unsupported unit: {unit} use 'rad/s' or 'rad/ps'")
-        return super().__new__(cls, value.shape, dtype=float, buffer=value)
+        obj = np.asarray(value).view(cls)
+        return obj
+
+    def __array_finalize__(self, obj):
+        if obj is None:
+            return
 
     @property
     def as_rad_s(self) -> NDArray:

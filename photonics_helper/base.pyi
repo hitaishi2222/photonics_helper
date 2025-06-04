@@ -157,6 +157,10 @@ class WavelengthArray(np.ndarray):
         """Convert wavelengths to angular frequency array."""
         ...
 
+    def to_equally_spaced(self, points=51) -> NDArray:
+        """Convert to equally spaced array"""
+        ...
+
 class FrequencyArray(np.ndarray):
     """Numpy array wrapper for multiple frequency values with unit conversions."""
 
@@ -203,6 +207,10 @@ class FrequencyArray(np.ndarray):
         """Convert frequencies to angular frequency array."""
         ...
 
+    def to_equally_spaced(self, points=51) -> NDArray:
+        """Convert to equally spaced array"""
+        ...
+
 class AngularFrequencyArray(np.ndarray):
     """Numpy array wrapper for multiple angular frequency values with unit conversions."""
 
@@ -237,4 +245,8 @@ class AngularFrequencyArray(np.ndarray):
 
     def to_freq(self) -> FrequencyArray:
         """Convert angular frequencies to frequency array."""
+        ...
+
+    def to_equally_spaced(self, points=51) -> NDArray:
+        """Convert to equally spaced array"""
         ...
