@@ -137,4 +137,3 @@ class RefractiveIndex:
             New RefractiveIndex instance
         """
         ...
-

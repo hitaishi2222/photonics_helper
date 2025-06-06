@@ -145,6 +145,11 @@ class WavelengthArray(np.ndarray):
         ...
 
     @property
+    def as_um(self) -> NDArray:
+        """Return the wavelengths in meters."""
+        ...
+
+    @property
     def as_nm(self) -> NDArray:
         """Return the wavelengths in nanometers."""
         ...

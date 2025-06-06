@@ -77,16 +77,16 @@ class RefractiveIndex:
         A0: int | float,
         A: List[float],
         B: List[float],
-        wl_from_to_in_m: Tuple[float, float],
+        wl_from_to_in_um: Tuple[float, float],
         n_points=200,
     ) -> Self:
         if len(A) != len(B):
             raise ValueError("Length of A and B should be same")
         else:
             n = []
-            wl = np.linspace(wl_from_to_in_m[0], wl_from_to_in_m[1], n_points)
-            wls = WavelengthArray(wl, "m")
-            for wl in wls:
+            wl = np.linspace(wl_from_to_in_um[0], wl_from_to_in_um[1], n_points)
+            wls = WavelengthArray(wl, "um")
+            for wl in wls.as_um:
                 sum = 0.0
                 for i in range(len(A)):
                     sum += A[i] * wl**2 / (wl**2 - B[i] ** 2)
@@ -101,34 +101,16 @@ class RefractiveIndex:
         A0: int | float,
         A: List[float],
         B: List[float],
-        wl_from_to_in_m: Tuple[float, float],
+        wl_from_to_in_um: Tuple[float, float],
         n_points=200,
     ) -> Self:
-        """_summary_
-
-        Args:
-            wl (Tuple[float, float]): wavelength(min, max) in μm
-            A0 (float): Mostly it will be 1, sometimes it may change
-            A (ArrayLike): list of Ai's
-            B (ArrayLike): list of Bi's
-
-        Solving eqn:
-            n = sqrt(1 + sum(Ai / (wl^2 - Bi) ))
-
-        Raises:
-            ValueError: Length of A and B should be same for summation
-
-        Returns:
-            Material: creates a material with sellmeier equation.
-        """
-
         if len(A) != len(B):
             raise ValueError("Length of A and B should be same")
         else:
             n = []
-            wl = np.linspace(wl_from_to_in_m[0], wl_from_to_in_m[1], n_points)
+            wl = np.linspace(wl_from_to_in_um[0], wl_from_to_in_um[1], n_points)
             wls = WavelengthArray(wl, "m")
-            for wl in wls:
+            for wl in wls.as_um:
                 sum = 0.0
                 for i in range(len(A)):
                     sum += A[i] / (wl**2 - B[i] ** 2)

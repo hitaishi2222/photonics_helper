@@ -63,7 +63,9 @@ class Dispersion:
         return cls(wavelengths=wavelengths, values=dispersion, unit="s/m^2")
 
     @classmethod
-    def from_beta(cls, beta: NDArray, wavelengths: WavelengthArray) -> Self:
+    def from_propagation_constanant(
+        cls, beta: NDArray, wavelengths: WavelengthArray
+    ) -> Self:
         # -(2*PI*C_MS) / lambda^2 * (d^2 beta/ d omega^2)
 
         if len(beta) != len(wavelengths):
@@ -92,6 +94,41 @@ class Dispersion:
             )
         return cls(wavelengths=wavelengths, values=dispersion, unit="s/m^2")
 
+    def fn_ps_nm_km(self, wavelength_nm: float) -> float:
+        min = self._wavelengths.as_nm.min()
+        max = self._wavelengths.as_nm.max()
+        if wavelength_nm > max or wavelength_nm < min:
+            raise ValueError(f"values of disersion available between {min} and {max}")
+        spline = make_splrep(self._wavelengths.as_nm, self.as_ps_nm_km)
+        return float(spline(wavelength_nm))
+
+    def get_beta2(self, wavelength_nm: float):
+        min = self._wavelengths.as_nm.min()
+        max = self._wavelengths.as_nm.max()
+        if wavelength_nm > max or wavelength_nm < min:
+            raise ValueError(
+                f"values of disersion available between {min} and {max} nm."
+            )
+        beta2 = -self._wavelengths.as_m**2 / (2 * PI * C_MS) * self.as_s_m_m
+        spline = make_splrep(self._wavelengths.as_nm, beta2)
+        return float(spline(wavelength_nm))
+
+    def get_betas(self, wavelength_nm: float, n: int = 6):
+        min = self._wavelengths.as_nm.min()
+        max = self._wavelengths.as_nm.max()
+        if wavelength_nm > max or wavelength_nm < min:
+            raise ValueError(
+                f"values of disersion available between {min} and {max} nm."
+            )
+
+        beta2 = -self._wavelengths.as_m**2 / (2 * PI * C_MS) * self.as_s_m_m
+        spline = make_splrep(self._wavelengths.to_omega().as_rad_s[::-1], beta2[::-1])
+        betas = np.array([])
+        for n in range(1, n):
+            df_fn = spline.derivative(n)
+            np.append(betas, df_fn(wavelength_nm))
+        return betas
+
 
 class PropagationConstant:
     def __init__(
@@ -119,7 +156,7 @@ class PropagationConstant:
         return beta2
 
     @classmethod
-    def from_neff_wavelength(cls, neff: NDArray, omega: AngularFrequencyArray) -> Self:
+    def from_neff_omega(cls, neff: NDArray, omega: AngularFrequencyArray) -> Self:
         if len(neff) != len(omega):
             raise ValueError(
                 "both neff and angular frequency array must have same length"
