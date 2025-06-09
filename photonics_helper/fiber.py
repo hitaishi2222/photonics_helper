@@ -1,11 +1,15 @@
-import warnings
+from photonics_helper.base import C_MS, PI, AngularFrequencyArray, WavelengthArray
+from photonics_helper.looks import c_info
+
 from numpy.typing import NDArray
 from typing import Literal, Self
 
+import warnings
 import numpy as np
 from scipy.interpolate import make_splrep
+from rich.traceback import install
 
-from photonics_helper.base import C_MS, PI, AngularFrequencyArray, WavelengthArray
+install()
 
 
 class Dispersion:
@@ -37,9 +41,44 @@ class Dispersion:
     def get_wl(self) -> WavelengthArray:
         return self._wavelengths
 
+    def check_wavelength_limit(self, wavelength: float, unit: Literal["nm", "m", "um"]):
+        min = 0
+        max = 0
+
+        if unit == "m":
+            min = self._wavelengths.as_m.min()
+            max = self._wavelengths.as_m.max()
+        elif unit == "um":
+            min = self._wavelengths.as_um.min()
+            max = self._wavelengths.as_um.max()
+        else:
+            min = self._wavelengths.as_nm.min()
+            max = self._wavelengths.as_nm.max()
+
+        if wavelength > max or wavelength < min:
+            raise ValueError(f"values of disersion available between {min} and {max}")
+
+    def fn(self, wavelength: float) -> float:
+        self.check_wavelength_limit(wavelength, "m")
+        c_info("Dispersion unit: s/m^2")
+        spline = make_splrep(self._wavelengths.as_m, self.as_s_m_m)
+        return float(spline(wavelength))
+
+    def fn_s_m_m(self, wavelength_nm: float) -> float:
+        self.check_wavelength_limit(wavelength_nm, "nm")
+        c_info("Dispersion unit: s/m^2")
+        spline = make_splrep(self._wavelengths.as_nm, self.as_s_m_m)
+        return float(spline(wavelength_nm))
+
+    def fn_ps_nm_km(self, wavelength_nm: float) -> float:
+        self.check_wavelength_limit(wavelength_nm, "nm")
+        c_info("Dispersion unit: ps/nm.km")
+        spline = make_splrep(self._wavelengths.as_nm, self.as_ps_nm_km)
+        return float(spline(wavelength_nm))
+
     @classmethod
     def from_neff(cls, neff: NDArray, wavelengths: WavelengthArray) -> Self:
-        # -lambda / C_MS * (d^2 neff/ d lambda^2)
+        # D = -lambda / C_MS * (d^2 neff/ d lambda^2)
 
         if len(neff) != len(wavelengths):
             raise ValueError("Length of both neff and wavelengths should be same")
@@ -60,6 +99,9 @@ class Dispersion:
             warnings.warn(
                 "Bad fitting of neff values. Consider building Disperison in other ways..."
             )
+            raise ChildProcessError(
+                "Can't perform numerical differentiation with small error..."
+            )
         return cls(wavelengths=wavelengths, values=dispersion, unit="s/m^2")
 
     @classmethod
@@ -76,15 +118,15 @@ class Dispersion:
             )
 
         omega = wavelengths.to_omega().to_equally_spaced()
-        interp = make_splrep(wavelengths.to_omega().as_rad_s, beta)(omega)
+        interp = make_splrep(wavelengths.to_omega().as_rad_s[::-1], beta[::-1])(omega)
 
-        spline = make_splrep(omega, interp)
+        spline = make_splrep(omega[::-1], interp[::-1])
         diff_2 = spline.derivative(2)
 
         dispersion: NDArray = (
-            -(2 * PI * C_MS)
-            / wavelengths.as_m**2
-            * diff_2(wavelengths.to_omega().as_rad_s)
+            # -(2 * PI * C_MS)
+            # / wavelengths.as_m**2 *
+            diff_2(wavelengths.to_omega().as_rad_s)
         )
 
         smooth_fit = np.all(np.diff(dispersion * 1e6) < 50)
@@ -92,15 +134,10 @@ class Dispersion:
             warnings.warn(
                 "Bad fitting of neff values. Consider building Disperison in other ways..."
             )
+            raise ChildProcessError(
+                "Can't perform numerical differentiation with small error..."
+            )
         return cls(wavelengths=wavelengths, values=dispersion, unit="s/m^2")
-
-    def fn_ps_nm_km(self, wavelength_nm: float) -> float:
-        min = self._wavelengths.as_nm.min()
-        max = self._wavelengths.as_nm.max()
-        if wavelength_nm > max or wavelength_nm < min:
-            raise ValueError(f"values of disersion available between {min} and {max}")
-        spline = make_splrep(self._wavelengths.as_nm, self.as_ps_nm_km)
-        return float(spline(wavelength_nm))
 
     def get_beta2(self, wavelength_nm: float):
         min = self._wavelengths.as_nm.min()
@@ -112,22 +149,6 @@ class Dispersion:
         beta2 = -self._wavelengths.as_m**2 / (2 * PI * C_MS) * self.as_s_m_m
         spline = make_splrep(self._wavelengths.as_nm, beta2)
         return float(spline(wavelength_nm))
-
-    def get_betas(self, wavelength_nm: float, n: int = 6):
-        min = self._wavelengths.as_nm.min()
-        max = self._wavelengths.as_nm.max()
-        if wavelength_nm > max or wavelength_nm < min:
-            raise ValueError(
-                f"values of disersion available between {min} and {max} nm."
-            )
-
-        beta2 = -self._wavelengths.as_m**2 / (2 * PI * C_MS) * self.as_s_m_m
-        spline = make_splrep(self._wavelengths.to_omega().as_rad_s[::-1], beta2[::-1])
-        betas = np.array([])
-        for n in range(1, n):
-            df_fn = spline.derivative(n)
-            np.append(betas, df_fn(wavelength_nm))
-        return betas
 
 
 class PropagationConstant:

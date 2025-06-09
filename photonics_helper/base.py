@@ -1,9 +1,13 @@
 from __future__ import annotations
 from typing import Literal, Self
+from numpy.typing import NDArray
+
 
 import numpy as np
 import scipy as sp
-from numpy.typing import NDArray
+from rich.traceback import install
+
+install()
 
 # Constants
 PI: float = sp.constants.pi
@@ -206,7 +210,7 @@ class FrequencyArray(np.ndarray):
     def to_equally_spaced(self, points=51) -> NDArray:
         min = self.as_Hz.min()
         max = self.as_Hz.max()
-        return np.linspace(min, max, points)
+        return np.linspace(max, min, points)
 
 
 class AngularFrequencyArray(np.ndarray):
@@ -245,4 +249,4 @@ class AngularFrequencyArray(np.ndarray):
     def to_equally_spaced(self, points=51) -> NDArray:
         min = self.as_rad_s.min()
         max = self.as_rad_s.max()
-        return np.linspace(min, max, points)
+        return np.linspace(max, min, points)

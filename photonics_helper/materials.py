@@ -1,11 +1,14 @@
-import numpy as np
-import matplotlib.pyplot as plt
+from .base import WavelengthArray
 
 from typing import List, Self, Tuple
 from numpy.typing import NDArray
-from scipy.interpolate import make_splrep
 
-from .base import WavelengthArray
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.interpolate import make_splrep
+from rich.traceback import install
+
+install()
 
 
 class RefractiveIndex:
@@ -39,7 +42,7 @@ class RefractiveIndex:
             raise AttributeError(
                 "Index can be found only in between ({min(self._wl)}) and ({max(self._wl)})"
             )
-        fn = make_splrep(self._n, self.wl)
+        fn = make_splrep(self._n, self._wl)
         return fn(wavelength)
 
     def k_func(self, wavelength: float):
@@ -47,7 +50,7 @@ class RefractiveIndex:
             raise AttributeError(
                 "Index can be found only in between ({min(self._wl)}) and ({max(self._wl)})"
             )
-        fn = make_splrep(self._k, self.wl)
+        fn = make_splrep(self._k, self._wl)
         return fn(wavelength)
 
     def nk_func(self, wavelength: float):
@@ -55,7 +58,7 @@ class RefractiveIndex:
             raise AttributeError(
                 "Index can be found only in between ({min(self._wl)}) and ({max(self._wl)})"
             )
-        fn = make_splrep(self.nk, self.wl)
+        fn = make_splrep(self.nk, self._wl)
         return fn(wavelength)
 
     def plot(self, include_k: bool = True):

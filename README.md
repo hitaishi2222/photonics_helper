@@ -24,7 +24,7 @@ pip install photonics-helper
 To get started, import the library and use its functions:
 
 ```python
-from photonics_helper import Wavelength, Frequency, Omega
+from photonics_helper import Wavelength
 
 # Convert wavelength to frequency
 wl = Wavelength(1550, "nm")
