@@ -124,9 +124,9 @@ class Dispersion:
         diff_2 = spline.derivative(2)
 
         dispersion: NDArray = (
-            # -(2 * PI * C_MS)
-            # / wavelengths.as_m**2 *
-            diff_2(wavelengths.to_omega().as_rad_s)
+            -(2 * PI * C_MS)
+            / wavelengths.as_m**2
+            * diff_2(wavelengths.to_omega().as_rad_s)
         )
 
         smooth_fit = np.all(np.diff(dispersion * 1e6) < 50)
