@@ -85,7 +85,11 @@ class Dispersion:
 
     @classmethod
     def from_neff(
-        cls, neff: NDArray, wavelengths: WavelengthArray, central_wavelength_nm: float
+        cls,
+        neff: NDArray,
+        wavelengths: WavelengthArray,
+        central_wavelength_nm: float,
+        ignore_fit_error: bool = False,
     ) -> Self:
         # D = -lambda / C_MS * (d^2 neff/ d lambda^2)
 
@@ -108,9 +112,10 @@ class Dispersion:
             warnings.warn(
                 "Bad fitting of neff values. Consider building Disperison in other ways..."
             )
-            raise ChildProcessError(
-                "Can't perform numerical differentiation with small error..."
-            )
+            if not ignore_fit_error:
+                raise ChildProcessError(
+                    "Can't perform numerical differentiation with small error..."
+                )
         return cls(
             wavelengths=wavelengths,
             values=dispersion,
@@ -120,7 +125,11 @@ class Dispersion:
 
     @classmethod
     def from_propagation_constanant(
-        cls, beta: NDArray, wavelengths: WavelengthArray, central_wavelength_nm: float
+        cls,
+        beta: NDArray,
+        wavelengths: WavelengthArray,
+        central_wavelength_nm: float,
+        ignore_fit_error: bool = False,
     ) -> Self:
         # -(2*PI*C_MS) / lambda^2 * (d^2 beta/ d omega^2)
 
@@ -148,9 +157,10 @@ class Dispersion:
             warnings.warn(
                 "Bad fitting of neff values. Consider building Disperison in other ways..."
             )
-            raise ChildProcessError(
-                "Can't perform numerical differentiation with small error..."
-            )
+            if not ignore_fit_error:
+                raise ChildProcessError(
+                    "Can't perform numerical differentiation with small error..."
+                )
         return cls(
             wavelengths=wavelengths,
             values=dispersion,
