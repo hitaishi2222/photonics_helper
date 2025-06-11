@@ -10,6 +10,7 @@ from .base import (
 )
 
 from .materials import RefractiveIndex
+from .fiber import Dispersion, PropagationConstant
 
 
 __all__ = [
@@ -22,4 +23,6 @@ __all__ = [
     "PI",
     "C_MS",
     "RefractiveIndex",
+    "Dispersion",
+    "PropagationConstant",
 ]

@@ -1,4 +1,10 @@
-from photonics_helper.base import C_MS, PI, AngularFrequencyArray, WavelengthArray
+from photonics_helper.base import (
+    C_MS,
+    PI,
+    AngularFrequencyArray,
+    Wavelength,
+    WavelengthArray,
+)
 from photonics_helper.looks import c_info
 
 from numpy.typing import NDArray
@@ -18,6 +24,7 @@ class Dispersion:
         wavelengths: WavelengthArray,
         values: NDArray,
         unit: Literal["ps/nm.km", "s/m^2"],
+        central_wavelength: Wavelength,
     ):
         if unit == "ps/nm.km":
             values = values * 1e6  # (12-9+3)
@@ -77,7 +84,9 @@ class Dispersion:
         return float(spline(wavelength_nm))
 
     @classmethod
-    def from_neff(cls, neff: NDArray, wavelengths: WavelengthArray) -> Self:
+    def from_neff(
+        cls, neff: NDArray, wavelengths: WavelengthArray, central_wavelength_nm: float
+    ) -> Self:
         # D = -lambda / C_MS * (d^2 neff/ d lambda^2)
 
         if len(neff) != len(wavelengths):
@@ -102,11 +111,16 @@ class Dispersion:
             raise ChildProcessError(
                 "Can't perform numerical differentiation with small error..."
             )
-        return cls(wavelengths=wavelengths, values=dispersion, unit="s/m^2")
+        return cls(
+            wavelengths=wavelengths,
+            values=dispersion,
+            unit="s/m^2",
+            central_wavelength=Wavelength(central_wavelength_nm, "nm"),
+        )
 
     @classmethod
     def from_propagation_constanant(
-        cls, beta: NDArray, wavelengths: WavelengthArray
+        cls, beta: NDArray, wavelengths: WavelengthArray, central_wavelength_nm: float
     ) -> Self:
         # -(2*PI*C_MS) / lambda^2 * (d^2 beta/ d omega^2)
 
@@ -137,7 +151,12 @@ class Dispersion:
             raise ChildProcessError(
                 "Can't perform numerical differentiation with small error..."
             )
-        return cls(wavelengths=wavelengths, values=dispersion, unit="s/m^2")
+        return cls(
+            wavelengths=wavelengths,
+            values=dispersion,
+            unit="s/m^2",
+            central_wavelength=Wavelength(central_wavelength_nm, "nm"),
+        )
 
     def get_beta2(self, wavelength_nm: float):
         min = self._wavelengths.as_nm.min()
