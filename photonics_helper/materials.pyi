@@ -59,6 +59,9 @@ class RefractiveIndex:
 
         Returns:
             Interpolated n value
+        
+        Raises:
+            AttributeError: If wavelength is outside valid range
         """
         ...
 
@@ -70,10 +73,13 @@ class RefractiveIndex:
 
         Returns:
             Interpolated k value
+        
+        Raises:
+            AttributeError: If wavelength is outside valid range
         """
         ...
 
-    def nk_func(self, wavelength: float) -> complex:
+    def nk_func(self, wavelength: float) -> float:
         """Interpolate complex refractive index at a specific wavelength.
 
         Args:
@@ -81,6 +87,9 @@ class RefractiveIndex:
 
         Returns:
             Interpolated complex n+ik value
+        
+        Raises:
+            AttributeError: If wavelength is outside valid range
         """
         ...
 
@@ -98,7 +107,7 @@ class RefractiveIndex:
         A0: int | float,
         A: List[float],
         B: List[float],
-        wl_from_to_in_m: Tuple[float, float],
+        wl_from_to_in_um: Tuple[float, float],
         n_points: int = 200,
     ) -> Self:
         """Create RefractiveIndex using Sellmeier equation.
@@ -107,11 +116,14 @@ class RefractiveIndex:
             A0: Offset coefficient
             A: List of amplitude coefficients
             B: List of wavelength coefficients
-            wl_from_to_in_m: Tuple of (min, max) wavelength in meters
+            wl_from_to_in_um: Tuple of (min, max) wavelength in micrometers
             n_points: Number of points to generate
 
         Returns:
             New RefractiveIndex instance
+        
+        Raises:
+            ValueError: If A and B lists have different lengths
         """
         ...
 
@@ -121,7 +133,7 @@ class RefractiveIndex:
         A0: int | float,
         A: List[float],
         B: List[float],
-        wl_from_to_in_m: Tuple[float, float],
+        wl_from_to_in_um: Tuple[float, float],
         n_points: int = 200,
     ) -> Self:
         """Create RefractiveIndex using alternative Sellmeier equation.
@@ -130,10 +142,13 @@ class RefractiveIndex:
             A0: Offset coefficient
             A: List of amplitude coefficients
             B: List of wavelength coefficients
-            wl_from_to_in_m: Tuple of (min, max) wavelength in meters
+            wl_from_to_in_um: Tuple of (min, max) wavelength in micrometers
             n_points: Number of points to generate
 
         Returns:
             New RefractiveIndex instance
+        
+        Raises:
+            ValueError: If A and B lists have different lengths
         """
         ...

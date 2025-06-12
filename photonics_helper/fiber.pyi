@@ -119,7 +119,7 @@ class Dispersion:
         neff: NDArray,
         wavelengths: WavelengthArray,
         central_wavelength_nm: float,
-        ignore_fit_error: bool = True,
+        ignore_fit_error: bool = False,
     ) -> Self:
         """
         Create Dispersion object from effective refractive index data.

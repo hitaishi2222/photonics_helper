@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Literal
+from typing import Literal, Self
 
 import numpy as np
 from numpy.typing import NDArray
@@ -10,7 +10,7 @@ C_MS: float
 class Wavelength(float):
     """Represents a scalar wavelength value with unit conversion methods."""
 
-    def __new__(cls, value: float, unit: Literal["nm", "um", "m"]) -> Wavelength:
+    def __new__(cls, value: float, unit: Literal["nm", "um", "m"]) -> Self:
         """Create a new wavelength instance.
 
         Args:
@@ -22,10 +22,14 @@ class Wavelength(float):
         """
         ...
 
-    def __repr__(self) -> str: ...
     @property
     def as_m(self) -> float:
         """Return the wavelength in meters."""
+        ...
+
+    @property
+    def as_um(self) -> float:
+        """Return the wavelength in micrometers."""
         ...
 
     @property
@@ -41,12 +45,16 @@ class Wavelength(float):
         """Convert wavelength to angular frequency."""
         ...
 
+    def to_wn(self) -> Wavenumber:
+        """Convert wavelength to wavenumber."""
+        ...
+
 class Frequency(float):
     """Represents a scalar frequency value with unit conversion methods."""
 
     def __new__(
         cls, value: float, unit: Literal["THz", "GHz", "MHz", "Hz"]
-    ) -> Frequency:
+    ) -> Self:
         """Create a new frequency instance.
 
         Args:
@@ -58,7 +66,6 @@ class Frequency(float):
         """
         ...
 
-    def __repr__(self) -> str: ...
     @property
     def as_Hz(self) -> float:
         """Return the frequency in Hertz."""
@@ -87,12 +94,16 @@ class Frequency(float):
         """Convert frequency to angular frequency."""
         ...
 
+    def to_wn(self) -> Wavenumber:
+        """Convert frequency to wavenumber."""
+        ...
+
 class AngularFrequency(float):
     """Represents a scalar angular frequency value with unit conversion methods."""
 
     def __new__(
         cls, value: float, unit: Literal["rad/s", "rad/ps"]
-    ) -> AngularFrequency:
+    ) -> Self:
         """Create a new angular frequency instance.
 
         Args:
@@ -105,6 +116,7 @@ class AngularFrequency(float):
         ...
 
     def __repr__(self) -> str: ...
+
     @property
     def as_rad_s(self) -> float:
         """Return the angular frequency in rad/s."""
@@ -123,10 +135,56 @@ class AngularFrequency(float):
         """Convert angular frequency to frequency."""
         ...
 
+    def to_wn(self) -> Wavenumber:
+        """Convert angular frequency to wavenumber."""
+        ...
+
+class Wavenumber(float):
+    """Represents a scalar wavenumber value with unit conversion methods."""
+
+    def __new__(cls, value: float, unit: Literal["1/cm", "1/m"]) -> Self:
+        """Create a new wavenumber instance.
+
+        Args:
+            value: The wavenumber value.
+            unit: The unit of the wavenumber ('1/cm' or '1/m').
+
+        Returns:
+            A normalized Wavenumber object in 1/m.
+        """
+        ...
+
+    @property
+    def as_1_m(self) -> float:
+        """Return the wavenumber in 1/m."""
+        ...
+
+    @property
+    def as_1_cm(self) -> float:
+        """Return the wavenumber in 1/cm."""
+        ...
+
+    @property
+    def as_angular(self) -> float:
+        """Return the angular wavenumber (k = 2π/λ)."""
+        ...
+
+    def to_wl(self) -> Wavelength:
+        """Convert wavenumber to wavelength."""
+        ...
+
+    def to_freq(self) -> Frequency:
+        """Convert wavenumber to frequency."""
+        ...
+
+    def to_omega(self) -> AngularFrequency:
+        """Convert wavenumber to angular frequency."""
+        ...
+
 class WavelengthArray(np.ndarray):
     """Numpy array wrapper for multiple wavelength values with unit conversions."""
 
-    def __new__(cls, value: NDArray, unit: Literal["nm", "um", "m"]) -> WavelengthArray:
+    def __new__(cls, value: NDArray, unit: Literal["nm", "um", "m"]) -> Self:
         """Create a new WavelengthArray instance.
 
         Args:
@@ -138,7 +196,8 @@ class WavelengthArray(np.ndarray):
         """
         ...
 
-    def __repr__(self) -> str: ...
+    def __array_finalize__(self, obj) -> None: ...
+
     @property
     def as_m(self) -> NDArray:
         """Return the wavelengths in meters."""
@@ -146,7 +205,7 @@ class WavelengthArray(np.ndarray):
 
     @property
     def as_um(self) -> NDArray:
-        """Return the wavelengths in meters."""
+        """Return the wavelengths in micrometers."""
         ...
 
     @property
@@ -162,8 +221,12 @@ class WavelengthArray(np.ndarray):
         """Convert wavelengths to angular frequency array."""
         ...
 
-    def to_equally_spaced(self, points=51) -> NDArray:
-        """Convert to equally spaced array"""
+    def to_wn(self) -> WavenumberArray:
+        """Convert wavelengths to wavenumber array."""
+        ...
+
+    def to_equally_spaced(self, points: int = 51) -> NDArray:
+        """Convert to equally spaced array."""
         ...
 
 class FrequencyArray(np.ndarray):
@@ -171,7 +234,7 @@ class FrequencyArray(np.ndarray):
 
     def __new__(
         cls, value: NDArray, unit: Literal["THz", "GHz", "MHz", "Hz"]
-    ) -> FrequencyArray:
+    ) -> Self:
         """Create a new FrequencyArray instance.
 
         Args:
@@ -183,7 +246,8 @@ class FrequencyArray(np.ndarray):
         """
         ...
 
-    def __repr__(self) -> str: ...
+    def __array_finalize__(self, obj) -> None: ...
+
     @property
     def as_Hz(self) -> NDArray:
         """Return the frequencies in Hz."""
@@ -212,8 +276,12 @@ class FrequencyArray(np.ndarray):
         """Convert frequencies to angular frequency array."""
         ...
 
-    def to_equally_spaced(self, points=51) -> NDArray:
-        """Convert to equally spaced array"""
+    def to_wn(self) -> WavenumberArray:
+        """Convert frequencies to wavenumber array."""
+        ...
+
+    def to_equally_spaced(self, points: int = 51) -> NDArray:
+        """Convert to equally spaced array."""
         ...
 
 class AngularFrequencyArray(np.ndarray):
@@ -221,7 +289,7 @@ class AngularFrequencyArray(np.ndarray):
 
     def __new__(
         cls, value: NDArray, unit: Literal["rad/s", "rad/ps"]
-    ) -> AngularFrequencyArray:
+    ) -> Self:
         """Create a new AngularFrequencyArray instance.
 
         Args:
@@ -233,7 +301,8 @@ class AngularFrequencyArray(np.ndarray):
         """
         ...
 
-    def __repr__(self) -> str: ...
+    def __array_finalize__(self, obj) -> None: ...
+
     @property
     def as_rad_s(self) -> NDArray:
         """Return the angular frequencies in rad/s."""
@@ -252,6 +321,56 @@ class AngularFrequencyArray(np.ndarray):
         """Convert angular frequencies to frequency array."""
         ...
 
-    def to_equally_spaced(self, points=51) -> NDArray:
-        """Convert to equally spaced array"""
+    def to_wn(self) -> WavenumberArray:
+        """Convert angular frequencies to wavenumber array."""
+        ...
+
+    def to_equally_spaced(self, points: int = 51) -> NDArray:
+        """Convert to equally spaced array."""
+        ...
+
+class WavenumberArray(np.ndarray):
+    """Numpy array wrapper for multiple wavenumber values with unit conversions."""
+
+    def __new__(cls, value: NDArray, unit: Literal["1/cm", "1/m"]) -> Self:
+        """Create a new WavenumberArray instance.
+
+        Args:
+            value: An array of wavenumber values.
+            unit: The unit of each wavenumber ('1/cm' or '1/m').
+
+        Returns:
+            A WavenumberArray object with values in 1/m.
+        """
+        ...
+
+    @property
+    def as_1_m(self) -> NDArray:
+        """Return the wavenumbers in 1/m."""
+        ...
+
+    @property
+    def as_1_cm(self) -> NDArray:
+        """Return the wavenumbers in 1/cm."""
+        ...
+
+    @property
+    def as_angular(self) -> NDArray:
+        """Return the angular wavenumbers (k = 2π/λ)."""
+        ...
+
+    def to_wl(self) -> WavelengthArray:
+        """Convert wavenumbers to wavelength array."""
+        ...
+
+    def to_freq(self) -> FrequencyArray:
+        """Convert wavenumbers to frequency array."""
+        ...
+
+    def to_omega(self) -> AngularFrequencyArray:
+        """Convert wavenumbers to angular frequency array."""
+        ...
+
+    def to_equally_spaced(self, points: int = 51) -> NDArray:
+        """Convert to equally spaced array."""
         ...
