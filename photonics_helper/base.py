@@ -112,7 +112,7 @@ class AngularFrequency(float):
     @property
     def as_rad_ps(self) -> float:
         # Use float() to avoid recursion in multiplication
-        return float(self) * 1e12  # Convert from rad/s to rad/ps
+        return float(self) * 1e-12  # Convert from rad/s to rad/ps
 
     def to_wl(self) -> Wavelength:
         return Wavelength((2 * PI) * C_MS / self, "m")

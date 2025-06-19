@@ -27,7 +27,7 @@ class Dispersion:
         central_wavelength: Wavelength,
     ):
         if unit == "ps/nm.km":
-            values = values * 1e6  # (12-9+3)
+            values = values * 1e-6  # (12-9+3)
         elif unit == "s/m^2":
             pass
         self._values = values
