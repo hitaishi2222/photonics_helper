@@ -11,6 +11,7 @@ from .base import (
 
 from .materials import RefractiveIndex
 from .fiber import Dispersion, PropagationConstant
+from .pulse import Pulse, RectangularPulse
 
 
 __all__ = [
@@ -25,4 +26,6 @@ __all__ = [
     "RefractiveIndex",
     "Dispersion",
     "PropagationConstant",
+    "Pulse",
+    "RectangularPulse",
 ]
