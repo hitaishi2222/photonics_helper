@@ -5,7 +5,7 @@ from photonics_helper.base import (
     Wavelength,
     WavelengthArray,
 )
-from photonics_helper.looks import c_info
+from photonics_helper.utils import c_info
 
 from numpy.typing import NDArray
 from typing import Literal, Self

@@ -1,6 +1,6 @@
-from photonics_helper.looks import c_help, c_info
+from photonics_helper.utils import c_help, c_info
 from .base import Wavelength
-from typing import Literal, Optional
+from typing import Literal
 
 
 class Pulse:

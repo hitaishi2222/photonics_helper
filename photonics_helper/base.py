@@ -4,14 +4,14 @@ from numpy.typing import NDArray
 
 
 import numpy as np
-import scipy as sp
+import scipy.constants as const
 from rich.traceback import install
 
 install()
 
 # Constants
-PI: float = sp.constants.pi
-C_MS: float = sp.constants.c
+PI: float = const.pi
+C_MS: float = const.c
 
 
 class Wavelength(float):
