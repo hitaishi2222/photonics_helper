@@ -40,7 +40,7 @@ class Pulse:
         return self._duration
 
     @duration.setter
-    def duration(self, value):
+    def duration(self, value: float) -> None:
         self._duration = value
 
     @property
@@ -48,7 +48,7 @@ class Pulse:
         return self._peak_power
 
     @peak_power.setter
-    def peak_power(self, value):
+    def peak_power(self, value: float) -> None:
         self._peak_power = value
 
     @property
@@ -66,7 +66,9 @@ class Pulse:
             c_help("To change pulse rate and period use setters...")
         return self._period
 
-    def set_period(self, value: float, unit: Literal["fs", "ps", "ns", "s", "os"]):
+    def set_period(
+        self, value: float, unit: Literal["fs", "ps", "ns", "s", "os"]
+    ) -> None:
         match unit:
             case "s":
                 self._period = value
@@ -85,13 +87,13 @@ class Pulse:
         self._rate = 1 / self._period
 
     @property
-    def rate(self):
+    def rate(self) -> float:
         if self._period == 2 * self._duration:
             c_info("Pulse rate of pules is considered as 1/(2* duration)")
             c_help("To change pulse rate and period use setters...")
         return self._rate
 
-    def set_rate(self, value: float, unit: Literal["THz", "GHz", "MHz", "Hz"]):
+    def set_rate(self, value: float, unit: Literal["THz", "GHz", "MHz", "Hz"]) -> None:
         match unit:
             case "Hz":
                 self._rate = value

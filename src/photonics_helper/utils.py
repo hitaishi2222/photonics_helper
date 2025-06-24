@@ -3,6 +3,8 @@ from rich.console import Console
 from numpy.typing import NDArray
 import numpy as np
 
+from photonics_helper.base import E_CHARGE
+
 console = Console()
 
 
@@ -72,7 +74,7 @@ def convert_length(
                 case "nm":
                     length = value
 
-    if isinstance(length, float):
+    if isinstance(length, float) or isinstance(length, int):
         return float(length)
     elif isinstance(length, np.ndarray):
         return np.asarray(length)
@@ -131,7 +133,7 @@ def convert_time(
                 case "fs":
                     time = value
 
-    if isinstance(time, float):
+    if isinstance(time, float) or isinstance(time, int):
         return float(time)
     elif isinstance(time, np.ndarray):
         return np.asarray(time)
@@ -206,7 +208,7 @@ def convert_frequency(
                 case "THz":
                     frequency = value
 
-    if isinstance(frequency, float):
+    if isinstance(frequency, float) or isinstance(frequency, int):
         return float(frequency)
     elif isinstance(frequency, np.ndarray):
         return np.asarray(frequency)
@@ -227,6 +229,10 @@ def convert_energy(
     from_units: Literal["J", "eV"],
     to_units: Literal["J", "eV"],
 ) -> Union[float, NDArray]:
+    if not (isinstance(value, float) or isinstance(value, np.ndarray)):
+        raise TypeError(
+            f"value should be only a type of float or NDArray: got {type(value)}."
+        )
     energy = value
     match from_units:
         case "J":
@@ -234,18 +240,18 @@ def convert_energy(
                 case "J":
                     energy = value
                 case "eV":
-                    energy = value / 1.602176634e-19
+                    energy = value / E_CHARGE
         case "eV":
             match to_units:
                 case "J":
-                    energy = value * 1.602176634e-19
+                    energy = value * E_CHARGE
                 case "eV":
                     energy = value
 
-    if isinstance(energy, float):
+    if isinstance(energy, float) or isinstance(energy, int):
         return float(energy)
     elif isinstance(energy, np.ndarray):
-        return np.asarray(energy)
+        return np.asarray(energy, dtype=np.float64)
     else:
         raise TypeError("value should be a type of either: float or NDArray")
 

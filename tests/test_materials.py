@@ -48,10 +48,10 @@ def test_sellmeier():
     A0 = 1
     A = [0.6961663, 0.4079426, 0.8974794]
     B = [0.0684043, 0.1162414, 9.896161]
-    wl_range = (0.5e-6, 2e-6)  # 0.5-2 µm
+    wl_range = (0.5, 2.0)  # 0.5-2 µm
 
     ri = RefractiveIndex.from_sellmeier(
-        A0=A0, A=A, B=B, wl_from_to_in_m=wl_range, n_points=100
+        A0=A0, A=A, B=B, wl_from_to_in_um=wl_range, n_points=100
     )
 
     assert isinstance(ri, RefractiveIndex)
@@ -63,10 +63,10 @@ def test_sellmeier_coefficient_mismatch():
     """Test error handling for mismatched Sellmeier coefficients"""
     A = [1, 2, 3]
     B = [1, 2]  # One less than A
-    wl_range = (0.5e-6, 2e-6)
+    wl_range = (0.5, 2.0)
 
     with pytest.raises(ValueError):
-        RefractiveIndex.from_sellmeier(A0=1, A=A, B=B, wl_from_to_in_m=wl_range)
+        RefractiveIndex.from_sellmeier(A0=1, A=A, B=B, wl_from_to_in_um=wl_range)
 
     with pytest.raises(ValueError):
-        RefractiveIndex.from_alt_sellmeier(A0=1, A=A, B=B, wl_from_to_in_m=wl_range)
+        RefractiveIndex.from_alt_sellmeier(A0=1, A=A, B=B, wl_from_to_in_um=wl_range)

@@ -1,11 +1,12 @@
 from __future__ import annotations
-from typing import Literal, Self
+from typing import Literal, Optional, Self
 
 import numpy as np
-from numpy.typing import NDArray
+from numpy.typing import ArrayLike, NDArray
 
 PI: float
 C_MS: float
+E_CHARGE: float
 
 class Wavelength(float):
     """Represents a scalar wavelength value with unit conversion methods."""
@@ -179,7 +180,7 @@ class Wavenumber(float):
 class WavelengthArray(np.ndarray):
     """Numpy array wrapper for multiple wavelength values with unit conversions."""
 
-    def __new__(cls, value: NDArray, unit: Literal["nm", "um", "m"]) -> Self:
+    def __new__(cls, value: ArrayLike, unit: Literal["nm", "um", "m"]) -> Self:
         """Create a new WavelengthArray instance.
 
         Args:
@@ -191,7 +192,7 @@ class WavelengthArray(np.ndarray):
         """
         ...
 
-    def __array_finalize__(self, obj) -> None: ...
+    def __array_finalize__(self, obj: Optional[np.ndarray]) -> None: ...
     @property
     def as_m(self) -> NDArray:
         """Return the wavelengths in meters."""
@@ -226,7 +227,9 @@ class WavelengthArray(np.ndarray):
 class FrequencyArray(np.ndarray):
     """Numpy array wrapper for multiple frequency values with unit conversions."""
 
-    def __new__(cls, value: NDArray, unit: Literal["THz", "GHz", "MHz", "Hz"]) -> Self:
+    def __new__(
+        cls, value: ArrayLike, unit: Literal["THz", "GHz", "MHz", "Hz"]
+    ) -> Self:
         """Create a new FrequencyArray instance.
 
         Args:
@@ -238,7 +241,7 @@ class FrequencyArray(np.ndarray):
         """
         ...
 
-    def __array_finalize__(self, obj) -> None: ...
+    def __array_finalize__(self, obj: Optional[np.ndarray]) -> None: ...
     @property
     def as_Hz(self) -> NDArray:
         """Return the frequencies in Hz."""
@@ -278,7 +281,7 @@ class FrequencyArray(np.ndarray):
 class AngularFrequencyArray(np.ndarray):
     """Numpy array wrapper for multiple angular frequency values with unit conversions."""
 
-    def __new__(cls, value: NDArray, unit: Literal["rad/s", "rad/ps"]) -> Self:
+    def __new__(cls, value: ArrayLike, unit: Literal["rad/s", "rad/ps"]) -> Self:
         """Create a new AngularFrequencyArray instance.
 
         Args:
@@ -290,7 +293,7 @@ class AngularFrequencyArray(np.ndarray):
         """
         ...
 
-    def __array_finalize__(self, obj) -> None: ...
+    def __array_finalize__(self, obj: Optional[np.ndarray]) -> None: ...
     @property
     def as_rad_s(self) -> NDArray:
         """Return the angular frequencies in rad/s."""
@@ -320,7 +323,7 @@ class AngularFrequencyArray(np.ndarray):
 class WavenumberArray(np.ndarray):
     """Numpy array wrapper for multiple wavenumber values with unit conversions."""
 
-    def __new__(cls, value: NDArray, unit: Literal["1/cm", "1/m"]) -> Self:
+    def __new__(cls, value: ArrayLike, unit: Literal["1/cm", "1/m"]) -> Self:
         """Create a new WavenumberArray instance.
 
         Args:
@@ -332,6 +335,7 @@ class WavenumberArray(np.ndarray):
         """
         ...
 
+    def __array_finalize__(self, obj: Optional[np.ndarray]) -> None: ...
     @property
     def as_1_m(self) -> NDArray:
         """Return the wavenumbers in 1/m."""
@@ -362,4 +366,3 @@ class WavenumberArray(np.ndarray):
     def to_equally_spaced(self, points: int = 51) -> NDArray:
         """Convert to equally spaced array."""
         ...
-

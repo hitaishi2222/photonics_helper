@@ -1,6 +1,6 @@
 from __future__ import annotations
-from typing import Literal, Self
-from numpy.typing import NDArray
+from typing import Literal, Optional, Self
+from numpy.typing import ArrayLike, NDArray
 
 
 import numpy as np
@@ -12,6 +12,7 @@ install()
 # Constants
 PI: float = const.pi
 C_MS: float = const.c
+E_CHARGE: float = const.e
 
 
 class Wavelength(float):
@@ -157,8 +158,7 @@ class Wavenumber(float):
 
 
 class WavelengthArray(np.ndarray):
-    def __new__(cls, value: NDArray, unit: Literal["nm", "um", "m"]) -> Self:
-        # Convert input array to float type
+    def __new__(cls, value: ArrayLike, unit: Literal["nm", "um", "m"]) -> Self:
         value = np.array(value, dtype=float)
         if unit == "nm":
             value *= 1e-9
@@ -168,10 +168,10 @@ class WavelengthArray(np.ndarray):
             pass  # Already in meters, no conversion needed
         else:
             raise ValueError(f"Unsupported unit: {unit} use 'nm', 'um', or 'm'")
-        obj = np.asarray(value).view(cls)
+        obj = np.asarray(value, dtype=np.float64).view(cls)
         return obj
 
-    def __array_finalize__(self, obj):
+    def __array_finalize__(self, obj: Optional[np.ndarray]) -> None:
         if obj is None:
             return
 
@@ -203,7 +203,9 @@ class WavelengthArray(np.ndarray):
 
 
 class FrequencyArray(np.ndarray):
-    def __new__(cls, value: NDArray, unit: Literal["THz", "GHz", "MHz", "Hz"]) -> Self:
+    def __new__(
+        cls, value: ArrayLike, unit: Literal["THz", "GHz", "MHz", "Hz"]
+    ) -> Self:
         # Convert input array to float type
         value = np.array(value, dtype=float)
         if unit == "THz":
@@ -218,10 +220,10 @@ class FrequencyArray(np.ndarray):
             raise ValueError(
                 f"Unsupported unit: {unit} use 'THz', 'GHz', 'MHz' or 'Hz'"
             )
-        obj = np.asarray(value).view(cls)
+        obj = np.asarray(value, dtype=np.float64).view(cls)
         return obj
 
-    def __array_finalize__(self, obj):
+    def __array_finalize__(self, obj: Optional[np.ndarray]) -> None:
         if obj is None:
             return
 
@@ -257,7 +259,7 @@ class FrequencyArray(np.ndarray):
 
 
 class AngularFrequencyArray(np.ndarray):
-    def __new__(cls, value: NDArray, unit: Literal["rad/s", "rad/ps"]) -> Self:
+    def __new__(cls, value: ArrayLike, unit: Literal["rad/s", "rad/ps"]) -> Self:
         # Convert input array to float type
         value = np.array(value, dtype=float)
         if unit == "rad/ps":
@@ -266,10 +268,10 @@ class AngularFrequencyArray(np.ndarray):
             pass  # Already in rad/s, no conversion needed
         else:
             raise ValueError(f"Unsupported unit: {unit} use 'rad/s' or 'rad/ps'")
-        obj = np.asarray(value).view(cls)
+        obj = np.asarray(value, dtype=np.float64).view(cls)
         return obj
 
-    def __array_finalize__(self, obj):
+    def __array_finalize__(self, obj: Optional[np.ndarray]) -> None:
         if obj is None:
             return
 
@@ -297,7 +299,7 @@ class AngularFrequencyArray(np.ndarray):
 
 
 class WavenumberArray(np.ndarray):
-    def __new__(cls, value: NDArray, unit: Literal["1/cm", "1/m"]) -> Self:
+    def __new__(cls, value: ArrayLike, unit: Literal["1/cm", "1/m"]) -> Self:
         # Convert input array to float type
         value = np.array(value, dtype=float)
         if unit == "1/cm":
@@ -306,8 +308,12 @@ class WavenumberArray(np.ndarray):
             pass  # Already in 1/m, no conversion needed
         else:
             raise ValueError(f"Unsupported unit: {unit} use '1/cm' or '1/m'")
-        obj = np.asarray(value).view(cls)
+        obj = np.asarray(value, dtype=np.float64).view(cls)
         return obj
+
+    def __array_finalize__(self, obj: Optional[np.ndarray]) -> None:
+        if obj is None:
+            return
 
     @property
     def as_1_m(self) -> NDArray:
