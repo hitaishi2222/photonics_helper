@@ -35,3 +35,18 @@ Documentation = "https://github.com/hitaishi2222/photonics-helper#readme"
 
 [tool.setuptools.package-data]
 photonics_helper = ["*.pyi"]
+
+[dependency-groups]
+dev = [
+    "pyrefly>=0.20.2",
+]
+
+[tool.mypy]
+ignore_missing_imports = true
+follow_imports = "normal"
+follow_imports_for_stubs= true
+show_error_context = true
+show_column_numbers = true
+show_error_codes = true
+pretty = true
+files = ["src/"]
