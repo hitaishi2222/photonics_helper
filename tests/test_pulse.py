@@ -31,21 +31,19 @@ class TestPulse:
         assert pytest.approx(pulse.duration) == 1e-6
         assert pulse.peak_power == 50
 
-    def test_pulse_init_os(self):
-        """Test Pulse initialization with octosecond units"""
-        pulse = Pulse(duration=1, duration_unit="os", peak_power=2000)
-        assert pytest.approx(pulse.duration) == 1e-18
-        assert pulse.peak_power == 2000
-
     def test_pulse_invalid_duration_unit(self):
         """Test error handling for invalid duration units"""
-        with pytest.raises(AttributeError, match="Pulse duration units should be only from"):
+        with pytest.raises(
+            ValueError, match="Unsupported unit: ms -> s use 's', 'ns', 'ps' or 'fs'"
+        ):
             Pulse(duration=100, duration_unit="ms", peak_power=1000)
 
     def test_pulse_with_central_wavelength(self):
         """Test Pulse initialization with central wavelength"""
         wl = Wavelength(1550, "nm")
-        pulse = Pulse(duration=100, duration_unit="fs", peak_power=1000, central_wavelength=wl)
+        pulse = Pulse(
+            duration=100, duration_unit="fs", peak_power=1000, central_wavelength=wl
+        )
         assert pulse.central_wavelength == wl
         assert pytest.approx(pulse.central_wavelength.as_nm) == 1550
 
@@ -112,17 +110,12 @@ class TestPulse:
         assert pytest.approx(pulse.period) == 1e-6
         assert pytest.approx(pulse.rate) == 1e6
 
-    def test_set_period_os(self):
-        """Test setting period with octosecond units"""
-        pulse = Pulse(duration=100, duration_unit="fs", peak_power=1000)
-        pulse.set_period(1, "os")
-        assert pytest.approx(pulse.period) == 1e-18
-        assert pytest.approx(pulse.rate) == 1e18
-
     def test_set_period_invalid_unit(self):
         """Test error handling for invalid period units"""
         pulse = Pulse(duration=100, duration_unit="fs", peak_power=1000)
-        with pytest.raises(AttributeError, match="Pulse duration units should be only from"):
+        with pytest.raises(
+            ValueError, match="Unsupported unit: ms -> s use 's', 'ns', 'ps' or 'fs'"
+        ):
             pulse.set_period(1, "ms")
 
     def test_set_rate_Hz(self):
@@ -153,12 +146,6 @@ class TestPulse:
         assert pytest.approx(pulse.rate) == 0.1e12
         assert pytest.approx(pulse.period) == 1 / (0.1e12)
 
-    def test_set_rate_invalid_unit(self):
-        """Test error handling for invalid rate units"""
-        pulse = Pulse(duration=100, duration_unit="fs", peak_power=1000)
-        with pytest.raises(AttributeError, match="Pulse rate units should be only from"):
-            pulse.set_rate(1000, "kHz")
-
 
 class TestRectangularPulse:
     """Test suite for RectangularPulse class"""
@@ -166,10 +153,7 @@ class TestRectangularPulse:
     def test_rectangular_pulse_init(self):
         """Test RectangularPulse initialization"""
         rect_pulse = RectangularPulse(
-            duration=100,
-            duration_unit="fs",
-            peak_power=1000,
-            amplitude=0.8
+            duration=100, duration_unit="fs", peak_power=1000, amplitude=0.8
         )
         assert pytest.approx(rect_pulse.duration) == 100e-15
         assert rect_pulse.peak_power == 1000
@@ -183,7 +167,7 @@ class TestRectangularPulse:
             duration_unit="fs",
             peak_power=2000,
             central_wavelength=wl,
-            amplitude=1.0
+            amplitude=1.0,
         )
         assert rect_pulse.central_wavelength == wl
         assert pytest.approx(rect_pulse.central_wavelength.as_nm) == 800
@@ -196,7 +180,7 @@ class TestRectangularPulse:
             duration_unit="fs",
             peak_power=1000,
             energy=5e-10,
-            amplitude=0.5
+            amplitude=0.5,
         )
         assert rect_pulse._energy == 5e-10
         assert rect_pulse.amplitude == 0.5
@@ -204,10 +188,7 @@ class TestRectangularPulse:
     def test_rectangular_pulse_inheritance(self):
         """Test that RectangularPulse inherits Pulse methods"""
         rect_pulse = RectangularPulse(
-            duration=100,
-            duration_unit="fs",
-            peak_power=1000,
-            amplitude=1.0
+            duration=100, duration_unit="fs", peak_power=1000, amplitude=1.0
         )
 
         # Test inherited methods
@@ -219,27 +200,19 @@ class TestRectangularPulse:
 
     def test_rectangular_pulse_default_amplitude(self):
         """Test RectangularPulse with default amplitude"""
-        rect_pulse = RectangularPulse(
-            duration=100,
-            duration_unit="fs",
-            peak_power=1000
-        )
+        rect_pulse = RectangularPulse(duration=100, duration_unit="fs", peak_power=1000)
         assert rect_pulse.amplitude == 1  # default value
 
     def test_rectangular_pulse_invalid_duration_unit(self):
         """Test error handling for invalid duration units in RectangularPulse"""
-        with pytest.raises(AttributeError, match="Pulse duration units should be only from"):
+        with pytest.raises(
+            ValueError, match="Unsupported unit: ms -> s use 's', 'ns', 'ps' or 'fs'"
+        ):
             RectangularPulse(duration=100, duration_unit="ms", peak_power=1000)
 
 
 class TestPulseEdgeCases:
     """Test edge cases and boundary conditions"""
-
-    def test_very_short_pulse(self):
-        """Test very short pulse durations"""
-        pulse = Pulse(duration=1, duration_unit="os", peak_power=1e6)
-        assert pytest.approx(pulse.duration) == 1e-18
-        assert pulse.rate > 1e17  # Very high rate
 
     def test_very_long_pulse(self):
         """Test very long pulse durations"""

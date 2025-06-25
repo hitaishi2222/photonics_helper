@@ -16,6 +16,18 @@ def c_help(msg: str) -> None:
     """Rich color output: Green (help)"""
     ...
 
+@overload
+def convert_length(
+    value: float,
+    from_units: Literal["m", "um", "nm"],
+    to_units: Literal["m", "um", "nm"],
+) -> float: ...
+@overload
+def convert_length(
+    value: NDArray,
+    from_units: Literal["m", "um", "nm"],
+    to_units: Literal["m", "um", "nm"],
+) -> NDArray: ...
 def convert_length(
     value: Union[float, NDArray],
     from_units: Literal["m", "um", "nm"],
@@ -34,10 +46,22 @@ def convert_length(
     """
     ...
 
+@overload
+def convert_time(
+    value: float,
+    from_units: Literal["s", "ns", "ps", "fs"],
+    to_units: Literal["s", "ns", "ps", "fs"],
+) -> float: ...
+@overload
+def convert_time(
+    value: NDArray,
+    from_units: Literal["s", "ns", "ps", "fs"],
+    to_units: Literal["s", "ns", "ps", "fs"],
+) -> NDArray: ...
 def convert_time(
     value: Union[float, NDArray],
-    from_units: Literal["s", "ps", "fs"],
-    to_units: Literal["s", "ps", "fs"],
+    from_units: Literal["s", "ns", "ps", "fs"],
+    to_units: Literal["s", "ns", "ps", "fs"],
 ) -> Union[float, NDArray]:
     """Converts time from one unit to another
 
@@ -52,6 +76,18 @@ def convert_time(
     """
     ...
 
+@overload
+def convert_frequency(
+    value: float,
+    from_units: Literal["Hz", "MHz", "GHz", "THz"],
+    to_units: Literal["Hz", "MHz", "GHz", "THz"],
+) -> float: ...
+@overload
+def convert_frequency(
+    value: NDArray,
+    from_units: Literal["Hz", "MHz", "GHz", "THz"],
+    to_units: Literal["Hz", "MHz", "GHz", "THz"],
+) -> NDArray: ...
 def convert_frequency(
     value: Union[float, NDArray],
     from_units: Literal["Hz", "MHz", "GHz", "THz"],
@@ -70,6 +106,14 @@ def convert_frequency(
     """
     ...
 
+@overload
+def convert_energy(
+    value: float, from_units: Literal["J", "eV"], to_units: Literal["J", "eV"]
+) -> float: ...
+@overload
+def convert_energy(
+    value: NDArray, from_units: Literal["J", "eV"], to_units: Literal["J", "eV"]
+) -> NDArray: ...
 def convert_energy(
     value: Union[float, NDArray],
     from_units: Literal["J", "eV"],

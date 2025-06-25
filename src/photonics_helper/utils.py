@@ -2,8 +2,9 @@ from typing import Literal, TypeVar, Union, overload
 from rich.console import Console
 from numpy.typing import NDArray
 import numpy as np
+import scipy.constants as const
 
-from photonics_helper.base import E_CHARGE
+E_CHARGE: float = const.e
 
 console = Console()
 
@@ -18,9 +19,6 @@ def c_info(msg: str):
 
 def c_help(msg: str):
     console.print(f"[bold green]{msg}[/bold green]")
-
-
-T = TypeVar("T", float, NDArray)
 
 
 @overload
@@ -73,6 +71,10 @@ def convert_length(
                     length = value * 1e-3
                 case "nm":
                     length = value
+        case _:
+            raise ValueError(
+                f"Unsupported unit: {from_units} -> {to_units} use 'nm', 'um', or 'm'"
+            )
 
     if isinstance(length, float) or isinstance(length, int):
         return float(length)
@@ -85,19 +87,19 @@ def convert_length(
 @overload
 def convert_time(
     value: float,
-    from_units: Literal["s", "ps", "fs"],
-    to_units: Literal["s", "ps", "fs"],
+    from_units: Literal["s", "ns", "ps", "fs"],
+    to_units: Literal["s", "ns", "ps", "fs"],
 ) -> float: ...
 @overload
 def convert_time(
     value: NDArray,
-    from_units: Literal["s", "ps", "fs"],
-    to_units: Literal["s", "ps", "fs"],
+    from_units: Literal["s", "ns", "ps", "fs"],
+    to_units: Literal["s", "ns", "ps", "fs"],
 ) -> NDArray: ...
 def convert_time(
     value: Union[float, NDArray],
-    from_units: Literal["s", "ps", "fs"],
-    to_units: Literal["s", "ps", "fs"],
+    from_units: Literal["s", "ns", "ps", "fs"],
+    to_units: Literal["s", "ns", "ps", "fs"],
 ) -> Union[float, NDArray]:
     if not (
         isinstance(value, float)
@@ -112,14 +114,28 @@ def convert_time(
             match to_units:
                 case "s":
                     time = value
+                case "ns":
+                    time = value * 1e9
                 case "ps":
                     time = value * 1e12
                 case "fs":
                     time = value * 1e15
+        case "ns":
+            match to_units:
+                case "s":
+                    time = value * 1e-9
+                case "ns":
+                    time = value
+                case "ps":
+                    time = value * 1e3
+                case "fs":
+                    time = value * 1e6
         case "ps":
             match to_units:
                 case "s":
                     time = value * 1e-12
+                case "ns":
+                    time = value * 1e-3
                 case "ps":
                     time = value
                 case "fs":
@@ -128,15 +144,21 @@ def convert_time(
             match to_units:
                 case "s":
                     time = value * 1e-15
+                case "ns":
+                    time = value * 1e-6
                 case "ps":
                     time = value * 1e-3
                 case "fs":
                     time = value
+        case _:
+            raise ValueError(
+                f"Unsupported unit: {from_units} -> {to_units} use 's', 'ns', 'ps' or 'fs'"
+            )
 
     if isinstance(time, float) or isinstance(time, int):
         return float(time)
     elif isinstance(time, np.ndarray):
-        return np.asarray(time)
+        return np.asarray(time, dtype=np.float64)
     else:
         raise TypeError("value should be a type of either: float or NDArray")
 
@@ -207,6 +229,10 @@ def convert_frequency(
                     frequency = value * 1e3
                 case "THz":
                     frequency = value
+        case _:
+            raise ValueError(
+                f"Unsupported unit: {from_units} -> {to_units} use 'Hz', 'MHz', 'GHz' or 'THz'"
+            )
 
     if isinstance(frequency, float) or isinstance(frequency, int):
         return float(frequency)
@@ -247,11 +273,117 @@ def convert_energy(
                     energy = value * E_CHARGE
                 case "eV":
                     energy = value
+        case _:
+            raise ValueError(
+                f"Unsupported unit: {from_units} -> {to_units} use 'J', or 'eV'"
+            )
 
     if isinstance(energy, float) or isinstance(energy, int):
         return float(energy)
     elif isinstance(energy, np.ndarray):
         return np.asarray(energy, dtype=np.float64)
+    else:
+        raise TypeError("value should be a type of either: float or NDArray")
+
+
+@overload
+def convert_angular_frequency(
+    value: float,
+    from_units: Literal["rad/s", "rad/ps"],
+    to_units: Literal["rad/s", "rad/ps"],
+) -> float: ...
+@overload
+def convert_angular_frequency(
+    value: NDArray,
+    from_units: Literal["rad/s", "rad/ps"],
+    to_units: Literal["rad/s", "rad/ps"],
+) -> NDArray: ...
+def convert_angular_frequency(
+    value: Union[float, NDArray],
+    from_units: Literal["rad/s", "rad/ps"],
+    to_units: Literal["rad/s", "rad/ps"],
+) -> Union[float, NDArray]:
+    if not (
+        isinstance(value, float)
+        or isinstance(value, int)
+        or isinstance(value, np.ndarray)
+    ):
+        raise TypeError("value should be a type of either: float or NDArray")
+
+    angular_frequency: Union[float, NDArray] = value
+    match from_units:
+        case "rad/s":
+            match to_units:
+                case "rad/s":
+                    angular_frequency = value
+                case "rad/ps":
+                    angular_frequency = value * 1e-12
+        case "rad/ps":
+            match to_units:
+                case "rad/s":
+                    angular_frequency = value * 1e12
+                case "rad/ps":
+                    angular_frequency = value
+        case _:
+            raise ValueError(
+                f"Unsupported unit: {from_units} -> {to_units} use 'rad/s' or 'rad/ps'"
+            )
+
+    if isinstance(angular_frequency, float) or isinstance(angular_frequency, int):
+        return float(angular_frequency)
+    elif isinstance(angular_frequency, np.ndarray):
+        return np.asarray(angular_frequency)
+    else:
+        raise TypeError("value should be a type of either: float or NDArray")
+
+
+@overload
+def convert_wavenumber(
+    value: float,
+    from_units: Literal["1/m", "1/cm"],
+    to_units: Literal["1/m", "1/cm"],
+) -> float: ...
+@overload
+def convert_wavenumber(
+    value: NDArray,
+    from_units: Literal["1/m", "1/cm"],
+    to_units: Literal["1/m", "1/cm"],
+) -> NDArray: ...
+def convert_wavenumber(
+    value: Union[float, NDArray],
+    from_units: Literal["1/m", "1/cm"],
+    to_units: Literal["1/m", "1/cm"],
+) -> Union[float, NDArray]:
+    if not (
+        isinstance(value, float)
+        or isinstance(value, int)
+        or isinstance(value, np.ndarray)
+    ):
+        raise TypeError("value should be a type of either: float or NDArray")
+
+    wavenumber: Union[float, NDArray] = value
+    match from_units:
+        case "1/m":
+            match to_units:
+                case "1/m":
+                    wavenumber = value
+                case "1/cm":
+                    wavenumber = value * 1e-2
+        case "1/cm":
+            match to_units:
+                case "1/m":
+                    wavenumber = value * 1e2
+                case "1/cm":
+                    wavenumber = value
+        case _:
+            raise ValueError(
+                f"Unsupported unit: {from_units} -> {to_units} use '1/m' or '1/cm'"
+            )
+
+    if isinstance(wavenumber, float) or isinstance(wavenumber, int):
+        return float(wavenumber)
+    elif isinstance(wavenumber, np.ndarray):
+        return np.asarray(wavenumber)
     else:
         raise TypeError("value should be a type of either: float or NDArray")
 

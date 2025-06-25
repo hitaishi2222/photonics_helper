@@ -264,7 +264,7 @@ class TestBaseConversions:
 
         # Compare with individual scalar conversions
         for i, wl_val in enumerate(wl_data):
-            wl_scalar = Wavelength(wl_val, "nm")
+            wl_scalar = Wavelength(float(wl_val), "nm")
             wn_scalar = wl_scalar.to_wn()
             assert pytest.approx(wn_arr.as_1_m[i]) == wn_scalar.as_1_m
 

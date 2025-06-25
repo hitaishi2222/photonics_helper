@@ -1,4 +1,4 @@
-from photonics_helper.utils import c_help, c_info
+from photonics_helper.utils import c_help, c_info, convert_frequency, convert_time
 from .base import Wavelength
 from typing import Literal
 
@@ -7,28 +7,12 @@ class Pulse:
     def __init__(
         self,
         duration: float,
-        duration_unit: Literal["fs", "ps", "ns", "s", "os"],
+        duration_unit: Literal["fs", "ps", "ns", "s"],
         peak_power: float,
         central_wavelength: Wavelength | None = None,
         energy: float | None = None,
     ) -> None:
-        self._duration = duration
-        match duration_unit:
-            case "s":
-                self._duration = duration
-            case "ns":
-                self._duration = duration * 1e-9
-            case "ps":
-                self._duration = duration * 1e-12
-            case "fs":
-                self._duration = duration * 1e-15
-            case "os":
-                self._duration = duration * 1e-18
-            case _:
-                raise AttributeError(
-                    "Pulse duration units should be only from ['fs', 'ps', 'ns', 's', 'os']"
-                )
-        self._duration_unit = duration_unit
+        self._duration = convert_time(duration, duration_unit, "s")
         self._peak_power = peak_power
         self._central_wavelength = central_wavelength
         self._energy = energy
@@ -66,24 +50,8 @@ class Pulse:
             c_help("To change pulse rate and period use setters...")
         return self._period
 
-    def set_period(
-        self, value: float, unit: Literal["fs", "ps", "ns", "s", "os"]
-    ) -> None:
-        match unit:
-            case "s":
-                self._period = value
-            case "ns":
-                self._period = value * 1e-9
-            case "ps":
-                self._period = value * 1e-12
-            case "fs":
-                self._period = value * 1e-15
-            case "os":
-                self._period = value * 1e-18
-            case _:
-                raise AttributeError(
-                    "Pulse duration units should be only from ['fs', 'ps', 'ns', 's', 'os']"
-                )
+    def set_period(self, value: float, unit: Literal["fs", "ps", "ns", "s"]) -> None:
+        self._period = convert_time(value, unit, "s")
         self._rate = 1 / self._period
 
     @property
@@ -94,19 +62,7 @@ class Pulse:
         return self._rate
 
     def set_rate(self, value: float, unit: Literal["THz", "GHz", "MHz", "Hz"]) -> None:
-        match unit:
-            case "Hz":
-                self._rate = value
-            case "MHz":
-                self._rate = value * 1e6
-            case "GHz":
-                self._rate = value * 1e9
-            case "THz":
-                self._rate = value * 1e12
-            case _:
-                raise AttributeError(
-                    "Pulse rate units should be only from ['THz', 'GHz', 'MHz', 'Hz']"
-                )
+        self._rate = convert_frequency(value, unit, "Hz")
         self._period = 1 / self._rate
 
 

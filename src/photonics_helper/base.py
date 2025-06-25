@@ -1,11 +1,13 @@
 from __future__ import annotations
 from typing import Literal, Optional, Self
-from numpy.typing import ArrayLike, NDArray
+from numpy.typing import NDArray
 
 
 import numpy as np
 import scipy.constants as const
 from rich.traceback import install
+
+from photonics_helper.utils import convert_frequency, convert_length
 
 install()
 
@@ -17,14 +19,7 @@ E_CHARGE: float = const.e
 
 class Wavelength(float):
     def __new__(cls, value: float, unit: Literal["nm", "um", "m"]) -> Self:
-        if unit == "nm":
-            value *= 1e-9
-        elif unit == "um":
-            value *= 1e-6
-        elif unit == "m":
-            pass  # Already in meters, no conversion needed
-        else:
-            raise ValueError(f"Unsupported unit: {unit} use 'nm', 'um', or 'm'")
+        value = convert_length(value, unit, "m")
         return super().__new__(cls, value)
 
     @property
@@ -51,18 +46,7 @@ class Wavelength(float):
 
 class Frequency(float):
     def __new__(cls, value: float, unit: Literal["THz", "GHz", "MHz", "Hz"]) -> Self:
-        if unit == "THz":
-            value *= 1e12
-        elif unit == "GHz":
-            value *= 1e9
-        elif unit == "MHz":
-            value *= 1e6
-        elif unit == "Hz":
-            pass  # Already in Hz, no conversion needed
-        else:
-            raise ValueError(
-                f"Unsupported unit: {unit} use 'THz', 'GHz', 'MHz' or 'Hz'"
-            )
+        value = convert_frequency(value, unit, "Hz")
         return super().__new__(cls, value)
 
     @property
@@ -158,16 +142,8 @@ class Wavenumber(float):
 
 
 class WavelengthArray(np.ndarray):
-    def __new__(cls, value: ArrayLike, unit: Literal["nm", "um", "m"]) -> Self:
-        value = np.array(value, dtype=float)
-        if unit == "nm":
-            value *= 1e-9
-        elif unit == "um":
-            value *= 1e-6
-        elif unit == "m":
-            pass  # Already in meters, no conversion needed
-        else:
-            raise ValueError(f"Unsupported unit: {unit} use 'nm', 'um', or 'm'")
+    def __new__(cls, value: NDArray, unit: Literal["nm", "um", "m"]) -> Self:
+        value = convert_length(value, unit, "m")
         obj = np.asarray(value, dtype=np.float64).view(cls)
         return obj
 
@@ -203,23 +179,8 @@ class WavelengthArray(np.ndarray):
 
 
 class FrequencyArray(np.ndarray):
-    def __new__(
-        cls, value: ArrayLike, unit: Literal["THz", "GHz", "MHz", "Hz"]
-    ) -> Self:
-        # Convert input array to float type
-        value = np.array(value, dtype=float)
-        if unit == "THz":
-            value *= 1e12
-        elif unit == "GHz":
-            value *= 1e9
-        elif unit == "MHz":
-            value *= 1e6
-        elif unit == "Hz":
-            pass  # Already in Hz, no conversion needed
-        else:
-            raise ValueError(
-                f"Unsupported unit: {unit} use 'THz', 'GHz', 'MHz' or 'Hz'"
-            )
+    def __new__(cls, value: NDArray, unit: Literal["THz", "GHz", "MHz", "Hz"]) -> Self:
+        value = convert_frequency(value, unit, "Hz")
         obj = np.asarray(value, dtype=np.float64).view(cls)
         return obj
 
@@ -259,7 +220,7 @@ class FrequencyArray(np.ndarray):
 
 
 class AngularFrequencyArray(np.ndarray):
-    def __new__(cls, value: ArrayLike, unit: Literal["rad/s", "rad/ps"]) -> Self:
+    def __new__(cls, value: NDArray, unit: Literal["rad/s", "rad/ps"]) -> Self:
         # Convert input array to float type
         value = np.array(value, dtype=float)
         if unit == "rad/ps":
@@ -299,7 +260,7 @@ class AngularFrequencyArray(np.ndarray):
 
 
 class WavenumberArray(np.ndarray):
-    def __new__(cls, value: ArrayLike, unit: Literal["1/cm", "1/m"]) -> Self:
+    def __new__(cls, value: NDArray, unit: Literal["1/cm", "1/m"]) -> Self:
         # Convert input array to float type
         value = np.array(value, dtype=float)
         if unit == "1/cm":
