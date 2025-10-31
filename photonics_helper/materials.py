@@ -38,27 +38,27 @@ class RefractiveIndex:
         return cls(n=np.real(nk), k=np.imag(nk), wl=wl)
 
     def n_func(self, wavelength: float):
-        if wavelength < min(self._wl) and wavelength > max(self._wl):
+        if wavelength < min(self._wl.as_um) or wavelength > max(self._wl.as_um):
             raise AttributeError(
-                "Index can be found only in between ({min(self._wl)}) and ({max(self._wl)})"
+                f"Index can be found only in between ({min(self._wl.as_um)}) and ({max(self._wl.as_um)})"
             )
-        fn = make_splrep(self._n, self._wl)
+        fn = make_splrep(self._wl.as_um, self._n)
         return fn(wavelength)
 
     def k_func(self, wavelength: float):
-        if wavelength < min(self._wl) and wavelength > max(self._wl):
+        if wavelength < min(self._wl.as_um) or wavelength > max(self._wl.as_um):
             raise AttributeError(
-                "Index can be found only in between ({min(self._wl)}) and ({max(self._wl)})"
+                f"Index can be found only in between ({min(self._wl.as_um)}) and ({max(self._wl.as_um)})"
             )
-        fn = make_splrep(self._k, self._wl)
+        fn = make_splrep(self._wl.as_um, self._k)
         return fn(wavelength)
 
     def nk_func(self, wavelength: float):
-        if wavelength < min(self._wl) and wavelength > max(self._wl):
+        if wavelength < min(self._wl.as_um) or wavelength > max(self._wl.as_um):
             raise AttributeError(
-                "Index can be found only in between ({min(self._wl)}) and ({max(self._wl)})"
+                f"Index can be found only in between ({min(self._wl.as_um)}) and ({max(self._wl.as_um)})"
             )
-        fn = make_splrep(self.nk, self._wl)
+        fn = make_splrep(self._wl.as_um, self.nk)
         return fn(wavelength)
 
     def plot(self, include_k: bool = True):
@@ -92,7 +92,7 @@ class RefractiveIndex:
             for wl in wls.as_um:
                 sum = 0.0
                 for i in range(len(A)):
-                    sum += A[i] * wl**2 / (wl**2 - B[i] ** 2)
+                    sum += A[i] * wl**2 / (wl**2 - B[i])
                 n.append(np.sqrt(A0 + sum))
             k = np.zeros(len(wls))
 
