@@ -12,6 +12,8 @@ from typing import Literal, Self
 
 import warnings
 import numpy as np
+import matplotlib.pyplot as plt
+from math import factorial
 from scipy.interpolate import make_splrep
 from rich.traceback import install
 
@@ -33,6 +35,7 @@ class Dispersion:
         self._values = values
         self._wavelengths = wavelengths
         self._unit = "s/m^2"
+        self.central_wavelength = central_wavelength
 
     def __repr__(self):
         return f"Dispersion: from wl: {self._wavelengths.min()} to {self._wavelengths.max()}"
@@ -45,7 +48,7 @@ class Dispersion:
     def as_s_m_m(self) -> NDArray:
         return self._values
 
-    def get_wl(self) -> WavelengthArray:
+    def get_wls(self) -> WavelengthArray:
         return self._wavelengths
 
     def check_wavelength_limit(self, wavelength: float, unit: Literal["nm", "m", "um"]):
@@ -178,6 +181,43 @@ class Dispersion:
         beta2 = -self._wavelengths.as_m**2 / (2 * PI * C_MS) * self.as_s_m_m
         spline = make_splrep(self._wavelengths.as_nm, beta2)
         return float(spline(wavelength_nm))
+
+    def get_betas(self, polyOrder, make_plot=False, return_diagnostics=False):
+        """Read in a tabulation of D vs Lambda. Returns betas in array
+        [beta2, beta3, ...]. If return_diagnostics is True, then return
+        (betas, fit_x_axis (omega in THz), data (ps^2), fit (ps^2) )"""
+
+        # omega - omega_0
+        omegaAxis = 2 * np.pi * C_MS / (self.get_wls().as_m) - 2 * np.pi * C_MS / (
+            self.central_wavelength.as_m
+        )
+
+        # Convert from D to beta via beta2 = -D * lambda^2 / (2*pi*c)
+        betaTwo = -self.as_s_m_m * (self.get_wls().as_m) ** 2 / (2 * np.pi * C_MS)
+        # The units of beta2 for the GNLSE solver are ps^2/m; convert
+        betaTwo = betaTwo * 1e24
+        # Also convert angular frequency to rad/ps
+        omegaAxis = omegaAxis * 1e-12  #  s/ps
+
+        # Fit beta2 with high-order polynomial
+        polyFitCo = np.polyfit(omegaAxis, betaTwo, polyOrder)
+
+        Betas = polyFitCo[::-1]
+
+        polyFit = np.zeros((len(omegaAxis),))
+
+        for i in range(len(Betas)):
+            Betas[i] = Betas[i] * factorial(i)
+            polyFit = polyFit + Betas[i] / factorial(i) * omegaAxis**i
+
+        if make_plot:
+            plt.plot(omegaAxis, betaTwo, "o")
+            plt.plot(omegaAxis, polyFit)
+            plt.show()
+        if return_diagnostics:
+            return Betas, omegaAxis, betaTwo, polyFit
+        else:
+            return Betas
 
 
 class PropagationConstant:
