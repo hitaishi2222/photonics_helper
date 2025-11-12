@@ -152,3 +152,16 @@ class RefractiveIndex:
             ValueError: If A and B lists have different lengths
         """
         ...
+
+    def propagation_loss(self) -> NDArray | None:
+        """Calculate propagation loss in dB/m.
+
+        This requires the material to have a non-zero extinction
+        coefficient (k). If k is all zeros, a warning is issued and None is returned.
+
+        The loss is calculated as: Loss (dB/m) = 10 * log10(exp(4 * pi * k / lambda))
+
+        Returns:
+            Propagation loss values in dB/m, or None if k is all zeros.
+        """
+        ...

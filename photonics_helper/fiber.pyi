@@ -49,7 +49,7 @@ class Dispersion:
         """Get dispersion values in s/m^2 units."""
         ...
 
-    def get_wl(self) -> WavelengthArray:
+    def get_wls(self) -> WavelengthArray:
         """Get the wavelength array for this dispersion data."""
         ...
 
@@ -173,20 +173,32 @@ class Dispersion:
         """
         ...
 
-    def get_beta2(self, wavelength_nm: float) -> float:
-        """
-        Get the second-order dispersion parameter β₂ at a specific wavelength.
-
-        β₂ is related to dispersion by: β₂ = -λ²/(2πc) * D
-
-        Args:
-            wavelength_nm: Wavelength in nanometers
-
-        Returns:
-            β₂ value in s²/m
-
         Raises:
             ValueError: If wavelength is outside valid range
+        """
+        ...
+
+    def get_betas(
+        self, polyOrder: int, make_plot: bool = False, return_diagnostics: bool = False
+    ) -> NDArray | Tuple[NDArray, NDArray, NDArray, NDArray]:
+        """
+        Calculate beta coefficients from dispersion data.
+
+        Fits a polynomial to the group velocity dispersion (GVD) parameter β₂
+        and returns the series expansion coefficients (β₂, β₃, ...).
+
+        Args:
+            polyOrder: Order of the polynomial fit.
+            make_plot: If True, displays a plot of the fit.
+            return_diagnostics: If True, returns detailed fit diagnostics.
+
+        Returns:
+            - If return_diagnostics is False: An array of beta coefficients [β₂, β₃, ...].
+            - If return_diagnostics is True: A tuple containing:
+                - betas: The array of beta coefficients.
+                - fit_x_axis: The frequency axis (ω - ω₀) in THz.
+                - data: The original β₂ data in ps²/m.
+                - fit: The polynomial fit of β₂ data.
         """
         ...
 

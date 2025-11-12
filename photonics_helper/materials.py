@@ -1,4 +1,5 @@
-from .base import WavelengthArray
+import warnings
+from .base import PI, WavelengthArray
 
 from typing import List, Self, Tuple
 from numpy.typing import NDArray
@@ -121,3 +122,11 @@ class RefractiveIndex:
             k = np.zeros(len(wls))
 
         return cls(n=np.array(n), k=k, wl=wls)
+
+    def propagation_loss(self):
+        if not np.all(self.k):
+            warnings.warn(
+                "RefractiveIndex doesn't have imaginary index values. please provide it before loss calculation"
+            )
+        else:
+            return -20 * np.log10(np.exp(-2 * PI * self.k / self.wl))
