@@ -129,4 +129,4 @@ class RefractiveIndex:
                 "RefractiveIndex doesn't have imaginary index values. please provide it before loss calculation"
             )
         else:
-            return -20 * np.log10(np.exp(-2 * PI * self.k / self.wl))
+            return -20 * np.log10(np.exp(-2 * PI * self.k / self.wl.as_m))

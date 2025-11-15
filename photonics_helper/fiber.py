@@ -182,14 +182,31 @@ class Dispersion:
         spline = make_splrep(self._wavelengths.as_nm, beta2)
         return float(spline(wavelength_nm))
 
-    def get_betas(self, polyOrder, make_plot=False, return_diagnostics=False):
+    def get_betas(
+        self,
+        polyOrder,
+        wavelength: Wavelength | None = None,
+        make_plot=False,
+        return_diagnostics=False,
+    ):
         """Read in a tabulation of D vs Lambda. Returns betas in array
         [beta2, beta3, ...]. If return_diagnostics is True, then return
         (betas, fit_x_axis (omega in THz), data (ps^2), fit (ps^2) )"""
 
+        if not wavelength:
+            wavelength = self.central_wavelength
+
+        minimum = min(self.get_wls().as_nm)
+        maximum = max(self.get_wls().as_nm)
+        if wavelength.as_nm < minimum or wavelength.as_nm > maximum:
+            warnings.warn(
+                f"wavelength given is not in the range of dispersion: \nit should be between {minimum} and {maximum}"
+            )
+            return
+
         # omega - omega_0
         omegaAxis = 2 * np.pi * C_MS / (self.get_wls().as_m) - 2 * np.pi * C_MS / (
-            self.central_wavelength.as_m
+            wavelength.as_m
         )
 
         # Convert from D to beta via beta2 = -D * lambda^2 / (2*pi*c)

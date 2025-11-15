@@ -1,7 +1,7 @@
 from photonics_helper.base import AngularFrequencyArray, Wavelength, WavelengthArray
 
 from numpy.typing import NDArray
-from typing import Literal, Self
+from typing import Literal, Self, Tuple
 
 class Dispersion:
     """
@@ -173,13 +173,12 @@ class Dispersion:
         """
         ...
 
-        Raises:
-            ValueError: If wavelength is outside valid range
-        """
-        ...
-
     def get_betas(
-        self, polyOrder: int, make_plot: bool = False, return_diagnostics: bool = False
+        self,
+        polyOrder: int,
+        wavelength: Wavelength | None = None,
+        make_plot: bool = False,
+        return_diagnostics: bool = False,
     ) -> NDArray | Tuple[NDArray, NDArray, NDArray, NDArray]:
         """
         Calculate beta coefficients from dispersion data.
@@ -189,6 +188,7 @@ class Dispersion:
 
         Args:
             polyOrder: Order of the polynomial fit.
+            wavelength: at which wavelengths data is calculated from.
             make_plot: If True, displays a plot of the fit.
             return_diagnostics: If True, returns detailed fit diagnostics.
 
@@ -268,4 +268,3 @@ class PropagationConstant:
             TypeError: If omega is not an AngularFrequencyArray
         """
         ...
-
