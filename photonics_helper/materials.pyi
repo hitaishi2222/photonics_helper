@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from numpy.typing import NDArray
 from typing import List, Self, Tuple
+from functools import cached_property
 
 from .base import WavelengthArray
 
@@ -18,22 +19,22 @@ class RefractiveIndex:
         """
         ...
 
-    @property
+    @cached_property
     def n(self) -> NDArray:
         """Real part of the refractive index."""
         ...
 
-    @property
+    @cached_property
     def k(self) -> NDArray:
         """Imaginary part (extinction coefficient) of the refractive index."""
         ...
 
-    @property
+    @cached_property
     def wl(self) -> WavelengthArray:
         """Wavelength points at which n,k are defined."""
         ...
 
-    @property
+    @cached_property
     def nk(self) -> NDArray:
         """Complex refractive index (n + ik)."""
         ...
@@ -59,7 +60,7 @@ class RefractiveIndex:
 
         Returns:
             Interpolated n value
-        
+
         Raises:
             AttributeError: If wavelength is outside valid range
         """
@@ -73,7 +74,7 @@ class RefractiveIndex:
 
         Returns:
             Interpolated k value
-        
+
         Raises:
             AttributeError: If wavelength is outside valid range
         """
@@ -87,7 +88,7 @@ class RefractiveIndex:
 
         Returns:
             Interpolated complex n+ik value
-        
+
         Raises:
             AttributeError: If wavelength is outside valid range
         """
@@ -121,7 +122,7 @@ class RefractiveIndex:
 
         Returns:
             New RefractiveIndex instance
-        
+
         Raises:
             ValueError: If A and B lists have different lengths
         """
@@ -147,7 +148,7 @@ class RefractiveIndex:
 
         Returns:
             New RefractiveIndex instance
-        
+
         Raises:
             ValueError: If A and B lists have different lengths
         """

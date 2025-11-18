@@ -1,5 +1,6 @@
 from photonics_helper.base import AngularFrequencyArray, Wavelength, WavelengthArray
 
+from functools import cached_property
 from numpy.typing import NDArray
 from typing import Literal, Self, Tuple
 
@@ -39,12 +40,12 @@ class Dispersion:
         """Return string representation showing wavelength range."""
         ...
 
-    @property
+    @cached_property
     def as_ps_nm_km(self) -> NDArray:
         """Get dispersion values in ps/nm.km units."""
         ...
 
-    @property
+    @cached_property
     def as_s_m_m(self) -> NDArray:
         """Get dispersion values in s/m^2 units."""
         ...

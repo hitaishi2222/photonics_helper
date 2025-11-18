@@ -7,6 +7,7 @@ from photonics_helper.base import (
 )
 from photonics_helper.looks import c_info
 
+from functools import cached_property
 from numpy.typing import NDArray
 from typing import Literal, Self
 
@@ -40,11 +41,11 @@ class Dispersion:
     def __repr__(self):
         return f"Dispersion: from wl: {self._wavelengths.min()} to {self._wavelengths.max()}"
 
-    @property
+    @cached_property
     def as_ps_nm_km(self) -> NDArray:
         return self._values * 1e6
 
-    @property
+    @cached_property
     def as_s_m_m(self) -> NDArray:
         return self._values
 

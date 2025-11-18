@@ -3,6 +3,7 @@ from .base import PI, WavelengthArray
 
 from typing import List, Self, Tuple
 from numpy.typing import NDArray
+from functools import cached_property
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -18,19 +19,19 @@ class RefractiveIndex:
         self._k = k
         self._wl = wl
 
-    @property
+    @cached_property
     def n(self) -> NDArray:
         return self._n
 
-    @property
+    @cached_property
     def k(self) -> NDArray:
         return self._k
 
-    @property
+    @cached_property
     def wl(self) -> WavelengthArray:
         return self._wl
 
-    @property
+    @cached_property
     def nk(self) -> NDArray:
         return self._n + self._k
 

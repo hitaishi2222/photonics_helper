@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import Literal, Self
 from numpy.typing import NDArray
+from functools import cached_property
 
 
 import numpy as np
@@ -26,15 +27,15 @@ class Wavelength(float):
             raise ValueError(f"Unsupported unit: {unit} use 'nm', 'um', or 'm'")
         return super().__new__(cls, value)
 
-    @property
+    @cached_property
     def as_m(self) -> float:
         return float(self)
 
-    @property
+    @cached_property
     def as_um(self) -> float:
         return self * 1e6
 
-    @property
+    @cached_property
     def as_nm(self) -> float:
         return self * 1e9
 
@@ -64,19 +65,19 @@ class Frequency(float):
             )
         return super().__new__(cls, value)
 
-    @property
+    @cached_property
     def as_Hz(self) -> float:
         return float(self)
 
-    @property
+    @cached_property
     def as_THz(self) -> float:
         return self * 1e-12
 
-    @property
+    @cached_property
     def as_GHz(self) -> float:
         return self * 1e-9
 
-    @property
+    @cached_property
     def as_MHz(self) -> float:
         return self * 1e-6
 
@@ -104,12 +105,12 @@ class AngularFrequency(float):
         # Use float() to avoid recursion when converting self to string
         return f"Angular Frequency -> {float(self)} rad/s"
 
-    @property
+    @cached_property
     def as_rad_s(self) -> float:
         # Use float() to avoid recursion when accessing value
         return float(self)
 
-    @property
+    @cached_property
     def as_rad_ps(self) -> float:
         # Use float() to avoid recursion in multiplication
         return float(self) * 1e-12  # Convert from rad/s to rad/ps
@@ -134,15 +135,15 @@ class Wavenumber(float):
             raise ValueError(f"Unsupported unit: {unit} use '1/cm' or '1/m'")
         return super().__new__(cls, value)
 
-    @property
+    @cached_property
     def as_1_m(self) -> float:
         return float(self)
 
-    @property
+    @cached_property
     def as_1_cm(self) -> float:
         return float(self) * 1e-2
 
-    @property
+    @cached_property
     def as_angular(self) -> float:
         return float(self) * 2 * PI
 
@@ -175,15 +176,15 @@ class WavelengthArray(np.ndarray):
         if obj is None:
             return
 
-    @property
+    @cached_property
     def as_m(self) -> NDArray:
         return np.array(self)
 
-    @property
+    @cached_property
     def as_um(self) -> NDArray:
         return np.array(self) * 1e6
 
-    @property
+    @cached_property
     def as_nm(self) -> NDArray:
         return np.array(self) * 1e9
 
@@ -225,19 +226,19 @@ class FrequencyArray(np.ndarray):
         if obj is None:
             return
 
-    @property
+    @cached_property
     def as_Hz(self) -> NDArray:
         return np.array(self)
 
-    @property
+    @cached_property
     def as_THz(self) -> NDArray:
         return np.array(self) * 1e-12
 
-    @property
+    @cached_property
     def as_GHz(self) -> NDArray:
         return np.array(self) * 1e-9
 
-    @property
+    @cached_property
     def as_MHz(self) -> NDArray:
         return np.array(self) * 1e-6
 
@@ -273,11 +274,11 @@ class AngularFrequencyArray(np.ndarray):
         if obj is None:
             return
 
-    @property
+    @cached_property
     def as_rad_s(self) -> NDArray:
         return np.array(self)
 
-    @property
+    @cached_property
     def as_rad_ps(self) -> NDArray:
         return np.array(self) * 1e-12
 
@@ -309,15 +310,15 @@ class WavenumberArray(np.ndarray):
         obj = np.asarray(value).view(cls)
         return obj
 
-    @property
+    @cached_property
     def as_1_m(self) -> NDArray:
         return np.array(self)
 
-    @property
+    @cached_property
     def as_1_cm(self) -> NDArray:
         return np.array(self) * 1e-2
 
-    @property
+    @cached_property
     def as_angular(self) -> NDArray:
         return np.array(self) * 2 * PI
 

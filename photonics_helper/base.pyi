@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import Literal, Self
+from functools import cached_property
 
 import numpy as np
 from numpy.typing import NDArray
@@ -22,17 +23,17 @@ class Wavelength(float):
         """
         ...
 
-    @property
+    @cached_property
     def as_m(self) -> float:
         """Return the wavelength in meters."""
         ...
 
-    @property
+    @cached_property
     def as_um(self) -> float:
         """Return the wavelength in micrometers."""
         ...
 
-    @property
+    @cached_property
     def as_nm(self) -> float:
         """Return the wavelength in nanometers."""
         ...
@@ -52,9 +53,7 @@ class Wavelength(float):
 class Frequency(float):
     """Represents a scalar frequency value with unit conversion methods."""
 
-    def __new__(
-        cls, value: float, unit: Literal["THz", "GHz", "MHz", "Hz"]
-    ) -> Self:
+    def __new__(cls, value: float, unit: Literal["THz", "GHz", "MHz", "Hz"]) -> Self:
         """Create a new frequency instance.
 
         Args:
@@ -66,22 +65,22 @@ class Frequency(float):
         """
         ...
 
-    @property
+    @cached_property
     def as_Hz(self) -> float:
         """Return the frequency in Hertz."""
         ...
 
-    @property
+    @cached_property
     def as_THz(self) -> float:
         """Return the frequency in Terahertz."""
         ...
 
-    @property
+    @cached_property
     def as_GHz(self) -> float:
         """Return the frequency in Gigahertz."""
         ...
 
-    @property
+    @cached_property
     def as_MHz(self) -> float:
         """Return the frequency in Megahertz."""
         ...
@@ -101,9 +100,7 @@ class Frequency(float):
 class AngularFrequency(float):
     """Represents a scalar angular frequency value with unit conversion methods."""
 
-    def __new__(
-        cls, value: float, unit: Literal["rad/s", "rad/ps"]
-    ) -> Self:
+    def __new__(cls, value: float, unit: Literal["rad/s", "rad/ps"]) -> Self:
         """Create a new angular frequency instance.
 
         Args:
@@ -116,13 +113,12 @@ class AngularFrequency(float):
         ...
 
     def __repr__(self) -> str: ...
-
-    @property
+    @cached_property
     def as_rad_s(self) -> float:
         """Return the angular frequency in rad/s."""
         ...
 
-    @property
+    @cached_property
     def as_rad_ps(self) -> float:
         """Return the angular frequency in rad/ps."""
         ...
@@ -154,17 +150,17 @@ class Wavenumber(float):
         """
         ...
 
-    @property
+    @cached_property
     def as_1_m(self) -> float:
         """Return the wavenumber in 1/m."""
         ...
 
-    @property
+    @cached_property
     def as_1_cm(self) -> float:
         """Return the wavenumber in 1/cm."""
         ...
 
-    @property
+    @cached_property
     def as_angular(self) -> float:
         """Return the angular wavenumber (k = 2π/λ)."""
         ...
@@ -197,18 +193,17 @@ class WavelengthArray(np.ndarray):
         ...
 
     def __array_finalize__(self, obj) -> None: ...
-
-    @property
+    @cached_property
     def as_m(self) -> NDArray:
         """Return the wavelengths in meters."""
         ...
 
-    @property
+    @cached_property
     def as_um(self) -> NDArray:
         """Return the wavelengths in micrometers."""
         ...
 
-    @property
+    @cached_property
     def as_nm(self) -> NDArray:
         """Return the wavelengths in nanometers."""
         ...
@@ -232,9 +227,7 @@ class WavelengthArray(np.ndarray):
 class FrequencyArray(np.ndarray):
     """Numpy array wrapper for multiple frequency values with unit conversions."""
 
-    def __new__(
-        cls, value: NDArray, unit: Literal["THz", "GHz", "MHz", "Hz"]
-    ) -> Self:
+    def __new__(cls, value: NDArray, unit: Literal["THz", "GHz", "MHz", "Hz"]) -> Self:
         """Create a new FrequencyArray instance.
 
         Args:
@@ -247,23 +240,22 @@ class FrequencyArray(np.ndarray):
         ...
 
     def __array_finalize__(self, obj) -> None: ...
-
-    @property
+    @cached_property
     def as_Hz(self) -> NDArray:
         """Return the frequencies in Hz."""
         ...
 
-    @property
+    @cached_property
     def as_THz(self) -> NDArray:
         """Return the frequencies in THz."""
         ...
 
-    @property
+    @cached_property
     def as_GHz(self) -> NDArray:
         """Return the frequencies in GHz."""
         ...
 
-    @property
+    @cached_property
     def as_MHz(self) -> NDArray:
         """Return the frequencies in MHz."""
         ...
@@ -287,9 +279,7 @@ class FrequencyArray(np.ndarray):
 class AngularFrequencyArray(np.ndarray):
     """Numpy array wrapper for multiple angular frequency values with unit conversions."""
 
-    def __new__(
-        cls, value: NDArray, unit: Literal["rad/s", "rad/ps"]
-    ) -> Self:
+    def __new__(cls, value: NDArray, unit: Literal["rad/s", "rad/ps"]) -> Self:
         """Create a new AngularFrequencyArray instance.
 
         Args:
@@ -302,13 +292,12 @@ class AngularFrequencyArray(np.ndarray):
         ...
 
     def __array_finalize__(self, obj) -> None: ...
-
-    @property
+    @cached_property
     def as_rad_s(self) -> NDArray:
         """Return the angular frequencies in rad/s."""
         ...
 
-    @property
+    @cached_property
     def as_rad_ps(self) -> NDArray:
         """Return the angular frequencies in rad/ps."""
         ...
@@ -344,17 +333,17 @@ class WavenumberArray(np.ndarray):
         """
         ...
 
-    @property
+    @cached_property
     def as_1_m(self) -> NDArray:
         """Return the wavenumbers in 1/m."""
         ...
 
-    @property
+    @cached_property
     def as_1_cm(self) -> NDArray:
         """Return the wavenumbers in 1/cm."""
         ...
 
-    @property
+    @cached_property
     def as_angular(self) -> NDArray:
         """Return the angular wavenumbers (k = 2π/λ)."""
         ...
@@ -374,3 +363,4 @@ class WavenumberArray(np.ndarray):
     def to_equally_spaced(self, points: int = 51) -> NDArray:
         """Convert to equally spaced array."""
         ...
+
