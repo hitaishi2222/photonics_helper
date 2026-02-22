@@ -50,8 +50,18 @@ pip install -e .
 
 # Roadmap
 
-- Add methods to convert wavelengths to energy (in eV)
-- Add support for wavenumber (cm^-1) conversions
+- ~~Add methods to convert wavelengths to energy (in eV)~~
+- ~~Add functionality for dispersion calculations~~
+- Modeling Envelopes
+- Modeling Pulse
+- Transfer Matrix Method (TMM)
+- Structured Light
 - Add methods for bandwidth calculations
-- Add functionality for dispersion calculations
 - Add methods for power/intensity conversions
+- Modeling GNLSE
+  - Kerr Effect
+  - Raman Effect
+  - Self Steepening
+  - Mode profile Dispersion
+- SSFM
+- FROG

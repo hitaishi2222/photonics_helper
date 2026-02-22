@@ -13,6 +13,8 @@ install()
 # Constants
 PI: float = sp.constants.pi
 C_MS: float = sp.constants.c
+EPS_0: float = sp.constants.epsilon_0
+MU_0: float = sp.constants.mu_0
 
 
 class Wavelength(float):

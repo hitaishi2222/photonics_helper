@@ -7,6 +7,8 @@ from numpy.typing import NDArray
 
 PI: float
 C_MS: float
+EPS_0: float
+MU_0: float
 
 class Wavelength(float):
     """Represents a scalar wavelength value with unit conversion methods."""
@@ -363,4 +365,3 @@ class WavenumberArray(np.ndarray):
     def to_equally_spaced(self, points: int = 51) -> NDArray:
         """Convert to equally spaced array."""
         ...
-

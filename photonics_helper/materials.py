@@ -33,7 +33,7 @@ class RefractiveIndex:
 
     @cached_property
     def nk(self) -> NDArray:
-        return np.array(complex(self._n, self._k), dtype=np.complex128)
+        return self._n + 1j * self._k
 
     @classmethod
     def from_complex(cls, nk: NDArray, wl: WavelengthArray) -> Self:

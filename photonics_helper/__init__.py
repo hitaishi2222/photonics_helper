@@ -9,11 +9,12 @@ from .base import (
     WavenumberArray,
     PI,
     C_MS,
+    EPS_0,
+    MU_0,
 )
 
 from .materials import RefractiveIndex
 from .fiber import Dispersion, PropagationConstant
-
 
 __all__ = [
     "Wavelength",
@@ -29,4 +30,6 @@ __all__ = [
     "RefractiveIndex",
     "Dispersion",
     "PropagationConstant",
+    "EPS_0",
+    "MU_0",
 ]
