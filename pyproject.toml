@@ -20,6 +20,8 @@ classifiers = [
 dependencies = [
     "matplotlib>=3.10.3",
     "numpy>=2.2.6",
+    "pydantic>=2.12.5",
+    "rich>=14.3.3",
     "scipy>=1.15.3",
 ]
 
@@ -34,3 +36,8 @@ Documentation = "https://github.com/hitaishi2222/photonics-helper#readme"
 
 [tool.setuptools.package-data]
 photonics_helper = ["*.pyi"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]

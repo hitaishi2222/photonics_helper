@@ -52,6 +52,9 @@ class Dispersion:
     def get_wls(self) -> WavelengthArray:
         return self._wavelengths
 
+    def _disp_fn(self):
+        return make_splrep(self._wavelengths.as_m, self.as_s_m_m)
+
     def check_wavelength_limit(self, wavelength: float, unit: Literal["nm", "m", "um"]):
         min = 0
         max = 0
@@ -72,20 +75,17 @@ class Dispersion:
     def fn(self, wavelength: float) -> float:
         self.check_wavelength_limit(wavelength, "m")
         c_info("Dispersion unit: s/m^2")
-        spline = make_splrep(self._wavelengths.as_m, self.as_s_m_m)
-        return float(spline(wavelength))
+        return self._disp_fn(wavelength).item()
 
     def fn_s_m_m(self, wavelength_nm: float) -> float:
         self.check_wavelength_limit(wavelength_nm, "nm")
         c_info("Dispersion unit: s/m^2")
-        spline = make_splrep(self._wavelengths.as_nm, self.as_s_m_m)
-        return float(spline(wavelength_nm))
+        return self._disp_fn(wavelength_nm * 1e-9).item()
 
     def fn_ps_nm_km(self, wavelength_nm: float) -> float:
         self.check_wavelength_limit(wavelength_nm, "nm")
         c_info("Dispersion unit: ps/nm.km")
-        spline = make_splrep(self._wavelengths.as_nm, self.as_ps_nm_km)
-        return float(spline(wavelength_nm))
+        return self._disp_fn(wavelength_nm * 1e-9).item() * 1e6
 
     @classmethod
     def from_neff(

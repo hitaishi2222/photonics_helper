@@ -96,7 +96,7 @@ class Frequency(float):
 class AngularFrequency(float):
     def __new__(cls, value: float, unit: Literal["rad/s", "rad/ps"]) -> Self:
         if unit == "rad/ps":
-            value *= 1e-12  # Convert from rad/ps to rad/s
+            value *= 1e12  # Convert from rad/ps to rad/s
         elif unit == "rad/s":
             pass  # Already in rad/s, no conversion needed
         else:
@@ -118,7 +118,7 @@ class AngularFrequency(float):
         return float(self) * 1e-12  # Convert from rad/s to rad/ps
 
     def to_wl(self) -> Wavelength:
-        return Wavelength((2 * PI) * C_MS / self, "m")
+        return Wavelength((2 * PI * C_MS) / self, "m")
 
     def to_freq(self) -> Frequency:
         return Frequency(self / (2 * PI), "Hz")
@@ -264,7 +264,7 @@ class AngularFrequencyArray(np.ndarray):
         # Convert input array to float type
         value = np.array(value, dtype=float)
         if unit == "rad/ps":
-            value *= 1e-12  # Convert from rad/ps to rad/s
+            value *= 1e12  # Convert from rad/ps to rad/s
         elif unit == "rad/s":
             pass  # Already in rad/s, no conversion needed
         else:
@@ -285,7 +285,7 @@ class AngularFrequencyArray(np.ndarray):
         return np.array(self) * 1e-12
 
     def to_wl(self) -> WavelengthArray:
-        return WavelengthArray((2 * PI) * C_MS / self, "m")
+        return WavelengthArray((2 * PI * C_MS) / self, "m")
 
     def to_freq(self) -> FrequencyArray:
         return FrequencyArray(self / (2 * PI), "Hz")

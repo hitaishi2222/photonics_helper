@@ -19,6 +19,11 @@ class RefractiveIndex:
         self._k = k
         self._wl = wl
 
+        self._wl_min = float(self._wl.as_um.min())
+        self._wl_max = float(self._wl.as_um.max())
+        self._n_spline = make_splrep(self._wl.as_um, self._n)
+        self._k_spline = make_splrep(self._wl.as_um, self._k)
+
     @cached_property
     def n(self) -> NDArray:
         return self._n
@@ -39,29 +44,25 @@ class RefractiveIndex:
     def from_complex(cls, nk: NDArray, wl: WavelengthArray) -> Self:
         return cls(n=np.real(nk), k=np.imag(nk), wl=wl)
 
-    def n_func(self, wavelength: float):
-        if wavelength < min(self._wl.as_um) or wavelength > max(self._wl.as_um):
-            raise AttributeError(
-                f"Index can be found only in between ({min(self._wl.as_um)}) and ({max(self._wl.as_um)})"
+    def _validate_range(self, wavelength: float):
+        if not (self._wl_min <= wavelength <= self._wl_max):
+            raise ValueError(
+                f"Index valid only between {self._wl_min} μm and {self._wl_max} μm"
             )
-        fn = make_splrep(self._wl.as_um, self._n)
-        return fn(wavelength)
 
-    def k_func(self, wavelength: float):
-        if wavelength < min(self._wl.as_um) or wavelength > max(self._wl.as_um):
-            raise AttributeError(
-                f"Index can be found only in between ({min(self._wl.as_um)}) and ({max(self._wl.as_um)})"
-            )
-        fn = make_splrep(self._wl.as_um, self._k)
-        return fn(wavelength)
+    def n_func(self, wavelength: float) -> float:
+        self._validate_range(wavelength)
+        return self._n_spline(wavelength).item()
 
-    def nk_func(self, wavelength: float):
-        if wavelength < min(self._wl.as_um) or wavelength > max(self._wl.as_um):
-            raise AttributeError(
-                f"Index can be found only in between ({min(self._wl.as_um)}) and ({max(self._wl.as_um)})"
-            )
-        fn = make_splrep(self._wl.as_um, self.nk)
-        return fn(wavelength)
+    def k_func(self, wavelength: float) -> float:
+        self._validate_range(wavelength)
+        return self._k_spline(wavelength).item()
+
+    def nk_func(self, wavelength: float) -> complex:
+        self._validate_range(wavelength)
+        return complex(
+            self._n_spline(wavelength).item(), self._k_spline(wavelength).item()
+        )
 
     def plot(self, include_k: bool = True):
 

@@ -59,7 +59,7 @@ def test_frequency_to_wl():
 
 def test_omega_scalar():
     omega = AngularFrequency(628, "rad/ps")
-    assert pytest.approx(omega.as_rad_s) == 628e-12
+    assert pytest.approx(omega.as_rad_s) == 628e12
 
 
 def test_omega_invalid_unit():
