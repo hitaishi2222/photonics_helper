@@ -55,8 +55,8 @@ def test_dispersion_accessor_functions():
     wrappers ``fn_ps_nm_km`` and ``fn_s_m_m``.
     """
     # Simple constant dispersion for which the spline is trivial.
-    wl_vals_nm = np.array([1500.0, 1550.0, 1600.0])
-    disp_vals = np.array([1e-6, 1e-6, 1e-6])  # s/m^2
+    wl_vals_nm = np.linspace(1500.0, 1600.0, 51)
+    disp_vals = np.ones(51) * 1e-6  # s/m^2
     wl_arr = WavelengthArray(wl_vals_nm, "nm")
     disp = Dispersion(
         wavelengths=wl_arr,
@@ -125,8 +125,8 @@ def test_propagation_constant_from_neff_omega_error_handling():
     The ``from_neff_omega`` constructor must enforce matching lengths and the
     correct type for the angular frequency array.
     """
-    neff = np.array([1.0, 1.1])
-    omega = AngularFrequencyArray(np.array([2.0, 4.0]), "rad/s")
+    neff = np.linspace(1.0, 1.1, 31)
+    omega = AngularFrequencyArray(np.linspace(2.0, 4.0, 31), "rad/s")
 
     # Mismatched lengths raise ``ValueError``.
     with pytest.raises(ValueError):

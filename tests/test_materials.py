@@ -22,7 +22,7 @@ def test_refractive_index_init(sample_refractive_index):
     assert (
         len(sample_refractive_index.n)
         == len(sample_refractive_index.k)
-        == len(sample_refractive_index.wl)
+        == len(sample_refractive_index.wl.value)
     )
 
 

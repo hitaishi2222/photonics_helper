@@ -39,7 +39,7 @@ class Dispersion:
         self.central_wavelength = central_wavelength
 
     def __repr__(self):
-        return f"Dispersion: from wl: {self._wavelengths.min()} to {self._wavelengths.max()}"
+        return f"Dispersion: from wl: {self._wavelengths.as_m.min()} to {self._wavelengths.as_m.max()}"
 
     @cached_property
     def as_ps_nm_km(self) -> NDArray:
@@ -75,17 +75,20 @@ class Dispersion:
     def fn(self, wavelength: float) -> float:
         self.check_wavelength_limit(wavelength, "m")
         c_info("Dispersion unit: s/m^2")
-        return self._disp_fn(wavelength).item()
+        fn = self._disp_fn()
+        return fn(wavelength).item()
 
     def fn_s_m_m(self, wavelength_nm: float) -> float:
         self.check_wavelength_limit(wavelength_nm, "nm")
         c_info("Dispersion unit: s/m^2")
-        return self._disp_fn(wavelength_nm * 1e-9).item()
+        fn = self._disp_fn()
+        return fn(wavelength_nm * 1e-9).item()
 
     def fn_ps_nm_km(self, wavelength_nm: float) -> float:
         self.check_wavelength_limit(wavelength_nm, "nm")
         c_info("Dispersion unit: ps/nm.km")
-        return self._disp_fn(wavelength_nm * 1e-9).item() * 1e6
+        fn = self._disp_fn()
+        return fn(wavelength_nm * 1e-9).item() * 1e6
 
     @classmethod
     def from_neff(
@@ -95,9 +98,12 @@ class Dispersion:
         central_wavelength_nm: float,
         ignore_fit_error: bool = False,
     ) -> Self:
+
+        if not isinstance(wavelengths, WavelengthArray):
+            raise TypeError("wavelengths should be an instance of `WavelengthArray`")
         # D = -lambda / C_MS * (d^2 neff/ d lambda^2)
 
-        if len(neff) != len(wavelengths):
+        if len(neff) != len(wavelengths.value):
             raise ValueError("Length of both neff and wavelengths should be same")
         if not isinstance(wavelengths, WavelengthArray):
             raise TypeError(
@@ -137,7 +143,7 @@ class Dispersion:
     ) -> Self:
         # -(2*PI*C_MS) / lambda^2 * (d^2 beta/ d omega^2)
 
-        if len(beta) != len(wavelengths):
+        if len(beta) != len(wavelengths.value):
             raise ValueError("Length of both beta and wavelengths should be same")
         if not isinstance(wavelengths, WavelengthArray):
             raise TypeError(
@@ -197,8 +203,9 @@ class Dispersion:
         if not wavelength:
             wavelength = self.central_wavelength
 
-        minimum = min(self.get_wls().as_nm)
-        maximum = max(self.get_wls().as_nm)
+        min_nm = self.get_wls().as_nm
+        maximum = max(min_nm)
+        minimum = min(min_nm)
         if wavelength.as_nm < minimum or wavelength.as_nm > maximum:
             warnings.warn(
                 f"wavelength given is not in the range of dispersion: \nit should be between {minimum} and {maximum}"
@@ -252,7 +259,9 @@ class PropagationConstant:
     def beta2_from_neff(
         cls, neff: NDArray, x_values: WavelengthArray | AngularFrequencyArray
     ):
-        if len(neff) != len(x_values):
+        if not isinstance(x_values, (WavelengthArray,AngularFrequencyArray)):
+            raise TypeError("x_values should be a type of either `WavelengthArray` or `AngularFrequencyArray`")
+        if len(neff) != len(x_values.value):
             raise ValueError("both neff and x_values must be of same length.")
 
         if isinstance(x_values, WavelengthArray):
@@ -260,18 +269,18 @@ class PropagationConstant:
         elif isinstance(x_values, AngularFrequencyArray):
             omegas = x_values
 
-        beta2 = neff * omegas / C_MS
+        beta2 = neff * omegas.as_rad_s / C_MS
         return beta2
 
     @classmethod
     def from_neff_omega(cls, neff: NDArray, omega: AngularFrequencyArray) -> Self:
-        if len(neff) != len(omega):
-            raise ValueError(
-                "both neff and angular frequency array must have same length"
-            )
         if not isinstance(omega, AngularFrequencyArray):
             raise TypeError(
                 f"omega should be a type of 'AngularFrequencyArray' : got {type(omega)}"
+            )
+        if len(neff) != len(omega.value):
+            raise ValueError(
+                "both neff and angular frequency array must have same length"
             )
 
         betas = omega.as_rad_s * neff / C_MS

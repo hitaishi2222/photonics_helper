@@ -1,12 +1,13 @@
 from __future__ import annotations
 from typing import Literal, Self
-from numpy.typing import NDArray
+from numpy.typing import NDArray, ArrayLike
 from functools import cached_property
 
 
 import numpy as np
 import scipy as sp
 from rich.traceback import install
+from pydantic.dataclasses import dataclass
 
 install()
 
@@ -17,74 +18,86 @@ EPS_0: float = sp.constants.epsilon_0
 MU_0: float = sp.constants.mu_0
 
 
-class Wavelength(float):
-    def __new__(cls, value: float, unit: Literal["nm", "um", "m"]) -> Self:
-        if unit == "nm":
-            value *= 1e-9
-        elif unit == "um":
-            value *= 1e-6
-        elif unit == "m":
+@dataclass(config={"arbitrary_types_allowed": True})
+class Wavelength():
+    value: float
+    unit: Literal["nm", "um", "m"]
+
+    def __post_init__(self):
+        if self.unit == "nm":
+            self.value *= 1e-9
+        elif self.unit == "um":
+            self.value *= 1e-6
+        elif self.unit == "m":
             pass  # Already in meters, no conversion needed
         else:
-            raise ValueError(f"Unsupported unit: {unit} use 'nm', 'um', or 'm'")
-        return super().__new__(cls, value)
+            raise ValueError(f"Unsupported unit: {self.unit} use 'nm', 'um', or 'm'")
+
+    def __repr__(self) -> str:
+        return f"Wavelength -> {self.as_m} m"
 
     @cached_property
     def as_m(self) -> float:
-        return float(self)
+        return self.value
 
     @cached_property
     def as_um(self) -> float:
-        return self * 1e6
+        return self.value * 1e6
 
     @cached_property
     def as_nm(self) -> float:
-        return self * 1e9
+        return self.value * 1e9
 
     def to_freq(self) -> Frequency:
-        return Frequency(C_MS / self, "Hz")
+        return Frequency(C_MS / self.value, "Hz")
 
     def to_omega(self) -> AngularFrequency:
-        return AngularFrequency(2 * PI * C_MS / self, "rad/s")
+        return AngularFrequency(2 * PI * C_MS / self.value, "rad/s")
 
     def to_wn(self) -> Wavenumber:
         return Wavenumber(value=1 / self.as_m, unit="1/m")
 
 
-class Frequency(float):
-    def __new__(cls, value: float, unit: Literal["THz", "GHz", "MHz", "Hz"]) -> Self:
-        if unit == "THz":
-            value *= 1e12
-        elif unit == "GHz":
-            value *= 1e9
-        elif unit == "MHz":
-            value *= 1e6
-        elif unit == "Hz":
+@dataclass(config={"arbitrary_types_allowed": True})
+class Frequency():
+    value: float
+    unit: Literal["THz", "GHz", "MHz", "Hz"]
+
+    def __post_init__(self):
+        if self.unit == "THz":
+            self.value *= 1e12
+        elif self.unit == "GHz":
+            self.value *= 1e9
+        elif self.unit == "MHz":
+            self.value *= 1e6
+        elif self.unit == "Hz":
             pass  # Already in Hz, no conversion needed
         else:
             raise ValueError(
-                f"Unsupported unit: {unit} use 'THz', 'GHz', 'MHz' or 'Hz'"
+                f"Unsupported unit: {self.unit} use 'THz', 'GHz', 'MHz' or 'Hz'"
             )
-        return super().__new__(cls, value)
+
+    def __repr__(self) -> str:
+        return f"Frequency -> {self.as_Hz} Hz"
 
     @cached_property
     def as_Hz(self) -> float:
-        return float(self)
+        return self.value
 
     @cached_property
     def as_THz(self) -> float:
-        return self * 1e-12
+        return self.value * 1e-12
 
     @cached_property
     def as_GHz(self) -> float:
-        return self * 1e-9
+        return self.value * 1e-9
 
     @cached_property
     def as_MHz(self) -> float:
-        return self * 1e-6
+        return self.value * 1e-6
 
     def to_wl(self) -> Wavelength:
-        return Wavelength(C_MS / self, "m")
+        return Wavelength(C_MS / self.value, "m")
 
     def to_omega(self) -> AngularFrequency:
         return AngularFrequency(2 * PI * self.as_Hz, "rad/s")
@@ -93,61 +106,66 @@ class Frequency(float):
         return Wavenumber(value=self.as_Hz / C_MS, unit="1/m")
 
 
-class AngularFrequency(float):
-    def __new__(cls, value: float, unit: Literal["rad/s", "rad/ps"]) -> Self:
-        if unit == "rad/ps":
-            value *= 1e12  # Convert from rad/ps to rad/s
-        elif unit == "rad/s":
+@dataclass(config={"arbitrary_types_allowed": True})
+class AngularFrequency():
+    value: float
+    unit: Literal["rad/s", "rad/ps"]
+
+    def __post_init__(self):
+        if self.unit == "rad/ps":
+            self.value *= 1e12  # Convert from rad/ps to rad/s
+        elif self.unit == "rad/s":
             pass  # Already in rad/s, no conversion needed
         else:
-            raise ValueError(f"Unsupported unit: {unit} use 'rad/s' or 'rad/ps'")
-        return super().__new__(cls, value)
+            raise ValueError(f"Unsupported unit: {self.unit} use 'rad/s' or 'rad/ps'")
 
     def __repr__(self) -> str:
-        # Use float() to avoid recursion when converting self to string
-        return f"Angular Frequency -> {float(self)} rad/s"
+        return f"Angular Frequency -> {self.value} rad/s"
 
     @cached_property
     def as_rad_s(self) -> float:
-        # Use float() to avoid recursion when accessing value
-        return float(self)
+        return self.value
 
     @cached_property
     def as_rad_ps(self) -> float:
-        # Use float() to avoid recursion in multiplication
-        return float(self) * 1e-12  # Convert from rad/s to rad/ps
+        return self.value * 1e-12
 
     def to_wl(self) -> Wavelength:
-        return Wavelength((2 * PI * C_MS) / self, "m")
+        return Wavelength((2 * PI * C_MS) / self.value, "m")
 
     def to_freq(self) -> Frequency:
-        return Frequency(self / (2 * PI), "Hz")
+        return Frequency(self.value / (2 * PI), "Hz")
 
     def to_wn(self) -> Wavenumber:
         return Wavenumber(value=self.as_rad_s / (2 * PI * C_MS), unit="1/m")
 
 
-class Wavenumber(float):
-    def __new__(cls, value: float, unit: Literal["1/cm", "1/m"]) -> Self:
-        if unit == "1/cm":
-            value *= 1e2  # Convert from 1/cm to 1/m
-        elif unit == "1/m":
+@dataclass(config={"arbitrary_types_allowed": True})
+class Wavenumber():
+    value: float
+    unit: Literal["1/cm", "1/m"]
+    def __post_init__(self):
+        if self.unit == "1/cm":
+            self.value *= 1e2  # Convert from 1/cm to 1/m
+        elif self.unit == "1/m":
             pass  # Already in 1/m, no conversion needed
         else:
-            raise ValueError(f"Unsupported unit: {unit} use '1/cm' or '1/m'")
-        return super().__new__(cls, value)
+            raise ValueError(f"Unsupported unit: {self.unit} use '1/cm' or '1/m'")
+
+    def __repr__(self) -> str:
+        return f"Wavenumber -> {self.as_1_m} 1/m"
 
     @cached_property
     def as_1_m(self) -> float:
-        return float(self)
+        return self.value
 
     @cached_property
     def as_1_cm(self) -> float:
-        return float(self) * 1e-2
+        return self.value * 1e-2
 
     @cached_property
     def as_angular(self) -> float:
-        return float(self) * 2 * PI
+        return self.value * 2 * PI
 
     def to_wl(self) -> Wavelength:
         return Wavelength(value=1 / self.as_1_m, unit="m")
@@ -159,36 +177,37 @@ class Wavenumber(float):
         return AngularFrequency(value=C_MS * 2 * PI * self.as_1_m, unit="rad/s")
 
 
-class WavelengthArray(np.ndarray):
-    def __new__(cls, value: NDArray, unit: Literal["nm", "um", "m"]) -> Self:
-        # Convert input array to float type
-        value = np.array(value, dtype=float)
-        if unit == "nm":
-            value *= 1e-9
-        elif unit == "um":
-            value *= 1e-6
-        elif unit == "m":
+@dataclass(config={"arbitrary_types_allowed": True})
+class WavelengthArray:
+    value: ArrayLike
+    unit: Literal["nm", "um", "m"]
+
+    def __post_init__(self):
+        self.value = np.array(self.value, dtype=float)
+        if self.unit == "nm":
+            self.value *= 1e-9
+        elif self.unit == "um":
+            self.value *= 1e-6
+        elif self.unit == "m":
             pass  # Already in meters, no conversion needed
         else:
-            raise ValueError(f"Unsupported unit: {unit} use 'nm', 'um', or 'm'")
-        obj = np.asarray(value).view(cls)
-        return obj
+            raise ValueError(f"Unsupported unit: {self.unit} use 'nm', 'um', or 'm'")
 
-    def __array_finalize__(self, obj):
-        if obj is None:
-            return
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__} -> from:{min(self.as_m)} m to: {max(self.as_m)} m"
+
 
     @cached_property
     def as_m(self) -> NDArray:
-        return np.array(self)
+        return self.value
 
     @cached_property
     def as_um(self) -> NDArray:
-        return np.array(self) * 1e6
+        return self.value * 1e6
 
     @cached_property
     def as_nm(self) -> NDArray:
-        return np.array(self) * 1e9
+        return self.value * 1e9
 
     def to_freq(self) -> FrequencyArray:
         return FrequencyArray(C_MS / self.as_m, "Hz")
@@ -205,47 +224,47 @@ class WavelengthArray(np.ndarray):
         return np.linspace(min, max, points)
 
 
-class FrequencyArray(np.ndarray):
-    def __new__(cls, value: NDArray, unit: Literal["THz", "GHz", "MHz", "Hz"]) -> Self:
-        # Convert input array to float type
-        value = np.array(value, dtype=float)
-        if unit == "THz":
-            value *= 1e12
-        elif unit == "GHz":
-            value *= 1e9
-        elif unit == "MHz":
-            value *= 1e6
-        elif unit == "Hz":
+@dataclass(config={"arbitrary_types_allowed": True})
+class FrequencyArray:
+    value: ArrayLike
+    unit: Literal["THz", "GHz", "MHz", "Hz"]
+
+    def __post_init__(self):
+        self.value = np.array(self.value, dtype=float)
+        if self.unit == "THz":
+            self.value *= 1e12
+        elif self.unit == "GHz":
+            self.value *= 1e9
+        elif self.unit == "MHz":
+            self.value *= 1e6
+        elif self.unit == "Hz":
             pass  # Already in Hz, no conversion needed
         else:
             raise ValueError(
-                f"Unsupported unit: {unit} use 'THz', 'GHz', 'MHz' or 'Hz'"
+                f"Unsupported unit: {self.unit} use 'THz', 'GHz', 'MHz' or 'Hz'"
             )
-        obj = np.asarray(value).view(cls)
-        return obj
 
-    def __array_finalize__(self, obj):
-        if obj is None:
-            return
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__} -> from:{min(self.as_Hz)} Hz to: {max(self.as_Hz)} Hz"
 
     @cached_property
     def as_Hz(self) -> NDArray:
-        return np.array(self)
+        return self.value
 
     @cached_property
     def as_THz(self) -> NDArray:
-        return np.array(self) * 1e-12
+        return self.value * 1e-12
 
     @cached_property
     def as_GHz(self) -> NDArray:
-        return np.array(self) * 1e-9
+        return self.value * 1e-9
 
     @cached_property
     def as_MHz(self) -> NDArray:
-        return np.array(self) * 1e-6
+        return self.value * 1e-6
 
     def to_wl(self) -> WavelengthArray:
-        return WavelengthArray(C_MS / self, "m")
+        return WavelengthArray(C_MS / self.value, "m")
 
     def to_omega(self) -> AngularFrequencyArray:
         return AngularFrequencyArray(2 * PI * self.as_Hz, "rad/s")
@@ -254,75 +273,80 @@ class FrequencyArray(np.ndarray):
         return WavenumberArray(value=self.as_Hz / C_MS, unit="1/m")
 
     def to_equally_spaced(self, points=51) -> NDArray:
-        min = self.as_Hz.min()
-        max = self.as_Hz.max()
-        return np.linspace(max, min, points)
+        _min = self.as_Hz.min()
+        _max = self.as_Hz.max()
+        return np.linspace(_max, _min, points)
 
 
-class AngularFrequencyArray(np.ndarray):
-    def __new__(cls, value: NDArray, unit: Literal["rad/s", "rad/ps"]) -> Self:
-        # Convert input array to float type
-        value = np.array(value, dtype=float)
-        if unit == "rad/ps":
-            value *= 1e12  # Convert from rad/ps to rad/s
-        elif unit == "rad/s":
+@dataclass(config={"arbitrary_types_allowed": True})
+class AngularFrequencyArray:
+    value: ArrayLike
+    unit: Literal["rad/s", "rad/ps"]
+
+    def __post_init__(self) -> Self:
+        self.value = np.array(self.value, dtype=float)
+        if self.unit == "rad/ps":
+            self.value *= 1e12  # Convert from rad/ps to rad/s
+        elif self.unit == "rad/s":
             pass  # Already in rad/s, no conversion needed
         else:
-            raise ValueError(f"Unsupported unit: {unit} use 'rad/s' or 'rad/ps'")
-        obj = np.asarray(value).view(cls)
-        return obj
+            raise ValueError(f"Unsupported unit: {self.unit} use 'rad/s' or 'rad/ps'")
 
-    def __array_finalize__(self, obj):
-        if obj is None:
-            return
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__} -> from:{min(self.as_rad_s)} rad/s to: {max(self.as_rad_s)} rad/s"
+
 
     @cached_property
     def as_rad_s(self) -> NDArray:
-        return np.array(self)
+        return self.value
 
     @cached_property
     def as_rad_ps(self) -> NDArray:
-        return np.array(self) * 1e-12
+        return self.value * 1e-12
 
     def to_wl(self) -> WavelengthArray:
-        return WavelengthArray((2 * PI * C_MS) / self, "m")
+        return WavelengthArray((2 * PI * C_MS) / self.value, "m")
 
     def to_freq(self) -> FrequencyArray:
-        return FrequencyArray(self / (2 * PI), "Hz")
+        return FrequencyArray(self.value / (2 * PI), "Hz")
 
     def to_wn(self) -> WavenumberArray:
         return WavenumberArray(value=self.as_rad_s / (2 * PI * C_MS), unit="1/m")
 
     def to_equally_spaced(self, points=51) -> NDArray:
-        min = self.as_rad_s.min()
-        max = self.as_rad_s.max()
-        return np.linspace(max, min, points)
+        _min = self.as_rad_s.min()
+        _max = self.as_rad_s.max()
+        return np.linspace(_max, _min, points)
 
 
-class WavenumberArray(np.ndarray):
-    def __new__(cls, value: NDArray, unit: Literal["1/cm", "1/m"]) -> Self:
-        # Convert input array to float type
-        value = np.array(value, dtype=float)
-        if unit == "1/cm":
-            value *= 1e2  # Convert from 1/cm to 1/m
-        elif unit == "1/m":
+@dataclass(config={"arbitrary_types_allowed": True})
+class WavenumberArray:
+    value: ArrayLike
+    unit: Literal["1/cm", "1/m"]
+
+    def __post_init__(self):
+        self.value = np.array(self.value, dtype=float)
+        if self.unit == "1/cm":
+            self.value *= 1e2  # Convert from 1/cm to 1/m
+        elif self.unit == "1/m":
             pass  # Already in 1/m, no conversion needed
         else:
-            raise ValueError(f"Unsupported unit: {unit} use '1/cm' or '1/m'")
-        obj = np.asarray(value).view(cls)
-        return obj
+            raise ValueError(f"Unsupported unit: {self.unit} use '1/cm' or '1/m'")
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__} -> from:{min(self.as_1_m)} 1/m to: {max(self.as_1_m)} 1/m"
 
     @cached_property
     def as_1_m(self) -> NDArray:
-        return np.array(self)
+        return self.value
 
     @cached_property
     def as_1_cm(self) -> NDArray:
-        return np.array(self) * 1e-2
+        return self.value * 1e-2
 
     @cached_property
     def as_angular(self) -> NDArray:
-        return np.array(self) * 2 * PI
+        return self.value * 2 * PI
 
     def to_wl(self) -> WavelengthArray:
         return WavelengthArray(value=1 / self.as_1_m, unit="m")
@@ -334,6 +358,6 @@ class WavenumberArray(np.ndarray):
         return AngularFrequencyArray(value=C_MS * 2 * PI * self.as_1_m, unit="rad/s")
 
     def to_equally_spaced(self, points=51) -> NDArray:
-        min = self.as_1_m.min()
-        max = self.as_1_m.max()
-        return np.linspace(max, min, points)
+        _min = self.as_1_m.min()
+        _max = self.as_1_m.max()
+        return np.linspace(_max, _min, points)

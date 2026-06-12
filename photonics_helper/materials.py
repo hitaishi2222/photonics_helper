@@ -66,12 +66,12 @@ class RefractiveIndex:
 
     def plot(self, include_k: bool = True):
 
-        plt.plot(self._wl, self.n, label="n")
+        plt.plot(self._wl.as_um, self.n, label="n")
         plt.xlabel("wavelength [m]")
         plt.ylabel("n")
 
         if include_k:
-            plt.plot(self._wl, self._k, label="k")
+            plt.plot(self._wl.as_um, self._k, label="k")
             plt.ylabel("n,k")
             plt.legend()
 
@@ -97,7 +97,7 @@ class RefractiveIndex:
                 for i in range(len(A)):
                     sum += A[i] * wl**2 / (wl**2 - B[i])
                 n.append(np.sqrt(A0 + sum))
-            k = np.zeros(len(wls))
+            k = np.zeros(len(wls.value))
 
         return cls(n=np.array(n), k=k, wl=wls)
 
@@ -121,7 +121,7 @@ class RefractiveIndex:
                 for i in range(len(A)):
                     sum += A[i] / (wl**2 - B[i] ** 2)
                 n.append(np.sqrt(A0 + sum))
-            k = np.zeros(len(wls))
+            k = np.zeros(len(wls.value))
 
         return cls(n=np.array(n), k=k, wl=wls)
 

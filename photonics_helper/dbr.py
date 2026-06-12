@@ -128,7 +128,7 @@ class Pattren:
         return names
 
     def plot_index(self, wl: float = 0) -> None:
-        if wl == 0 and self.central_wavelength == 0:
+        if wl == 0 and self.central_wavelength is None:
             raise ValueError(
                 "Wavelenth reguired[in meters]: set central wavelength (or) assign wavelength of your choice in function."
             )
@@ -183,7 +183,7 @@ def plot_2d(pattren: Pattren, height=100e-9, overlay_index: bool = False) -> Non
         x_min = [pos[0] for pos in pattren._get_positions() if pos]
         x_max = [pos[1] for pos in pattren._get_positions() if pos]
 
-        if pattren.central_wavelength == 0:
+        if pattren.central_wavelength is None:
             raise ValueError("Wavelenth reguired[in meters]: set central wavelength")
         else:
             n, k = pattren.get_index(pattren.central_wavelength)
