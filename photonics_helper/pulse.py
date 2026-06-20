@@ -1,12 +1,16 @@
-from dataclasses import dataclass
-from math import sqrt, log, acosh
-from typing import Dict, Literal, Self
+from dataclasses import dataclass, field
+from math import sqrt, log, acosh, factorial, pi
+from typing import Callable, Dict, Literal, Self, Optional
 from functools import cached_property
+import logging
 from matplotlib import gridspec
 from photonics_helper.base import Wavelength
 
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.special import airy, hermite as hermite_poly, genlaguerre
+
+logger = logging.getLogger(__name__)
 
 SHAPE_FACTORS: Dict[str, float] = {
     "gaussian": 2 * sqrt(log(2)),
@@ -16,36 +20,150 @@ SHAPE_FACTORS: Dict[str, float] = {
 }
 
 
+def _super_gaussian_factor(order: int = 2) -> float:
+    """FWHM factor for super-gaussian: 2*T0*(log(2)/2)^(1/(2N))."""
+    return 2.0 * T0 * (log(2) / 2) ** (1.0 / (2 * order))
+
+
+def _triangular_factor() -> float:
+    """FWHM factor for triangular: 2*T0*(1 - 1/sqrt(2))."""
+    return 2.0 * (1.0 - 1.0 / sqrt(2))
+
+
+def _cosine_factor() -> float:
+    """FWHM factor for raised cosine: 2*T0*(1 - 1/sqrt(2))^(1/2)
+    raised cos: cos(pi*t/(2*T0)) at half power.
+    cos^2(pi*t/(2*T0)) = 0.5 -> cos(pi*t/(2*T0)) = 1/sqrt(2) -> pi*t/(2*T0) = pi/4 -> t = T0/2
+    FWHM = 2*t = T0
+    Wait let me recalculate.
+    """
+    # A(t) = cos(pi*t/(2*T0)) for |t| < T0
+    # I(t) = cos^2(pi*t/(2*T0))
+    # FWHM: cos^2(pi*t/(2*T0)) = 0.5
+    # cos(pi*t/(2*T0)) = 1/sqrt(2)
+    # pi*t/(2*T0) = pi/4
+    # t = T0/2
+    # FWHM = 2*t = T0
+    return 1.0
+
+
+def _exponential_factor() -> float:
+    """FWHM factor for bi-exponential: 2*T0*log(2)."""
+    return 2.0 * log(2)
+
+
+def _airy_factor() -> float:
+    """FWHM factor for Airy: first maximum of Ai function."""
+    # The first maximum of Ai(-x) is at x ≈ 2.3381 (first zero of Ai).
+    # Actually for the Airy pulse, the peak is at t=0, Ai(0) ≈ 0.3550.
+    # FWHM: Ai(-x)/Ai(0) = sqrt(0.5), find x such that Ai(-x) = Ai(0)*sqrt(0.5)
+    # Ai(0) ≈ 0.35503, Ai(0)*sqrt(0.5) ≈ 0.25104
+    # Ai(-x) = 0.25104 -> x ≈ 1.0 (approximately)
+    # Use numerical search
+    from scipy.optimize import brentq
+    target = 0.35503 * sqrt(0.5)
+    f = lambda x: airy(-x)[0] - target
+    root = brentq(f, 0.1, 2.0)
+    return 2.0 * root
+
+
 @dataclass
 class Envelope:
-    shape: Literal["gaussian", "sech", "lorentzian", "rectangular"]
+    """Analytic description of an optical pulse envelope.
+
+    Parameters
+    ----------
+    shape : The functional shape of the pulse. Supported values:
+        ``"gaussian"``, ``"sech"``, ``"lorentzian"``, ``"rectangular"``,
+        ``"super-gaussian"``, ``"triangular"``, ``"parabolic"``,
+        ``"cosine"``, ``"exponential"``, ``"gauss-hermite"``,
+        ``"airy"``, ``"custom"``.
+    peak_amplitude : Peak amplitude of the electric-field envelope *A(t)*.
+    pulse_width : Characteristic width *T₀* (the "1/e" width for a Gaussian, etc.).
+    chirp : Linear chirp coefficient *C* (default ``0.0``). The instantaneous
+        phase added to the envelope is ``0.5*C*(t/T₀)**2``.
+    """
+
+    shape: Literal[
+        "gaussian", "sech", "lorentzian", "rectangular",
+        "super-gaussian", "triangular", "parabolic", "cosine",
+        "exponential", "gauss-hermite", "airy", "custom",
+    ]
     peak_amplitude: float
     pulse_width: float  # T0
     chirp: float = 0.0
 
+    # Shape-specific extra parameters
+    super_gaussian_order: int = 2  # for "super-gaussian"
+    beam_waist: Optional[float] = None  # for "gauss-hermite"
+    hg_mode: int = 0  # Hermite polynomial mode index m
+    func: Optional[Callable] = None  # for "custom": func(t, T0, A0)
+    phase_func: Optional[Callable] = None  # for "custom": phase_func(t, T0, chirp)
+
     @property
     def fwhm(self) -> float:
-        return SHAPE_FACTORS[self.shape] * self.pulse_width
+        if self.shape == "super-gaussian":
+            return 2.0 * self.pulse_width * (log(2) / 2) ** (1.0 / (2 * self.super_gaussian_order))
+        elif self.shape == "triangular":
+            return 2.0 * self.pulse_width * (1.0 - 1.0 / sqrt(2))
+        elif self.shape == "cosine":
+            return self.pulse_width
+        elif self.shape == "exponential":
+            return 2.0 * self.pulse_width * log(2)
+        elif self.shape == "airy":
+            from scipy.optimize import brentq
+            # Ai(0) ≈ 0.35503, half-max of intensity = sqrt(0.5) * Ai(0) ≈ 0.25104
+            target = 0.35503 * sqrt(0.5)
+            f = lambda x: airy(-x)[0] - target
+            root = brentq(f, 0.1, 2.0)
+            return 2.0 * root * self.pulse_width
+        elif self.shape in SHAPE_FACTORS:
+            return SHAPE_FACTORS[self.shape] * self.pulse_width
+        else:
+            # custom, parabolic, gauss-hermite — return pulse_width as a lower-bound
+            return self.pulse_width
 
     @classmethod
     def from_fwhm(
         cls,
-        shape: Literal["gaussian", "sech", "lorentzian", "rectangular"],
+        shape: Literal[
+            "gaussian", "sech", "lorentzian", "rectangular",
+            "super-gaussian", "triangular", "cosine", "exponential", "airy",
+        ],
         peak_amplitude: float,
         fwhm: float,
     ) -> Self:
-        T0 = fwhm / SHAPE_FACTORS[shape]
-        return cls(
-            shape=shape,
-            peak_amplitude=peak_amplitude,
-            pulse_width=T0,
-        )
+        """Construct an Envelope from a desired full-width at half-maximum."""
+        if shape == "super-gaussian":
+            T0 = fwhm / (2.0 * (log(2) / 2) ** (1.0 / (2 * 2)))  # default order=2
+            return cls(
+                shape="super-gaussian", peak_amplitude=peak_amplitude,
+                pulse_width=T0, super_gaussian_order=2,
+            )
+        elif shape == "triangular":
+            T0 = fwhm / (2.0 * (1.0 - 1.0 / sqrt(2)))
+            return cls(shape="triangular", peak_amplitude=peak_amplitude, pulse_width=T0)
+        elif shape == "cosine":
+            T0 = fwhm  # FWHM = T0
+            return cls(shape="cosine", peak_amplitude=peak_amplitude, pulse_width=T0)
+        elif shape == "exponential":
+            T0 = fwhm / (2.0 * log(2))
+            return cls(shape="exponential", peak_amplitude=peak_amplitude, pulse_width=T0)
+        elif shape == "airy":
+            from scipy.optimize import brentq
+            target = 0.35503 * sqrt(0.5)
+            f = lambda x: airy(-x)[0] - target
+            root = brentq(f, 0.1, 2.0)
+            T0 = fwhm / (2.0 * root)
+            return cls(shape="airy", peak_amplitude=peak_amplitude, pulse_width=T0)
+        else:
+            T0 = fwhm / SHAPE_FACTORS[shape]
+            return cls(
+                shape=shape, peak_amplitude=peak_amplitude, pulse_width=T0,
+            )
 
     def field(self, t: np.ndarray) -> np.ndarray:
-        """
-        Returns complex envelope A(t)
-        """
-
+        """Returns complex envelope A(t)."""
         T0 = self.pulse_width
         A0 = self.peak_amplitude
 
@@ -55,20 +173,89 @@ class Envelope:
             case "sech":
                 amp = A0 / np.cosh(t / T0)
             case "lorentzian":
-                """
-                Lorentzian defined at amplitude level:
-                """
                 amp = A0 / (1 + (t / T0) ** 2)
             case "rectangular":
                 amp = A0 * (np.abs(t) <= T0)
+            case "super-gaussian":
+                N = self.super_gaussian_order
+                amp = A0 * np.exp(-(abs(t / T0) ** (2 * N)))
+            case "triangular":
+                amp = A0 * np.maximum(0.0, 1.0 - abs(t) / T0)
+            case "parabolic":
+                x = t / T0
+                amp = A0 * np.where(abs(x) <= 1.0, 1.0 - x**2, 0.0)
+            case "cosine":
+                x = t / T0
+                amp = A0 * np.where(abs(x) <= 1.0, np.cos(pi * x / 2), 0.0)
+            case "exponential":
+                amp = A0 * np.exp(-abs(t) / T0)
+            case "gauss-hermite":
+                w = self.beam_waist if self.beam_waist is not None else T0
+                x = sqrt(2) * t / w
+                H_m = hermite_poly(self.hg_mode)
+                amp = A0 * H_m(x) * np.exp(-x**2 / 2)
+            case "airy":
+                # Standard Airy pulse: Ai(-(t-t0)/T0), t0=0, accelerating towards +t
+                amp = A0 * airy(t / T0)[0]
+            case "custom":
+                if self.func is None:
+                    raise ValueError("'custom' shape requires 'func' to be set")
+                amp = self.func(t, T0, A0)
+            case _:
+                raise ValueError(f"Unknown shape: {self.shape}")
 
-        phase = 0.5 * self.chirp * (t / T0) ** 2
+        # Apply phase
+        if self.shape == "parabolic":
+            # Parabolic chirp: phase = chirp * (t/T0)^2, active only where amp != 0
+            x = t / T0
+            phase = np.where(abs(x) <= 1.0, self.chirp * x**2, 0.0)
+        elif self.shape == "custom":
+            if self.phase_func is not None:
+                phase = self.phase_func(t, T0, self.chirp)
+            else:
+                phase = 0.5 * self.chirp * (t / T0) ** 2
+        else:
+            phase = 0.5 * self.chirp * (t / T0) ** 2
 
         return amp * np.exp(1j * phase)
 
     def intensity(self, t: np.ndarray) -> np.ndarray:
         A = self.field(t)
         return np.abs(A) ** 2
+
+    @classmethod
+    def from_parabolic_asymptotic(
+        cls,
+        peak_amplitude: float,
+        pulse_width: float,
+        gain: float,
+        length: float,
+        chirp: float = 0.0,
+    ) -> Self:
+        """Construct a parabolic pulse with asymptotic amplifier chirp.
+
+        The chirp coefficient follows the asymptotic parabolic solution:
+        ``α ≈ 0.2726 × z × gain``.
+
+        Parameters
+        ----------
+        peak_amplitude : A₀
+        pulse_width : T₀
+        gain : Small-signal gain coefficient (unitless or per-length as used in the amplifier model)
+        length : Propagation length in the amplifier
+        chirp : Additional chirp on top of the asymptotic value (default 0)
+        """
+        alpha_asym = 0.2726 * length * gain + chirp
+        logger.info(
+            "Using asymptotic parabolic chirp: α ≈ 0.2726 × z × gain = %.4f",
+            alpha_asym,
+        )
+        return cls(
+            shape="parabolic",
+            peak_amplitude=peak_amplitude,
+            pulse_width=pulse_width,
+            chirp=alpha_asym,
+        )
 
 
 @dataclass
@@ -107,6 +294,28 @@ class TemporalGrid:
     @property
     def time_window(self):
         return self.N * self.dt
+
+    @classmethod
+    def for_pulse_train(
+        cls,
+        repetition_rate: float,
+        n_pulses: int,
+        pulse_width: float,
+        N: int = 2**12,
+    ) -> Self:
+        """Compute the right Tmax to cover a pulse train.
+
+        Parameters
+        ----------
+        repetition_rate : Hz — pulse spacing = 1 / repetition_rate
+        n_pulses : number of pulses
+        pulse_width : T₀ — characteristic width, used to estimate needed padding
+        N : number of time points (default 2¹²)
+        """
+        spacing = 1.0 / repetition_rate
+        # Window must cover all pulses + padding for tails
+        Tmax = n_pulses * spacing + 10 * pulse_width
+        return cls(N=N, Tmax=Tmax)
 
     def check_aliasing(self, T0):
         if self.time_window < 10 * T0:
@@ -148,6 +357,76 @@ class Wave:
 
     def peak_power(self):
         return np.max(self.envelope.intensity(self.grid.t))
+
+    def average_power(self, repetition_rate: float) -> float:
+        """Average power = pulse energy × repetition_rate.
+
+        Parameters
+        ----------
+        repetition_rate : Hz
+        """
+        return self.pulse_energy() * repetition_rate
+
+    @classmethod
+    def from_pulse_train(
+        cls,
+        envelope: Envelope,
+        central_wavelength: Wavelength,
+        grid: TemporalGrid,
+        repetition_rate: float,
+        n_pulses: int = 10,
+        refractive_index: float = 1.0,
+    ) -> Self:
+        """Construct a pulse train Wave from a single-envelope shape.
+
+        Parameters
+        ----------
+        envelope : The single-pulse envelope shape to repeat
+        central_wavelength : Central wavelength of the carrier
+        grid : TemporalGrid covering the full window (all pulses + padding)
+        repetition_rate : Hz — spacing between consecutive pulses
+        n_pulses : number of pulses (default 10)
+        refractive_index : background refractive index (default 1.0)
+        """
+        # Build the multi-pulse envelope field
+        full_field = np.zeros_like(grid.t, dtype=complex)
+        spacing = 1.0 / repetition_rate
+        for k in range(n_pulses):
+            t_centered = grid.t - k * spacing
+            full_field += envelope.field(t_centered)
+
+        # Create a temporary "virtual" envelope that stores the train flag
+        train_env = Envelope(
+            shape=envelope.shape,
+            peak_amplitude=envelope.peak_amplitude,
+            pulse_width=envelope.pulse_width,
+            chirp=envelope.chirp,
+            super_gaussian_order=envelope.super_gaussian_order,
+            beam_waist=envelope.beam_waist,
+            hg_mode=envelope.hg_mode,
+            func=envelope.func,
+            phase_func=envelope.phase_func,
+        )
+        train_env._is_pulse_train = True
+        train_env._n_pulses = n_pulses
+        train_env._repetition_rate = repetition_rate
+
+        wave = cls(
+            grid=grid,
+            envelope=train_env,
+            central_wavelength=central_wavelength,
+            refractive_index=refractive_index,
+            repetition_rate=repetition_rate,
+        )
+        # Override the envelope_field property via a wrapper
+        wave._pulse_train_field = full_field
+        return wave
+
+    @property
+    def envelope_field(self):
+        if hasattr(self, '_pulse_train_field') and self._pulse_train_field is not None:
+            return self._pulse_train_field
+        return self.envelope.field(self.grid.t)
 
     @cached_property
     def spectrum(self) -> np.ndarray:

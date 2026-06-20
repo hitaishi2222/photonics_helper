@@ -15,7 +15,8 @@ pulses:
 
 from __future__ import annotations
 
-from typing import Literal, Optional, Self, Tuple
+from functools import cached_property
+from typing import Callable, Literal, Optional, Self
 
 import numpy as np
 from matplotlib.figure import Figure
@@ -30,28 +31,50 @@ class Envelope:
     ----------
     shape:
         The functional shape of the pulse. Accepted values are
-        ``"gaussian"``, ``"sech"``, ``"lorentzian"``, and ``"rectangular"``.
+        ``"gaussian"``, ``"sech"``, ``"lorentzian"``, ``"rectangular"``,
+        ``"super-gaussian"``, ``"triangular"``, ``"parabolic"``,
+        ``"cosine"``, ``"exponential"``, ``"gauss-hermite"``,
+        ``"airy"``, ``"custom"``.
     peak_amplitude:
         Peak amplitude of the electric‑field envelope *A(t)*.
     pulse_width:
-        Characteristic width *T₀* (the “1/e” width for a Gaussian, etc.).
+        Characteristic width *T₀* (the "1/e" width for a Gaussian, etc.).
     chirp:
         Linear chirp coefficient *C* (default ``0.0``). The instantaneous
         phase added to the envelope is ``0.5*C*(t/T₀)**2``.
     """
 
-    shape: Literal["gaussian", "sech", "lorentzian", "rectangular"]
+    shape: Literal[
+        "gaussian", "sech", "lorentzian", "rectangular",
+        "super-gaussian", "triangular", "parabolic", "cosine",
+        "exponential", "gauss-hermite", "airy", "custom",
+    ]
     peak_amplitude: float
     pulse_width: float  # T0
     chirp: float
+    super_gaussian_order: int
+    beam_waist: Optional[float]
+    hg_mode: int
+    func: Optional[Callable]
+    phase_func: Optional[Callable]
 
     def __init__(
         self,
-        shape: Literal["gaussian", "sech", "lorentzian", "rectangular"],
+        shape: Literal[
+            "gaussian", "sech", "lorentzian", "rectangular",
+            "super-gaussian", "triangular", "parabolic", "cosine",
+            "exponential", "gauss-hermite", "airy", "custom",
+        ],
         peak_amplitude: float,
         pulse_width: float,
         chirp: float = ...,
+        super_gaussian_order: int = ...,
+        beam_waist: Optional[float] = ...,
+        hg_mode: int = ...,
+        func: Optional[Callable] = ...,
+        phase_func: Optional[Callable] = ...,
     ) -> None: ...
+
     @property
     def fwhm(self) -> float:
         """
@@ -65,7 +88,10 @@ class Envelope:
     @classmethod
     def from_fwhm(
         cls,
-        shape: Literal["gaussian", "sech", "lorentzian", "rectangular"],
+        shape: Literal[
+            "gaussian", "sech", "lorentzian", "rectangular",
+            "super-gaussian", "triangular", "cosine", "exponential", "airy",
+        ],
         peak_amplitude: float,
         fwhm: float,
     ) -> Self:
@@ -102,6 +128,31 @@ class Envelope:
         """
         ...
 
+    @classmethod
+    def from_parabolic_asymptotic(
+        cls,
+        peak_amplitude: float,
+        pulse_width: float,
+        gain: float,
+        length: float,
+        chirp: float = ...,
+    ) -> Self:
+        """
+        Construct a parabolic pulse with asymptotic amplifier chirp.
+
+        The chirp coefficient follows the asymptotic parabolic solution:
+        ``α ≈ 0.2726 × z × gain``.
+
+        Parameters
+        ----------
+        peak_amplitude : A₀
+        pulse_width : T₀
+        gain : Small‑signal gain coefficient
+        length : Propagation length in the amplifier
+        chirp : Additional chirp on top of the asymptotic value (default 0)
+        """
+        ...
+
 class TemporalGrid:
     """
     Uniformly sampled temporal/frequency grid and related FFT utilities.
@@ -115,6 +166,7 @@ class TemporalGrid:
     Tmax: float
 
     def __init__(self, N: int, Tmax: float) -> None: ...
+
     @property
     def dt(self) -> float:
         """Time step ``Δt = Tmax / N``."""
@@ -179,6 +231,26 @@ class TemporalGrid:
         """Total simulated time window ``N * dt`` (should equal ``Tmax``)."""
         ...
 
+    @classmethod
+    def for_pulse_train(
+        cls,
+        repetition_rate: float,
+        n_pulses: int,
+        pulse_width: float,
+        N: int = ...,
+    ) -> Self:
+        """
+        Compute the right Tmax to cover a pulse train.
+
+        Parameters
+        ----------
+        repetition_rate : Hz — pulse spacing = 1 / repetition_rate
+        n_pulses : number of pulses
+        pulse_width : T₀ — characteristic width, used to estimate needed padding
+        N : number of time points (default 2¹²)
+        """
+        ...
+
     def check_aliasing(self, T0: float) -> None:
         """
         Emit a warning if the total time window is too short to contain the
@@ -212,7 +284,8 @@ class Wave:
         refractive_index: float = ...,
         repetition_rate: Optional[float] = ...,
     ) -> None: ...
-    @property
+
+    @cached_property
     def central_frequency(self) -> float:
         """
         Central angular frequency :math:`\\omega_0` (rad·s⁻¹) derived from the
@@ -251,7 +324,17 @@ class Wave:
         """Maximum envelope intensity (peak power) in the same units."""
         ...
 
-    @property
+    def average_power(self, repetition_rate: float) -> float:
+        """
+        Average power = pulse energy × repetition_rate.
+
+        Parameters
+        ----------
+        repetition_rate : Hz
+        """
+        ...
+
+    @cached_property
     def spectrum(self) -> np.ndarray:
         """
         Frequency‑domain representation of the envelope ``A(ω)`` obtained via
@@ -263,7 +346,7 @@ class Wave:
         """
         Compute the product :math:`Δt·Δω` (root‑mean‑square widths) of the
         intensity and spectral intensity.  For a transform‑limited Gaussian
-        pulse the value is ≈ 0.44.
+        pulse the value is ≈ 0.44.
         """
         ...
 
@@ -276,8 +359,8 @@ class Wave:
         show_electric_field: bool = ...,
         show_phase: bool = ...,
         show_spectrogram: bool = ...,
-        figsize: Optional[Tuple[float, float]] = ...,
-        save_path: Optional[str] = ...,
+        figsize: tuple[float, float] | None = ...,
+        save_path: str | None = ...,
     ) -> Figure:
         """
         Produce a multi‑panel figure summarising the pulse.
