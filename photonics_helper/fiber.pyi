@@ -54,30 +54,13 @@ class Dispersion:
         """Get the wavelength array for this dispersion data."""
         ...
 
-    def check_wavelength_limit(
-        self, wavelength: float, unit: Literal["nm", "m", "um"]
-    ) -> None:
-        """
-        Check if a wavelength is within the valid range of the dispersion data.
-
-        Args:
-            wavelength: Wavelength value to check
-            unit: Unit of the wavelength ("nm", "m", or "um")
-
-        Raises:
-            ValueError: If wavelength is outside the valid range
-        """
+    def _check_wl(self, wavelength_m: float) -> None:
+        """Check if wavelength (in meters) is within valid range."""
         ...
 
     def fn(self, wavelength: float) -> float:
         """
-        Get interpolated dispersion value at a specific wavelength.
-
-        Args:
-            wavelength: Wavelength in meters
-
-        Returns:
-            Dispersion value in s/m^2
+        Get interpolated dispersion value at a specific wavelength (in meters).
 
         Raises:
             ValueError: If wavelength is outside valid range
@@ -85,33 +68,11 @@ class Dispersion:
         ...
 
     def fn_s_m_m(self, wavelength_nm: float) -> float:
-        """
-        Get interpolated dispersion value in s/m^2 units.
-
-        Args:
-            wavelength_nm: Wavelength in nanometers
-
-        Returns:
-            Dispersion value in s/m^2
-
-        Raises:
-            ValueError: If wavelength is outside valid range
-        """
+        """Dispersion in s/m^2 at wavelength in nm."""
         ...
 
     def fn_ps_nm_km(self, wavelength_nm: float) -> float:
-        """
-        Get interpolated dispersion value in ps/nm.km units.
-
-        Args:
-            wavelength_nm: Wavelength in nanometers
-
-        Returns:
-            Dispersion value in ps/nm.km
-
-        Raises:
-            ValueError: If wavelength is outside valid range
-        """
+        """Dispersion in ps/nm.km at wavelength in nm."""
         ...
 
     @classmethod

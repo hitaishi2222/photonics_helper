@@ -15,6 +15,7 @@ from .base import (
 
 from .materials import RefractiveIndex
 from .fiber import Dispersion, PropagationConstant
+from .frog import FROGTrace, generate_trace, retrieve, fidelity
 
 __all__ = [
     "Wavelength",
@@ -30,6 +31,10 @@ __all__ = [
     "RefractiveIndex",
     "Dispersion",
     "PropagationConstant",
+    "FROGTrace",
+    "generate_trace",
+    "retrieve",
+    "fidelity",
     "EPS_0",
     "MU_0",
 ]

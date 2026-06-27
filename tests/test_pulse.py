@@ -11,7 +11,7 @@ expected.
 import numpy as np
 import pytest
 
-from photonics_helper.base import Wavelength
+from photonics_helper.base import Wavelength, Frequency
 from photonics_helper.pulse import SHAPE_FACTORS, Envelope, TemporalGrid, Wave
 
 
@@ -427,7 +427,7 @@ def test_custom_peak_preserved():
 def test_pulse_train_repetition_spacing():
     """Pulse train should show N pulses spaced by 1/repetition_rate."""
     env = Envelope(shape="gaussian", peak_amplitude=1.0, pulse_width=100e-15)
-    repetition_rate = 10e9  # 10 GHz → 100 ps spacing
+    repetition_rate = Frequency(10, "GHz")  # 10 GHz → 100 ps spacing
     n_pulses = 5
     grid = TemporalGrid(N=2**14, Tmax=1000e-12)
     wave = Wave.from_pulse_train(
@@ -437,7 +437,7 @@ def test_pulse_train_repetition_spacing():
         repetition_rate=repetition_rate,
         n_pulses=n_pulses,
     )
-    spacing = 1.0 / repetition_rate  # 100 ps
+    spacing = 1.0 / repetition_rate.as_Hz  # 100 ps
     # Check that peaks occur near expected positions
     from scipy.signal import find_peaks
     envelope_mag = np.abs(wave.envelope_field)
@@ -456,7 +456,7 @@ def test_pulse_train_repetition_spacing():
 def test_pulse_train_same_as_single_for_one_pulse():
     """Pulse train with n_pulses=1 should equal a single pulse."""
     env = Envelope(shape="sech", peak_amplitude=1.0, pulse_width=100e-15)
-    repetition_rate = 10e9
+    repetition_rate = Frequency(10, "GHz")
     n_pulses = 1
     grid = TemporalGrid(N=2**12, Tmax=500e-12)
     wave_train = Wave.from_pulse_train(
@@ -479,7 +479,7 @@ def test_pulse_train_same_as_single_for_one_pulse():
 def test_pulse_train_average_power():
     """Average power = pulse_energy × repetition_rate."""
     env = Envelope(shape="gaussian", peak_amplitude=1.0, pulse_width=100e-15)
-    repetition_rate = 10e9
+    repetition_rate = Frequency(10, "GHz")
     grid = TemporalGrid(N=2**12, Tmax=500e-12)
     wave = Wave(
         grid=grid,
@@ -489,13 +489,13 @@ def test_pulse_train_average_power():
     )
     energy = wave.pulse_energy()
     avg_power = wave.average_power(repetition_rate)
-    assert pytest.approx(avg_power, rel=1e-10) == energy * repetition_rate
+    assert pytest.approx(avg_power, rel=1e-10) == energy * repetition_rate.as_Hz
 
 
 def test_pulse_train_multiple_pulses_energy():
     """Pulse train energy ≈ n_pulses × single pulse energy (for well-separated pulses)."""
     env = Envelope(shape="gaussian", peak_amplitude=1.0, pulse_width=50e-15)
-    repetition_rate = 100e9  # 10 ps spacing, 50 fs pulses → well separated
+    repetition_rate = Frequency(100, "GHz")  # 10 ps spacing, 50 fs pulses → well separated
     n_pulses = 10
     # First compute single-pulse energy using the same grid size
     grid_single = TemporalGrid(N=2**14, Tmax=500e-12)
@@ -523,7 +523,7 @@ def test_pulse_train_multiple_pulses_energy():
 def test_pulse_train_stored_repetition_rate():
     """Pulse train Wave should store repetition_rate."""
     env = Envelope(shape="gaussian", peak_amplitude=1.0, pulse_width=100e-15)
-    repetition_rate = 25e9
+    repetition_rate = Frequency(25, "GHz")
     grid = TemporalGrid(N=2**12, Tmax=1000e-12)
     wave = Wave.from_pulse_train(
         envelope=env,
@@ -566,7 +566,7 @@ def test_temporal_grid_fft_conjugate():
 
 def test_temporal_grid_for_pulse_train():
     """for_pulse_train should produce a grid large enough for all pulses."""
-    repetition_rate = 10e9
+    repetition_rate = Frequency(10, "GHz")
     n_pulses = 20
     pulse_width = 100e-15
     grid = TemporalGrid.for_pulse_train(
@@ -574,7 +574,7 @@ def test_temporal_grid_for_pulse_train():
         n_pulses=n_pulses,
         pulse_width=pulse_width,
     )
-    spacing = 1.0 / repetition_rate
+    spacing = 1.0 / repetition_rate.as_Hz
     expected_Tmax = n_pulses * spacing + 10 * pulse_width
     assert grid.Tmax >= expected_Tmax
     # Check that the grid is reasonable
@@ -778,12 +778,11 @@ def test_rectangular_fwhm_value():
 
 
 def test_unknown_shape_raises():
-    """An unknown shape should raise ValueError in field()."""
-    env = Envelope(
-        shape="nonexistent", peak_amplitude=1.0, pulse_width=1e-12,
-    )
-    with pytest.raises(ValueError, match="Unknown shape"):
-        env.field(np.array([0.0]))
+    """An unknown shape should be rejected by pydantic validation."""
+    with pytest.raises(Exception):
+        Envelope(
+            shape="nonexistent", peak_amplitude=1.0, pulse_width=1e-12,
+        )
 
 
 def test_wave_time_bandwidth_product_shape():

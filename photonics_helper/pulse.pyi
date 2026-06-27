@@ -21,7 +21,7 @@ from typing import Callable, Literal, Optional, Self
 import numpy as np
 from matplotlib.figure import Figure
 
-from photonics_helper.base import Wavelength
+from photonics_helper.base import Wavelength, Frequency
 
 class Envelope:
     """
@@ -125,6 +125,56 @@ class Envelope:
         -------
         np.ndarray
             Real‑valued intensity evaluated on ``t``.
+        """
+        ...
+
+    def visualize_2d(
+        self,
+        backend: Literal["plotly", "matplotlib"] = "plotly",
+        N: int = 2**12,
+        show_phase: bool = True,
+        show_fwhm: bool = True,
+        figsize: tuple[float, float] | None = None,
+        title: str | None = None,
+        theme: Literal["light", "dark"] = "light",
+    ):
+        """
+        Plot temporal intensity, spectral intensity, phase, and polar plot.
+
+        Parameters
+        ----------
+        backend : "plotly" or "matplotlib" (default "plotly")
+        N : number of time points (default 2^12)
+        show_phase : show instantaneous phase overlay (default True)
+        show_fwhm : show FWHM markers (default True)
+        figsize : figure size for matplotlib backend (default None)
+        title : optional title override (default uses shape name)
+        theme : "light" or "dark" (default "light")
+
+        Returns
+        -------
+        plotly.graph_objects.Figure or matplotlib.figure.Figure
+        """
+        ...
+
+    def visualize_3d(
+        self,
+        N: int = 2**12,
+        title: str | None = None,
+        theme: Literal["light", "dark"] = "light",
+    ):
+        """
+        Plot 3D surface of temporal intensity |A(t)|².
+
+        Parameters
+        ----------
+        N : number of time points (default 2^12)
+        title : optional title override
+        theme : "light" or "dark" (default "light")
+
+        Returns
+        -------
+        plotly.graph_objects.Figure
         """
         ...
 
@@ -234,7 +284,7 @@ class TemporalGrid:
     @classmethod
     def for_pulse_train(
         cls,
-        repetition_rate: float,
+        repetition_rate: Frequency,
         n_pulses: int,
         pulse_width: float,
         N: int = ...,
@@ -244,7 +294,7 @@ class TemporalGrid:
 
         Parameters
         ----------
-        repetition_rate : Hz — pulse spacing = 1 / repetition_rate
+        repetition_rate : Frequency — pulse spacing = 1 / repetition_rate
         n_pulses : number of pulses
         pulse_width : T₀ — characteristic width, used to estimate needed padding
         N : number of time points (default 2¹²)
@@ -274,7 +324,7 @@ class Wave:
 
     central_wavelength: Wavelength
     refractive_index: float
-    repetition_rate: Optional[float]
+    repetition_rate: Optional[Frequency]
 
     def __init__(
         self,
@@ -282,7 +332,7 @@ class Wave:
         envelope: Envelope,
         central_wavelength: Wavelength,
         refractive_index: float = ...,
-        repetition_rate: Optional[float] = ...,
+        repetition_rate: Optional[Frequency] = ...,
     ) -> None: ...
 
     @cached_property
@@ -324,13 +374,37 @@ class Wave:
         """Maximum envelope intensity (peak power) in the same units."""
         ...
 
-    def average_power(self, repetition_rate: float) -> float:
+    def average_power(self, repetition_rate: Frequency) -> float:
         """
         Average power = pulse energy × repetition_rate.
 
         Parameters
         ----------
-        repetition_rate : Hz
+        repetition_rate : Frequency
+        """
+        ...
+
+    @classmethod
+    def from_pulse_train(
+        cls,
+        envelope: Envelope,
+        central_wavelength: Wavelength,
+        grid: TemporalGrid,
+        repetition_rate: Frequency,
+        n_pulses: int = ...,
+        refractive_index: float = ...,
+    ) -> Self:
+        """
+        Construct a pulse train Wave from a single-envelope shape.
+
+        Parameters
+        ----------
+        envelope : The single-pulse envelope shape to repeat
+        central_wavelength : Central wavelength of the carrier
+        grid : TemporalGrid covering the full window (all pulses + padding)
+        repetition_rate : Frequency — spacing between consecutive pulses
+        n_pulses : number of pulses (default 10)
+        refractive_index : background refractive index (default 1.0)
         """
         ...
 

@@ -55,40 +55,24 @@ class Dispersion:
     def _disp_fn(self):
         return make_splrep(self._wavelengths.as_m, self.as_s_m_m)
 
-    def check_wavelength_limit(self, wavelength: float, unit: Literal["nm", "m", "um"]):
-        min = 0
-        max = 0
-
-        if unit == "m":
-            min = self._wavelengths.as_m.min()
-            max = self._wavelengths.as_m.max()
-        elif unit == "um":
-            min = self._wavelengths.as_um.min()
-            max = self._wavelengths.as_um.max()
-        else:
-            min = self._wavelengths.as_nm.min()
-            max = self._wavelengths.as_nm.max()
-
-        if wavelength > max or wavelength < min:
-            raise ValueError(f"values of disersion available between {min} and {max}")
+    def _check_wl(self, wavelength_m: float):
+        if wavelength_m < self._wavelengths.as_m.min() or wavelength_m > self._wavelengths.as_m.max():
+            raise ValueError(
+                f"values of dispersion available between "
+                f"{self._wavelengths.as_m.min():.3e} and {self._wavelengths.as_m.max():.3e} m"
+            )
 
     def fn(self, wavelength: float) -> float:
-        self.check_wavelength_limit(wavelength, "m")
+        self._check_wl(wavelength)
         c_info("Dispersion unit: s/m^2")
-        fn = self._disp_fn()
-        return fn(wavelength).item()
+        spl = self._disp_fn()
+        return spl(wavelength).item()
 
     def fn_s_m_m(self, wavelength_nm: float) -> float:
-        self.check_wavelength_limit(wavelength_nm, "nm")
-        c_info("Dispersion unit: s/m^2")
-        fn = self._disp_fn()
-        return fn(wavelength_nm * 1e-9).item()
+        return self.fn(wavelength_nm * 1e-9)
 
     def fn_ps_nm_km(self, wavelength_nm: float) -> float:
-        self.check_wavelength_limit(wavelength_nm, "nm")
-        c_info("Dispersion unit: ps/nm.km")
-        fn = self._disp_fn()
-        return fn(wavelength_nm * 1e-9).item() * 1e6
+        return self.fn(wavelength_nm * 1e-9) * 1e6
 
     @classmethod
     def from_neff(

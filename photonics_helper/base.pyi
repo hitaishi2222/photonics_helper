@@ -142,3 +142,22 @@ class WavenumberArray:
     def to_freq(self) -> FrequencyArray: ...
     def to_omega(self) -> AngularFrequencyArray: ...
     def to_equally_spaced(self, points: int = 51) -> NDArray: ...
+
+class Permittivity(float):
+    def __new__(cls, value): ...
+    @cached_property
+    def unit(self) -> str: ...
+    @classmethod
+    def from_relative(cls, relative_value: float) -> Permittivity: ...
+
+class Permiability(float):
+    def __new__(cls, value):
+        return super().__new__(cls, value)
+
+    @cached_property
+    def unit(self):
+        return "H/m"
+
+    @classmethod
+    def from_relative(cls, relative_value: float):
+        return cls(MU_0 * relative_value)

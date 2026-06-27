@@ -11,7 +11,11 @@ import pytest
 
 from photonics_helper.base import (
     C_MS,
+    EPS_0,
+    MU_0,
     PI,
+    Permiability,
+    Permittivity,
     AngularFrequency,
     AngularFrequencyArray,
     Frequency,
@@ -143,3 +147,154 @@ def test_scalar_units_consistency():
     np.testing.assert_allclose(
         omega.to_wn().to_omega().as_rad_s, omega.as_rad_s, rtol=1e-12
     )
+
+
+# ─── to_equally_spaced ───────────────────────────────────────────────
+
+
+def test_wavelength_array_equally_spaced():
+    wl = WavelengthArray(np.array([1500.0, 1600.0]), "nm")
+    eq = wl.to_equally_spaced(points=51)
+    assert len(eq) == 51
+    assert pytest.approx(eq[0]) == wl.as_m.min()
+    assert pytest.approx(eq[-1]) == wl.as_m.max()
+    # Should be linearly spaced
+    np.testing.assert_allclose(np.diff(eq), eq[1] - eq[0], rtol=1e-10, atol=1e-30)
+
+
+def test_frequency_array_equally_spaced():
+    f = FrequencyArray(np.array([200.0, 300.0]), "THz")
+    eq = f.to_equally_spaced(points=51)
+    assert len(eq) == 51
+    assert eq[0] == f.as_Hz.max()
+    assert eq[-1] == f.as_Hz.min()
+
+
+def test_angular_frequency_array_equally_spaced():
+    omega = AngularFrequencyArray(np.array([2.0, 4.0]), "rad/ps")
+    eq = omega.to_equally_spaced(points=51)
+    assert len(eq) == 51
+    assert eq[0] == omega.as_rad_s.max()
+    assert eq[-1] == omega.as_rad_s.min()
+
+
+def test_wavenumber_array_equally_spaced():
+    wn = WavenumberArray(np.array([1e4, 2e4]), "1/cm")
+    eq = wn.to_equally_spaced(points=51)
+    assert len(eq) == 51
+    assert eq[0] == wn.as_1_m.max()
+    assert eq[-1] == wn.as_1_m.min()
+
+
+# ─── Permittivity / Permiability ────────────────────────────────────
+
+
+def test_permittivity_from_relative():
+    from photonics_helper.base import Permittivity
+
+    p = Permittivity.from_relative(1.0)
+    assert pytest.approx(p) == EPS_0
+
+
+def test_permiability_from_relative():
+    from photonics_helper.base import Permiability
+
+    p = Permiability.from_relative(1.0)
+    assert pytest.approx(p) == MU_0
+
+
+# ─── repr methods ────────────────────────────────────────────────────
+
+
+def test_wavelength_array_repr():
+    wl = WavelengthArray(np.array([1500.0, 1600.0]), "nm")
+    r = repr(wl)
+    assert "WavelengthArray" in r
+    assert "from:" in r
+    assert "to:" in r
+
+
+def test_frequency_array_repr():
+    f = FrequencyArray(np.array([100.0, 200.0]), "THz")
+    r = repr(f)
+    assert "FrequencyArray" in r
+
+
+def test_angular_frequency_array_repr():
+    omega = AngularFrequencyArray(np.array([2.0, 4.0]), "rad/ps")
+    r = repr(omega)
+    assert "AngularFrequencyArray" in r
+
+
+def test_wavenumber_array_repr():
+    wn = WavenumberArray(np.array([1e4, 2e4]), "1/cm")
+    r = repr(wn)
+    assert "WavenumberArray" in r
+
+
+# ─── additional scalar tests ────────────────────────────────────────
+
+
+def test_wavelength_as_um():
+    wl = Wavelength(1550, "nm")
+    assert pytest.approx(wl.as_um) == 1.55
+
+
+def test_wavelength_as_nm():
+    wl = Wavelength(1.55e-6, "m")
+    assert pytest.approx(wl.as_nm) == 1550.0
+
+
+def test_frequency_as_THz():
+    f = Frequency(193.414e12, "Hz")
+    assert pytest.approx(f.as_THz) == 193.414
+
+
+def test_frequency_as_GHz():
+    f = Frequency(1e9, "Hz")
+    assert pytest.approx(f.as_GHz) == 1.0
+
+
+def test_frequency_as_MHz():
+    f = Frequency(1e6, "Hz")
+    assert pytest.approx(f.as_MHz) == 1.0
+
+
+def test_angular_frequency_as_rad_ps():
+    omega = AngularFrequency(1e12, "rad/s")
+    assert pytest.approx(omega.as_rad_ps) == 1.0
+
+
+def test_wavenumber_as_1_cm():
+    # 10000 1/m = 100 1/cm (1 m = 100 cm)
+    wn = Wavenumber(10000, "1/m")
+    assert pytest.approx(wn.as_1_cm) == 100.0
+
+
+def test_wavenumber_as_angular():
+    wn = Wavenumber(1.0, "1/m")
+    assert pytest.approx(wn.as_angular) == 2 * PI
+
+
+def test_wavelength_round_trip_via_wavenumber():
+    wl = Wavelength(800, "nm")
+    wn = wl.to_wn()
+    wl_back = wn.to_wl()
+    assert pytest.approx(wl_back.as_nm) == 800.0
+
+
+def test_frequency_round_trip_via_wavenumber():
+    f = Frequency(200, "THz")
+    wn = f.to_wn()
+    f_back = wn.to_freq()
+    assert pytest.approx(f_back.as_THz) == 200.0
+
+
+def test_angular_frequency_round_trip_via_wavenumber():
+    omega = AngularFrequency(2 * PI * 193e12, "rad/s")
+    wn = omega.to_wn()
+    omega_back = wn.to_omega()
+    assert pytest.approx(omega_back.as_rad_s, rel=1e-10) == omega.as_rad_s
+
+
+

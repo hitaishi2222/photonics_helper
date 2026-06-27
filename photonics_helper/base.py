@@ -19,7 +19,7 @@ MU_0: float = sp.constants.mu_0
 
 
 @dataclass(config={"arbitrary_types_allowed": True})
-class Wavelength():
+class Wavelength:
     value: float
     unit: Literal["nm", "um", "m"]
 
@@ -59,7 +59,7 @@ class Wavelength():
 
 
 @dataclass(config={"arbitrary_types_allowed": True})
-class Frequency():
+class Frequency:
     value: float
     unit: Literal["THz", "GHz", "MHz", "Hz"]
 
@@ -107,7 +107,7 @@ class Frequency():
 
 
 @dataclass(config={"arbitrary_types_allowed": True})
-class AngularFrequency():
+class AngularFrequency:
     value: float
     unit: Literal["rad/s", "rad/ps"]
 
@@ -141,9 +141,10 @@ class AngularFrequency():
 
 
 @dataclass(config={"arbitrary_types_allowed": True})
-class Wavenumber():
+class Wavenumber:
     value: float
     unit: Literal["1/cm", "1/m"]
+
     def __post_init__(self):
         if self.unit == "1/cm":
             self.value *= 1e2  # Convert from 1/cm to 1/m
@@ -195,7 +196,6 @@ class WavelengthArray:
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__} -> from:{min(self.as_m)} m to: {max(self.as_m)} m"
-
 
     @cached_property
     def as_m(self) -> NDArray:
@@ -295,7 +295,6 @@ class AngularFrequencyArray:
     def __repr__(self) -> str:
         return f"{self.__class__.__name__} -> from:{min(self.as_rad_s)} rad/s to: {max(self.as_rad_s)} rad/s"
 
-
     @cached_property
     def as_rad_s(self) -> NDArray:
         return self.value
@@ -361,3 +360,21 @@ class WavenumberArray:
         _min = self.as_1_m.min()
         _max = self.as_1_m.max()
         return np.linspace(_max, _min, points)
+
+
+class Permittivity(float):
+    @classmethod
+    def from_relative(cls, relative_value: float):
+        return cls(EPS_0 * relative_value)
+
+    def __repr__(self):
+        return f"{super().__repr__()} F/m"
+
+
+class Permiability(float):
+    @classmethod
+    def from_relative(cls, relative_value: float):
+        return cls(MU_0 * relative_value)
+
+    def __repr__(self):
+        return f"{super().__repr__()} H/m"

@@ -1,14 +1,15 @@
-from dataclasses import dataclass, field
-from math import sqrt, log, acosh, factorial, pi
+from __future__ import annotations
+from pydantic.dataclasses import dataclass
+from math import sqrt, log, acosh, pi
 from typing import Callable, Dict, Literal, Self, Optional
 from functools import cached_property
 import logging
 from matplotlib import gridspec
-from photonics_helper.base import Wavelength
+from photonics_helper.base import Wavelength, Frequency
 
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.special import airy, hermite as hermite_poly, genlaguerre
+from scipy.special import airy, hermite as hermite_poly
 
 logger = logging.getLogger(__name__)
 
@@ -20,74 +21,21 @@ SHAPE_FACTORS: Dict[str, float] = {
 }
 
 
-def _super_gaussian_factor(order: int = 2) -> float:
-    """FWHM factor for super-gaussian: 2*T0*(log(2)/2)^(1/(2N))."""
-    return 2.0 * T0 * (log(2) / 2) ** (1.0 / (2 * order))
-
-
-def _triangular_factor() -> float:
-    """FWHM factor for triangular: 2*T0*(1 - 1/sqrt(2))."""
-    return 2.0 * (1.0 - 1.0 / sqrt(2))
-
-
-def _cosine_factor() -> float:
-    """FWHM factor for raised cosine: 2*T0*(1 - 1/sqrt(2))^(1/2)
-    raised cos: cos(pi*t/(2*T0)) at half power.
-    cos^2(pi*t/(2*T0)) = 0.5 -> cos(pi*t/(2*T0)) = 1/sqrt(2) -> pi*t/(2*T0) = pi/4 -> t = T0/2
-    FWHM = 2*t = T0
-    Wait let me recalculate.
-    """
-    # A(t) = cos(pi*t/(2*T0)) for |t| < T0
-    # I(t) = cos^2(pi*t/(2*T0))
-    # FWHM: cos^2(pi*t/(2*T0)) = 0.5
-    # cos(pi*t/(2*T0)) = 1/sqrt(2)
-    # pi*t/(2*T0) = pi/4
-    # t = T0/2
-    # FWHM = 2*t = T0
-    return 1.0
-
-
-def _exponential_factor() -> float:
-    """FWHM factor for bi-exponential: 2*T0*log(2)."""
-    return 2.0 * log(2)
-
-
-def _airy_factor() -> float:
-    """FWHM factor for Airy: first maximum of Ai function."""
-    # The first maximum of Ai(-x) is at x ≈ 2.3381 (first zero of Ai).
-    # Actually for the Airy pulse, the peak is at t=0, Ai(0) ≈ 0.3550.
-    # FWHM: Ai(-x)/Ai(0) = sqrt(0.5), find x such that Ai(-x) = Ai(0)*sqrt(0.5)
-    # Ai(0) ≈ 0.35503, Ai(0)*sqrt(0.5) ≈ 0.25104
-    # Ai(-x) = 0.25104 -> x ≈ 1.0 (approximately)
-    # Use numerical search
-    from scipy.optimize import brentq
-    target = 0.35503 * sqrt(0.5)
-    f = lambda x: airy(-x)[0] - target
-    root = brentq(f, 0.1, 2.0)
-    return 2.0 * root
-
-
 @dataclass
 class Envelope:
-    """Analytic description of an optical pulse envelope.
-
-    Parameters
-    ----------
-    shape : The functional shape of the pulse. Supported values:
-        ``"gaussian"``, ``"sech"``, ``"lorentzian"``, ``"rectangular"``,
-        ``"super-gaussian"``, ``"triangular"``, ``"parabolic"``,
-        ``"cosine"``, ``"exponential"``, ``"gauss-hermite"``,
-        ``"airy"``, ``"custom"``.
-    peak_amplitude : Peak amplitude of the electric-field envelope *A(t)*.
-    pulse_width : Characteristic width *T₀* (the "1/e" width for a Gaussian, etc.).
-    chirp : Linear chirp coefficient *C* (default ``0.0``). The instantaneous
-        phase added to the envelope is ``0.5*C*(t/T₀)**2``.
-    """
-
     shape: Literal[
-        "gaussian", "sech", "lorentzian", "rectangular",
-        "super-gaussian", "triangular", "parabolic", "cosine",
-        "exponential", "gauss-hermite", "airy", "custom",
+        "gaussian",
+        "sech",
+        "lorentzian",
+        "rectangular",
+        "super-gaussian",
+        "triangular",
+        "parabolic",
+        "cosine",
+        "exponential",
+        "gauss-hermite",
+        "airy",
+        "custom",
     ]
     peak_amplitude: float
     pulse_width: float  # T0
@@ -103,7 +51,11 @@ class Envelope:
     @property
     def fwhm(self) -> float:
         if self.shape == "super-gaussian":
-            return 2.0 * self.pulse_width * (log(2) / 2) ** (1.0 / (2 * self.super_gaussian_order))
+            return (
+                2.0
+                * self.pulse_width
+                * (log(2) / 2) ** (1.0 / (2 * self.super_gaussian_order))
+            )
         elif self.shape == "triangular":
             return 2.0 * self.pulse_width * (1.0 - 1.0 / sqrt(2))
         elif self.shape == "cosine":
@@ -112,6 +64,7 @@ class Envelope:
             return 2.0 * self.pulse_width * log(2)
         elif self.shape == "airy":
             from scipy.optimize import brentq
+
             # Ai(0) ≈ 0.35503, half-max of intensity = sqrt(0.5) * Ai(0) ≈ 0.25104
             target = 0.35503 * sqrt(0.5)
             f = lambda x: airy(-x)[0] - target
@@ -127,8 +80,15 @@ class Envelope:
     def from_fwhm(
         cls,
         shape: Literal[
-            "gaussian", "sech", "lorentzian", "rectangular",
-            "super-gaussian", "triangular", "cosine", "exponential", "airy",
+            "gaussian",
+            "sech",
+            "lorentzian",
+            "rectangular",
+            "super-gaussian",
+            "triangular",
+            "cosine",
+            "exponential",
+            "airy",
         ],
         peak_amplitude: float,
         fwhm: float,
@@ -137,20 +97,27 @@ class Envelope:
         if shape == "super-gaussian":
             T0 = fwhm / (2.0 * (log(2) / 2) ** (1.0 / (2 * 2)))  # default order=2
             return cls(
-                shape="super-gaussian", peak_amplitude=peak_amplitude,
-                pulse_width=T0, super_gaussian_order=2,
+                shape="super-gaussian",
+                peak_amplitude=peak_amplitude,
+                pulse_width=T0,
+                super_gaussian_order=2,
             )
         elif shape == "triangular":
             T0 = fwhm / (2.0 * (1.0 - 1.0 / sqrt(2)))
-            return cls(shape="triangular", peak_amplitude=peak_amplitude, pulse_width=T0)
+            return cls(
+                shape="triangular", peak_amplitude=peak_amplitude, pulse_width=T0
+            )
         elif shape == "cosine":
             T0 = fwhm  # FWHM = T0
             return cls(shape="cosine", peak_amplitude=peak_amplitude, pulse_width=T0)
         elif shape == "exponential":
             T0 = fwhm / (2.0 * log(2))
-            return cls(shape="exponential", peak_amplitude=peak_amplitude, pulse_width=T0)
+            return cls(
+                shape="exponential", peak_amplitude=peak_amplitude, pulse_width=T0
+            )
         elif shape == "airy":
             from scipy.optimize import brentq
+
             target = 0.35503 * sqrt(0.5)
             f = lambda x: airy(-x)[0] - target
             root = brentq(f, 0.1, 2.0)
@@ -159,7 +126,9 @@ class Envelope:
         else:
             T0 = fwhm / SHAPE_FACTORS[shape]
             return cls(
-                shape=shape, peak_amplitude=peak_amplitude, pulse_width=T0,
+                shape=shape,
+                peak_amplitude=peak_amplitude,
+                pulse_width=T0,
             )
 
     def field(self, t: np.ndarray) -> np.ndarray:
@@ -193,7 +162,7 @@ class Envelope:
                 w = self.beam_waist if self.beam_waist is not None else T0
                 x = sqrt(2) * t / w
                 H_m = hermite_poly(self.hg_mode)
-                amp = A0 * H_m(x) * np.exp(-x**2 / 2)
+                amp = A0 * H_m(x) * np.exp(-(x**2) / 2)
             case "airy":
                 # Standard Airy pulse: Ai(-(t-t0)/T0), t0=0, accelerating towards +t
                 amp = A0 * airy(t / T0)[0]
@@ -222,6 +191,445 @@ class Envelope:
     def intensity(self, t: np.ndarray) -> np.ndarray:
         A = self.field(t)
         return np.abs(A) ** 2
+
+    def _make_grid(self, N: int = 2**12) -> TemporalGrid:
+        """Create a TemporalGrid sized for this envelope."""
+        # Window must cover ~10x pulse width for tails to decay
+        Tmax = 10.0 * self.pulse_width
+        return TemporalGrid(N=N, Tmax=Tmax)
+
+    def visualize_2d(
+        self,
+        backend: Literal["plotly", "matplotlib"] = "plotly",
+        N: int = 2**12,
+        show_phase: bool = True,
+        show_fwhm: bool = True,
+        figsize: tuple[float, float] | None = None,
+        title: str | None = None,
+        theme: Literal["light", "dark"] = "light",
+    ):
+        """Plot temporal intensity, spectral intensity, and phase.
+
+        Parameters
+        ----------
+        backend : "plotly" or "matplotlib" (default "plotly")
+        N : number of time points (default 2^12)
+        show_phase : show instantaneous phase overlay (default True)
+        show_fwhm : show FWHM markers (default True)
+        figsize : figure size for matplotlib backend (default None)
+        title : optional title override (default uses shape name)
+        theme : "light" or "dark" (default "light")
+        """
+        if backend not in ("plotly", "matplotlib"):
+            raise ValueError("backend must be 'plotly' or 'matplotlib'")
+
+        grid = self._make_grid(N)
+        t = grid.t
+        A = self.field(t)
+        intensity_t = np.abs(A) ** 2
+        spectral = grid.fft(A)
+        intensity_w = np.abs(spectral) ** 2
+        phase = np.unwrap(np.angle(A))
+
+        if title is None:
+            title = f"{self.shape.title()} Pulse Envelope (T₀={self.pulse_width*1e15:.1f} fs)"
+
+        if theme not in ("light", "dark"):
+            raise ValueError("theme must be 'light' or 'dark'")
+
+        if backend == "plotly":
+            return self._visualize_2d_plotly(
+                t,
+                A,
+                intensity_t,
+                intensity_w,
+                phase,
+                grid,
+                show_phase,
+                show_fwhm,
+                title,
+                theme,
+            )
+        else:
+            return self._visualize_2d_matplotlib(
+                t,
+                A,
+                intensity_t,
+                intensity_w,
+                phase,
+                grid,
+                show_phase,
+                show_fwhm,
+                figsize,
+                title,
+                theme,
+            )
+
+    def _visualize_2d_plotly(
+        self,
+        t,
+        A,
+        intensity_t,
+        intensity_w,
+        phase,
+        grid,
+        show_phase,
+        show_fwhm,
+        title,
+        theme,
+    ):
+        """Plotly implementation of 2D visualization."""
+        import plotly.graph_objects as go
+        from plotly.subplots import make_subplots
+
+        fig = make_subplots(
+            rows=2,
+            cols=2,
+            subplot_titles=(
+                "Temporal Intensity",
+                "Spectral Intensity",
+                "Phase",
+                "Polar Plot",
+            ),
+            specs=[
+                [{"type": "scatter"}, {"type": "scatter"}],
+                [{"type": "scatter"}, {"type": "scatter"}],
+            ],
+            shared_xaxes=False,
+        )
+
+        # Temporal intensity
+        fig.add_trace(
+            go.Scatter(
+                x=t,
+                y=intensity_t,
+                mode="lines",
+                name="Intensity",
+                line=dict(color="#00d4ff"),
+            ),
+            row=1,
+            col=1,
+        )
+        if show_fwhm:
+            fwhm_val = self.fwhm
+            fig.add_vrect(
+                x0=-fwhm_val / 2,
+                x1=fwhm_val / 2,
+                fillcolor="orange",
+                opacity=0.1,
+                line_width=0,
+            )
+            fig.add_hline(
+                y=np.max(intensity_t) / 2,
+                line_dash="dot",
+                line_color="orange",
+                opacity=0.5,
+            )
+            # Pulse width markers at ±T₀
+            fig.add_vline(
+                x=-self.pulse_width,
+                line_dash="dot",
+                line_color="#fbbf24",
+                opacity=0.7,
+                row=1,
+                col=1,
+            )
+            fig.add_vline(
+                x=self.pulse_width,
+                line_dash="dot",
+                line_color="#fbbf24",
+                opacity=0.7,
+                row=1,
+                col=1,
+            )
+            fig.add_annotation(
+                x=self.pulse_width,
+                y=0,
+                text="T₀",
+                showarrow=True,
+                arrowhead=2,
+                arrowsize=1,
+                arrowwidth=1,
+                arrowcolor="#fbbf24",
+                ax=20,
+                ay=-30,
+                font=dict(size=12, color="#fbbf24"),
+                row=1,
+                col=1,
+            )
+            fig.add_annotation(
+                x=-self.pulse_width,
+                y=0,
+                text="T₀",
+                showarrow=True,
+                arrowhead=2,
+                arrowsize=1,
+                arrowwidth=1,
+                arrowcolor="#fbbf24",
+                ax=-20,
+                ay=-30,
+                font=dict(size=12, color="#fbbf24"),
+                row=1,
+                col=1,
+            )
+        # Parameters text box
+        params_text = (
+            f"Shape: {self.shape}<br>"
+            f"T₀ = {self.pulse_width:.3g} s ({self.pulse_width*1e15:.1f} fs)<br>"
+            f"FWHM = {self.fwhm:.3g} s ({self.fwhm*1e15:.1f} fs)<br>"
+            f"Chirp = {self.chirp:.2f}"
+        )
+        fig.add_annotation(
+            xref="paper",
+            yref="paper",
+            x=0.02,
+            y=0.98,
+            text=params_text,
+            showarrow=False,
+            font=dict(size=11, color="black"),
+            align="left",
+            valign="top",
+            bgcolor="rgba(255, 235, 180, 0.85)",
+            bordercolor="#d4a017",
+            borderwidth=1.5,
+            borderpad=6,
+            xanchor="left",
+            yanchor="top",
+        )
+
+        # Spectral intensity
+        w = grid.w
+        fig.add_trace(
+            go.Scatter(
+                x=w,
+                y=intensity_w,
+                mode="lines",
+                name="Spectrum",
+                line=dict(color="#a78bfa"),
+            ),
+            row=1,
+            col=2,
+        )
+
+        # Phase
+        if show_phase:
+            fig.add_trace(
+                go.Scatter(
+                    x=t,
+                    y=phase,
+                    mode="lines",
+                    name="Phase",
+                    line=dict(color="#ff6b6b", dash="dot"),
+                ),
+                row=2,
+                col=1,
+            )
+
+        # Polar plot (Re vs Im)
+        fig.add_trace(
+            go.Scatter(
+                x=np.real(A),
+                y=np.imag(A),
+                mode="lines",
+                name="Polar",
+                line=dict(color="#34d399"),
+            ),
+            row=2,
+            col=2,
+        )
+
+        fig.update_layout(
+            title=title,
+            height=700,
+            showlegend=False,
+            template="plotly_white" if theme == "light" else "plotly_dark",
+        )
+        return fig
+
+    def _visualize_2d_matplotlib(
+        self,
+        t,
+        A,
+        intensity_t,
+        intensity_w,
+        phase,
+        grid,
+        show_phase,
+        show_fwhm,
+        figsize,
+        title,
+        theme,
+    ):
+        """Matplotlib implementation of 2D visualization."""
+        import matplotlib.pyplot as plt
+
+        if theme == "dark":
+            plt.style.use("dark_background")
+        else:
+            plt.style.use("default")
+
+        fig, axes = plt.subplots(2, 2, figsize=figsize or (12, 8))
+        fig.suptitle(title, fontsize=12, fontweight="bold")
+
+        # Temporal intensity
+        ax_t = axes[0, 0]
+        ax_t.plot(t, intensity_t, color="#00d4ff", linewidth=1.5)
+        ax_t.set_xlabel("Time (s)")
+        ax_t.set_ylabel("Intensity")
+        ax_t.set_title("Temporal Profile")
+        if show_fwhm:
+            fwhm_val = self.fwhm
+            ax_t.axvspan(-fwhm_val / 2, fwhm_val / 2, alpha=0.1, color="orange")
+            ax_t.axhline(
+                y=np.max(intensity_t) / 2, color="orange", linestyle="--", alpha=0.5
+            )
+            # Pulse width markers at ±T₀
+            ax_t.axvline(
+                x=-self.pulse_width,
+                color="#fbbf24",
+                linewidth=1.0,
+                linestyle="-.",
+                alpha=0.7,
+            )
+            ax_t.axvline(
+                x=self.pulse_width,
+                color="#fbbf24",
+                linewidth=1.0,
+                linestyle="-.",
+                alpha=0.7,
+            )
+            ax_t.annotate(
+                "T₀",
+                xy=(self.pulse_width, 0),
+                xytext=(self.pulse_width, 0.15),
+                color="#fbbf24",
+                fontsize=10,
+                fontweight="bold",
+                ha="left",
+                arrowprops=dict(arrowstyle="->", color="#fbbf24", lw=1.0),
+            )
+            ax_t.annotate(
+                "T₀",
+                xy=(-self.pulse_width, 0),
+                xytext=(-self.pulse_width, 0.15),
+                color="#fbbf24",
+                fontsize=10,
+                fontweight="bold",
+                ha="right",
+            )
+        # Parameters text box
+        params_text = (
+            f"Shape: {self.shape}\n"
+            f"T₀ = {self.pulse_width:.3g} s ({self.pulse_width*1e15:.1f} fs)\n"
+            f"FWHM = {self.fwhm:.3g} s ({self.fwhm*1e15:.1f} fs)\n"
+            f"Chirp = {self.chirp:.2f}"
+        )
+        ax_t.text(
+            0.02,
+            0.98,
+            params_text,
+            transform=ax_t.transAxes,
+            fontsize=9,
+            verticalalignment="top",
+            bbox=dict(boxstyle="round,pad=0.4", facecolor="wheat", alpha=0.85),
+        )
+
+        # Spectral intensity
+        w = grid.w
+        ax_w = axes[0, 1]
+        ax_w.plot(w, intensity_w, color="#a78bfa", linewidth=1.5)
+        ax_w.set_xlabel("Angular frequency (rad/s)")
+        ax_w.set_ylabel("Intensity")
+        ax_w.set_title("Spectral Profile")
+
+        # Phase
+        ax_ph = axes[1, 0]
+        if show_phase:
+            ax_ph.plot(t, phase, color="#ff6b6b", linewidth=1.0, linestyle="--")
+            ax_ph.set_ylabel("Phase (rad)")
+        ax_ph.set_xlabel("Time (s)")
+        ax_ph.set_title("Instantaneous Phase")
+
+        # Polar plot
+        ax_pol = axes[1, 1]
+        ax_pol.plot(np.real(A), np.imag(A), color="#34d399", linewidth=1.0)
+        ax_pol.set_xlabel("Re(A)")
+        ax_pol.set_ylabel("Im(A)")
+        ax_pol.set_title("Polar Plot")
+        ax_pol.axis("equal")
+
+        plt.tight_layout()
+        return fig
+
+    def visualize_3d(
+        self,
+        N: int = 2**12,
+        title: str | None = None,
+        theme: Literal["light", "dark"] = "light",
+    ):
+        """Plot 3D spectrogram (time vs frequency vs intensity).
+
+        Shows how the frequency content evolves over time.
+        Useful for visualizing chirp and time-frequency structure.
+
+        Parameters
+        ----------
+        N : number of time points (default 2^12)
+        title : optional title override
+        theme : "light" or "dark" (default "light")
+        """
+        import plotly.graph_objects as go
+        from scipy.signal import spectrogram as scipy_spectrogram
+
+        grid = self._make_grid(N)
+        t = grid.t
+        A = self.field(t)
+
+        # Compute spectrogram using scipy
+        # Window size ~1/10 of pulse width for good time-frequency resolution
+        win_size = max(32, int(self.pulse_width / grid.dt / 10))
+        win_size = min(win_size, N // 4)
+        win_size = win_size if win_size % 2 == 0 else win_size + 1
+
+        f_sg, t_sg, Sxx = scipy_spectrogram(
+            np.abs(A),
+            fs=1.0 / grid.dt,
+            window="hann",
+            nperseg=win_size,
+            noverlap=win_size * 3 // 4,
+            mode="magnitude",
+        )
+
+        # Frequency in rad/s
+        f_sg_rad = f_sg * 2 * np.pi
+
+        if title is None:
+            title = f"3D Spectrogram  [{self.shape}]"
+
+        # 3D surface: Time vs Frequency vs Power
+        fig = go.Figure(
+            data=[
+                go.Surface(
+                    x=t_sg,
+                    y=f_sg_rad,
+                    z=Sxx**2,
+                    colorscale="Viridis",
+                    showscale=True,
+                    colorbar=dict(title="Power"),
+                )
+            ]
+        )
+
+        fig.update_layout(
+            title=title,
+            scene=dict(
+                xaxis_title="Time (s)",
+                yaxis_title="Angular frequency (rad/s)",
+                zaxis_title="Power",
+            ),
+            template="plotly_white" if theme == "light" else "plotly_dark",
+        )
+        return fig
 
     @classmethod
     def from_parabolic_asymptotic(
@@ -298,7 +706,7 @@ class TemporalGrid:
     @classmethod
     def for_pulse_train(
         cls,
-        repetition_rate: float,
+        repetition_rate: Frequency,
         n_pulses: int,
         pulse_width: float,
         N: int = 2**12,
@@ -307,12 +715,12 @@ class TemporalGrid:
 
         Parameters
         ----------
-        repetition_rate : Hz — pulse spacing = 1 / repetition_rate
+        repetition_rate : Frequency — pulse spacing = 1 / repetition_rate
         n_pulses : number of pulses
         pulse_width : T₀ — characteristic width, used to estimate needed padding
         N : number of time points (default 2¹²)
         """
-        spacing = 1.0 / repetition_rate
+        spacing = 1.0 / repetition_rate.as_Hz
         # Window must cover all pulses + padding for tails
         Tmax = n_pulses * spacing + 10 * pulse_width
         return cls(N=N, Tmax=Tmax)
@@ -329,7 +737,7 @@ class Wave:
 
     central_wavelength: Wavelength
     refractive_index: float = 1.0
-    repetition_rate: float | None = None
+    repetition_rate: Frequency | None = None
 
     @cached_property
     def central_frequency(self) -> float:
@@ -358,14 +766,14 @@ class Wave:
     def peak_power(self):
         return np.max(self.envelope.intensity(self.grid.t))
 
-    def average_power(self, repetition_rate: float) -> float:
+    def average_power(self, repetition_rate: Frequency) -> float:
         """Average power = pulse energy × repetition_rate.
 
         Parameters
         ----------
         repetition_rate : Hz
         """
-        return self.pulse_energy() * repetition_rate
+        return self.pulse_energy() * repetition_rate.as_Hz
 
     @classmethod
     def from_pulse_train(
@@ -373,7 +781,7 @@ class Wave:
         envelope: Envelope,
         central_wavelength: Wavelength,
         grid: TemporalGrid,
-        repetition_rate: float,
+        repetition_rate: Frequency,
         n_pulses: int = 10,
         refractive_index: float = 1.0,
     ) -> Self:
@@ -390,7 +798,7 @@ class Wave:
         """
         # Build the multi-pulse envelope field
         full_field = np.zeros_like(grid.t, dtype=complex)
-        spacing = 1.0 / repetition_rate
+        spacing = 1.0 / repetition_rate.as_Hz
         for k in range(n_pulses):
             t_centered = grid.t - k * spacing
             full_field += envelope.field(t_centered)
@@ -424,7 +832,7 @@ class Wave:
 
     @property
     def envelope_field(self):
-        if hasattr(self, '_pulse_train_field') and self._pulse_train_field is not None:
+        if hasattr(self, "_pulse_train_field") and self._pulse_train_field is not None:
             return self._pulse_train_field
         return self.envelope.field(self.grid.t)
 
