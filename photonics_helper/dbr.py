@@ -1,3 +1,5 @@
+"""Distributed Bragg Reflector (DBR) design and transfer-matrix simulation."""
+
 from typing import Dict, List, Literal, Optional, Tuple
 
 import matplotlib.pyplot as plt
@@ -10,6 +12,8 @@ from photonics_helper.materials import RefractiveIndex
 
 
 class Material(RefractiveIndex):
+    """A named material with wavelength-dependent complex refractive index."""
+
     def __init__(
         self, name: str, n: np.ndarray, k: np.ndarray, wl: WavelengthArray
     ) -> None:
@@ -23,6 +27,16 @@ class Material(RefractiveIndex):
 
 @dataclass
 class Block:
+    """A single layer in a DBR stack.
+
+    Attributes
+    ----------
+    length : thickness of the layer (m).
+    material : Material with refractive index data.
+    colour : optional colour string for plotting.
+    position : (start, end) coordinates along the stack.
+    """
+
     length: float  # width of single block
     material: Material  # its Material property
     colour: Optional[str] = None  # colour (Optional) for visualisation
@@ -52,6 +66,17 @@ class Block:
 
 @dataclass
 class Pattren:
+    """A repeating DBR layer pattern.
+
+    Attributes
+    ----------
+    style : layer sequence string, e.g. "ABAB" or "ABCABC".
+    mapping : dict mapping style characters to Block instances.
+    central_wavelength : design central wavelength.
+    length : total physical length of the pattern.
+    out : ordered list of Blocks composing the pattern.
+    """
+
     style: str  # Block style Ex: "ABAB" / "ABCABC" / "AB_AB"
     mapping: Dict[str, Block]  # Ex {"A": SiO2, "B": Si}
     central_wavelength: Wavelength  # central wavelength for DBR
@@ -74,6 +99,7 @@ class Pattren:
         return self._length
 
     def make_pattren(self) -> None:
+        """Build the Block list from style and mapping."""
         start_pos: float = 0
         end_pos: float = 0
         for block in self.style:
@@ -85,6 +111,7 @@ class Pattren:
         self._length = end_pos
 
     def add_block(self, block: Block, mapping: str, index: int) -> None:
+        """Insert a block at *index* in the pattern style."""
         self.style = self.style[:index] + mapping + self.style[index:]
         print(self.style)
         if mapping not in self.mapping:
@@ -93,11 +120,13 @@ class Pattren:
         self.make_pattren()
 
     def remove_block(self, index: int) -> None:
+        """Remove the block at *index* from the pattern style."""
         self.style = self.style[:index] + self.style[index + 1 :]
         self._out = []
         self.make_pattren()
 
     def get_index(self, wl_micron: float) -> Tuple[List[float], List[float]]:
+        """Return [n, k] arrays for all blocks at the given wavelength (μm)."""
         n = []
         k = []
         for block in self.out:
@@ -106,15 +135,19 @@ class Pattren:
         return n, k
 
     def _get_lengths(self) -> List[float]:
+        """Return layer thicknesses."""
         return [block.length for block in self.out]
 
     def _get_positions(self) -> List[Tuple[float, float] | None]:
+        """Return layer start/end positions."""
         return [block.position for block in self.out]
 
     def _get_colours(self) -> List[str | None]:
+        """Return layer colours."""
         return [block.colour for block in self.out]
 
     def _get_names(self, type=1) -> List[str]:
+        """Return layer material names (type=2 deduplicates for legends)."""
         names = [block.material.name for block in self.out]
         if type == 2:
             # for DBR legends in plots
@@ -142,6 +175,7 @@ class Pattren:
 
 
 def plot_index(pattren: Pattren, wl) -> None:
+    """Plot refractive index n across the DBR pattern at wavelength *wl*."""
     n, _ = pattren.get_index(wl)
     x_min = [pos[0] for pos in pattren._get_positions() if pos]
     x_max = [pos[1] for pos in pattren._get_positions() if pos]
@@ -157,6 +191,14 @@ def plot_index(pattren: Pattren, wl) -> None:
 
 
 def plot_2d(pattren: Pattren, height=100e-9, overlay_index: bool = False) -> None:
+    """Plot a 2-D bar chart of the DBR pattern.
+
+    Parameters
+    ----------
+    pattren : Pattren — the DBR pattern.
+    height : bar height in metres (default 100 nm).
+    overlay_index : if True, overlay refractive index on the bar chart.
+    """
     lengths = pattren._get_lengths()
     colors = pattren._get_colours()
     start_points = [pos[0] for pos in pattren._get_positions() if pos]
@@ -196,12 +238,24 @@ def plot_2d(pattren: Pattren, height=100e-9, overlay_index: bool = False) -> Non
 
 @dataclass
 class TMM:
+    """Transfer-matrix method for a DBR stack.
+
+    Computes reflection, transmission, and field profiles using the
+    2×2 transfer-matrix formalism for stratified media.
+
+    Attributes
+    ----------
+    pattern : Pattren — the layer stack.
+    anlge_of_incidence : angle of incidence in radians.
+    polarisation : "TE" or "TM".
+    """
+
     pattern: Pattren
     anlge_of_incidence: float
     polarisation: Literal["TE", "TM"]
 
     def _interface_matrix(self, n1, n2, angle, pol) -> np.ndarray:
-        """2×2 Fresnel interface matrix"""
+        """2×2 Fresnel interface matrix between media n1 and n2."""
         # Compute transmission angle using Snell's law
         sin_theta2 = n1 * np.sin(angle) / n2
         if np.isrealobj(sin_theta2):
@@ -223,7 +277,7 @@ class TMM:
     def _propagation_matrix(
         self, letter_asigned: str, wavelength: Wavelength, angle
     ) -> np.ndarray:
-        """2×2 phase accumulation matrix"""
+        """2×2 phase accumulation matrix for a single layer."""
         n: float = self.pattern.mapping[letter_asigned].material.n_func(wavelength.as_m)
         d: float = self.pattern.mapping[letter_asigned].length
         delta = 2 * PI * n * d * np.cos(self.anlge_of_incidence) / wavelength.as_m
@@ -232,7 +286,7 @@ class TMM:
     def transfer_matrix(
         self, wavelength: float, angle: float = 0.0, polarization: str = "TE"
     ) -> np.ndarray:
-        """Full stack matrix = product of all layer matrices"""
+        """Compute the full 2×2 transfer matrix for the stack at a given wavelength."""
         n_list, k_list = self.pattern.get_index(wavelength)
         n_complex = [n + 1j * k for n, k in zip(n_list, k_list)]
 
@@ -266,7 +320,7 @@ class TMM:
         return M_total
 
     def spectrum(self, wavelengths: WavelengthArray) -> tuple[NDArray, NDArray]:
-        """Returns R(λ), T(λ) across wavelength range"""
+        """Compute reflection R(λ) and transmission T(λ) across a wavelength range."""
         R = np.empty_like(wavelengths.as_m, dtype=float)
         T = np.empty_like(wavelengths.as_m, dtype=float)
 
@@ -303,7 +357,7 @@ class TMM:
         )
 
     def field_profile(self, wavelength: float) -> NDArray:
-        """E(z) inside the stack — useful for cavity design"""
+        """Compute |E(z)| inside the stack at a single wavelength - useful for cavity design."""
         n_list, k_list = self.pattern.get_index(wavelength)
         n_complex = [n + 1j * k for n, k in zip(n_list, k_list)]
         letters = list(self.pattern.style)

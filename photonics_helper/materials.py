@@ -1,3 +1,5 @@
+"""Refractive index data with spline interpolation and Sellmeier models."""
+
 import warnings
 from .base import PI, WavelengthArray
 
@@ -14,6 +16,17 @@ install()
 
 
 class RefractiveIndex:
+    """Wavelength-dependent complex refractive index (n + ik).
+
+    Stores tabulated n and k values and interpolates via cubic splines.
+
+    Attributes
+    ----------
+    n : real part of refractive index.
+    k : imaginary part (extinction coefficient).
+    wl : wavelength array (um).
+    """
+
     def __init__(self, n: NDArray, k: NDArray, wl: WavelengthArray) -> None:
         self._n = n
         self._k = k
@@ -42,6 +55,7 @@ class RefractiveIndex:
 
     @classmethod
     def from_complex(cls, nk: NDArray, wl: WavelengthArray) -> Self:
+        """Construct from a complex refractive index array."""
         return cls(n=np.real(nk), k=np.imag(nk), wl=wl)
 
     def _validate_range(self, wavelength: float):
@@ -51,20 +65,24 @@ class RefractiveIndex:
             )
 
     def n_func(self, wavelength: float) -> float:
+        """Interpolated real refractive index n at wavelength (μm)."""
         self._validate_range(wavelength)
         return self._n_spline(wavelength).item()
 
     def k_func(self, wavelength: float) -> float:
+        """Interpolated extinction coefficient k at wavelength (μm)."""
         self._validate_range(wavelength)
         return self._k_spline(wavelength).item()
 
     def nk_func(self, wavelength: float) -> complex:
+        """Interpolated complex refractive index n+ik at wavelength (μm)."""
         self._validate_range(wavelength)
         return complex(
             self._n_spline(wavelength).item(), self._k_spline(wavelength).item()
         )
 
     def plot(self, include_k: bool = True):
+        """Plot n (and optionally k) versus wavelength."""
 
         plt.plot(self._wl.as_um, self.n, label="n")
         plt.xlabel("wavelength [m]")
@@ -86,6 +104,7 @@ class RefractiveIndex:
         wl_from_to_in_um: Tuple[float, float],
         n_points=200,
     ) -> Self:
+        """Construct from a Sellmeier equation: n² = A₀ + Σ Aᵢλ²/(λ² - Bᵢ)."""
         if len(A) != len(B):
             raise ValueError("Length of A and B should be same")
         else:
@@ -110,6 +129,7 @@ class RefractiveIndex:
         wl_from_to_in_um: Tuple[float, float],
         n_points=200,
     ) -> Self:
+        """Construct from an alternative Sellmeier form: n² = A₀ + Σ Aᵢ/(λ² - Bᵢ²)."""
         if len(A) != len(B):
             raise ValueError("Length of A and B should be same")
         else:
@@ -126,6 +146,7 @@ class RefractiveIndex:
         return cls(n=np.array(n), k=k, wl=wls)
 
     def propagation_loss(self):
+        """Compute propagation loss (dB/m) from the extinction coefficient k."""
         if not np.all(self.k):
             warnings.warn(
                 "RefractiveIndex doesn't have imaginary index values. please provide it before loss calculation"

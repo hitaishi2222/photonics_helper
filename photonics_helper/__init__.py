@@ -1,3 +1,5 @@
+"""Photonics helper library — units, materials, fibers, pulses, FROG."""
+
 from .base import (
     Wavelength,
     Frequency,
@@ -7,6 +9,8 @@ from .base import (
     FrequencyArray,
     AngularFrequencyArray,
     WavenumberArray,
+    MeepUnit,
+    MeepUnitArray,
     PI,
     C_MS,
     EPS_0,
@@ -26,6 +30,8 @@ __all__ = [
     "FrequencyArray",
     "AngularFrequencyArray",
     "WavenumberArray",
+    "MeepUnit",
+    "MeepUnitArray",
     "PI",
     "C_MS",
     "RefractiveIndex",
