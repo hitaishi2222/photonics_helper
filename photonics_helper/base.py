@@ -70,10 +70,20 @@ class Wavelength:
         """Convert to Wavenumber (1/m)."""
         return Wavenumber(value=1 / self.as_m, unit="1/m")
 
+    @classmethod
+    def from_meep(cls, value: float, base_length: Wavelength | None = None) -> Self:
+        """Create from MEEP frequency units.
+
+        In MEEP, c = 1, so f_Meep = a/λ where a is the base_length.
+        """
+        if base_length is None:
+            base_length = Wavelength(1.0, "um")
+        return cls(base_length.as_m / value, "m")
+
     @cached_property
     def as_meep(self) -> float:
-        """Convert to MEEP units (λ₀ = 1 μm)."""
-        return self.as_m / 1e-6
+        """Convert to MEEP frequency units: f_Meep = a/λ."""
+        return 1e-6 / self.as_m
 
 
 @dataclass(config={"arbitrary_types_allowed": True})
@@ -132,6 +142,16 @@ class Frequency:
         """Convert to Wavenumber (1/m)."""
         return Wavenumber(value=self.as_Hz / C_MS, unit="1/m")
 
+    @classmethod
+    def from_meep(cls, value: float, base_length: Wavelength | None = None) -> Self:
+        """Create from MEEP frequency units.
+
+        In MEEP, c = 1, so f_Meep = ν·a.
+        """
+        if base_length is None:
+            base_length = Wavelength(1.0, "um")
+        return cls(value / base_length.as_m, "Hz")
+
     @cached_property
     def as_meep(self) -> float:
         """Convert to MEEP units (λ₀ = 1 μm)."""
@@ -183,10 +203,20 @@ class AngularFrequency:
         """Convert to Wavenumber (1/m)."""
         return Wavenumber(value=self.as_rad_s / (2 * PI * C_MS), unit="1/m")
 
+    @classmethod
+    def from_meep(cls, value: float, base_length: Wavelength | None = None) -> Self:
+        """Create from MEEP frequency units.
+
+        In MEEP, c = 1, so f_Meep = ω·a/(2π).
+        """
+        if base_length is None:
+            base_length = Wavelength(1.0, "um")
+        return cls(2 * PI * value / base_length.as_m, "rad/s")
+
     @cached_property
     def as_meep(self) -> float:
-        """Convert to MEEP units (λ₀ = 1 μm)."""
-        return self.as_rad_s * 1e-6 / C_MS
+        """Convert to MEEP frequency units: f_Meep = aω/(2πc)."""
+        return self.as_rad_s * 1e-6 / (2 * PI * C_MS)
 
 
 @dataclass(config={"arbitrary_types_allowed": True})
@@ -237,6 +267,21 @@ class Wavenumber:
     def to_omega(self) -> AngularFrequency:
         """Convert to AngularFrequency (rad/s)."""
         return AngularFrequency(value=C_MS * 2 * PI * self.as_1_m, unit="rad/s")
+
+    @classmethod
+    def from_meep(cls, value: float, base_length: Wavelength | None = None) -> Self:
+        """Create from MEEP frequency units.
+
+        In MEEP, c = 1, so f_Meep = k·a/(2π).
+        """
+        if base_length is None:
+            base_length = Wavelength(1.0, "um")
+        return cls(2 * PI * value / base_length.as_m, "1/m")
+
+    @cached_property
+    def as_meep(self) -> float:
+        """Convert to MEEP frequency units: f_Meep = ak/(2π)."""
+        return self.as_1_m * 1e-6 / (2 * PI)
 
 
 @dataclass(config={"arbitrary_types_allowed": True})
@@ -291,10 +336,20 @@ class WavelengthArray:
         _max = self.as_m.max()
         return np.linspace(_min, _max, points)
 
+    @classmethod
+    def from_meep(cls, value: float | NDArray, base_length: Wavelength | None = None) -> Self:
+        """Create from MEEP frequency units.
+
+        In MEEP, c = 1, so f_Meep = a/λ where a is the base_length.
+        """
+        if base_length is None:
+            base_length = Wavelength(1.0, "um")
+        return cls(base_length.as_m / value, "m")
+
     @cached_property
     def as_meep(self) -> NDArray:
-        """Convert to MEEP units (λ₀ = 1 μm)."""
-        return self.as_m / 1e-6
+        """Convert to MEEP frequency units: f_Meep = a/λ."""
+        return 1e-6 / self.as_m
 
 
 @dataclass(config={"arbitrary_types_allowed": True})
@@ -357,6 +412,16 @@ class FrequencyArray:
         _max = self.as_Hz.max()
         return np.linspace(_max, _min, points)
 
+    @classmethod
+    def from_meep(cls, value: float | NDArray, base_length: Wavelength | None = None) -> Self:
+        """Create from MEEP frequency units.
+
+        In MEEP, c = 1, so f_Meep = ν·a.
+        """
+        if base_length is None:
+            base_length = Wavelength(1.0, "um")
+        return cls(value / base_length.as_m, "Hz")
+
     @cached_property
     def as_meep(self) -> NDArray:
         """Convert to MEEP units (λ₀ = 1 μm)."""
@@ -409,10 +474,20 @@ class AngularFrequencyArray:
         _max = self.as_rad_s.max()
         return np.linspace(_max, _min, points)
 
+    @classmethod
+    def from_meep(cls, value: float | NDArray, base_length: Wavelength | None = None) -> Self:
+        """Create from MEEP frequency units.
+
+        In MEEP, c = 1, so f_Meep = ω·a/(2π).
+        """
+        if base_length is None:
+            base_length = Wavelength(1.0, "um")
+        return cls(2 * PI * value / base_length.as_m, "rad/s")
+
     @cached_property
     def as_meep(self) -> NDArray:
-        """Convert to MEEP units (λ₀ = 1 μm)."""
-        return self.as_rad_s * 1e-6 / C_MS
+        """Convert to MEEP frequency units: f_Meep = aω/(2πc)."""
+        return self.as_rad_s * 1e-6 / (2 * PI * C_MS)
 
 
 @dataclass(config={"arbitrary_types_allowed": True})
@@ -465,80 +540,20 @@ class WavenumberArray:
         _max = self.as_1_m.max()
         return np.linspace(_max, _min, points)
 
+    @classmethod
+    def from_meep(cls, value: float | NDArray, base_length: Wavelength | None = None) -> Self:
+        """Create from MEEP frequency units.
 
-@dataclass(config={"arbitrary_types_allowed": True})
-class MeepUnit:
-    """A quantity expressed in MEEP units (λ₀ = 1 μm, c = 1/(2π) μm/fs).
-
-    Accepts a single scalar value in MEEP units. Use ``to_wl()``, ``to_freq()``,
-    ``to_omega()``, or ``to_wn()`` to convert to the corresponding class.
-    """
-
-    value: float
-
-    def __repr__(self) -> str:
-        return f"MeepUnit -> {self.value} (MEEP units)"
-
-    def __str__(self) -> str:
-        return f"{self.value:.2f} (MEEP units)"
-
-    @cached_property
-    def as_meep(self) -> float:
-        return self.value
-
-    def to_wl(self) -> Wavelength:
-        """Convert to Wavelength (μm)."""
-        return Wavelength(self.as_meep, "um")
-
-    def to_freq(self) -> Frequency:
-        """Convert to Frequency (Hz)."""
-        return Frequency(C_MS / (self.as_meep * 1e-6), "Hz")
-
-    def to_omega(self) -> AngularFrequency:
-        """Convert to AngularFrequency (rad/s)."""
-        return AngularFrequency(2 * PI * C_MS / (self.as_meep * 1e-6), "rad/s")
-
-    def to_wn(self) -> Wavenumber:
-        """Convert to Wavenumber (1/m)."""
-        return Wavenumber(value=1 / (self.as_meep * 1e-6), unit="1/m")
-
-
-@dataclass(config={"arbitrary_types_allowed": True})
-class MeepUnitArray:
-    """Array of quantities expressed in MEEP units (λ₀ = 1 μm, c = 1/(2π) μm/fs).
-
-    Accepts an array of values in MEEP units. Use ``to_wl()``, ``to_freq()``,
-    ``to_omega()``, or ``to_wn()`` to convert to the corresponding array class.
-    """
-
-    value: ArrayLike
-
-    def __post_init__(self):
-        """Ensure value is a numpy array."""
-        self.value = np.array(self.value, dtype=float)
-
-    def __repr__(self) -> str:
-        return f"{self.__class__.__name__} -> from:{min(self.as_meep)} to:{max(self.as_meep)} (MEEP units)"
+        In MEEP, c = 1, so f_Meep = k·a/(2π).
+        """
+        if base_length is None:
+            base_length = Wavelength(1.0, "um")
+        return cls(2 * PI * value / base_length.as_m, "1/m")
 
     @cached_property
     def as_meep(self) -> NDArray:
-        return self.value
-
-    def to_wl(self) -> WavelengthArray:
-        """Convert to WavelengthArray (μm)."""
-        return WavelengthArray(self.as_meep, "um")
-
-    def to_freq(self) -> FrequencyArray:
-        """Convert to FrequencyArray (Hz)."""
-        return FrequencyArray(C_MS / (self.as_meep * 1e-6), "Hz")
-
-    def to_omega(self) -> AngularFrequencyArray:
-        """Convert to AngularFrequencyArray (rad/s)."""
-        return AngularFrequencyArray(2 * PI * C_MS / (self.as_meep * 1e-6), "rad/s")
-
-    def to_wn(self) -> WavenumberArray:
-        """Convert to WavenumberArray (1/m)."""
-        return WavenumberArray(value=1 / (self.as_meep * 1e-6), unit="1/m")
+        """Convert to MEEP frequency units: f_Meep = ak/(2π)."""
+        return self.as_1_m * 1e-6 / (2 * PI)
 
 
 class Permittivity(float):

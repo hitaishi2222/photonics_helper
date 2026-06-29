@@ -26,8 +26,6 @@ from photonics_helper.base import (
     WavelengthArray,
     Wavenumber,
     WavenumberArray,
-    MeepUnit,
-    MeepUnitArray,
 )
 
 
@@ -348,15 +346,15 @@ def test_wavenumber_array_invalid_unit():
 
 
 def test_wavelength_as_meep():
-    # 500 nm → 0.5 in MEEP units (λ₀ = 1 μm)
+    # f_Meep = a/λ: 500 nm → 1e-6/500e-9 = 2.0
     wl = Wavelength(500, "nm")
-    assert pytest.approx(wl.as_meep) == 0.5
+    assert pytest.approx(wl.as_meep) == 2.0
 
-    # 1550 nm → 1.55
+    # 1550 nm → 1e-6/1550e-9 ≈ 0.64516
     wl = Wavelength(1550, "nm")
-    assert pytest.approx(wl.as_meep) == 1.55
+    assert pytest.approx(wl.as_meep, rel=1e-5) == 1e-6 / 1550e-9
 
-    # 1 μm → 1.0
+    # 1 μm → 1.0 (a/a = 1)
     wl = Wavelength(1.0, "um")
     assert pytest.approx(wl.as_meep) == 1.0
 
@@ -372,14 +370,15 @@ def test_frequency_as_meep():
 
 
 def test_angular_frequency_as_meep():
-    # ω = 2πc/λ₀ ⇒ ω * λ₀ / c = 2π
+    # f_Meep = aω/(2πc): ω = 2πc/a ⇒ f_Meep = 1.0
     omega = AngularFrequency(2 * PI * C_MS / 1e-6, "rad/s")
-    assert pytest.approx(omega.as_meep, rel=1e-10) == 2 * PI
+    assert pytest.approx(omega.as_meep, rel=1e-10) == 1.0
 
 
 def test_wavelength_array_as_meep():
     wl = WavelengthArray(np.array([400.0, 500.0, 600.0]), "nm")
-    np.testing.assert_allclose(wl.as_meep, [0.4, 0.5, 0.6])
+    expected = 1e-6 / np.array([400.0, 500.0, 600.0]) * 1e9  # a/λ
+    np.testing.assert_allclose(wl.as_meep, expected, rtol=1e-10)
 
 
 def test_frequency_array_as_meep():
@@ -393,228 +392,126 @@ def test_angular_frequency_array_as_meep():
         np.array([2 * PI * C_MS / 1e-6, 2 * PI * C_MS / 0.5e-6]),
         "rad/s",
     )
-    np.testing.assert_allclose(omega.as_meep, [2 * PI, 4 * PI], rtol=1e-10)
+    np.testing.assert_allclose(omega.as_meep, [1.0, 2.0], rtol=1e-10)
 
 
 def test_meep_round_trip_wavelength():
-    # wavelength → meep → back via as_meep * λ₀
+    # wavelength → meep → back via a / f_Meep
     wl = Wavelength(800, "nm")
     meep = wl.as_meep
-    assert pytest.approx(meep * 1e-6) == wl.as_m
+    assert pytest.approx(1e-6 / meep) == wl.as_m
 
 
-# ─── MeepUnit (scalar) ───────────────────────────────────────────────
+def test_wavenumber_as_meep():
+    # f_Meep = ak/(2π): k = 2π/1μm ⇒ f_Meep = 1.0
+    wn = Wavenumber(2 * PI / 1e-6, "1/m")
+    assert pytest.approx(wn.as_meep, rel=1e-10) == 1.0
 
 
-def test_meepunit_basic():
-    m = MeepUnit(1.0)
-    assert pytest.approx(m.as_meep) == 1.0
+def test_wavenumber_array_as_meep():
+    wn = WavenumberArray(np.array([2 * PI / 1e-6, 2 * PI / 0.5e-6]), "1/m")
+    np.testing.assert_allclose(wn.as_meep, [1.0, 2.0], rtol=1e-10)
 
 
-def test_meepunit_repr():
-    m = MeepUnit(1.55)
-    r = repr(m)
-    assert "MeepUnit" in r
-    assert "1.55" in r
+# ─── from_meep tests ─────────────────────────────────────────────────
 
 
-def test_meepunit_str():
-    m = MeepUnit(1.55)
-    s = str(m)
-    assert "1.55" in s
-    assert "MEEP" in s
+def test_wavelength_from_meep_default_base():
+    w = Wavelength.from_meep(1.0)
+    assert pytest.approx(w.as_um) == 1.0
 
 
-def test_meepunit_to_wl():
-    m = MeepUnit(1.55)
-    wl = m.to_wl()
-    assert isinstance(wl, Wavelength)
-    assert pytest.approx(wl.as_um) == 1.55
-    assert pytest.approx(wl.as_nm) == 1550.0
+def test_wavelength_from_meep_custom_base():
+    w = Wavelength.from_meep(2.0, base_length=Wavelength(0.5, "um"))
+    assert pytest.approx(w.as_um) == 0.25
 
 
-def test_meepunit_to_freq():
-    m = MeepUnit(1.0)
-    freq = m.to_freq()
-    assert isinstance(freq, Frequency)
-    # λ = 1 μm → f = c / 1e-6 ≈ 2.998e14 Hz
-    expected = C_MS / 1e-6
-    assert pytest.approx(freq.as_Hz, rel=1e-10) == expected
+def test_frequency_from_meep_default_base():
+    f = Frequency.from_meep(1.0)
+    assert pytest.approx(f.as_Hz) == 1.0 / 1e-6
 
 
-def test_meepunit_to_omega():
-    m = MeepUnit(1.0)
-    omega = m.to_omega()
-    assert isinstance(omega, AngularFrequency)
-    expected = 2 * PI * C_MS / 1e-6
-    assert pytest.approx(omega.as_rad_s, rel=1e-10) == expected
+def test_frequency_from_meep_custom_base():
+    f = Frequency.from_meep(1.0, base_length=Wavelength(2.0, "um"))
+    assert pytest.approx(f.as_Hz) == 1.0 / 2e-6
 
 
-def test_meepunit_to_wn():
-    m = MeepUnit(1.0)
-    wn = m.to_wn()
-    assert isinstance(wn, Wavenumber)
-    assert pytest.approx(wn.as_1_m, rel=1e-10) == 1e6
+def test_angular_frequency_from_meep_default_base():
+    om = AngularFrequency.from_meep(1.0)
+    assert pytest.approx(om.as_rad_s) == 2 * PI / 1e-6
 
 
-# ─── MeepUnitArray ──────────────────────────────────────────────────
+def test_angular_frequency_from_meep_custom_base():
+    om = AngularFrequency.from_meep(1.0, base_length=Wavelength(0.5, "um"))
+    assert pytest.approx(om.as_rad_s) == 2 * PI / 0.5e-6
 
 
-def test_meepunitarray_basic():
-    ma = MeepUnitArray([0.5, 1.0, 1.5])
-    assert np.allclose(ma.as_meep, [0.5, 1.0, 1.5])
+def test_wavenumber_from_meep_default_base():
+    wn = Wavenumber.from_meep(1.0)
+    assert pytest.approx(wn.as_1_m) == 2 * PI / 1e-6
 
 
-def test_meepunitarray_repr():
-    ma = MeepUnitArray([0.5, 1.0, 1.5])
-    r = repr(ma)
-    assert "MeepUnitArray" in r
-    assert "from:" in r
-    assert "to:" in r
+def test_wavenumber_from_meep_custom_base():
+    wn = Wavenumber.from_meep(1.0, base_length=Wavelength(2.0, "um"))
+    assert pytest.approx(wn.as_1_m) == 2 * PI / 2e-6
 
 
-def test_meepunitarray_to_wl():
-    ma = MeepUnitArray([0.8, 1.0, 1.2])
-    wl = ma.to_wl()
-    assert isinstance(wl, WavelengthArray)
-    assert np.allclose(wl.as_um, [0.8, 1.0, 1.2])
-    assert np.allclose(wl.as_nm, [800.0, 1000.0, 1200.0])
+def test_wavelength_array_from_meep_default_base():
+    wa = WavelengthArray.from_meep(np.array([1.0, 2.0]))
+    np.testing.assert_allclose(wa.as_um, [1.0, 0.5], rtol=1e-10)
 
 
-def test_meepunitarray_to_freq():
-    ma = MeepUnitArray([1.0, 2.0])
-    freq = ma.to_freq()
-    assert isinstance(freq, FrequencyArray)
-    expected = C_MS / np.array([1e-6, 2e-6])
-    np.testing.assert_allclose(freq.as_Hz, expected, rtol=1e-10)
+def test_wavelength_array_from_meep_custom_base():
+    wa = WavelengthArray.from_meep(
+        np.array([1.0, 2.0]), base_length=Wavelength(3.0, "um")
+    )
+    np.testing.assert_allclose(wa.as_um, [3.0, 1.5], rtol=1e-10)
 
 
-def test_meepunitarray_to_omega():
-    ma = MeepUnitArray([1.0, 2.0])
-    omega = ma.to_omega()
-    assert isinstance(omega, AngularFrequencyArray)
-    expected = 2 * PI * C_MS / np.array([1e-6, 2e-6])
-    np.testing.assert_allclose(omega.as_rad_s, expected, rtol=1e-10)
+def test_frequency_array_from_meep_default_base():
+    fa = FrequencyArray.from_meep(np.array([1.0, 2.0]))
+    np.testing.assert_allclose(fa.as_Hz, np.array([1.0, 2.0]) / 1e-6, rtol=1e-10)
 
 
-def test_meepunitarray_to_wn():
-    ma = MeepUnitArray([1.0, 2.0])
-    wn = ma.to_wn()
-    assert isinstance(wn, WavenumberArray)
-    expected = 1.0 / np.array([1e-6, 2e-6])
-    np.testing.assert_allclose(wn.as_1_m, expected, rtol=1e-10)
+def test_frequency_array_from_meep_custom_base():
+    fa = FrequencyArray.from_meep(
+        np.array([1.0, 2.0]), base_length=Wavelength(0.5, "um")
+    )
+    np.testing.assert_allclose(fa.as_Hz, np.array([1.0, 2.0]) / 0.5e-6, rtol=1e-10)
 
 
-# ─── MeepUnit ↔ Wavelength round-trip ──────────────────────────────
+def test_angular_frequency_array_from_meep_default_base():
+    oma = AngularFrequencyArray.from_meep(np.array([1.0, 2.0]))
+    np.testing.assert_allclose(
+        oma.as_rad_s, 2 * PI * np.array([1.0, 2.0]) / 1e-6, rtol=1e-10
+    )
 
 
-def test_meepunit_round_trip_wavelength():
-    # MeepUnit → Wavelength → MeepUnit
-    m = MeepUnit(1.55)
-    wl = m.to_wl()
-    m_back = Wavelength(wl.as_um, "um")
-    assert pytest.approx(m_back.as_meep) == m.as_meep
+def test_angular_frequency_array_from_meep_custom_base():
+    oma = AngularFrequencyArray.from_meep(
+        np.array([1.0, 2.0]), base_length=Wavelength(0.5, "um")
+    )
+    np.testing.assert_allclose(
+        oma.as_rad_s, 2 * PI * np.array([1.0, 2.0]) / 0.5e-6, rtol=1e-10
+    )
 
 
-def test_meepunit_round_trip_frequency():
-    m = MeepUnit(1.0)
-    freq = m.to_freq()
-    freq_back = Frequency(freq.as_Hz, "Hz")
-    assert pytest.approx(freq_back.as_meep, rel=1e-10) == m.as_meep
+def test_wavenumber_array_from_meep_default_base():
+    wna = WavenumberArray.from_meep(np.array([1.0, 2.0]))
+    np.testing.assert_allclose(
+        wna.as_1_m, 2 * PI * np.array([1.0, 2.0]) / 1e-6, rtol=1e-10
+    )
 
 
-def test_meepunit_round_trip_angular_frequency():
-    """MeepUnit → AngularFrequency → Wavelength recovers original μm value."""
-    for val in [0.5, 1.0, 1.55]:
-        m = MeepUnit(val)
-        omega = m.to_omega()
-        wl = omega.to_wl()
-        assert pytest.approx(wl.as_um) == val
+def test_wavenumber_array_from_meep_custom_base():
+    wna = WavenumberArray.from_meep(
+        np.array([1.0, 2.0]), base_length=Wavelength(2.0, "um")
+    )
+    np.testing.assert_allclose(
+        wna.as_1_m, 2 * PI * np.array([1.0, 2.0]) / 2e-6, rtol=1e-10
+    )
 
 
-def test_meepunit_round_trip_wavenumber():
-    """MeepUnit → Wavenumber → Wavelength recovers original μm value."""
-    for val in [0.5, 1.0, 1.55]:
-        m = MeepUnit(val)
-        wn = m.to_wn()
-        wl = wn.to_wl()
-        assert pytest.approx(wl.as_um) == val
-
-
-# ─── MeepUnitArray round-trip ──────────────────────────────────────
-
-
-def test_meepunitarray_round_trip_wavelength():
-    ma = MeepUnitArray([0.8, 1.0, 1.2])
-    wl = ma.to_wl()
-    wl_back = WavelengthArray(wl.as_um, "um")
-    np.testing.assert_allclose(wl_back.as_meep, ma.as_meep, rtol=1e-12)
-
-
-def test_meepunitarray_round_trip_frequency():
-    """MeepUnitArray → FrequencyArray → WavelengthArray recovers μm values."""
-    for val in [0.5, 1.0, 1.5]:
-        ma = MeepUnitArray([val])
-        freq = ma.to_freq()
-        wl = freq.to_wl()
-        assert pytest.approx(wl.as_um[0]) == val
-
-
-def test_meepunitarray_round_trip_angular_frequency():
-    """MeepUnitArray → AngularFrequencyArray → WavelengthArray recovers μm values."""
-    for val in [0.5, 1.0, 1.5]:
-        ma = MeepUnitArray([val])
-        omega = ma.to_omega()
-        wl = omega.to_wl()
-        assert pytest.approx(wl.as_um[0]) == val
-
-
-def test_meepunitarray_round_trip_wavenumber():
-    """MeepUnitArray → WavenumberArray → WavelengthArray recovers μm values."""
-    for val in [0.5, 1.0, 1.5]:
-        ma = MeepUnitArray([val])
-        wn = ma.to_wn()
-        wl = wn.to_wl()
-        assert pytest.approx(wl.as_um[0]) == val
-
-
-# ─── MeepUnit ↔ as_meep consistency ────────────────────────────────
-
-
-def test_meepunit_as_meep_matches_wavelength_as_meep():
-    """MeepUnit(x).as_meep should equal Wavelength(x um).as_meep."""
-    for val in [0.5, 1.0, 1.55, 2.0]:
-        m = MeepUnit(val)
-        wl = Wavelength(val, "um")
-        assert pytest.approx(m.as_meep) == wl.as_meep
-
-
-def test_meepunit_as_meep_matches_frequency_as_meep():
-    """MeepUnit(x) and Frequency(c/(x·1e-6) Hz) describe the same mode.
-
-    Frequency.as_meep = f·1e-6/C_MS = 1/x, MeepUnit(x).as_meep = x.
-    Their product should be 1 (reciprocal relationship in MEEP units).
-    """
-    for val in [0.5, 1.0, 1.55]:
-        m = MeepUnit(val)
-        f = Frequency(C_MS / (val * 1e-6), "Hz")
-        assert pytest.approx(m.as_meep * f.as_meep) == 1.0
-
-
-def test_meepunit_as_meep_matches_angular_frequency_as_meep():
-    """MeepUnit(x) and AngularFrequency(2πc/(x·1e-6) rad/s): product of as_meep = 2π."""
-    for val in [0.5, 1.0, 1.55]:
-        m = MeepUnit(val)
-        omega = AngularFrequency(2 * PI * C_MS / (val * 1e-6), "rad/s")
-        assert pytest.approx(m.as_meep * omega.as_meep) == 2 * PI
-
-
-def test_meepunit_as_meep_matches_wavenumber_as_meep():
-    """MeepUnit(x) and Wavenumber(1/(x·1e-6) 1/m): reciprocal relationship."""
-    for val in [0.5, 1.0, 1.55]:
-        m = MeepUnit(val)
-        wn = Wavenumber(1 / (val * 1e-6), "1/m")
-        assert pytest.approx(wn.as_1_m * m.as_meep * 1e-6) == 1.0
 
 
 
