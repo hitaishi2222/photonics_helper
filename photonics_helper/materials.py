@@ -6,6 +6,8 @@ from .base import PI, WavelengthArray
 from typing import List, Self, Tuple
 from numpy.typing import NDArray
 from functools import cached_property
+from pydantic.dataclasses import dataclass
+from pydantic import model_validator, Field
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -15,6 +17,7 @@ from rich.traceback import install
 install()
 
 
+@dataclass(config={"arbitrary_types_allowed": True})
 class RefractiveIndex:
     """Wavelength-dependent complex refractive index (n + ik).
 
@@ -27,15 +30,24 @@ class RefractiveIndex:
     wl : wavelength array (um).
     """
 
-    def __init__(self, n: NDArray, k: NDArray, wl: WavelengthArray) -> None:
-        self._n = n
-        self._k = k
-        self._wl = wl
+    _n: NDArray = Field(alias="n")
+    _k: NDArray = Field(alias="k")
+    _wl: WavelengthArray = Field(alias="wl")
+    _n_spline: object = None
+    _k_spline: object = None
 
+    @model_validator(mode="after")
+    def _setup_splines(self) -> "RefractiveIndex":
         self._wl_min = float(self._wl.as_um.min())
         self._wl_max = float(self._wl.as_um.max())
-        self._n_spline = make_splrep(self._wl.as_um, self._n)
-        self._k_spline = make_splrep(self._wl.as_um, self._k)
+        try:
+            self._n_spline = make_splrep(self._wl.as_um, self._n)
+            self._k_spline = make_splrep(self._wl.as_um, self._k)
+        except Exception:
+            # insufficient data for cubic spline (e.g. single-point material)
+            self._n_spline = None
+            self._k_spline = None
+        return self
 
     @cached_property
     def n(self) -> NDArray:
@@ -85,7 +97,7 @@ class RefractiveIndex:
         """Plot n (and optionally k) versus wavelength."""
 
         plt.plot(self._wl.as_um, self.n, label="n")
-        plt.xlabel("wavelength [m]")
+        plt.xlabel("wavelength [μm]")
         plt.ylabel("n")
 
         if include_k:
@@ -108,14 +120,13 @@ class RefractiveIndex:
         if len(A) != len(B):
             raise ValueError("Length of A and B should be same")
         else:
-            n = []
             wl = np.linspace(wl_from_to_in_um[0], wl_from_to_in_um[1], n_points)
             wls = WavelengthArray(wl, "um")
-            for wl in wls.as_um:
-                sum = 0.0
-                for i in range(len(A)):
-                    sum += A[i] * wl**2 / (wl**2 - B[i])
-                n.append(np.sqrt(A0 + sum))
+            wl_arr = np.array(wls.as_um)
+            A_arr = np.array(A)
+            B_arr = np.array(B)
+            terms = A_arr * wl_arr[:, None] ** 2 / (wl_arr[:, None] ** 2 - B_arr)
+            n = np.sqrt(A0 + terms.sum(axis=1))
             k = np.zeros(len(wls.value))
 
         return cls(n=np.array(n), k=k, wl=wls)

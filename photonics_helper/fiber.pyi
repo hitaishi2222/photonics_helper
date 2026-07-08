@@ -2,8 +2,10 @@ from photonics_helper.base import AngularFrequencyArray, Wavelength, WavelengthA
 
 from functools import cached_property
 from numpy.typing import NDArray
-from typing import Literal, Self, Tuple
+from typing import Literal, Optional, Self, Tuple
+from pydantic.dataclasses import dataclass
 
+@dataclass(config={"arbitrary_types_allowed": True})
 class Dispersion:
     """
     Represents optical fiber dispersion characteristics.
@@ -13,28 +15,16 @@ class Dispersion:
     between different units.
 
     Attributes:
-        _values: Dispersion values in s/m^2
-        _wavelengths: Wavelength array for the dispersion data
-        _unit: Internal unit representation (always "s/m^2")
+        wavelengths: wavelength array.
+        values: dispersion values in s/m^2.
+        unit: internal unit representation (always "s/m^2").
+        central_wavelength: design central wavelength.
     """
 
-    def __init__(
-        self,
-        wavelengths: WavelengthArray,
-        values: NDArray,
-        unit: Literal["ps/nm.km", "s/m^2"],
-        central_wavelength: Wavelength,
-    ) -> None:
-        """
-        Initialize a Dispersion object.
-
-        Args:
-            wavelengths: Array of wavelengths corresponding to dispersion values
-            values: Dispersion values in the specified unit
-            unit: Unit of the dispersion values ("ps/nm.km" or "s/m^2")
-            central_wavelength: Central wavelength for the dispersion curve
-        """
-        ...
+    wavelengths: WavelengthArray
+    values: NDArray
+    unit: Literal["ps/nm.km", "s/m^2"] = "s/m^2"
+    central_wavelength: Optional[Wavelength] = None
 
     def __repr__(self) -> str:
         """Return string representation showing wavelength range."""
@@ -106,7 +96,7 @@ class Dispersion:
         ...
 
     @classmethod
-    def from_propagation_constanant(
+    def from_propagation_constant(
         cls,
         beta: NDArray,
         wavelengths: WavelengthArray,
@@ -164,6 +154,7 @@ class Dispersion:
         """
         ...
 
+@dataclass(config={"arbitrary_types_allowed": True})
 class PropagationConstant:
     """
     Represents propagation constant characteristics of optical fibers.
@@ -173,22 +164,12 @@ class PropagationConstant:
     optical properties.
 
     Attributes:
-        _values: Propagation constant values
-        _wavelengths: Wavelength array (if initialized with wavelengths)
-        _omegas: Angular frequency array (if initialized with frequencies)
+        values: propagation constant values.
+        x_values: wavelength or angular frequency array.
     """
 
-    def __init__(
-        self, values: NDArray, x_values: WavelengthArray | AngularFrequencyArray
-    ) -> None:
-        """
-        Initialize a PropagationConstant object.
-
-        Args:
-            values: Array of propagation constant values
-            x_values: Either wavelength or angular frequency array
-        """
-        ...
+    values: NDArray
+    x_values: WavelengthArray | AngularFrequencyArray
 
     @classmethod
     def beta2_from_neff(

@@ -160,23 +160,22 @@ class Pattren:
             return temp
         return names
 
-    def plot_index(self, wl: float = 0) -> None:
-        if wl == 0 and self.central_wavelength is None:
-            raise ValueError(
-                "Wavelenth reguired[in meters]: set central wavelength (or) assign wavelength of your choice in function."
-            )
-        elif wl != 0:
-            plot_index(self, wl)
-        else:
-            plot_index(self, self.central_wavelength)
+    def plot_index(self, wl: Wavelength | None = None) -> None:
+        if wl is None:
+            if self.central_wavelength is None:
+                raise ValueError(
+                    "Wavelenth reguired[in meters]: set central wavelength (or) assign wavelength of your choice in function."
+                )
+            wl = self.central_wavelength
+        plot_index(self, wl)
 
     def plot_2d(self, height=100e-9, overlay_index: bool = False) -> None:
         plot_2d(self, height=height, overlay_index=overlay_index)
 
 
-def plot_index(pattren: Pattren, wl) -> None:
+def plot_index(pattren: Pattren, wl: Wavelength) -> None:
     """Plot refractive index n across the DBR pattern at wavelength *wl*."""
-    n, _ = pattren.get_index(wl)
+    n, _ = pattren.get_index(wl.as_um)
     x_min = [pos[0] for pos in pattren._get_positions() if pos]
     x_max = [pos[1] for pos in pattren._get_positions() if pos]
 
@@ -228,7 +227,7 @@ def plot_2d(pattren: Pattren, height=100e-9, overlay_index: bool = False) -> Non
         if pattren.central_wavelength is None:
             raise ValueError("Wavelenth reguired[in meters]: set central wavelength")
         else:
-            n, k = pattren.get_index(pattren.central_wavelength)
+            n, k = pattren.get_index(pattren.central_wavelength.as_um)
 
         ax1.hlines(n, x_min, x_max, colors="k")
         ax1.vlines(x_max[:-1], n[:-1], n[1:], colors="k")
@@ -246,12 +245,12 @@ class TMM:
     Attributes
     ----------
     pattern : Pattren — the layer stack.
-    anlge_of_incidence : angle of incidence in radians.
+    angle_of_incidence : angle of incidence in radians.
     polarisation : "TE" or "TM".
     """
 
     pattern: Pattren
-    anlge_of_incidence: float
+    angle_of_incidence: float
     polarisation: Literal["TE", "TM"]
 
     def _interface_matrix(self, n1, n2, angle, pol) -> np.ndarray:
@@ -278,16 +277,17 @@ class TMM:
         self, letter_asigned: str, wavelength: Wavelength, angle
     ) -> np.ndarray:
         """2×2 phase accumulation matrix for a single layer."""
-        n: float = self.pattern.mapping[letter_asigned].material.n_func(wavelength.as_m)
+        n: float = self.pattern.mapping[letter_asigned].material.n_func(wavelength.as_um)
         d: float = self.pattern.mapping[letter_asigned].length
-        delta = 2 * PI * n * d * np.cos(self.anlge_of_incidence) / wavelength.as_m
+        delta = 2 * PI * n * d * np.cos(self.angle_of_incidence) / wavelength.as_m
         return np.array([[np.exp(1j * delta), 0], [0, np.exp(-1j * delta)]])
 
     def transfer_matrix(
-        self, wavelength: float, angle: float = 0.0, polarization: str = "TE"
+        self, wavelength: Wavelength, angle: float = 0.0, polarization: str = "TE"
     ) -> np.ndarray:
         """Compute the full 2×2 transfer matrix for the stack at a given wavelength."""
-        n_list, k_list = self.pattern.get_index(wavelength)
+        wl_um = wavelength.as_um
+        n_list, k_list = self.pattern.get_index(wl_um)
         n_complex = [n + 1j * k for n, k in zip(n_list, k_list)]
 
         M_total = np.identity(2, dtype=complex)
@@ -302,8 +302,7 @@ class TMM:
             M_total = M_int @ M_total
 
             # Propagation
-            wl_obj = Wavelength(wavelength, "m")
-            M_prop = self._propagation_matrix(letter, wl_obj, theta_prev)
+            M_prop = self._propagation_matrix(letter, wavelength, theta_prev)
             M_total = M_prop @ M_total
 
             # Update angle for next layer
@@ -326,39 +325,34 @@ class TMM:
 
         n0 = 1.0 + 0j  # incident medium
 
-        for i, wl in enumerate(wavelengths.as_um):
+        for i, wl_m in enumerate(wavelengths.as_m):
+            wl = Wavelength(wl_m, "m")
             M = self.transfer_matrix(
-                wl, angle=self.anlge_of_incidence, polarization=self.polarisation
+                wl, angle=self.angle_of_incidence, polarization=self.polarisation
             )
-            n_sub_real, k_sub = self.pattern.get_index(wl)
+            wl_um = wl_m * 1e6
+            n_sub_real, k_sub = self.pattern.get_index(wl_um)
             n_sub = n_sub_real[-1] + 1j * k_sub[-1]
 
-            M11, M12, M21, M22 = M[0, 0], M[0, 1], M[1, 0], M[1, 1]
-            r = (n0 * M11 + n0 * n_sub * M12 - M21 - n_sub * M22) / (
-                n0 * M11 + n0 * n_sub * M12 + M21 + n_sub * M22
-            )
-            t = (2 * n0) / (n0 * M11 + n0 * n_sub * M12 + M21 + n_sub * M22)
+            M11, M21 = M[0, 0], M[1, 0]
+            r = M21 / M11
+            t = 1.0 / M11
             R[i] = np.abs(r) ** 2
             T[i] = (n_sub.real / n0.real) * (np.abs(t) ** 2)
 
         return R, T
 
-    def _reflection_coefficient(self, wavelength: float) -> complex:
+    def _reflection_coefficient(self, wavelength: Wavelength) -> complex:
         """Helper to compute overall reflection coefficient."""
-        n0 = 1.0 + 0j
         M = self.transfer_matrix(
-            wavelength, angle=self.anlge_of_incidence, polarization=self.polarisation
+            wavelength, angle=self.angle_of_incidence, polarization=self.polarisation
         )
-        n_sub_real, k_sub = self.pattern.get_index(wavelength)
-        n_sub = n_sub_real[-1] + 1j * k_sub[-1]
-        M11, M12, M21, M22 = M[0, 0], M[0, 1], M[1, 0], M[1, 1]
-        return (n0 * M11 + n0 * n_sub * M12 - M21 - n_sub * M22) / (
-            n0 * M11 + n0 * n_sub * M12 + M21 + n_sub * M22
-        )
+        return M[1, 0] / M[0, 0]
 
-    def field_profile(self, wavelength: float) -> NDArray:
-        """Compute |E(z)| inside the stack at a single wavelength - useful for cavity design."""
-        n_list, k_list = self.pattern.get_index(wavelength)
+    def field_profile(self, wavelength: Wavelength) -> NDArray:
+        """Compute |E(z)| inside the stack at a single wavelength — useful for cavity design."""
+        wl_um = wavelength.as_um
+        n_list, k_list = self.pattern.get_index(wl_um)
         n_complex = [n + 1j * k for n, k in zip(n_list, k_list)]
         letters = list(self.pattern.style)
 
@@ -369,7 +363,7 @@ class TMM:
         field_vals: List[float] = []
 
         n_prev = 1.0 + 0j
-        theta_prev = self.anlge_of_incidence
+        theta_prev = self.angle_of_incidence
 
         for letter, n_curr in zip(letters, n_complex):
             # Interface
@@ -382,8 +376,7 @@ class TMM:
             field_vals.append(np.abs(v[0] + v[1]))
 
             # Propagation through the layer
-            wl_obj = Wavelength(wavelength, "m")
-            M_prop = self._propagation_matrix(letter, wl_obj, theta_prev)
+            M_prop = self._propagation_matrix(letter, wavelength, theta_prev)
             v = M_prop @ v
 
             # Update angle for next layer

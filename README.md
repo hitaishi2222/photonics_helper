@@ -27,6 +27,13 @@ pip install photonics-helper
   - Generate FROG traces from electric fields
   - Retrieve pulse shape, chirp, and phase from measured traces
   - Fidelity metric for retrieval quality assessment
+- **Raman Modeling**: Full Raman response physics for 30+ materials
+  - Time-domain response (electronic Kerr + delayed lattice oscillation)
+  - Frequency-domain gain spectrum
+  - Stokes / anti-Stokes wavelength calculation
+  - Pump-wavelength explorer and material comparison overlays
+  - SQLite material database (`materials.db`) with 30 materials
+  - Interactive Dash dashboard for comparing Raman properties
 - **Comprehensive Documentation**: Clear documentation with examples
 - **Easy to Use**: Intuitive API design
 
@@ -129,6 +136,44 @@ fig = trace.visualize(retrieved=result)
 fig.savefig("frog.png", dpi=150, bbox_inches="tight")
 ```
 
+# Raman Material Database
+
+Load Raman material parameters from the built-in SQLite database (30 materials):
+
+```python
+from photonics_helper.raman import RamanSpec
+
+# Load from bundled materials.db (falls back to hardcoded dict)
+silica = RamanSpec.from_database("Silica")
+print(silica.summary())
+# Material: Silica
+# Raman shift: 440.0 cm⁻¹ = 13.19 THz
+# Linewidth: 45.0 cm⁻¹ = 1.35 THz
+# fR: 0.18
+# n₂: 3.2e-20 m²/W
+```
+
+All 30 available materials:
+
+| Category | Materials |
+|----------|-----------|
+| Glasses | Silica, GeO₂, As₂S₃, As₂Se₃, ZBLAN |
+| Semiconductors | Si, Ge, GaAs, GaN, AlN, InP, InGaAs, AlGaAs, SiC, Si₃N₄ |
+| II-VI | CdS, CdTe, ZnO |
+| Oxides | Ga₂O₃, Al₂O₃ (sapphire), BaTiO₃, LiNbO₃, LiTaO₃, KTP |
+| Crystals & Hosts | Diamond, YAG, YLF |
+| NLO Crystals | LBO, AgGaS₂, AgGaSe₂ |
+
+```python
+# Stokes / anti-Stokes for a given pump
+from photonics_helper.base import Wavelength
+
+pump = Wavelength(800, "nm")
+stokes = silica.stokes_wavelength(pump)
+anti = silica.anti_stokes_wavelength(pump)
+print(f"Stokes: {stokes.as_nm:.1f} nm, Anti-Stokes: {anti.as_nm:.1f} nm")
+```
+
 # Development
 
 To install for development:
@@ -156,12 +201,21 @@ pip install -e .
   - SHG-FROG trace generation
   - PCGPA pulse retrieval
   - Fidelity metric
+- **Raman Modeling** ✅
+  - Time-domain Raman response h_R(t)
+  - Frequency-domain gain spectrum H(Ω)
+  - Raman pulse interaction (R(t) ⊗ |E|²)
+  - Material comparison overlays with 6 panel types
+  - Pump wavelength explorer (Stokes/anti-Stokes)
+  - SQLite material database (30 entries)
+  - Interactive Dash dashboard
+  - Catalog explorer example (`examples/11_raman_material_catalog.py`)
 - Structured Light
 - Add methods for bandwidth calculations
 - Add methods for power/intensity conversions
 - Modeling GNLSE
   - Kerr Effect
-  - Raman Effect
+  - ~~Raman Effect~~
   - Self Steepening
   - Mode profile Dispersion
 - SSFM

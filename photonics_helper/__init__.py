@@ -17,7 +17,19 @@ from .base import (
 
 from .materials import RefractiveIndex
 from .fiber import Dispersion, PropagationConstant
-from .frog import FROGTrace, generate_trace, retrieve, fidelity
+from .pulse import FROGTrace, generate_trace, retrieve, fidelity
+from .raman import (
+    RamanSpec,
+    RamanDatabase,
+    RamanResponse,
+    RamanFrequencyResponse,
+    RamanPulseInteraction,
+    PumpWavelengthExplorer,
+    MaterialComparison,
+    RAMAN_MATERIALS,
+    COMMON_COMPARISONS,
+    app,
+)
 
 __all__ = [
     "Wavelength",
@@ -39,4 +51,14 @@ __all__ = [
     "fidelity",
     "EPS_0",
     "MU_0",
+    "RamanSpec",
+    "RamanDatabase",
+    "RamanResponse",
+    "RamanFrequencyResponse",
+    "RamanPulseInteraction",
+    "PumpWavelengthExplorer",
+    "MaterialComparison",
+    "RAMAN_MATERIALS",
+    "COMMON_COMPARISONS",
+    "app",
 ]

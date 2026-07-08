@@ -1,23 +1,28 @@
 from __future__ import annotations
 
 from numpy.typing import NDArray
-from typing import List, Self, Tuple
+from typing import List, Optional, Self, Tuple
 from functools import cached_property
+from pydantic.dataclasses import dataclass
 
 from .base import WavelengthArray
 
+@dataclass(config={"arbitrary_types_allowed": True})
 class RefractiveIndex:
-    """Represents refractive index data with real (n) and imaginary (k) components."""
+    """Wavelength-dependent complex refractive index (n + ik).
 
-    def __init__(self, n: NDArray, k: NDArray, wl: WavelengthArray) -> None:
-        """Initialize refractive index data.
+    Stores tabulated n and k values and interpolates via cubic splines.
 
-        Args:
-            n: Array of real refractive index values
-            k: Array of extinction coefficient values
-            wl: Array of wavelengths at which n,k are defined
-        """
-        ...
+    Attributes
+    ----------
+    n : real part of refractive index.
+    k : imaginary part (extinction coefficient).
+    wl : wavelength array (um).
+    """
+
+    n: NDArray
+    k: NDArray
+    wl: WavelengthArray
 
     @cached_property
     def n(self) -> NDArray:
@@ -154,15 +159,6 @@ class RefractiveIndex:
         """
         ...
 
-    def propagation_loss(self) -> NDArray | None:
-        """Calculate propagation loss in dB/m.
-
-        This requires the material to have a non-zero extinction
-        coefficient (k). If k is all zeros, a warning is issued and None is returned.
-
-        The loss is calculated as: Loss (dB/m) = 10 * log10(exp(4 * pi * k / lambda))
-
-        Returns:
-            Propagation loss values in dB/m, or None if k is all zeros.
-        """
+    def propagation_loss(self):
+        """Compute propagation loss (dB/m) from the extinction coefficient k."""
         ...

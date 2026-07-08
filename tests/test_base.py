@@ -168,24 +168,24 @@ def test_frequency_array_equally_spaced():
     f = FrequencyArray(np.array([200.0, 300.0]), "THz")
     eq = f.to_equally_spaced(points=51)
     assert len(eq) == 51
-    assert eq[0] == f.as_Hz.max()
-    assert eq[-1] == f.as_Hz.min()
+    assert eq[0] == f.as_Hz.min()
+    assert eq[-1] == f.as_Hz.max()
 
 
 def test_angular_frequency_array_equally_spaced():
     omega = AngularFrequencyArray(np.array([2.0, 4.0]), "rad/ps")
     eq = omega.to_equally_spaced(points=51)
     assert len(eq) == 51
-    assert eq[0] == omega.as_rad_s.max()
-    assert eq[-1] == omega.as_rad_s.min()
+    assert eq[0] == omega.as_rad_s.min()
+    assert eq[-1] == omega.as_rad_s.max()
 
 
 def test_wavenumber_array_equally_spaced():
     wn = WavenumberArray(np.array([1e4, 2e4]), "1/cm")
     eq = wn.to_equally_spaced(points=51)
     assert len(eq) == 51
-    assert eq[0] == wn.as_1_m.max()
-    assert eq[-1] == wn.as_1_m.min()
+    assert eq[0] == wn.as_1_m.min()
+    assert eq[-1] == wn.as_1_m.max()
 
 
 # ─── Permittivity / Permiability ────────────────────────────────────

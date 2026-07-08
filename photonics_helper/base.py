@@ -114,6 +114,9 @@ class Frequency:
     def __repr__(self) -> str:
         return f"Frequency -> {self.as_Hz} Hz"
 
+    def __str__(self) -> str:
+        return f"{self.as_THz:.4f} THz"
+
     @cached_property
     def as_Hz(self) -> float:
         return self.value
@@ -410,7 +413,7 @@ class FrequencyArray:
         """Return equally-spaced frequency values between min and max."""
         _min = self.as_Hz.min()
         _max = self.as_Hz.max()
-        return np.linspace(_max, _min, points)
+        return np.linspace(_min, _max, points)
 
     @classmethod
     def from_meep(cls, value: float | NDArray, base_length: Wavelength | None = None) -> Self:
@@ -472,7 +475,7 @@ class AngularFrequencyArray:
         """Return equally-spaced angular frequency values between min and max."""
         _min = self.as_rad_s.min()
         _max = self.as_rad_s.max()
-        return np.linspace(_max, _min, points)
+        return np.linspace(_min, _max, points)
 
     @classmethod
     def from_meep(cls, value: float | NDArray, base_length: Wavelength | None = None) -> Self:
@@ -538,7 +541,7 @@ class WavenumberArray:
         """Return equally-spaced wavenumber values between min and max."""
         _min = self.as_1_m.min()
         _max = self.as_1_m.max()
-        return np.linspace(_max, _min, points)
+        return np.linspace(_min, _max, points)
 
     @classmethod
     def from_meep(cls, value: float | NDArray, base_length: Wavelength | None = None) -> Self:

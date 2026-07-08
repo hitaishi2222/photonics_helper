@@ -94,7 +94,7 @@ def test_tmm_spectrum_and_field_profile(constant_material):
         mapping={"A": block_a, "B": block_b},
         central_wavelength=Wavelength(1.55, "um"),
     )
-    tmm = TMM(pattern=pat, anlge_of_incidence=0.0, polarisation="TE")
+    tmm = TMM(pattern=pat, angle_of_incidence=0.0, polarisation="TE")
 
     # Spectrum over a small range – reflectance should be near zero because indices match
     wl_vals = np.array([1500, 1600])  # nanometres
@@ -107,6 +107,6 @@ def test_tmm_spectrum_and_field_profile(constant_material):
     # assert np.allclose(T, 1.0, atol=1e-6)
 
     # Field profile should contain one entry per layer (2 layers)
-    field = tmm.field_profile(wavelength=1.55)
+    field = tmm.field_profile(wavelength=Wavelength(1.55, "um"))
     assert field.shape[0] == 2
     assert np.all(field >= 0)

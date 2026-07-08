@@ -12,6 +12,8 @@ from photonics_helper.looks import c_info
 from functools import cached_property
 from numpy.typing import NDArray
 from typing import Literal, Self
+from pydantic.dataclasses import dataclass
+from pydantic import model_validator, Field
 
 import warnings
 import numpy as np
@@ -23,6 +25,7 @@ from rich.traceback import install
 install()
 
 
+@dataclass(config={"arbitrary_types_allowed": True})
 class Dispersion:
     """Wavelength-dependent dispersion D(λ) with spline interpolation.
 
@@ -35,21 +38,15 @@ class Dispersion:
     central_wavelength : design central wavelength.
     """
 
-    def __init__(
-        self,
-        wavelengths: WavelengthArray,
-        values: NDArray,
-        unit: Literal["ps/nm.km", "s/m^2"],
-        central_wavelength: Wavelength,
-    ):
-        if unit == "ps/nm.km":
-            values = values * 1e-6  # (12-9+3)
-        elif unit == "s/m^2":
-            pass
-        self._values = values
-        self._wavelengths = wavelengths
-        self._unit = "s/m^2"
-        self.central_wavelength = central_wavelength
+    _wavelengths: WavelengthArray = Field(alias="wavelengths")
+    _values: NDArray = Field(alias="values")
+    _unit: Literal["ps/nm.km", "s/m^2"] = Field(default="s/m^2", alias="unit")
+    central_wavelength: Wavelength | None = None
+
+    @model_validator(mode="after")
+    def _setup(self) -> "Dispersion":
+        # unit conversion handled externally; _unit is always "s/m^2" internally
+        return self
 
     def __repr__(self):
         return f"Dispersion: from wl: {self._wavelengths.as_m.min()} to {self._wavelengths.as_m.max()}"
@@ -117,10 +114,6 @@ class Dispersion:
 
         if len(neff) != len(wavelengths.value):
             raise ValueError("Length of both neff and wavelengths should be same")
-        if not isinstance(wavelengths, WavelengthArray):
-            raise TypeError(
-                f"wavelengths cannot process the type: {type(wavelengths)}, required WavelengthArray"
-            )
         wl = wavelengths.to_equally_spaced()
         interp = make_splrep(wavelengths.as_m, neff)(wl)
 
@@ -146,7 +139,7 @@ class Dispersion:
         )
 
     @classmethod
-    def from_propagation_constanant(
+    def from_propagation_constant(
         cls,
         beta: NDArray,
         wavelengths: WavelengthArray,
@@ -196,11 +189,11 @@ class Dispersion:
 
     def get_beta2(self, wavelength_nm: float):
         """Return β₂ at wavelength_nm (ps²/m) via spline interpolation."""
-        min = self._wavelengths.as_nm.min()
-        max = self._wavelengths.as_nm.max()
-        if wavelength_nm > max or wavelength_nm < min:
+        _min_wl = self._wavelengths.as_nm.min()
+        _max_wl = self._wavelengths.as_nm.max()
+        if wavelength_nm > _max_wl or wavelength_nm < _min_wl:
             raise ValueError(
-                f"values of disersion available between {min} and {max} nm."
+                f"values of disersion available between {_min_wl} and {_max_wl} nm."
             )
         beta2 = -self._wavelengths.as_m**2 / (2 * PI * C_MS) * self.as_s_m_m
         spline = make_splrep(self._wavelengths.as_nm, beta2)
@@ -264,6 +257,7 @@ class Dispersion:
             return Betas
 
 
+@dataclass(config={"arbitrary_types_allowed": True})
 class PropagationConstant:
     """Propagation constant β as a function of wavelength or angular frequency.
 
@@ -273,14 +267,18 @@ class PropagationConstant:
     x_values : wavelength or angular frequency array.
     """
 
-    def __init__(
-        self, values: NDArray, x_values: WavelengthArray | AngularFrequencyArray
-    ):
-        if isinstance(x_values, WavelengthArray):
-            self._wavelengths = x_values
-        elif isinstance(x_values, AngularFrequencyArray):
-            self._omegas = x_values
-        self._values = values
+    _values: NDArray = Field(alias="values")
+    _x_values: WavelengthArray | AngularFrequencyArray = Field(alias="x_values")
+    _wavelengths: WavelengthArray | None = None
+    _omegas: AngularFrequencyArray | None = None
+
+    @model_validator(mode="after")
+    def _setup(self) -> "PropagationConstant":
+        if isinstance(self._x_values, WavelengthArray):
+            self._wavelengths = self._x_values
+        elif isinstance(self._x_values, AngularFrequencyArray):
+            self._omegas = self._x_values
+        return self
 
     @classmethod
     def beta2_from_neff(

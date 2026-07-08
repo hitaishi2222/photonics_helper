@@ -8,7 +8,7 @@ and assess retrieval quality.
 """
 
 import numpy as np
-from photonics_helper.frog import generate_trace, retrieve, fidelity
+from photonics_helper.pulse import generate_trace, retrieve, fidelity
 import matplotlib
 matplotlib.use('Agg')  # Non-interactive backend for PNG export
 import matplotlib.pyplot as plt

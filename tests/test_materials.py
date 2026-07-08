@@ -38,7 +38,7 @@ def test_from_complex():
 
 def test_nk_property(sample_refractive_index):
     """Test complex refractive index property"""
-    expected = sample_refractive_index.n + sample_refractive_index.k
+    expected = sample_refractive_index.n + 1j * sample_refractive_index.k
     assert_array_almost_equal(sample_refractive_index.nk, expected)
 
 

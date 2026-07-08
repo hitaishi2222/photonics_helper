@@ -301,14 +301,7 @@ class TemporalGrid:
         """
         ...
 
-    def check_aliasing(self, T0: float) -> None:
-        """
-        Emit a warning if the total time window is too short to contain the
-        pulse comfortably (heuristic: ``time_window < 10 * T0``).
 
-        The function prints a message; it does not raise an exception.
-        """
-        ...
 
 class Wave:
     """
@@ -420,7 +413,7 @@ class Wave:
         """
         Compute the product :math:`Δt·Δω` (root‑mean‑square widths) of the
         intensity and spectral intensity.  For a transform‑limited Gaussian
-        pulse the value is ≈ 0.44.
+        pulse the value is ≈ 0.707.
         """
         ...
 
