@@ -11,7 +11,7 @@ def sample_refractive_index():
     wl = np.linspace(1e-6, 2e-6, 100)  # 1-2 µm range
     n = np.ones_like(wl) * 1.5  # constant n = 1.5
     k = np.zeros_like(wl)  # lossless material
-    return RefractiveIndex(n=n, k=k, wl=WavelengthArray(wl, "m"))
+    return RefractiveIndex(n=n, k=k, wl=WavelengthArray(wl, "m"))  # type: ignore[arg-type]
 
 
 def test_refractive_index_init(sample_refractive_index):
@@ -22,7 +22,7 @@ def test_refractive_index_init(sample_refractive_index):
     assert (
         len(sample_refractive_index.n)
         == len(sample_refractive_index.k)
-        == len(sample_refractive_index.wl.value)
+        == len(sample_refractive_index.wl.value)  # type: ignore[arg-type]
     )
 
 

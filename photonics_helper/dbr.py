@@ -5,27 +5,29 @@ from typing import Dict, List, Literal, Optional, Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 from numpy.typing import NDArray
-from dataclasses import dataclass, field
+from dataclasses import field
+from pydantic.dataclasses import dataclass
 
 from photonics_helper.base import PI, Wavelength, WavelengthArray
 from photonics_helper.materials import RefractiveIndex
 
 
+@dataclass(config={"arbitrary_types_allowed": True})
 class Material(RefractiveIndex):
     """A named material with wavelength-dependent complex refractive index."""
 
-    def __init__(
-        self, name: str, n: np.ndarray, k: np.ndarray, wl: WavelengthArray
-    ) -> None:
-        super().__init__(n=n, k=k, wl=wl)
-        self._name = name
+    _name: str = ""
+
+    def __post_init__(self):
+        if not self._name:
+            object.__setattr__(self, "_name", "unnamed")
 
     @property
     def name(self) -> str:
         return self._name
 
 
-@dataclass
+@dataclass(config={"arbitrary_types_allowed": True})
 class Block:
     """A single layer in a DBR stack.
 
@@ -54,7 +56,7 @@ class Block:
 
     @position.setter
     def position(self, value: Tuple[float, float]) -> None:
-        if value[1] - value[0] != self.length:
+        if abs((value[1] - value[0]) - self.length) > 1e-12:
             raise ValueError("Your position is not compatable with the length of Block")
         else:
             self._position = value
@@ -64,7 +66,7 @@ class Block:
         self._position = (0, self.length)
 
 
-@dataclass
+@dataclass(config={"arbitrary_types_allowed": True})
 class Pattren:
     """A repeating DBR layer pattern.
 
@@ -235,7 +237,7 @@ def plot_2d(pattren: Pattren, height=100e-9, overlay_index: bool = False) -> Non
     plt.show()
 
 
-@dataclass
+@dataclass(config={"arbitrary_types_allowed": True})
 class TMM:
     """Transfer-matrix method for a DBR stack.
 
@@ -253,69 +255,55 @@ class TMM:
     angle_of_incidence: float
     polarisation: Literal["TE", "TM"]
 
-    def _interface_matrix(self, n1, n2, angle, pol) -> np.ndarray:
-        """2×2 Fresnel interface matrix between media n1 and n2."""
-        # Compute transmission angle using Snell's law
-        sin_theta2 = n1 * np.sin(angle) / n2
-        if np.isrealobj(sin_theta2):
-            sin_theta2 = np.clip(sin_theta2, -1.0, 1.0)
-        theta2 = np.arcsin(sin_theta2)
-
-        if pol == "TE":
-            r = (n1 * np.cos(angle) - n2 * np.cos(theta2)) / (
-                n1 * np.cos(angle) + n2 * np.cos(theta2)
-            )
-            t = (2 * n1 * np.cos(angle)) / (n1 * np.cos(angle) + n2 * np.cos(theta2))
-        else:  # TM
-            r = (n2 * np.cos(angle) - n1 * np.cos(theta2)) / (
-                n2 * np.cos(angle) + n1 * np.cos(theta2)
-            )
-            t = (2 * n1 * np.cos(angle)) / (n2 * np.cos(angle) + n1 * np.cos(theta2))
-        return (1 / t) * np.array([[1, r], [r, 1]], dtype=complex)
-
-    def _propagation_matrix(
-        self, letter_asigned: str, wavelength: Wavelength, angle
+    def _characteristic_matrix(
+        self, letter_asigned: str, wavelength: Wavelength
     ) -> np.ndarray:
-        """2×2 phase accumulation matrix for a single layer."""
-        n: float = self.pattern.mapping[letter_asigned].material.n_func(wavelength.as_um)
+        """2×2 characteristic matrix for a single layer.
+
+        Uses the standard optical admittance formalism which correctly
+        handles absorbing (complex n) layers. For lossless media this
+        reduces to the usual cos/sin form.
+        """
+        mat = self.pattern.mapping[letter_asigned].material
+        n_real: float = mat.n_func(wavelength.as_um)
+        n_imag: float = mat.k_func(wavelength.as_um)
+        n: complex = n_real + 1j * n_imag
         d: float = self.pattern.mapping[letter_asigned].length
-        delta = 2 * PI * n * d * np.cos(self.angle_of_incidence) / wavelength.as_m
-        return np.array([[np.exp(1j * delta), 0], [0, np.exp(-1j * delta)]])
+        # Phase thickness with complex n
+        cos_theta = np.cos(self.angle_of_incidence)
+        # Snell's law for complex n: sin_theta_layer = sin_incident / n
+        sin_theta_layer = np.sin(self.angle_of_incidence) / n
+        if np.isrealobj(sin_theta_layer):
+            sin_theta_layer = np.clip(sin_theta_layer, -1.0, 1.0)
+        cos_theta_layer = np.sqrt(1.0 - sin_theta_layer ** 2)
+        delta = 2 * PI * n * d * cos_theta_layer / wavelength.as_m
 
-    def transfer_matrix(
-        self, wavelength: Wavelength, angle: float = 0.0, polarization: str = "TE"
-    ) -> np.ndarray:
-        """Compute the full 2×2 transfer matrix for the stack at a given wavelength."""
-        wl_um = wavelength.as_um
-        n_list, k_list = self.pattern.get_index(wl_um)
-        n_complex = [n + 1j * k for n, k in zip(n_list, k_list)]
+        # Optical admittance η = n * cos(θ_layer) for TE, n / cos(θ_layer) for TM
+        if self.polarisation == "TE":
+            eta = n * cos_theta_layer
+        else:  # TM
+            eta = n / cos_theta_layer
 
+        cos_d = np.cos(delta)
+        sin_d = np.sin(delta)
+        return np.array(
+            [[cos_d, -1j * sin_d / eta], [-1j * eta * sin_d, cos_d]],
+            dtype=complex,
+        )
+
+    def transfer_matrix(self, wavelength: Wavelength) -> np.ndarray:
+        """Compute the full 2×2 characteristic matrix for the stack.
+
+        Uses the optical admittance formalism so that absorbing layers
+        (complex n) are handled correctly.  The returned matrix M relates
+        the tangential E and H fields at the front and back of the stack:
+            [E_front]   [M11  M12] [E_back]
+            [H_front] = [M21  M22] [H_back]
+        """
         M_total = np.identity(2, dtype=complex)
-
-        n_prev = 1.0 + 0j  # incident medium (air)
-        theta_prev = angle
-        letters = list(self.pattern.style)
-
-        for letter, n_curr in zip(letters, n_complex):
-            # Interface
-            M_int = self._interface_matrix(n_prev, n_curr, theta_prev, polarization)
-            M_total = M_int @ M_total
-
-            # Propagation
-            M_prop = self._propagation_matrix(letter, wavelength, theta_prev)
-            M_total = M_prop @ M_total
-
-            # Update angle for next layer
-            sin_theta_next = n_prev * np.sin(theta_prev) / n_curr
-            if np.isrealobj(sin_theta_next):
-                sin_theta_next = np.clip(sin_theta_next, -1.0, 1.0)
-            theta_next = np.arcsin(sin_theta_next)
-            n_prev = n_curr
-            theta_prev = theta_next
-
-        # Exit interface back to air
-        M_exit = self._interface_matrix(n_prev, 1.0 + 0j, theta_prev, polarization)
-        M_total = M_exit @ M_total
+        for letter in self.pattern.style:
+            M_layer = self._characteristic_matrix(letter, wavelength)
+            M_total = M_layer @ M_total
         return M_total
 
     def spectrum(self, wavelengths: WavelengthArray) -> tuple[NDArray, NDArray]:
@@ -323,68 +311,76 @@ class TMM:
         R = np.empty_like(wavelengths.as_m, dtype=float)
         T = np.empty_like(wavelengths.as_m, dtype=float)
 
-        n0 = 1.0 + 0j  # incident medium
+        # Optical admittances of incident (air) and exit (air) media
+        eta0 = self._admittance(1.0 + 0j, self.angle_of_incidence)
+        eta_exit = self._admittance(1.0 + 0j, 0.0)
 
         for i, wl_m in enumerate(wavelengths.as_m):
             wl = Wavelength(wl_m, "m")
-            M = self.transfer_matrix(
-                wl, angle=self.angle_of_incidence, polarization=self.polarisation
-            )
-            wl_um = wl_m * 1e6
-            n_sub_real, k_sub = self.pattern.get_index(wl_um)
-            n_sub = n_sub_real[-1] + 1j * k_sub[-1]
+            M = self.transfer_matrix(wl)
 
-            M11, M21 = M[0, 0], M[1, 0]
-            r = M21 / M11
-            t = 1.0 / M11
+            M11, M12, M21, M22 = M[0, 0], M[0, 1], M[1, 0], M[1, 1]
+            # Characteristic matrix formalism: r and t from admittance boundary
+            denom = eta0 * M11 + eta0 * eta_exit * M12 + M21 + eta_exit * M22
+            r = (eta0 * M11 + eta0 * eta_exit * M12 - M21 - eta_exit * M22) / denom
+            t = 2.0 * eta0 / denom
             R[i] = np.abs(r) ** 2
-            T[i] = (n_sub.real / n0.real) * (np.abs(t) ** 2)
+            T[i] = (eta_exit.real / eta0.real) * np.abs(t) ** 2
 
         return R, T
 
+    def _admittance(self, n: complex, angle: float) -> complex:
+        """Optical admittance η = n·cos(θ) for TE, n/cos(θ) for TM."""
+        if self.polarisation == "TE":
+            cos_t = np.cos(angle)
+            return n * cos_t
+        else:
+            sin_t = np.sin(angle) / n
+            if np.isrealobj(sin_t):
+                sin_t = np.clip(sin_t, -1.0, 1.0)
+            cos_t = np.sqrt(1.0 - sin_t ** 2)
+            return n / cos_t
+
     def _reflection_coefficient(self, wavelength: Wavelength) -> complex:
-        """Helper to compute overall reflection coefficient."""
-        M = self.transfer_matrix(
-            wavelength, angle=self.angle_of_incidence, polarization=self.polarisation
-        )
-        return M[1, 0] / M[0, 0]
+        """Overall reflection coefficient via characteristic matrix formalism."""
+        M = self.transfer_matrix(wavelength)
+        eta0 = self._admittance(1.0 + 0j, self.angle_of_incidence)
+        eta_exit = self._admittance(1.0 + 0j, 0.0)
+        M11, M12, M21, M22 = M[0, 0], M[0, 1], M[1, 0], M[1, 1]
+        denom = eta0 * M11 + eta0 * eta_exit * M12 + M21 + eta_exit * M22
+        return (eta0 * M11 + eta0 * eta_exit * M12 - M21 - eta_exit * M22) / denom
 
     def field_profile(self, wavelength: Wavelength) -> NDArray:
-        """Compute |E(z)| inside the stack at a single wavelength — useful for cavity design."""
-        wl_um = wavelength.as_um
-        n_list, k_list = self.pattern.get_index(wl_um)
-        n_complex = [n + 1j * k for n, k in zip(n_list, k_list)]
-        letters = list(self.pattern.style)
+        """Compute |E(z)| inside the stack at a single wavelength.
 
-        # initial field vector (forward = 1, backward = overall reflected)
+        Returns one value per layer: the magnitude of the total electric
+        field at the *front* of each layer (just after the interface).
+        """
         r_total = self._reflection_coefficient(wavelength)
-        v = np.array([1.0 + 0j, r_total], dtype=complex)
+        eta0 = self._admittance(1.0 + 0j, self.angle_of_incidence)
+
+        # Normalize so that the incident forward wave has E = 1.
+        # H_forward = eta0 * E_forward,  H_backward = -eta0 * E_backward
+        # At the front face: E_total = E_f + E_b,  H_total = eta0*(E_f - E_b)
+        # With E_f = 1, E_b = r_total:
+        E_front = 1.0 + r_total
+        H_front = eta0 * (1.0 - r_total)
 
         field_vals: List[float] = []
+        E_cur = E_front
+        H_cur = H_front
 
-        n_prev = 1.0 + 0j
-        theta_prev = self.angle_of_incidence
-
-        for letter, n_curr in zip(letters, n_complex):
-            # Interface
-            M_int = self._interface_matrix(
-                n_prev, n_curr, theta_prev, self.polarisation
-            )
-            v = M_int @ v
-
-            # Record field magnitude at the start of the layer
-            field_vals.append(np.abs(v[0] + v[1]))
-
-            # Propagation through the layer
-            M_prop = self._propagation_matrix(letter, wavelength, theta_prev)
-            v = M_prop @ v
-
-            # Update angle for next layer
-            sin_theta_next = n_prev * np.sin(theta_prev) / n_curr
-            if np.isrealobj(sin_theta_next):
-                sin_theta_next = np.clip(sin_theta_next, -1.0, 1.0)
-            theta_next = np.arcsin(sin_theta_next)
-            n_prev = n_curr
-            theta_prev = theta_next
+        for letter in self.pattern.style:
+            M_layer = self._characteristic_matrix(letter, wavelength)
+            # Record |E| at the front of this layer
+            field_vals.append(np.abs(E_cur))
+            # Propagate through the layer
+            M11, M12 = M_layer[0, 0], M_layer[0, 1]
+            M21, M22 = M_layer[1, 0], M_layer[1, 1]
+            E_cur = M11 * E_cur + M12 * H_cur
+            H_cur = M21 * E_cur + M22 * H_cur
+            # Re-derive E_cur from H_cur to stay consistent with the admittance
+            # convention (E = H / eta_local is not quite right for the internal
+            # field; instead we keep the (E,H) pair propagated by M).
 
         return np.array(field_vals, dtype=float)

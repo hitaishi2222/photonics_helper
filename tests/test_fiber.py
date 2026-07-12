@@ -96,7 +96,7 @@ def test_dispersion_from_neff_error_conditions():
     with pytest.raises(TypeError):
         Dispersion.from_neff(
             neff=np.array([1.5, 1.51]),
-            wavelengths=[1500.0, 1550.0],  # not a WavelengthArray
+            wavelengths=[1500.0, 1550.0],  # type: ignore[arg-type]  # not a WavelengthArray
             central_wavelength_nm=1550.0,
         )
 
@@ -139,7 +139,7 @@ def test_propagation_constant_from_neff_omega_error_handling():
     with pytest.raises(TypeError):
         PropagationConstant.from_neff_omega(
             neff=neff,
-            omega=np.array([2.0, 4.0]),  # not an AngularFrequencyArray
+            omega=np.array([2.0, 4.0]),  # type: ignore[arg-type]  # not an AngularFrequencyArray
         )
 
     # Valid construction should succeed.

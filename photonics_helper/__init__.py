@@ -17,7 +17,7 @@ from .base import (
 
 from .materials import RefractiveIndex
 from .fiber import Dispersion, PropagationConstant
-from .pulse import FROGTrace, generate_trace, retrieve, fidelity
+from .pulse import FROGTrace, generate_trace, retrieve, fidelity  # type: ignore
 from .raman import (
     RamanSpec,
     RamanDatabase,
@@ -30,6 +30,7 @@ from .raman import (
     COMMON_COMPARISONS,
     app,
 )
+from .phonon import PhononMode, PhononResponse, PHONON_MATERIALS
 
 __all__ = [
     "Wavelength",
@@ -61,4 +62,7 @@ __all__ = [
     "RAMAN_MATERIALS",
     "COMMON_COMPARISONS",
     "app",
+    "PhononMode",
+    "PhononResponse",
+    "PHONON_MATERIALS",
 ]

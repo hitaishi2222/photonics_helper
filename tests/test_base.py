@@ -304,42 +304,42 @@ def test_angular_frequency_round_trip_via_wavenumber():
 
 def test_wavelength_invalid_unit():
     with pytest.raises(ValidationError):
-        Wavelength(500, "pm")
+        Wavelength(500, "pm" + "")  # type: ignore[arg-type]
 
 
 def test_frequency_invalid_unit():
     with pytest.raises(ValidationError):
-        Frequency(1.0, "kHz")
+        Frequency(1.0, "kHz" + "")  # type: ignore[arg-type]
 
 
 def test_angular_frequency_invalid_unit():
     with pytest.raises(ValidationError):
-        AngularFrequency(1.0, "rad/ns")
+        AngularFrequency(1.0, "rad/ns" + "")  # type: ignore[arg-type]
 
 
 def test_wavenumber_invalid_unit():
     with pytest.raises(ValidationError):
-        Wavenumber(1.0, "1/nm")
+        Wavenumber(1.0, "1/nm" + "")  # type: ignore[arg-type]
 
 
 def test_wavelength_array_invalid_unit():
     with pytest.raises(ValidationError):
-        WavelengthArray([500.0], "pm")
+        WavelengthArray([500.0], "pm" + "")  # type: ignore[arg-type]
 
 
 def test_frequency_array_invalid_unit():
     with pytest.raises(ValidationError):
-        FrequencyArray([1.0], "kHz")
+        FrequencyArray([1.0], "kHz" + "")  # type: ignore[arg-type]
 
 
 def test_angular_frequency_array_invalid_unit():
     with pytest.raises(ValidationError):
-        AngularFrequencyArray([1.0], "rad/ns")
+        AngularFrequencyArray([1.0], "rad/ns" + "")  # type: ignore[arg-type]
 
 
 def test_wavenumber_array_invalid_unit():
     with pytest.raises(ValidationError):
-        WavenumberArray([1.0], "1/nm")
+        WavenumberArray([1.0], "1/nm" + "")  # type: ignore[arg-type]
 
 
 # ─── as_meep (MEEP units, λ₀ = 1 μm) ────────────────────────────────
@@ -447,12 +447,12 @@ def test_angular_frequency_from_meep_custom_base():
 
 
 def test_wavenumber_from_meep_default_base():
-    wn = Wavenumber.from_meep(1.0)
+    wn = Wavenumber.from_meep(1.0)  # type: ignore[attr-defined]
     assert pytest.approx(wn.as_1_m) == 2 * PI / 1e-6
 
 
 def test_wavenumber_from_meep_custom_base():
-    wn = Wavenumber.from_meep(1.0, base_length=Wavelength(2.0, "um"))
+    wn = Wavenumber.from_meep(1.0, base_length=Wavelength(2.0, "um"))  # type: ignore[attr-defined]
     assert pytest.approx(wn.as_1_m) == 2 * PI / 2e-6
 
 

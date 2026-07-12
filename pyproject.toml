@@ -38,6 +38,13 @@ Documentation = "https://github.com/hitaishi2222/photonics-helper#readme"
 [tool.setuptools.package-data]
 photonics_helper = ["*.pyi"]
 
+[tool.pyrefly]
+project-includes = [
+    "**/*.py*",
+    "**/*.ipynb",
+]
+permissive-ignores = true
+
 [dependency-groups]
 dev = [
     "pytest>=9.0.2",

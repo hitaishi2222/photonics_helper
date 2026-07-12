@@ -162,7 +162,7 @@ class TestRamanSpec:
         fig = silica.plot_spectrum(backend="matplotlib")
 
         assert fig is not None
-        plt.close(fig)
+        plt.close(fig)  # type: ignore[arg-type]
 
     def test_plot_spectrum_plotly(self):
         """Test spectrum plot with plotly backend."""
@@ -186,7 +186,7 @@ class TestRamanSpec:
         fig = cds.plot_phonons(backend="matplotlib")
 
         assert fig is not None
-        plt.close(fig)
+        plt.close(fig)  # type: ignore[arg-type]
 
     def test_plot_phonons_missing_data(self):
         """Test phonon plot with missing phonon data."""
@@ -198,7 +198,7 @@ class TestRamanSpec:
         fig = silica.plot_phonons(backend="matplotlib")
 
         assert fig is not None
-        plt.close(fig)
+        plt.close(fig)  # type: ignore[arg-type]
 
     def test_construction_with_all_params(self):
         """Test construction with all parameters."""
@@ -320,6 +320,7 @@ class TestRamanDatabase:
             db.update_material("TestMat", fR=0.5, n2=1e-19)
 
             result = db.get_material("TestMat")
+            assert result is not None
             assert result["fR"] == 0.5
             assert result["n2"] == 1e-19
             assert result["raman_shift_cm"] == 400
@@ -427,8 +428,8 @@ class TestRAMAN_MATERIALS:
             assert "name" in data
             assert "raman_shift_cm" in data
             assert "raman_linewidth_cm" in data
-            assert data["raman_shift_cm"] > 0
-            assert data["raman_linewidth_cm"] > 0
+            assert data["raman_shift_cm"] > 0  # type: ignore[operator]
+            assert data["raman_linewidth_cm"] > 0  # type: ignore[operator]
 
     def test_all_materials_loadable(self):
         """Test that all hardcoded materials can be loaded."""
@@ -510,7 +511,7 @@ class TestRAMAN_MATERIALS:
         for name, data in RAMAN_MATERIALS.items():
             gc = data.get("gain_coeff")
             if gc is not None:
-                assert gc > 0, f"{name} has gain_coeff={gc}, expected > 0"
+                assert gc > 0, f"{name} has gain_coeff={gc}, expected > 0"  # type: ignore[operator]
 
     def test_n2_is_real(self):
         """Test n2 is a finite number or None for every material."""
@@ -581,22 +582,22 @@ class TestRamanFrequencyResponse:
     def test_H_real_shape(self):
         """Test that H_real has correct shape."""
         fr = self._make_freq_resp()
-        assert fr.H_real.shape == (fr.grid.N,)
+        assert fr.H_real.shape == (fr.grid.N,)  # type: ignore[union-attr]
 
     def test_H_imag_shape(self):
         """Test that H_imag has correct shape."""
         fr = self._make_freq_resp()
-        assert fr.H_imag.shape == (fr.grid.N,)
+        assert fr.H_imag.shape == (fr.grid.N,)  # type: ignore[union-attr]
 
     def test_H_magnitude_shape(self):
         """Test that H_magnitude has correct shape."""
         fr = self._make_freq_resp()
-        assert fr.H_magnitude.shape == (fr.grid.N,)
+        assert fr.H_magnitude.shape == (fr.grid.N,)  # type: ignore[union-attr]
 
     def test_H_phase_shape(self):
         """Test that H_phase has correct shape."""
         fr = self._make_freq_resp()
-        assert fr.H_phase.shape == (fr.grid.N,)
+        assert fr.H_phase.shape == (fr.grid.N,)  # type: ignore[union-attr]
 
     def test_magnitude_non_negative(self):
         """Test that |H(Ω)| is non-negative."""
@@ -641,7 +642,7 @@ class TestRamanFrequencyResponse:
         """Test H(0) is real and positive (DC component)."""
         fr = self._make_freq_resp()
         # Find index closest to Ω=0
-        zero_idx = np.argmin(np.abs(fr.grid.w))
+        zero_idx = np.argmin(np.abs(fr.grid.w))  # type: ignore[union-attr]
         # H(0) should be real (no phase) and positive
         assert abs(fr.H_imag[zero_idx]) < 1e-10 * np.max(np.abs(fr.H_real))
         assert fr.H_real[zero_idx] > 0
@@ -655,7 +656,7 @@ class TestRamanFrequencyResponse:
         fr = self._make_freq_resp()
         fig = fr.plot_real(backend="matplotlib")
         assert fig is not None
-        plt.close(fig)
+        plt.close(fig)  # type: ignore[arg-type]
 
     def test_plot_imag_returns_figure(self):
         """Test plot_imag returns a matplotlib figure."""
@@ -666,7 +667,7 @@ class TestRamanFrequencyResponse:
         fr = self._make_freq_resp()
         fig = fr.plot_imag(backend="matplotlib")
         assert fig is not None
-        plt.close(fig)
+        plt.close(fig)  # type: ignore[arg-type]
 
     def test_plot_magnitude_returns_figure(self):
         """Test plot_magnitude returns a matplotlib figure."""
@@ -677,7 +678,7 @@ class TestRamanFrequencyResponse:
         fr = self._make_freq_resp()
         fig = fr.plot_magnitude(backend="matplotlib")
         assert fig is not None
-        plt.close(fig)
+        plt.close(fig)  # type: ignore[arg-type]
 
     def test_plot_phase_returns_figure(self):
         """Test plot_phase returns a matplotlib figure."""
@@ -688,7 +689,7 @@ class TestRamanFrequencyResponse:
         fr = self._make_freq_resp()
         fig = fr.plot_phase(backend="matplotlib")
         assert fig is not None
-        plt.close(fig)
+        plt.close(fig)  # type: ignore[arg-type]
 
     def test_plot_all_returns_figure(self):
         """Test plot_all returns a 4-panel figure."""
@@ -699,8 +700,8 @@ class TestRamanFrequencyResponse:
         fr = self._make_freq_resp()
         fig = fr.plot_all(backend="matplotlib")
         assert fig is not None
-        assert len(fig.axes) == 4
-        plt.close(fig)
+        assert len(fig.axes) == 4  # type: ignore[attr-defined]
+        plt.close(fig)  # type: ignore[arg-type]
 
     def test_plot_all_plotly(self):
         """Test plot_all with plotly backend."""
@@ -772,17 +773,17 @@ class TestRamanResponse:
 
         # τ1 = 1 / ν_R (oscillation period)
         expected_tau1 = 1.0 / spec.raman_shift_Hz
-        assert_almost_equal(resp.tau1, expected_tau1, decimal=10)
+        assert_almost_equal(resp.tau1, expected_tau1, decimal=10)  # type: ignore[arg-type]
 
         # τ2 = 1 / (π × linewidth_Hz) (damping time from Lorentzian FWHM)
         expected_tau2 = 1.0 / (np.pi * spec.linewidth_Hz)
-        assert_almost_equal(resp.tau2, expected_tau2, decimal=10)
+        assert_almost_equal(resp.tau2, expected_tau2, decimal=10)  # type: ignore[arg-type]
 
     def test_construction_explicit_tau_overrides(self):
         """Test that explicit tau1/tau2 override auto-derived values."""
         resp = self._make_response(tau1=1e-12, tau2=2e-12)
-        assert_almost_equal(resp.tau1, 1e-12)
-        assert_almost_equal(resp.tau2, 2e-12)
+        assert_almost_equal(resp.tau1, 1e-12)  # type: ignore[arg-type]
+        assert_almost_equal(resp.tau2, 2e-12)  # type: ignore[arg-type]
 
     def test_h_R_at_t_equals_zero(self):
         """Test h_R(0) = 0 because sin(0) = 0."""
@@ -848,11 +849,11 @@ class TestRamanResponse:
         """Test that δ_ε(t) integrates to ~1."""
         resp = self._make_response()
         # Use a fine grid around t=0
-        eps = resp.grid.dt * 10  # narrow Gaussian width
+        eps = resp.grid.dt * 10  # type: ignore[union-attr]  # narrow Gaussian width
         t = np.linspace(-5 * eps, 5 * eps, 10000)
         inst = resp.instantaneous_response(t)
         # instantaneous_response = (1-fR)*delta, so integral = (1-fR)
-        expected_integral = 1.0 - resp.fR
+        expected_integral = 1.0 - resp.fR  # type: ignore[operator]
         integral = np.trapezoid(inst, t)
         assert_almost_equal(integral, expected_integral, decimal=1)
 
@@ -908,15 +909,15 @@ class TestRamanResponse:
 
         # τ1 = 1/ν_R
         expected_tau1 = 1.0 / spec.raman_shift_Hz
-        assert_almost_equal(resp.tau1, expected_tau1, decimal=8)
+        assert_almost_equal(resp.tau1, expected_tau1, decimal=8)  # type: ignore[arg-type]
         # τ1 should be on the order of femtoseconds
-        assert 1e-15 < resp.tau1 < 1e-13
+        assert 1e-15 < resp.tau1 < 1e-13  # type: ignore[operator]
 
         # τ2 = 1/(π × linewidth)
         expected_tau2 = 1.0 / (np.pi * spec.linewidth_Hz)
-        assert_almost_equal(resp.tau2, expected_tau2, decimal=8)
+        assert_almost_equal(resp.tau2, expected_tau2, decimal=8)  # type: ignore[arg-type]
         # τ2 should be larger than τ1 (damping slower than oscillation)
-        assert resp.tau2 > resp.tau1
+        assert resp.tau2 > resp.tau1  # type: ignore[operator]
 
     def test_plot_components_returns_figure(self):
         """Test that plot_components returns a matplotlib figure."""
@@ -929,8 +930,8 @@ class TestRamanResponse:
 
         assert fig is not None
         # Should have 3 axes (3 panels)
-        assert len(fig.axes) == 3
-        plt.close(fig)
+        assert len(fig.axes) == 3  # type: ignore[attr-defined]
+        plt.close(fig)  # type: ignore[arg-type]
 
     def test_plot_components_plotly(self):
         """Test plot_components with plotly backend."""
@@ -948,7 +949,7 @@ class TestRamanResponse:
         resp = self._make_response()
         # Grid should cover at least several τ2
         assert resp.grid.Tmax > 10 * resp.tau2, \
-            "Grid Tmax should cover at least 10× τ2 to capture damped oscillation"
+            "Grid Tmax should cover at least 10× τ2 to capture damped oscillation"  # type: ignore[operator]
 
     def test_different_materials_different_tau(self):
         """Test that different materials produce different τ1, τ2."""
@@ -975,13 +976,13 @@ class TestRamanResponse:
         # (sin reaches first max at π/2, so 2πν_R·t = π/2 → t = 1/(4ν_R) = τ1/4)
         first_max_idx = np.argmax(h)
         first_peak_t = t[first_max_idx]
-        expected_peak = resp.tau1 / 4
+        expected_peak = resp.tau1 / 4  # type: ignore[operator]
         assert_almost_equal(first_peak_t, expected_peak, decimal=1)
 
     def test_combined_response_integral_positive(self):
         """Test that the combined response R(t) has positive integral (causality)."""
         resp = self._make_response()
-        t = resp.grid.t
+        t = resp.grid.t  # type: ignore
         combined = resp.combined_response(t)
         integral = np.trapezoid(combined, t)
         assert integral > 0, "Combined response integral should be positive"
@@ -1025,7 +1026,7 @@ class TestRamanPulseInteraction:
         """Test that nonlinear polarization has correct shape."""
         interaction = self._make_interaction()
         P_NL = interaction.nonlinear_polarization
-        assert P_NL.shape == (interaction.grid.N,)
+        assert P_NL.shape == (interaction.grid.N,)  # type: ignore[union-attr]
 
     def test_polarization_zero_outside_pulse(self):
         """Test that P_NL is negligible where pulse intensity is negligible."""
@@ -1050,8 +1051,8 @@ class TestRamanPulseInteraction:
         P_NL = interaction.nonlinear_polarization
         I = interaction.pulse.envelope_intensity
 
-        pulse_peak_t = interaction.grid.t[np.argmax(I)]
-        PNL_peak_t = interaction.grid.t[np.argmax(P_NL)]
+        pulse_peak_t = interaction.grid.t[np.argmax(I)]  # type: ignore[union-attr]
+        PNL_peak_t = interaction.grid.t[np.argmax(P_NL)]  # type: ignore[union-attr]
 
         # The delayed polarization should peak after the pulse peak
         # (due to the convolution with the delayed Raman response)
@@ -1063,7 +1064,7 @@ class TestRamanPulseInteraction:
         interaction = self._make_interaction()
 
         # Get the delayed (positive) part of Raman response
-        t = interaction.grid.t
+        t = interaction.grid.t  # type: ignore[union-attr]
         R_delayed = interaction.response.delayed_response(t)
         I = interaction.pulse.envelope_intensity
 
@@ -1110,7 +1111,7 @@ class TestRamanPulseInteraction:
 
         for shape in ["gaussian", "sech", "lorentzian"]:
             envelope = Envelope(
-                shape=shape,
+                shape=shape,  # type: ignore[arg-type]
                 peak_amplitude=1.0,
                 pulse_width=100e-15,
             )
@@ -1137,8 +1138,8 @@ class TestRamanPulseInteraction:
 
         assert fig is not None
         # Should have 4 axes (4 panels)
-        assert len(fig.axes) == 4
-        plt.close(fig)
+        assert len(fig.axes) == 4  # type: ignore[attr-defined]
+        plt.close(fig)  # type: ignore[arg-type]
 
     def test_plot_interaction_plotly(self):
         """Test plot_interaction with plotly backend."""
@@ -1161,7 +1162,7 @@ class TestRamanPulseInteraction:
         fig = interaction.animate(backend="matplotlib", frames=5)
 
         assert fig is not None
-        plt.close(fig)
+        plt.close(fig)  # type: ignore[arg-type]
 
     def test_convolution_with_known_function(self):
         """Test convolution correctness with a known input.
@@ -1171,7 +1172,7 @@ class TestRamanPulseInteraction:
         """
         interaction = self._make_interaction()
         P_NL = interaction.nonlinear_polarization
-        t = interaction.grid.t
+        t = interaction.grid.t  # type: ignore[union-attr]
 
         # Get the Raman response
         R = interaction.response.combined_response(t)
@@ -1186,7 +1187,7 @@ class TestRamanPulseInteraction:
         # They should be within a few grid points of each other
         # (the pulse broadens the response slightly)
         assert abs(PNL_peak_t - R_peak_t) < 10 * interaction.grid.dt, \
-            f"P_NL peak at {PNL_peak_t*1e12:.3f} ps too far from R peak at {R_peak_t*1e12:.3f} ps"
+            f"P_NL peak at {PNL_peak_t*1e12:.3f} ps too far from R peak at {R_peak_t*1e12:.3f} ps"  # type: ignore[union-attr]
 
     def test_polarization_scales_with_intensity(self):
         """Test that P_NL scales linearly with pulse intensity."""
@@ -1212,7 +1213,7 @@ class TestRamanPulseInteraction:
         """Test that the grid covers the pulse and response."""
         interaction = self._make_interaction()
         # Grid should be wide enough to capture both pulse and Raman response
-        assert interaction.grid.Tmax > 5e-12, "Grid should cover at least 5 ps"
+        assert interaction.grid.Tmax > 5e-12, "Grid should cover at least 5 ps"  # type: ignore[union-attr]
 
     def test_polarization_energy_conservation(self):
         """Test that the polarization doesn't create energy from nowhere.
@@ -1223,7 +1224,7 @@ class TestRamanPulseInteraction:
         interaction = self._make_interaction()
         P_NL = interaction.nonlinear_polarization
         I = interaction.pulse.envelope_intensity
-        t = interaction.grid.t
+        t = interaction.grid.t  # type: ignore[union-attr]
 
         # The convolution integral: ∫ P_NL dt ∝ (∫ R dt) × (∫ I dt)
         # Both integrals should be finite and positive
@@ -1410,7 +1411,7 @@ class TestPumpWavelengthExplorer:
         fig = explorer.plot_frequency_axis(pump, backend="matplotlib")
 
         assert fig is not None
-        plt.close(fig)
+        plt.close(fig)  # type: ignore[arg-type]
 
     def test_plot_wavelength_axis_returns_figure(self):
         """Test plot_wavelength_axis returns a matplotlib figure."""
@@ -1423,7 +1424,7 @@ class TestPumpWavelengthExplorer:
         fig = explorer.plot_wavelength_axis(pump, backend="matplotlib")
 
         assert fig is not None
-        plt.close(fig)
+        plt.close(fig)  # type: ignore[arg-type]
 
     def test_plot_both_returns_figure(self):
         """Test plot_both returns a 2-panel figure."""
@@ -1436,8 +1437,8 @@ class TestPumpWavelengthExplorer:
         fig = explorer.plot_both(pump, backend="matplotlib")
 
         assert fig is not None
-        assert len(fig.axes) == 2
-        plt.close(fig)
+        assert len(fig.axes) == 2  # type: ignore[attr-defined]
+        plt.close(fig)  # type: ignore[arg-type]
 
     def test_plot_vs_pump_returns_figure(self):
         """Test plot_vs_pump returns a figure."""
@@ -1449,7 +1450,7 @@ class TestPumpWavelengthExplorer:
         fig = explorer.plot_vs_pump(pump_range_um=(0.5, 2.0), backend="matplotlib")
 
         assert fig is not None
-        plt.close(fig)
+        plt.close(fig)  # type: ignore[arg-type]
 
     def test_plot_both_plotly(self):
         """Test plot_both with plotly backend."""
@@ -1514,7 +1515,7 @@ class TestPumpWavelengthExplorer:
         pump = Wavelength(800, "nm")
 
         fig = explorer.plot_frequency_axis(pump, backend="matplotlib")
-        ax = fig.axes[0]
+        ax = fig.axes[0]  # type: ignore[attr-defined]
 
         # Check that vertical lines exist for all three
         lines = ax.get_lines()
@@ -1522,7 +1523,7 @@ class TestPumpWavelengthExplorer:
         # (pump + stokes + anti-stokes markers)
         # We verify by checking the plot was created without error
         assert fig is not None
-        plt.close(fig)
+        plt.close(fig)  # type: ignore[arg-type]
 
 
 # ─── MaterialComparison Tests (Layer 6) ────────────────────────────────────────
@@ -1650,11 +1651,11 @@ class TestMaterialComparison:
         fig = comp.plot_spectra_overlay(backend="matplotlib")
 
         assert fig is not None
-        assert len(fig.axes) == 1
+        assert len(fig.axes) == 1  # type: ignore[attr-defined]
         # Check that the line has the correct label
-        line = fig.axes[0].get_lines()[0]
+        line = fig.axes[0].get_lines()[0]  # type: ignore[attr-defined]
         assert line.get_label() == "Silica"
-        plt.close(fig)
+        plt.close(fig)  # type: ignore[arg-type]
 
     def test_plot_spectra_overlay_multiple(self):
         """Test spectra overlay with multiple materials has one line per material."""
@@ -1673,14 +1674,14 @@ class TestMaterialComparison:
         fig = comp.plot_spectra_overlay(backend="matplotlib")
 
         assert fig is not None
-        assert len(fig.axes) == 1
-        lines = fig.axes[0].get_lines()
+        assert len(fig.axes) == 1  # type: ignore[attr-defined]
+        lines = fig.axes[0].get_lines()  # type: ignore[attr-defined]
         assert len(lines) == 3
         labels = [line.get_label() for line in lines]
         assert "Silica" in labels
         assert "CdS" in labels
         assert "Diamond" in labels
-        plt.close(fig)
+        plt.close(fig)  # type: ignore[arg-type]
 
     def test_plot_spectra_overlay_colors_differ(self):
         """Test that each material gets a different color."""
@@ -1698,11 +1699,11 @@ class TestMaterialComparison:
         )
         fig = comp.plot_spectra_overlay(backend="matplotlib")
 
-        lines = fig.axes[0].get_lines()
+        lines = fig.axes[0].get_lines()  # type: ignore[attr-defined]
         colors = [line.get_color() for line in lines]
         # All colors should be different
         assert len(set(colors)) == len(colors)
-        plt.close(fig)
+        plt.close(fig)  # type: ignore[arg-type]
 
     def test_plot_spectra_overlay_plotly(self):
         """Test spectra overlay with plotly backend."""
@@ -1739,10 +1740,10 @@ class TestMaterialComparison:
         fig = comp.plot_response_overlay(backend="matplotlib", grid=grid)
 
         assert fig is not None
-        assert len(fig.axes) == 1
-        line = fig.axes[0].get_lines()[0]
+        assert len(fig.axes) == 1  # type: ignore[attr-defined]
+        line = fig.axes[0].get_lines()[0]  # type: ignore[attr-defined]
         assert line.get_label() == "Silica"
-        plt.close(fig)
+        plt.close(fig)  # type: ignore[arg-type]
 
     def test_plot_response_overlay_multiple(self):
         """Test response overlay with multiple materials."""
@@ -1762,14 +1763,14 @@ class TestMaterialComparison:
         fig = comp.plot_response_overlay(backend="matplotlib", grid=grid)
 
         assert fig is not None
-        lines = fig.axes[0].get_lines()
+        lines = fig.axes[0].get_lines()  # type: ignore[attr-defined]
         # Filter out internal lines (axhline has labels like '_child2')
         labeled_lines = [l for l in lines if l.get_label() and not l.get_label().startswith("_")]
         assert len(labeled_lines) == 2
         labels = [line.get_label() for line in labeled_lines]
         assert "Silica" in labels
         assert "CdS" in labels
-        plt.close(fig)
+        plt.close(fig)  # type: ignore[arg-type]
 
     def test_plot_frequency_overlay_empty(self):
         """Test frequency overlay with no materials returns None."""
@@ -1791,10 +1792,10 @@ class TestMaterialComparison:
         fig = comp.plot_frequency_overlay(backend="matplotlib", grid=grid)
 
         assert fig is not None
-        assert len(fig.axes) == 1
-        line = fig.axes[0].get_lines()[0]
+        assert len(fig.axes) == 1  # type: ignore[attr-defined]
+        line = fig.axes[0].get_lines()[0]  # type: ignore[attr-defined]
         assert line.get_label() == "Silica"
-        plt.close(fig)
+        plt.close(fig)  # type: ignore[arg-type]
 
     def test_plot_frequency_overlay_multiple(self):
         """Test frequency overlay with multiple materials."""
@@ -1814,13 +1815,13 @@ class TestMaterialComparison:
         fig = comp.plot_frequency_overlay(backend="matplotlib", grid=grid)
 
         assert fig is not None
-        lines = fig.axes[0].get_lines()
+        lines = fig.axes[0].get_lines()  # type: ignore[attr-defined]
         labeled_lines = [l for l in lines if l.get_label() and not l.get_label().startswith("_")]
         assert len(labeled_lines) == 2
         labels = [line.get_label() for line in labeled_lines]
         assert "Silica" in labels
         assert "As2Se3" in labels
-        plt.close(fig)
+        plt.close(fig)  # type: ignore[arg-type]
 
     def test_plot_frequency_overlay_annotates_resonances(self):
         """Test that frequency overlay marks resonance frequencies."""
@@ -1836,12 +1837,12 @@ class TestMaterialComparison:
         grid = TemporalGrid(N=2**14, Tmax=10e-12)
         fig = comp.plot_frequency_overlay(backend="matplotlib", grid=grid)
 
-        ax = fig.axes[0]
+        ax = fig.axes[0]  # type: ignore[attr-defined]
         # Check for vertical lines (resonance markers)
         vlines = [p for p in ax.patches]  # patches include vlines in mpl
         # We verify the plot was created with annotations
         assert fig is not None
-        plt.close(fig)
+        plt.close(fig)  # type: ignore[arg-type]
 
     def test_comparison_table_format(self):
         """Test that comparison_table returns formatted text."""
@@ -1898,8 +1899,8 @@ class TestMaterialComparison:
 
         assert fig is not None
         # Should have 3 panels: spectra, response, frequency
-        assert len(fig.axes) == 3
-        plt.close(fig)
+        assert len(fig.axes) == 3  # type: ignore[attr-defined]
+        plt.close(fig)  # type: ignore[arg-type]
 
     def test_plot_all_multiple(self):
         """Test plot_all with multiple materials."""
@@ -1919,8 +1920,8 @@ class TestMaterialComparison:
         fig = comp.plot_all(backend="matplotlib", grid=grid)
 
         assert fig is not None
-        assert len(fig.axes) == 3
-        plt.close(fig)
+        assert len(fig.axes) == 3  # type: ignore[attr-defined]
+        plt.close(fig)  # type: ignore[arg-type]
 
     def test_common_comparisons_defined(self):
         """Test that preset comparison groups are defined."""
@@ -2127,7 +2128,7 @@ class TestMaterialComparison:
         comp = self._make_comparison(materials=[RamanSpec.from_database("Silica")])
         fig = comp.plot_spectra_overlay(backend="matplotlib", shift_range_cm=600)
 
-        line = fig.axes[0].get_lines()[0]
+        line = fig.axes[0].get_lines()[0]  # type: ignore[attr-defined]
         x = line.get_xdata()
         y = line.get_ydata()
 
@@ -2147,7 +2148,7 @@ class TestMaterialComparison:
         assert left_val / peak_val > 0.1, f"Left tail {left_val/peak_val:.3f} too low for Lorentzian"
         assert right_val / peak_val > 0.1, f"Right tail {right_val/peak_val:.3f} too low for Lorentzian"
 
-        plt.close(fig)
+        plt.close(fig)  # type: ignore[arg-type]
 
     def test_plot_spectra_overlay_title_includes_materials(self):
         """Test that the plot title lists material names."""
@@ -2161,10 +2162,10 @@ class TestMaterialComparison:
         )
         fig = comp.plot_spectra_overlay(backend="matplotlib")
 
-        title = fig.axes[0].get_title()
+        title = fig.axes[0].get_title()  # type: ignore[attr-defined]
         assert "Silica" in title
         assert "CdS" in title
-        plt.close(fig)
+        plt.close(fig)  # type: ignore[arg-type]
 
     def test_materials_order_preserved(self):
         """Test that material order is preserved in overlay plots."""
@@ -2179,11 +2180,11 @@ class TestMaterialComparison:
         comp.add(RamanSpec.from_database("Diamond"))
 
         fig = comp.plot_spectra_overlay(backend="matplotlib")
-        lines = fig.axes[0].get_lines()
+        lines = fig.axes[0].get_lines()  # type: ignore[attr-defined]
         labels = [line.get_label() for line in lines]
 
         assert labels == ["Silica", "CdS", "Diamond"]
-        plt.close(fig)
+        plt.close(fig)  # type: ignore[arg-type]
 
 
 # ─── Dash App Tests (Layer 7) ─────────────────────────────────────────────────

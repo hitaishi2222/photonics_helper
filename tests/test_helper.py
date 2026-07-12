@@ -20,7 +20,7 @@ def test_wavelength_scalar():
 
 def test_wavelength_invalid_unit():
     with pytest.raises(ValueError):
-        Wavelength(1000, "cm")
+        Wavelength(1000, "cm" + "")  # type: ignore[arg-type]
 
 
 def test_wavelength_to_freq():
@@ -46,7 +46,7 @@ def test_frequency_scalar():
 
 def test_frequency_invalid_unit():
     with pytest.raises(ValueError):
-        Frequency(10, "kHz")
+        Frequency(10, "kHz" + "")  # type: ignore[arg-type]
 
 
 def test_frequency_to_wl():
@@ -64,7 +64,7 @@ def test_omega_scalar():
 
 def test_omega_invalid_unit():
     with pytest.raises(ValueError):
-        AngularFrequency(1, "deg/s")
+        AngularFrequency(1, "deg/s" + "")  # type: ignore[arg-type]
 
 
 def test_omega_to_freq():
@@ -104,4 +104,4 @@ def test_array_omega():
 
 def test_array_invalid_unit():
     with pytest.raises(ValueError):
-        WavelengthArray(np.array([500]), "cm")
+        WavelengthArray(np.array([500]), "cm" + "")  # type: ignore[arg-type]

@@ -1,5 +1,7 @@
 # Photonics Helper
 
+> ⚠️ **Disclaimer**: This library is under active development. APIs, interfaces, and internals may change between versions without notice. It is intended as a learning resource and research aid — not a production-grade simulation tool. If you rely on it for published results, please verify all outputs independently and cite the underlying physical models rather than this library.
+
 A comprehensive helper library for photonics and optics calculations, providing easy-to-use tools for wavelength, frequency, and angular frequency conversions.
 
 # Installation
@@ -210,14 +212,16 @@ pip install -e .
   - SQLite material database (30 entries)
   - Interactive Dash dashboard
   - Catalog explorer example (`examples/11_raman_material_catalog.py`)
+- **GNLSE** ✅ (in development)
+  - Dispersion (arbitrary-order β_k)
+  - Kerr effect
+  - Raman scattering (delayed response)
+  - Self-steepening
+  - Two-photon absorption (TPA)
+  - Adaptive step-size (SSFM)
+  - Soliton propagation, fission, supercontinuum
 - Structured Light
 - Add methods for bandwidth calculations
 - Add methods for power/intensity conversions
-- Modeling GNLSE
-  - Kerr Effect
-  - ~~Raman Effect~~
-  - Self Steepening
-  - Mode profile Dispersion
-- SSFM
 
 > ⚠️ **Note**: The TMM / DBR module (`dbr.py`) is still under active development. The API and internals may change.

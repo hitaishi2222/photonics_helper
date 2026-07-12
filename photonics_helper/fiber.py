@@ -38,10 +38,10 @@ class Dispersion:
     central_wavelength : design central wavelength.
     """
 
+    central_wavelength: Wavelength
     _wavelengths: WavelengthArray = Field(alias="wavelengths")
     _values: NDArray = Field(alias="values")
     _unit: Literal["ps/nm.km", "s/m^2"] = Field(default="s/m^2", alias="unit")
-    central_wavelength: Wavelength | None = None
 
     @model_validator(mode="after")
     def _setup(self) -> "Dispersion":
@@ -112,7 +112,7 @@ class Dispersion:
             raise TypeError("wavelengths should be an instance of `WavelengthArray`")
         # D = -lambda / C_MS * (d^2 neff/ d lambda^2)
 
-        if len(neff) != len(wavelengths.value):
+        if len(neff) != len(wavelengths.value):  # type: ignore[arg-type]
             raise ValueError("Length of both neff and wavelengths should be same")
         wl = wavelengths.to_equally_spaced()
         interp = make_splrep(wavelengths.as_m, neff)(wl)
@@ -152,7 +152,7 @@ class Dispersion:
         """
         # -(2*PI*C_MS) / lambda^2 * (d^2 beta/ d omega^2)
 
-        if len(beta) != len(wavelengths.value):
+        if len(beta) != len(wavelengths.value):  # type: ignore[arg-type]
             raise ValueError("Length of both beta and wavelengths should be same")
         if not isinstance(wavelengths, WavelengthArray):
             raise TypeError(
@@ -188,7 +188,7 @@ class Dispersion:
         )
 
     def get_beta2(self, wavelength_nm: float):
-        """Return β₂ at wavelength_nm (ps²/m) via spline interpolation."""
+        """Return β₂ at wavelength_nm (s²/m) via spline interpolation."""
         _min_wl = self._wavelengths.as_nm.min()
         _max_wl = self._wavelengths.as_nm.max()
         if wavelength_nm > _max_wl or wavelength_nm < _min_wl:
@@ -212,8 +212,11 @@ class Dispersion:
         If return_diagnostics is True, returns (betas, fit_x_axis, data, fit).
         """
 
-        if not wavelength:
+        if wavelength is None:
             wavelength = self.central_wavelength
+
+        if wavelength is None:
+            raise ValueError("No central wavelength available")
 
         min_nm = self.get_wls().as_nm
         maximum = max(min_nm)
@@ -287,7 +290,7 @@ class PropagationConstant:
         """Compute β₂ = neff × ω / c from effective index."""
         if not isinstance(x_values, (WavelengthArray, AngularFrequencyArray)):
             raise TypeError("x_values should be a type of either `WavelengthArray` or `AngularFrequencyArray`")
-        if len(neff) != len(x_values.value):
+        if len(neff) != len(x_values.value):  # type: ignore[arg-type]
             raise ValueError("both neff and x_values must be of same length.")
 
         if isinstance(x_values, WavelengthArray):
@@ -305,7 +308,7 @@ class PropagationConstant:
             raise TypeError(
                 f"omega should be a type of 'AngularFrequencyArray' : got {type(omega)}"
             )
-        if len(neff) != len(omega.value):
+        if len(neff) != len(omega.value):  # type: ignore[arg-type]
             raise ValueError(
                 "both neff and angular frequency array must have same length"
             )

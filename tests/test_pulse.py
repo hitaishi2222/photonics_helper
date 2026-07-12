@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 
 from photonics_helper.base import Wavelength, Frequency
-from photonics_helper.pulse import SHAPE_FACTORS, Envelope, TemporalGrid, Wave
+from photonics_helper.pulse import SHAPE_FACTORS, Envelope, TemporalGrid, Wave  # type: ignore[import-not-found]
 
 
 @pytest.fixture
@@ -598,7 +598,7 @@ def test_temporal_grid_time_window():
 
 
 def test_parseval_gaussian():
-    """Parseval's theorem: ∫|E(t)|²dt = ∫|E(ω)|²dω."""
+    """Parseval's theorem: ∫|E(t)|²dt = (1/2π) ∫|E(ω)|²dω."""
     T0 = 100e-15
     env = Envelope(shape="gaussian", peak_amplitude=1.0, pulse_width=T0)
     grid = TemporalGrid(N=2**13, Tmax=10 * 2 * np.sqrt(np.log(2)) * T0)
@@ -609,8 +609,8 @@ def test_parseval_gaussian():
     )
     time_energy = np.sum(wave.envelope_intensity) * grid.dt
     freq_energy = np.sum(np.abs(wave.spectrum) ** 2) * grid.dw
-    # Parseval: the two energies should match
-    assert pytest.approx(time_energy, rel=1e-6) == freq_energy
+    # Parseval with angular frequency: ∫|E(t)|²dt = (1/2π) ∫|E(ω)|²dω
+    assert time_energy == pytest.approx(freq_energy / (2 * np.pi), rel=1e-6)
 
 
 # ─── Chirp tests ───────────────────────────────────────────────────────
@@ -619,7 +619,7 @@ def test_parseval_gaussian():
 def test_chirp_zero_phase_profile():
     """Transform-limited (chirp=0) envelope should have flat phase."""
     for shape in ["gaussian", "sech", "super-gaussian", "triangular", "cosine"]:
-        env = Envelope(shape=shape, peak_amplitude=1.0, pulse_width=1e-12, chirp=0.0)
+        env = Envelope(shape=shape, peak_amplitude=1.0, pulse_width=1e-12, chirp=0.0)  # type: ignore[arg-type]
         t = np.linspace(-0.5e-12, 0.5e-12, 200)
         phases = np.unwrap(np.angle(env.field(t)))
         assert np.max(np.abs(phases)) < 1e-13, (
@@ -690,7 +690,7 @@ def test_envelope_intensity_is_non_negative():
     """Intensity should be non-negative for all t."""
     for shape in ["gaussian", "sech", "lorentzian", "super-gaussian", "triangular",
                   "parabolic", "cosine", "exponential", "gauss-hermite", "airy"]:
-        env = Envelope(shape=shape, peak_amplitude=1.0, pulse_width=1e-12)
+        env = Envelope(shape=shape, peak_amplitude=1.0, pulse_width=1e-12)  # type: ignore[arg-type]
         t = np.linspace(-5e-12, 5e-12, 5000)
         I = env.intensity(t)
         assert np.all(I >= 0), f"Intensity negative for shape={shape}"
@@ -781,7 +781,7 @@ def test_unknown_shape_raises():
     """An unknown shape should be rejected by pydantic validation."""
     with pytest.raises(Exception):
         Envelope(
-            shape="nonexistent", peak_amplitude=1.0, pulse_width=1e-12,
+            shape="nonexistent", peak_amplitude=1.0, pulse_width=1e-12,  # type: ignore[arg-type]
         )
 
 
@@ -807,7 +807,7 @@ def test_transform_limited_pulses_have_low_tbp():
     T0 = 100e-15
     grid = TemporalGrid(N=2**13, Tmax=10 * 2 * np.sqrt(np.log(2)) * T0)
     for shape in ["gaussian", "sech"]:
-        env = Envelope(shape=shape, peak_amplitude=1.0, pulse_width=T0, chirp=0.0)
+        env = Envelope(shape=shape, peak_amplitude=1.0, pulse_width=T0, chirp=0.0)  # type: ignore[arg-type]
         wave = Wave(
             grid=grid,
             envelope=env,
@@ -837,9 +837,9 @@ def test_all_shapes_have_valid_field_and_intensity():
         elif shape == "gauss-hermite":
             kwargs.update({"beam_waist": 1e-12, "hg_mode": 0})
         elif shape == "custom":
-            kwargs["func"] = lambda t, T0, A0: A0 * np.exp(-(t/T0)**2)
+            kwargs["func"] = lambda t, T0, A0: A0 * np.exp(-(t/T0)**2)  # type: ignore[typed-dict-item]
 
-        env = Envelope(**kwargs)
+        env = Envelope(**kwargs)  # type: ignore[arg-type]
         t = np.linspace(-5e-12, 5e-12, 5000)
         field = env.field(t)
         intensity = env.intensity(t)

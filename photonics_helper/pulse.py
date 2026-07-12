@@ -1,7 +1,7 @@
 from __future__ import annotations
 from pydantic.dataclasses import dataclass
 from math import sqrt, log, acosh, pi
-from typing import Callable, Dict, Literal, Self, Optional
+from typing import Any, Callable, Dict, Literal, Self, Optional
 from functools import cached_property
 import logging
 from matplotlib import gridspec
@@ -47,6 +47,9 @@ class Envelope:
     hg_mode: int = 0  # Hermite polynomial mode index m
     func: Optional[Callable] = None  # for "custom": func(t, T0, A0)
     phase_func: Optional[Callable] = None  # for "custom": phase_func(t, T0, chirp)
+    _is_pulse_train: bool = False
+    _n_pulses: int = 1
+    _repetition_rate: Optional[Frequency] = None
 
     @property
     def fwhm(self) -> float:
@@ -68,8 +71,9 @@ class Envelope:
             # Ai(0) ≈ 0.35503, half-max of intensity = sqrt(0.5) * Ai(0) ≈ 0.25104
             target = 0.35503 * sqrt(0.5)
             f = lambda x: airy(-x)[0] - target
-            root = brentq(f, 0.1, 2.0)
-            return 2.0 * root * self.pulse_width
+            root = brentq(f, 0.1, 2.0)  # type: ignore[operator]
+            return 2.0 * root * self.pulse_width  # type: ignore[operator]
+
         elif self.shape in SHAPE_FACTORS:
             return SHAPE_FACTORS[self.shape] * self.pulse_width
         else:
@@ -120,8 +124,9 @@ class Envelope:
 
             target = 0.35503 * sqrt(0.5)
             f = lambda x: airy(-x)[0] - target
-            root = brentq(f, 0.1, 2.0)
-            T0 = fwhm / (2.0 * root)
+            root = brentq(f, 0.1, 2.0)  # type: ignore[operator]
+            T0 = fwhm / (2.0 * root)  # type: ignore[operator]
+
             return cls(shape="airy", peak_amplitude=peak_amplitude, pulse_width=T0)
         else:
             T0 = fwhm / SHAPE_FACTORS[shape]
@@ -140,7 +145,8 @@ class Envelope:
             case "gaussian":
                 amp = A0 * np.exp(-(t**2) / (2 * T0**2))
             case "sech":
-                amp = A0 / np.cosh(t / T0)
+                x = np.clip(t / T0, -700, 700)  # prevent cosh overflow
+                amp = A0 / np.cosh(x)
             case "lorentzian":
                 amp = A0 / (1 + (t / T0) ** 2)
             case "rectangular":
@@ -732,6 +738,7 @@ class Wave:
     envelope: Envelope
 
     central_wavelength: Wavelength
+    _pulse_train_field: Any = None
     refractive_index: float = 1.0
     repetition_rate: Frequency | None = None
 
@@ -760,7 +767,8 @@ class Wave:
         return np.sum(self.envelope.intensity(self.grid.t)) * self.grid.dt
 
     def peak_power(self):
-        return np.max(self.envelope.intensity(self.grid.t))
+        A = self.envelope_field
+        return np.max(np.abs(A) ** 2)
 
     def average_power(self, repetition_rate: Frequency) -> float:
         """Average power = pulse energy × repetition_rate.
@@ -1097,6 +1105,7 @@ class Wave:
 # ─── SHG-FROG ────────────────────────────────────────────────────────────────
 
 
+@dataclass(config={"arbitrary_types_allowed": True})
 class FROGTrace:
     """Represents a FROG trace I(ω, τ).
 
@@ -1119,25 +1128,7 @@ class FROGTrace:
     tau: np.ndarray
     dt: float
     dw: float
-    field: Optional[np.ndarray]
-
-    def __init__(
-        self,
-        trace: np.ndarray,
-        unnormalized_trace: np.ndarray,
-        omega: np.ndarray,
-        tau: np.ndarray,
-        dt: float,
-        dw: float,
-        field: Optional[np.ndarray] = None,
-    ):
-        self.trace = trace
-        self.unnormalized_trace = unnormalized_trace
-        self.omega = omega
-        self.tau = tau
-        self.dt = dt
-        self.dw = dw
-        self.field = field
+    field: Optional[np.ndarray] = None
 
     @classmethod
     def from_field(

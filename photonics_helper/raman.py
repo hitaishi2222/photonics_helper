@@ -16,11 +16,13 @@ import sqlite3
 from pathlib import Path
 from typing import Literal, Self, Optional
 from functools import cached_property
+import warnings
 
 import numpy as np
 import matplotlib.pyplot as plt
 from pydantic.dataclasses import dataclass
 from pydantic import model_validator, Field
+from numpy.typing import NDArray
 
 from .base import (
     PI,
@@ -444,6 +446,7 @@ RAMAN_MATERIALS = {
 
 # ─── RamanSpec ────────────────────────────────────────────────────────────────
 
+
 @dataclass(config={"arbitrary_types_allowed": True})
 class RamanSpec:
     """Material Raman scattering properties.
@@ -466,14 +469,15 @@ class RamanSpec:
     lo_phonon_cm : LO phonon wavenumber (cm⁻¹).
     to_phonon_cm : TO phonon wavenumber (cm⁻¹).
     references : Source citation.
+    phonon_modes : List of PhononMode for multi-mode Raman materials.
     """
 
     name: str
+    raman_shift_cm: float | None = None
+    raman_linewidth_cm: float | None = None
     crystal: str | None = None
     bandgap_eV: float | None = None
     n2: float | None = None
-    raman_shift_cm: float | None = None
-    raman_linewidth_cm: float | None = None
     fR: float | None = None
     gain_coeff: float | None = None
     tau1: float | None = None
@@ -482,11 +486,12 @@ class RamanSpec:
     lo_phonon_cm: float | None = None
     to_phonon_cm: float | None = None
     references: str | None = None
+    phonon_modes: list | None = None
 
     @model_validator(mode="after")
     def _validate(self) -> "RamanSpec":
         """Validate that essential Raman parameters are present.
-        
+
         Note: raman_shift_cm and raman_linewidth_cm are optional in the
         constructor. They should be provided when creating from raw params,
         but can be None when using from_database() with fallback.
@@ -555,6 +560,46 @@ class RamanSpec:
         nu_anti_stokes = nu_pump + self.raman_shift_Hz
         return Wavelength(C_MS / nu_anti_stokes, "m")
 
+    @property
+    def phonon_response(self):
+        """Multi-mode phonon response, or None if no modes configured.
+
+        Returns
+        -------
+        PhononResponse or None
+        """
+        from .phonon import PhononResponse
+
+        if self.phonon_modes:
+            return PhononResponse(self.phonon_modes, fR=self.fR)
+        return None
+
+    def multi_stokes_wavelengths(self, pump_wl) -> list:
+        """Stokes wavelength for each phonon mode.
+
+        Parameters
+        ----------
+        pump_wl : Wavelength
+            Pump wavelength.
+
+        Returns
+        -------
+        list[Wavelength]
+            Stokes wavelengths, one per mode.
+        """
+        if not self.phonon_modes:
+            return []
+
+        from .base import C_MS
+
+        wavelengths = []
+        for mode in self.phonon_modes:
+            nu_pump = C_MS / pump_wl.as_m
+            nu_stokes = nu_pump - C_MS * mode.shift_cm * 100.0
+            if nu_stokes > 0:
+                wavelengths.append(Wavelength(C_MS / nu_stokes, "m"))
+        return wavelengths
+
     def summary(self) -> str:
         """Text summary of material Raman properties."""
         lines = [
@@ -572,7 +617,124 @@ class RamanSpec:
             lines.append(f"LO phonon: {self.lo_phonon_cm} cm⁻¹")
         if self.to_phonon_cm:
             lines.append(f"TO phonon: {self.to_phonon_cm} cm⁻¹")
+        if self.phonon_modes:
+            lines.append(f"Multi-mode: {len(self.phonon_modes)} phonon modes")
         return "\n".join(lines)
+
+    def nk(self, wavelength_um: float) -> complex:
+        """Interpolated complex refractive index at wavelength (μm).
+
+        Returns n + i·k from the nk_data table, or falls back to Sellmeier
+        interpolation if tabulated data is absent.
+
+        Parameters
+        ----------
+        wavelength_um : Wavelength in μm
+
+        Returns
+        -------
+        complex : n + i·k
+
+        Raises
+        ------
+        ValueError : If no data available or wavelength outside valid range
+        """
+        from photonics_helper.raman import RamanDatabase  # type: ignore[import-not-found, self-import]
+        from photonics_helper.materials import RefractiveIndex
+        import numpy as np
+
+        # Query tabulated data first
+        db = RamanDatabase()
+        wl, n_tab, k_tab = db.get_nk_data(self.name)
+
+        if len(wl) > 0:
+            # Interpolate from tabulated data
+            from scipy.interpolate import interp1d
+
+            n_func = interp1d(wl, n_tab, kind="cubic", fill_value="extrapolate")
+            k_func = interp1d(wl, k_tab, kind="cubic", fill_value="extrapolate")
+
+            # Validate range
+            if wavelength_um < wl[0] or wavelength_um > wl[-1]:
+                raise ValueError(
+                    f"Wavelength {wavelength_um} μm outside valid range [{wl[0]:.3f}, {wl[-1]:.3f}] μm"
+                )
+
+            n_val = float(n_func(wavelength_um))
+            k_val = float(k_func(wavelength_um))
+            return complex(n_val, k_val)
+
+        # Fallback to Sellmeier
+        sellmeier_data = db.get_sellmeier(self.name)
+        if sellmeier_data:
+            return self.nk_from_sellmeier(wavelength_um, sellmeier_data)
+
+        # No data available
+        raise ValueError(f"No refractive index data available for {self.name}")
+
+    def nk_from_sellmeier(
+        self, wavelength_um: float, sellmeier_data: dict | None = None
+    ) -> complex:
+        """Compute n + ik from stored Sellmeier coefficients.
+
+        Parameters
+        ----------
+        wavelength_um : Wavelength in μm
+        sellmeier_data : Dict with keys: form, a0, coefficients, wavelengths, valid_from_um, valid_to_um
+                       If None, fetches from database
+
+        Returns
+        -------
+        complex : n + i·0 (k=0 for transparent region)
+
+        Raises
+        ------
+        ValueError : If wavelength outside valid range or no data available
+        """
+        from photonics_helper.raman import RamanDatabase  # type: ignore[import-not-found, self-import]
+        import numpy as np
+
+        if sellmeier_data is None:
+            db = RamanDatabase()
+            sellmeier_data = db.get_sellmeier(self.name)
+
+        if sellmeier_data is None:
+            raise ValueError(f"No Sellmeier data available for {self.name}")
+
+        # Validate wavelength range
+        if (
+            wavelength_um < sellmeier_data["valid_from_um"]
+            or wavelength_um > sellmeier_data["valid_to_um"]
+        ):
+            raise ValueError(
+                f"Wavelength {wavelength_um} μm outside valid range "
+                f"[{sellmeier_data['valid_from_um']:.3f}, {sellmeier_data['valid_to_um']:.3f}] μm"
+            )
+
+        # Compute n from Sellmeier equation
+        form = sellmeier_data["form"]
+        a0 = sellmeier_data["a0"]
+        coefficients = sellmeier_data["coefficients"]
+        wavelengths = sellmeier_data["wavelengths"]
+
+        if form == "standard":
+            # n² = A₀ + Σ Aᵢλ²/(λ² - Bᵢ)
+            n_squared = a0
+            for A, B in zip(coefficients, wavelengths):
+                n_squared += A * wavelength_um**2 / (wavelength_um**2 - B)
+            n_val = np.sqrt(n_squared)
+
+        elif form == "alt":
+            # n² = A₀ + Σ Aᵢ/(λ² - Bᵢ²)
+            n_squared = a0
+            for A, B in zip(coefficients, wavelengths):
+                n_squared += A / (wavelength_um**2 - B**2)
+            n_val = np.sqrt(n_squared)
+        else:
+            raise ValueError(f"Unknown Sellmeier form: {form}")
+
+        # k = 0 for transparent region (no absorption data in Sellmeier)
+        return complex(float(n_val), 0.0)
 
     def plot_spectrum(
         self,
@@ -598,7 +760,7 @@ class RamanSpec:
         width = self.raman_linewidth_cm / 2
 
         # Lorentzian lineshape
-        intensity = (width / np.pi) / ((shift - center) ** 2 + width ** 2)
+        intensity = (width / np.pi) / ((shift - center) ** 2 + width**2)
         intensity /= np.max(intensity)  # Normalize
 
         if backend == "plotly":
@@ -615,10 +777,19 @@ class RamanSpec:
         else:
             fig, ax = plt.subplots(figsize=figsize or (8, 5))
             ax.plot(shift, intensity, linewidth=2, label="Raman peak")
-            ax.axvline(x=center, color="r", linestyle="--", alpha=0.5, label=f"Peak: {center} cm⁻¹")
+            ax.axvline(
+                x=center,
+                color="r",
+                linestyle="--",
+                alpha=0.5,
+                label=f"Peak: {center} cm⁻¹",
+            )
             ax.axvspan(
-                center - width, center + width,
-                alpha=0.2, color="orange", label=f"FWHM: {2*width:.1f} cm⁻¹"
+                center - width,
+                center + width,
+                alpha=0.2,
+                color="orange",
+                label=f"FWHM: {2*width:.1f} cm⁻¹",
             )
             ax.set_xlabel("Raman shift (cm⁻¹)", fontsize=12)
             ax.set_ylabel("Intensity (arb.)", fontsize=12)
@@ -642,19 +813,23 @@ class RamanSpec:
                 raise ImportError("plotly required for plotly backend")
             fig = go.Figure()
             if self.lo_phonon_cm:
-                fig.add_trace(go.Indicator(
-                    mode="gauge+number",
-                    value=self.lo_phonon_cm,
-                    title=dict(text="LO Phonon"),
-                    gauge=dict(axis=dict(range=[0, self.lo_phonon_cm * 1.2])),
-                ))
+                fig.add_trace(
+                    go.Indicator(
+                        mode="gauge+number",
+                        value=self.lo_phonon_cm,
+                        title=dict(text="LO Phonon"),
+                        gauge=dict(axis=dict(range=[0, self.lo_phonon_cm * 1.2])),
+                    )
+                )
             if self.to_phonon_cm:
-                fig.add_trace(go.Indicator(
-                    mode="gauge+number",
-                    value=self.to_phonon_cm,
-                    title=dict(text="TO Phonon"),
-                    gauge=dict(axis=dict(range=[0, self.to_phonon_cm * 1.2])),
-                ))
+                fig.add_trace(
+                    go.Indicator(
+                        mode="gauge+number",
+                        value=self.to_phonon_cm,
+                        title=dict(text="TO Phonon"),
+                        gauge=dict(axis=dict(range=[0, self.to_phonon_cm * 1.2])),
+                    )
+                )
             fig.update_layout(title=f"Phonon Modes: {self.name}")
             return fig
         else:
@@ -664,7 +839,14 @@ class RamanSpec:
                 axes[0].set_xlabel("Wavenumber (cm⁻¹)")
                 axes[0].set_title("LO Phonon")
             else:
-                axes[0].text(0.5, 0.5, "N/A", ha="center", va="center", transform=axes[0].transAxes)
+                axes[0].text(
+                    0.5,
+                    0.5,
+                    "N/A",
+                    ha="center",
+                    va="center",
+                    transform=axes[0].transAxes,
+                )
                 axes[0].set_title("LO Phonon")
 
             if self.to_phonon_cm:
@@ -672,10 +854,19 @@ class RamanSpec:
                 axes[1].set_xlabel("Wavenumber (cm⁻¹)")
                 axes[1].set_title("TO Phonon")
             else:
-                axes[1].text(0.5, 0.5, "N/A", ha="center", va="center", transform=axes[1].transAxes)
+                axes[1].text(
+                    0.5,
+                    0.5,
+                    "N/A",
+                    ha="center",
+                    va="center",
+                    transform=axes[1].transAxes,
+                )
                 axes[1].set_title("TO Phonon")
 
-            fig.suptitle(f"Raman-Active Phonons: {self.name}", fontsize=14, fontweight="bold")
+            fig.suptitle(
+                f"Raman-Active Phonons: {self.name}", fontsize=14, fontweight="bold"
+            )
             plt.tight_layout()
             return fig
 
@@ -699,13 +890,13 @@ class RamanSpec:
             db = RamanDatabase(db_path=db_path)
             row = db.get_material(name)
             if row:
-                return cls(**row)
+                return cls(**row)  # type: ignore[arg-type]
         except Exception:
             pass
 
         # Fall back to hardcoded materials
         if name in RAMAN_MATERIALS:
-            return cls(**RAMAN_MATERIALS[name])
+            return cls(**RAMAN_MATERIALS[name])  # type: ignore[arg-type]
 
         # Use fallback if provided
         if fallback:
@@ -716,6 +907,8 @@ class RamanSpec:
 
 # ─── RamanDatabase ────────────────────────────────────────────────────────────
 
+
+@dataclass(config={"arbitrary_types_allowed": True})
 class RamanDatabase:
     """SQLite database for Raman material data.
 
@@ -744,26 +937,19 @@ class RamanDatabase:
     );
     """
 
-    def __init__(self, db_path: Path | None = None):
-        """Initialize database.
+    db_path: Path | None = None
 
-        Parameters
-        ----------
-        db_path : Path to SQLite database file. If None, uses materials.db
-                  next to this module or creates a new one.
-        """
-        if db_path is None:
+    def __post_init__(self):
+        if self.db_path is None:
             # Try bundled DB first, then next to module
             bundled = Path(__file__).parent / "materials.db"
             if bundled.exists():
-                self.db_path = bundled
+                object.__setattr__(self, "db_path", bundled)
             else:
                 # Create new DB in user's home directory
-                self.db_path = Path.home() / ".photonics_helper" / "materials.db"
-                self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        else:
-            self.db_path = Path(db_path)
-
+                home_db = Path.home() / ".photonics_helper" / "materials.db"
+                home_db.parent.mkdir(parents=True, exist_ok=True)
+                object.__setattr__(self, "db_path", home_db)
         self._init_db()
 
     def _init_db(self):
@@ -798,6 +984,33 @@ class RamanDatabase:
             )
         """)
 
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS sellmeier (
+                material       TEXT PRIMARY KEY REFERENCES raman_specs(name),
+                form           TEXT CHECK(form IN ('standard', 'alt')),
+                a0             REAL,
+                coefficients   TEXT,
+                wavelengths    TEXT,
+                valid_from_um  REAL,
+                valid_to_um    REAL,
+                source         TEXT
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS phonon_modes (
+                material           TEXT REFERENCES raman_specs(name),
+                shift_cm           REAL,
+                linewidth_cm       REAL,
+                symmetry           TEXT,
+                relative_strength  REAL DEFAULT 1.0,
+                lo_phonon_cm       REAL,
+                to_phonon_cm       REAL,
+                note               TEXT,
+                PRIMARY KEY (material, shift_cm, symmetry)
+            )
+        """)
+
         conn.commit()
         conn.close()
 
@@ -811,26 +1024,29 @@ class RamanDatabase:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
-        cursor.execute("""
+        cursor.execute(
+            """
             INSERT OR REPLACE INTO raman_specs
             (name, crystal, bandgap_eV, n2, raman_shift_cm, raman_linewidth_cm,
              fR, gain_coeff, tau1, tau2, lo_phonon_cm, to_phonon_cm, "references")
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            spec.get("name"),
-            spec.get("crystal"),
-            spec.get("bandgap_eV"),
-            spec.get("n2"),
-            spec.get("raman_shift_cm"),
-            spec.get("raman_linewidth_cm"),
-            spec.get("fR"),
-            spec.get("gain_coeff"),
-            spec.get("tau1"),
-            spec.get("tau2"),
-            spec.get("lo_phonon_cm"),
-            spec.get("to_phonon_cm"),
-            spec.get("references"),
-        ))
+        """,
+            (
+                spec.get("name"),
+                spec.get("crystal"),
+                spec.get("bandgap_eV"),
+                spec.get("n2"),
+                spec.get("raman_shift_cm"),
+                spec.get("raman_linewidth_cm"),
+                spec.get("fR"),
+                spec.get("gain_coeff"),
+                spec.get("tau1"),
+                spec.get("tau2"),
+                spec.get("lo_phonon_cm"),
+                spec.get("to_phonon_cm"),
+                spec.get("references"),
+            ),
+        )
 
         conn.commit()
         conn.close()
@@ -874,6 +1090,122 @@ class RamanDatabase:
 
         conn.close()
         return [row[0] for row in rows]
+
+    def add_phonon_mode(self, material: str, mode: "PhononMode") -> None:
+        """Insert a phonon mode for a material.
+
+        Parameters
+        ----------
+        material : str
+            Material name.
+        mode : PhononMode
+            Phonon mode to add.
+        """
+        from .phonon import PhononMode
+
+        if not isinstance(mode, PhononMode):
+            raise TypeError("mode must be a PhononMode instance")
+
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            INSERT OR REPLACE INTO phonon_modes
+            (material, shift_cm, linewidth_cm, symmetry, relative_strength,
+             lo_phonon_cm, to_phonon_cm, note)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+            (
+                material,
+                mode.shift_cm,
+                mode.linewidth_cm,
+                mode.symmetry,
+                mode.relative_strength,
+                mode.lo_phonon_cm,
+                mode.to_phonon_cm,
+                mode.note,
+            ),
+        )
+
+        conn.commit()
+        conn.close()
+
+    def get_phonon_modes(self, material: str) -> list["PhononMode"]:
+        """Get all phonon modes for a material.
+
+        Parameters
+        ----------
+        material : str
+            Material name.
+
+        Returns
+        -------
+        list[PhononMode]
+            Phonon modes for the material.
+        """
+        from .phonon import PhononMode
+
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute(
+            "SELECT * FROM phonon_modes WHERE material = ? ORDER BY shift_cm",
+            (material,),
+        )
+        rows = cursor.fetchall()
+
+        conn.close()
+
+        modes = []
+        for row in rows:
+            modes.append(
+                PhononMode(
+                    shift_cm=row["shift_cm"],
+                    linewidth_cm=row["linewidth_cm"],
+                    symmetry=row["symmetry"],
+                    relative_strength=row["relative_strength"],
+                    lo_phonon_cm=row["lo_phonon_cm"],
+                    to_phonon_cm=row["to_phonon_cm"],
+                    note=row["note"],
+                )
+            )
+        return modes
+
+    def list_phonon_materials(self) -> list[str]:
+        """Get materials with phonon mode data.
+
+        Returns
+        -------
+        list[str]
+            Material names that have phonon_modes entries.
+        """
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT DISTINCT material FROM phonon_modes ORDER BY material")
+        rows = cursor.fetchall()
+
+        conn.close()
+        return [row[0] for row in rows]
+
+    def seed_phonon_data(self) -> int:
+        """Seed PHONON_MATERIALS data into the phonon_modes table.
+
+        Returns
+        -------
+        int
+            Number of modes seeded.
+        """
+        from .phonon import PHONON_MATERIALS, PhononMode
+
+        count = 0
+        for material, modes in PHONON_MATERIALS.items():
+            for mode in modes:
+                self.add_phonon_mode(material, mode)
+                count += 1
+        return count
 
     def update_material(self, name: str, **kwargs) -> None:
         """UPDATE material fields.
@@ -927,15 +1259,18 @@ class RamanDatabase:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
-        cursor.execute("""
+        cursor.execute(
+            """
             INSERT INTO nk_data (material, wavelength_um, n, k)
             VALUES (?, ?, ?, ?)
-        """, (material, wl_um, n, k))
+        """,
+            (material, wl_um, n, k),
+        )
 
         conn.commit()
         conn.close()
 
-    def get_nk_data(self, material: str) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def get_nk_data(self, material: str) -> tuple[NDArray, NDArray, NDArray]:
         """SELECT nk data for a material.
 
         Parameters
@@ -951,7 +1286,7 @@ class RamanDatabase:
 
         cursor.execute(
             "SELECT wavelength_um, n, k FROM nk_data WHERE material = ? ORDER BY wavelength_um",
-            (material,)
+            (material,),
         )
         rows = cursor.fetchall()
 
@@ -966,7 +1301,88 @@ class RamanDatabase:
 
         return wl, n, k
 
-    def search_materials(self, query: str) -> list[dict]:
+    def add_sellmeier(
+        self,
+        material: str,
+        form: str,
+        a0: float,
+        coefficients: list[float],
+        wavelengths: list[float],
+        valid_from_um: float,
+        valid_to_um: float,
+        source: str,
+    ) -> None:
+        """INSERT Sellmeier coefficients.
+
+        Parameters
+        ----------
+        material : Material name
+        form : 'standard' or 'alt'
+        a0 : Constant term A₀
+        coefficients : List of Aᵢ coefficients
+        wavelengths : List of Bᵢ wavelengths
+        valid_from_um : Valid range start (μm)
+        valid_to_um : Valid range end (μm)
+        source : Citation
+        """
+        import json
+
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            INSERT OR REPLACE INTO sellmeier (material, form, a0, coefficients, wavelengths, valid_from_um, valid_to_um, source)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+            (
+                material,
+                form,
+                a0,
+                json.dumps(coefficients),
+                json.dumps(wavelengths),
+                valid_from_um,
+                valid_to_um,
+                source,
+            ),
+        )
+
+        conn.commit()
+        conn.close()
+
+    def get_sellmeier(self, material: str) -> dict | None:
+        """SELECT Sellmeier coefficients for a material.
+
+        Parameters
+        ----------
+        material : Material name
+
+        Returns
+        -------
+        dict with keys: material, form, a0, coefficients, wavelengths, valid_from_um, valid_to_um, source
+        Or None if not found
+        """
+        import json
+
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT * FROM sellmeier WHERE material = ?", (material,))
+        row = cursor.fetchone()
+
+        conn.close()
+
+        if not row:
+            return None
+
+        result = dict(row)
+        result["coefficients"] = json.loads(result["coefficients"])
+        result["wavelengths"] = json.loads(result["wavelengths"])
+
+        return result
+
+    def search_materials(self, query: str) -> list[dict[str, float]]:
         """LIKE search across name, crystal, references.
 
         Parameters
@@ -982,17 +1398,20 @@ class RamanDatabase:
         cursor = conn.cursor()
 
         search_pattern = f"%{query}%"
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT * FROM raman_specs
             WHERE name LIKE ? OR crystal LIKE ? OR "references" LIKE ?
             ORDER BY name
-        """, (search_pattern, search_pattern, search_pattern))
+        """,
+            (search_pattern, search_pattern, search_pattern),
+        )
         rows = cursor.fetchall()
 
         conn.close()
         return [dict(row) for row in rows]
 
-    def export_to_dict(self) -> dict:
+    def export_to_dict(self) -> dict[str, dict]:
         """Export all materials as a Python dict.
 
         Returns
@@ -1009,7 +1428,7 @@ class RamanDatabase:
         conn.close()
         return {row["name"]: dict(row) for row in rows}
 
-    def import_from_dict(self, data: dict) -> None:
+    def import_from_dict(self, data: dict[str, dict]) -> None:
         """Bulk INSERT from a Python dict.
 
         Parameters
@@ -1020,26 +1439,29 @@ class RamanDatabase:
         cursor = conn.cursor()
 
         for name, spec in data.items():
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT OR REPLACE INTO raman_specs
                 (name, crystal, bandgap_eV, n2, raman_shift_cm, raman_linewidth_cm,
                  fR, gain_coeff, tau1, tau2, lo_phonon_cm, to_phonon_cm, "references")
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                spec.get("name", name),
-                spec.get("crystal"),
-                spec.get("bandgap_eV"),
-                spec.get("n2"),
-                spec.get("raman_shift_cm"),
-                spec.get("raman_linewidth_cm"),
-                spec.get("fR"),
-                spec.get("gain_coeff"),
-                spec.get("tau1"),
-                spec.get("tau2"),
-                spec.get("lo_phonon_cm"),
-                spec.get("to_phonon_cm"),
-                spec.get("references"),
-            ))
+            """,
+                (
+                    spec.get("name", name),
+                    spec.get("crystal"),
+                    spec.get("bandgap_eV"),
+                    spec.get("n2"),
+                    spec.get("raman_shift_cm"),
+                    spec.get("raman_linewidth_cm"),
+                    spec.get("fR"),
+                    spec.get("gain_coeff"),
+                    spec.get("tau1"),
+                    spec.get("tau2"),
+                    spec.get("lo_phonon_cm"),
+                    spec.get("to_phonon_cm"),
+                    spec.get("references"),
+                ),
+            )
 
         conn.commit()
         conn.close()
@@ -1053,8 +1475,8 @@ class RamanResponse:
     """Time-domain Raman response function h_R(t).
 
     Implements the standard Silica model (Agrawal):
-        h_R(t) = (τ1² + α·τ2²) / τ2³ · exp(-t²/(2τ2²)) · sin(2π·ν_R·t)   for t ≥ 0
-        h_R(t) = 0                                                          for t < 0
+        h_R(t) = (τ1² + τ2²) / (τ1·τ2²) · exp(-t/τ2) · sin(t/τ1)   for t ≥ 0
+        h_R(t) = 0                                                    for t < 0
 
     Combined response: R(t) = (1 - fR)·δ(t) + fR·h_R(t)
     where δ(t) is approximated as a narrow Gaussian.
@@ -1074,10 +1496,10 @@ class RamanResponse:
     """
 
     spec: RamanSpec
-    fR: float = None
-    tau1: float = None
-    tau2: float = None
-    grid: TemporalGrid = None
+    fR: float | None = None
+    tau1: float | None = None
+    tau2: float | None = None
+    grid: TemporalGrid | None = None
 
     @model_validator(mode="after")
     def _derive_tau(self) -> "RamanResponse":
@@ -1086,14 +1508,23 @@ class RamanResponse:
             self.fR = self.spec.fR or 0.0
 
         if self.tau1 is None and self.spec.raman_shift_Hz > 0:
-            self.tau1 = 1.0 / self.spec.raman_shift_Hz
+            self.tau1 = 1.0 / (2 * np.pi * self.spec.raman_shift_Hz)
 
         if self.tau2 is None and self.spec.linewidth_Hz > 0:
             self.tau2 = 1.0 / (np.pi * self.spec.linewidth_Hz)
+            warnings.warn(
+                f"Auto-derived τ2 = {self.tau2*1e15:.1f} fs from linewidth. "
+                f"This approximation (τ2 = 1/(π·linewidth)) assumes weak damping "
+                f"and may be inaccurate for materials like Silica where τ2/τ1 is small. "
+                f"Consider providing τ1 and τ2 explicitly for accurate Raman responses.",
+                stacklevel=2,
+            )
 
         if self.grid is None:
             # Default grid: cover ~20 τ2 for damped oscillation to decay
-            self.grid = TemporalGrid(N=2**14, Tmax=max(10e-12, 20 * (self.tau2 or 1e-12)))
+            self.grid = TemporalGrid(
+                N=2**14, Tmax=max(10e-12, 20 * (self.tau2 or 1e-12))
+            )
 
         return self
 
@@ -1101,23 +1532,24 @@ class RamanResponse:
     def _delta_width(self) -> float:
         """Width parameter ε for the narrow Gaussian approximation of δ(t)."""
         # Use grid.dt * 5 as the delta width — narrow enough to look like a spike
-        return self.grid.dt * 5
+        return self.grid.dt * 5  # type: ignore
 
     def _h_R(self, t: np.ndarray) -> np.ndarray:
         """Raw delayed response h_R(t) (without fR scaling).
 
-        h_R(t) = (τ1² + α·τ2²) / τ2³ · exp(-t²/(2τ2²)) · sin(2π·ν_R·t)   for t ≥ 0
-        h_R(t) = 0                                                          for t < 0
+        Standard Agrawal exponential-damped form:
+        h_R(t) = (τ1² + τ2²) / (τ1·τ2²) · exp(-t/τ2) · sin(t/τ1)   for t ≥ 0
+        h_R(t) = 0                                                    for t < 0
         """
         result = np.zeros_like(t, dtype=float)
         mask = t >= 0
         t_pos = t[mask]
 
-        prefactor = (self.tau1 ** 2 + self.spec.alpha * self.tau2 ** 2) / self.tau2 ** 3
-        gaussian = np.exp(-t_pos ** 2 / (2 * self.tau2 ** 2))
-        oscillation = np.sin(2 * np.pi * self.spec.raman_shift_Hz * t_pos)
+        prefactor = (self.tau1**2 + self.tau2**2) / (self.tau1 * self.tau2**2)  # type: ignore
+        exponential = np.exp(-t_pos / self.tau2)
+        oscillation = np.sin(t_pos / self.tau1)
 
-        result[mask] = prefactor * gaussian * oscillation
+        result[mask] = prefactor * exponential * oscillation
 
         integral = np.trapezoid(result[mask], t_pos)
         if integral > 0:
@@ -1138,11 +1570,11 @@ class RamanResponse:
         np.ndarray — instantaneous response values.
         """
         if t is None:
-            t = self.grid.t
+            t = self.grid.t  # type: ignore
         t = np.asarray(t, dtype=float)
         eps = self._delta_width
-        delta = np.exp(-t ** 2 / (2 * eps ** 2)) / (eps * np.sqrt(2 * np.pi))
-        return (1.0 - self.fR) * delta
+        delta = np.exp(-(t**2) / (2 * eps**2)) / (eps * np.sqrt(2 * np.pi))
+        return (1.0 - self.fR) * delta  # type: ignore
 
     def delayed_response(self, t: np.ndarray | None = None) -> np.ndarray:
         """Lattice oscillation: fR·h_R(t).
@@ -1156,9 +1588,9 @@ class RamanResponse:
         np.ndarray — delayed (Raman) response values.
         """
         if t is None:
-            t = self.grid.t
+            t = self.grid.t  # type: ignore
         t = np.asarray(t, dtype=float)
-        return self.fR * self._h_R(t)
+        return self.fR * self._h_R(t)  # type: ignore
 
     def combined_response(self, t: np.ndarray | None = None) -> np.ndarray:
         """Total Raman response R(t) = (1-fR)δ(t) + fR·h_R(t).
@@ -1172,9 +1604,9 @@ class RamanResponse:
         np.ndarray — combined response values.
         """
         if t is None:
-            t = self.grid.t
+            t = self.grid.t  # type: ignore
         t = np.asarray(t, dtype=float)
-        return self.instantaneous_response(t) + self.delayed_response(t)
+        return self.instantaneous_response(t) + self.delayed_response(t)  # type: ignore
 
     def plot_components(
         self,
@@ -1209,7 +1641,7 @@ class RamanResponse:
             t_min, t_max = t_range_ps
             t = np.linspace(t_min * 1e-12, t_max * 1e-12, 5000)
         else:
-            t = self.grid.t
+            t = self.grid.t  # type: ignore
 
         inst = self.instantaneous_response(t)
         delayed = self.delayed_response(t)
@@ -1218,8 +1650,9 @@ class RamanResponse:
         fig, axes = plt.subplots(3, 1, figsize=figsize or (10, 9), sharex=True)
         fig.suptitle(
             f"Raman Response: {self.spec.name}  "
-            f"(fR={self.fR:.2f}, τ1={self.tau1*1e15:.2f} fs, τ2={self.tau2*1e15:.2f} fs)",
-            fontsize=13, fontweight="bold",
+            f"(fR={self.fR:.2f}, τ1={self.tau1*1e15:.2f} fs, τ2={self.tau2*1e15:.2f} fs)",  # type: ignore
+            fontsize=13,
+            fontweight="bold",
         )
 
         # Panel 1: Instantaneous
@@ -1243,7 +1676,9 @@ class RamanResponse:
 
         # Panel 3: Combined
         ax3 = axes[2]
-        ax3.plot(t * 1e12, combined, color="#34d399", linewidth=1.5, label="Combined R(t)")
+        ax3.plot(
+            t * 1e12, combined, color="#34d399", linewidth=1.5, label="Combined R(t)"
+        )
         ax3.set_xlabel("Time (ps)", fontsize=10)
         ax3.set_ylabel("Amplitude (arb.)", fontsize=10)
         ax3.set_title("Combined Response R(t) = (1-fR)δ(t) + fR·h_R(t)", fontsize=11)
@@ -1267,14 +1702,15 @@ class RamanResponse:
             t_min, t_max = t_range_ps
             t = np.linspace(t_min * 1e-12, t_max * 1e-12, 5000)
         else:
-            t = self.grid.t
+            t = self.grid.t  # type: ignore
 
         inst = self.instantaneous_response(t)
         delayed = self.delayed_response(t)
         combined = self.combined_response(t)
 
         fig = make_subplots(
-            rows=3, cols=1,
+            rows=3,
+            cols=1,
             subplot_titles=(
                 "Instantaneous (Electronic Kerr) Response",
                 "Delayed (Lattice Oscillation) Response fR·h_R(t)",
@@ -1286,15 +1722,44 @@ class RamanResponse:
 
         t_ps = t * 1e12
 
-        fig.add_trace(go.Scatter(x=t_ps, y=inst, mode="lines", name="Instant.",
-                                  line=dict(color="#00d4ff", width=1.5)), row=1, col=1)
-        fig.add_trace(go.Scatter(x=t_ps, y=delayed, mode="lines", name="Delayed",
-                                  line=dict(color="#a78bfa", width=1.5)), row=2, col=1)
-        fig.add_trace(go.Scatter(x=t_ps, y=combined, mode="lines", name="Combined",
-                                  line=dict(color="#34d399", width=1.5)), row=3, col=1)
+        fig.add_trace(
+            go.Scatter(
+                x=t_ps,
+                y=inst,
+                mode="lines",
+                name="Instant.",
+                line=dict(color="#00d4ff", width=1.5),
+            ),
+            row=1,
+            col=1,
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=t_ps,
+                y=delayed,
+                mode="lines",
+                name="Delayed",
+                line=dict(color="#a78bfa", width=1.5),
+            ),
+            row=2,
+            col=1,
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=t_ps,
+                y=combined,
+                mode="lines",
+                name="Combined",
+                line=dict(color="#34d399", width=1.5),
+            ),
+            row=3,
+            col=1,
+        )
 
         for i in range(1, 4):
-            fig.add_hline(y=0, line_dash="dot", line_color="gray", opacity=0.5, row=i, col=1)
+            fig.add_hline(
+                y=0, line_dash="dot", line_color="gray", opacity=0.5, row=i, col=1
+            )
 
         fig.update_yaxes(title_text="Amplitude (arb.)", row=1, col=1)
         fig.update_yaxes(title_text="Amplitude (arb.)", row=2, col=1)
@@ -1303,7 +1768,7 @@ class RamanResponse:
 
         fig.update_layout(
             title_text=f"Raman Response: {self.spec.name}  "
-                       f"(fR={self.fR:.2f}, τ1={self.tau1*1e15:.2f} fs, τ2={self.tau2*1e15:.2f} fs)",
+            f"(fR={self.fR:.2f}, τ1={self.tau1*1e15:.2f} fs, τ2={self.tau2*1e15:.2f} fs)",  # type: ignore
             height=750,
             showlegend=False,
         )
@@ -1328,7 +1793,7 @@ class RamanFrequencyResponse:
     """
 
     response: RamanResponse
-    grid: TemporalGrid = None
+    grid: TemporalGrid | None = None
 
     @model_validator(mode="after")
     def _ensure_grid(self) -> "RamanFrequencyResponse":
@@ -1339,8 +1804,12 @@ class RamanFrequencyResponse:
     @property
     def H(self) -> np.ndarray:
         """Complex frequency response H(Ω)."""
-        h_R_t = self.response.delayed_response(self.grid.t) / self.response.fR if self.response.fR > 0 else np.zeros_like(self.grid.t)
-        return self.grid.fft(h_R_t)
+        h_R_t = (
+            self.response.delayed_response(self.grid.t) / self.response.fR  # type: ignore
+            if self.response.fR > 0  # type: ignore
+            else np.zeros_like(self.grid.t)  # type: ignore
+        )
+        return self.grid.fft(h_R_t)  # type: ignore
 
     @property
     def H_real(self) -> np.ndarray:
@@ -1366,8 +1835,8 @@ class RamanFrequencyResponse:
     def resonance_frequency_THz(self) -> float:
         """Resonance frequency in THz (peak of |Im(H)|)."""
         # Find peak of |Im(H)| in positive frequencies
-        positive_mask = self.grid.w > 0
-        w_pos = self.grid.w[positive_mask]
+        positive_mask = self.grid.w > 0  # type: ignore
+        w_pos = self.grid.w[positive_mask]  # type: ignore
         imag_pos = self.H_imag[positive_mask]
         peak_idx = np.argmax(np.abs(imag_pos))
         return w_pos[peak_idx] / (2 * np.pi * 1e12)  # rad/s → THz
@@ -1376,7 +1845,7 @@ class RamanFrequencyResponse:
     def resonance_FWHM_THz(self) -> float:
         """FWHM of the resonance in THz."""
         mag = self.H_magnitude
-        w = self.grid.w / (2 * np.pi * 1e12)  # rad/s → THz
+        w = self.grid.w / (2 * np.pi * 1e12)  # type: ignore  # rad/s → THz
 
         # Find peak
         peak_idx = np.argmax(mag)
@@ -1393,7 +1862,7 @@ class RamanFrequencyResponse:
             return w_right - w_left
 
         # Fallback: use grid resolution
-        return float(self.grid.dw / (2 * np.pi * 1e12))
+        return float(self.grid.dw / (2 * np.pi * 1e12))  # type: ignore
 
     @property
     def quality_factor(self) -> float:
@@ -1412,8 +1881,12 @@ class RamanFrequencyResponse:
         if backend == "plotly":
             if not HAS_PLOTLY:
                 raise ImportError("plotly required for plotly backend")
-            return self._plot_dispersion_plotly("Real Part Re(H)", self.H_real, "Re(H(Ω))", figsize)
-        return self._plot_dispersion_matplotlib("Real Part Re(H)", self.H_real, "Re(H(Ω))", figsize)
+            return self._plot_dispersion_plotly(
+                "Real Part Re(H)", self.H_real, "Re(H(Ω))", figsize
+            )
+        return self._plot_dispersion_matplotlib(
+            "Real Part Re(H)", self.H_real, "Re(H(Ω))", figsize
+        )
 
     def plot_imag(
         self,
@@ -1424,8 +1897,12 @@ class RamanFrequencyResponse:
         if backend == "plotly":
             if not HAS_PLOTLY:
                 raise ImportError("plotly required for plotly backend")
-            return self._plot_dispersion_plotly("Imaginary Part Im(H)", self.H_imag, "Im(H(Ω))", figsize)
-        return self._plot_dispersion_matplotlib("Imaginary Part Im(H)", self.H_imag, "Im(H(Ω))", figsize)
+            return self._plot_dispersion_plotly(
+                "Imaginary Part Im(H)", self.H_imag, "Im(H(Ω))", figsize
+            )
+        return self._plot_dispersion_matplotlib(
+            "Imaginary Part Im(H)", self.H_imag, "Im(H(Ω))", figsize
+        )
 
     def plot_magnitude(
         self,
@@ -1436,8 +1913,12 @@ class RamanFrequencyResponse:
         if backend == "plotly":
             if not HAS_PLOTLY:
                 raise ImportError("plotly required for plotly backend")
-            return self._plot_dispersion_plotly("Magnitude |H(Ω)|", self.H_magnitude, "|H(Ω)|", figsize)
-        return self._plot_dispersion_matplotlib("Magnitude |H(Ω)|", self.H_magnitude, "|H(Ω)|", figsize)
+            return self._plot_dispersion_plotly(
+                "Magnitude |H(Ω)|", self.H_magnitude, "|H(Ω)|", figsize
+            )
+        return self._plot_dispersion_matplotlib(
+            "Magnitude |H(Ω)|", self.H_magnitude, "|H(Ω)|", figsize
+        )
 
     def plot_phase(
         self,
@@ -1448,8 +1929,12 @@ class RamanFrequencyResponse:
         if backend == "plotly":
             if not HAS_PLOTLY:
                 raise ImportError("plotly required for plotly backend")
-            return self._plot_dispersion_plotly("Phase ∠H(Ω)", self.H_phase, "∠H(Ω) (rad)", figsize)
-        return self._plot_dispersion_matplotlib("Phase ∠H(Ω)", self.H_phase, "∠H(Ω) (rad)", figsize)
+            return self._plot_dispersion_plotly(
+                "Phase ∠H(Ω)", self.H_phase, "∠H(Ω) (rad)", figsize
+            )
+        return self._plot_dispersion_matplotlib(
+            "Phase ∠H(Ω)", self.H_phase, "∠H(Ω) (rad)", figsize
+        )
 
     def plot_all(
         self,
@@ -1464,13 +1949,17 @@ class RamanFrequencyResponse:
         return self._plot_all_matplotlib(figsize)
 
     def _plot_dispersion_matplotlib(
-        self, title: str, data: np.ndarray, ylabel: str, figsize: tuple[float, float] | None
+        self,
+        title: str,
+        data: np.ndarray,
+        ylabel: str,
+        figsize: tuple[float, float] | None,
     ):
         """Single-panel dispersion plot (matplotlib)."""
         import matplotlib.pyplot as plt
 
         fig, ax = plt.subplots(figsize=figsize or (10, 5))
-        w_THz = self.grid.w / (2 * np.pi * 1e12)
+        w_THz = self.grid.w / (2 * np.pi * 1e12)  # type: ignore[union-attr]
         ax.plot(w_THz, data, linewidth=1.5, color="#00d4ff")
         ax.set_xlabel("Angular frequency (THz)", fontsize=11)
         ax.set_ylabel(ylabel, fontsize=11)
@@ -1481,22 +1970,39 @@ class RamanFrequencyResponse:
         # Annotate resonance
         if "Im" in title or "Magnitude" in title:
             f_res = self.resonance_frequency_THz
-            ax.axvline(f_res, color="r", linestyle="--", alpha=0.7, label=f"Resonance: {f_res:.2f} THz")
+            ax.axvline(
+                f_res,
+                color="r",
+                linestyle="--",
+                alpha=0.7,
+                label=f"Resonance: {f_res:.2f} THz",
+            )
             ax.legend()
 
         plt.tight_layout()
         return fig
 
     def _plot_dispersion_plotly(
-        self, title: str, data: np.ndarray, ylabel: str, figsize: tuple[float, float] | None
+        self,
+        title: str,
+        data: np.ndarray,
+        ylabel: str,
+        figsize: tuple[float, float] | None,
     ):
         """Single-panel dispersion plot (plotly)."""
         import plotly.graph_objects as go
 
         fig = go.Figure()
-        w_THz = self.grid.w / (2 * np.pi * 1e12)
-        fig.add_trace(go.Scatter(x=w_THz, y=data, mode="lines", name="H(Ω)",
-                                  line=dict(color="#00d4ff", width=1.5)))
+        w_THz = self.grid.w / (2 * np.pi * 1e12)  # type: ignore[union-attr]
+        fig.add_trace(
+            go.Scatter(
+                x=w_THz,
+                y=data,
+                mode="lines",
+                name="H(Ω)",
+                line=dict(color="#00d4ff", width=1.5),
+            )
+        )
         fig.update_layout(
             title=title,
             xaxis_title="Angular frequency (THz)",
@@ -1513,10 +2019,11 @@ class RamanFrequencyResponse:
         fig.suptitle(
             f"Raman Frequency Response: {self.response.spec.name}  "
             f"(f_res={self.resonance_frequency_THz:.2f} THz, Q={self.quality_factor:.1f})",
-            fontsize=13, fontweight="bold",
+            fontsize=13,
+            fontweight="bold",
         )
 
-        w_THz = self.grid.w / (2 * np.pi * 1e12)
+        w_THz = self.grid.w / (2 * np.pi * 1e12)  # type: ignore[union-attr]
         colors = ["#00d4ff", "#a78bfa", "#34d399", "#fbbf24"]
         titles = ["Re(H(Ω))", "Im(H(Ω))", "|H(Ω)|", "∠H(Ω)"]
         data = [self.H_real, self.H_imag, self.H_magnitude, self.H_phase]
@@ -1533,8 +2040,13 @@ class RamanFrequencyResponse:
             # Annotate resonance on Im and |H| panels
             if idx in (1, 2):
                 f_res = self.resonance_frequency_THz
-                ax.axvline(f_res, color="r", linestyle="--", alpha=0.7,
-                           label=f"Resonance: {f_res:.2f} THz")
+                ax.axvline(
+                    f_res,
+                    color="r",
+                    linestyle="--",
+                    alpha=0.7,
+                    label=f"Resonance: {f_res:.2f} THz",
+                )
                 ax.legend(fontsize=8)
 
         plt.tight_layout()
@@ -1546,12 +2058,14 @@ class RamanFrequencyResponse:
         from plotly.subplots import make_subplots
 
         fig = make_subplots(
-            rows=2, cols=2,
+            rows=2,
+            cols=2,
             subplot_titles=["Re(H(Ω))", "Im(H(Ω))", "|H(Ω)|", "∠H(Ω)"],
-            shared_xaxes=True, shared_yaxes=False,
+            shared_xaxes=True,
+            shared_yaxes=False,
         )
 
-        w_THz = self.grid.w / (2 * np.pi * 1e12)
+        w_THz = self.grid.w / (2 * np.pi * 1e12)  # type: ignore[union-attr]
         colors = ["#00d4ff", "#a78bfa", "#34d399", "#fbbf24"]
         data = [self.H_real, self.H_imag, self.H_magnitude, self.H_phase]
         ylabels = ["Re(H(Ω))", "Im(H(Ω))", "|H(Ω)|", "∠H(Ω) (rad)"]
@@ -1560,9 +2074,20 @@ class RamanFrequencyResponse:
             row, col = divmod(idx, 2)
             row += 1
             col += 1
-            fig.add_trace(go.Scatter(x=w_THz, y=data[idx], mode="lines", name= ylabels[idx],
-                                      line=dict(color=colors[idx], width=1.5)), row=row, col=col)
-            fig.add_hline(y=0, line_dash="dot", line_color="gray", opacity=0.5, row=row, col=col)
+            fig.add_trace(
+                go.Scatter(
+                    x=w_THz,
+                    y=data[idx],
+                    mode="lines",
+                    name=ylabels[idx],
+                    line=dict(color=colors[idx], width=1.5),
+                ),
+                row=row,
+                col=col,
+            )
+            fig.add_hline(
+                y=0, line_dash="dot", line_color="gray", opacity=0.5, row=row, col=col
+            )
 
         fig.update_layout(
             title_text=f"Raman Frequency Response: {self.response.spec.name}",
@@ -1600,8 +2125,8 @@ class RamanPulseInteraction:
     pulse: Wave
     response: RamanResponse
     spec: RamanSpec
-    n2: float = None
-    grid: TemporalGrid = None
+    n2: float | None = None
+    grid: TemporalGrid | None = None
 
     @model_validator(mode="after")
     def _ensure_defaults(self) -> "RamanPulseInteraction":
@@ -1625,12 +2150,12 @@ class RamanPulseInteraction:
         from scipy.signal import fftconvolve
 
         I_t = self.pulse.envelope_intensity
-        R_t = self.response.combined_response(self.grid.t)
+        R_t = self.response.combined_response(self.grid.t)  # type: ignore
 
         # Full convolution, then extract central N points
         P_full = fftconvolve(I_t, R_t, mode="full")
 
-        N = self.grid.N
+        N = self.grid.N  # type: ignore
         if len(P_full) >= N:
             start = (len(P_full) - N) // 2
             P_NL = P_full[start : start + N]
@@ -1672,16 +2197,24 @@ class RamanPulseInteraction:
         if t_range_ps is not None:
             t_min, t_max = t_range_ps
             t = np.linspace(t_min * 1e-12, t_max * 1e-12, 5000)
-            I_t = np.abs(self.pulse.envelope_field[:1] if False else self.pulse.envelope_field) ** 2
+            I_t = (
+                np.abs(
+                    self.pulse.envelope_field[:1]
+                    if False
+                    else self.pulse.envelope_field
+                )
+                ** 2
+            )
             # For custom time range, recompute intensity on the fly
             from photonics_helper.pulse import TemporalGrid
+
             custom_grid = TemporalGrid(N=len(t), Tmax=t_max * 1e-12)
-            custom_grid.t = t  # override
+            custom_grid.t = t  # type: ignore[reportAttributeAccessIssue]  # override cached_property via instance dict
             I_t = np.abs(self.pulse.envelope_field) ** 2
             # Use grid-based computation for consistency
-            t = self.grid.t
+            t = self.grid.t  # type: ignore
         else:
-            t = self.grid.t
+            t = self.grid.t  # type: ignore
 
         I_t = self.pulse.envelope_intensity
         R_t = self.response.combined_response(t)
@@ -1698,7 +2231,8 @@ class RamanPulseInteraction:
         fig.suptitle(
             f"Pulse-Raman Interaction: {self.spec.name}  "
             f"(n₂={self.n2:.2e} m²/W, fR={self.response.fR:.2f})",
-            fontsize=13, fontweight="bold",
+            fontsize=13,
+            fontweight="bold",
         )
 
         t_ps = t * 1e12
@@ -1731,7 +2265,9 @@ class RamanPulseInteraction:
 
         # Panel 4: Output pulse
         ax4 = axes[3]
-        ax4.plot(t_ps, I_t, color="#00d4ff", linewidth=1.0, alpha=0.5, label="Input |E|²")
+        ax4.plot(
+            t_ps, I_t, color="#00d4ff", linewidth=1.0, alpha=0.5, label="Input |E|²"
+        )
         ax4.plot(t_ps, I_out, color="#fbbf24", linewidth=1.5, label="Output |E_out|²")
         ax4.set_xlabel("Time (ps)", fontsize=10)
         ax4.set_ylabel("Intensity (arb.)", fontsize=10)
@@ -1751,7 +2287,7 @@ class RamanPulseInteraction:
         import plotly.graph_objects as go
         from plotly.subplots import make_subplots
 
-        t = self.grid.t
+        t = self.grid.t  # type: ignore
         t_ps = t * 1e12
         I_t = self.pulse.envelope_intensity
         R_t = self.response.combined_response(t)
@@ -1763,7 +2299,8 @@ class RamanPulseInteraction:
         I_out = np.abs(E_out) ** 2
 
         fig = make_subplots(
-            rows=4, cols=1,
+            rows=4,
+            cols=1,
             subplot_titles=(
                 "Input Pulse Intensity |E(t)|²",
                 "Combined Raman Response R(t)",
@@ -1774,19 +2311,67 @@ class RamanPulseInteraction:
             vertical_spacing=0.08,
         )
 
-        fig.add_trace(go.Scatter(x=t_ps, y=I_t, mode="lines", name="|E|²",
-                                  line=dict(color="#00d4ff", width=1.5)), row=1, col=1)
-        fig.add_trace(go.Scatter(x=t_ps, y=R_t, mode="lines", name="R(t)",
-                                  line=dict(color="#a78bfa", width=1.5)), row=2, col=1)
-        fig.add_trace(go.Scatter(x=t_ps, y=P_NL, mode="lines", name="P_NL(t)",
-                                  line=dict(color="#34d399", width=1.5)), row=3, col=1)
-        fig.add_trace(go.Scatter(x=t_ps, y=I_t, mode="lines", name="Input", opacity=0.5,
-                                  line=dict(color="#00d4ff", width=1.0)), row=4, col=1)
-        fig.add_trace(go.Scatter(x=t_ps, y=I_out, mode="lines", name="Output",
-                                  line=dict(color="#fbbf24", width=1.5)), row=4, col=1)
+        fig.add_trace(
+            go.Scatter(
+                x=t_ps,
+                y=I_t,
+                mode="lines",
+                name="|E|²",
+                line=dict(color="#00d4ff", width=1.5),
+            ),
+            row=1,
+            col=1,
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=t_ps,
+                y=R_t,
+                mode="lines",
+                name="R(t)",
+                line=dict(color="#a78bfa", width=1.5),
+            ),
+            row=2,
+            col=1,
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=t_ps,
+                y=P_NL,
+                mode="lines",
+                name="P_NL(t)",
+                line=dict(color="#34d399", width=1.5),
+            ),
+            row=3,
+            col=1,
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=t_ps,
+                y=I_t,
+                mode="lines",
+                name="Input",
+                opacity=0.5,
+                line=dict(color="#00d4ff", width=1.0),
+            ),
+            row=4,
+            col=1,
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=t_ps,
+                y=I_out,
+                mode="lines",
+                name="Output",
+                line=dict(color="#fbbf24", width=1.5),
+            ),
+            row=4,
+            col=1,
+        )
 
         for i in range(1, 5):
-            fig.add_hline(y=0, line_dash="dot", line_color="gray", opacity=0.3, row=i, col=1)
+            fig.add_hline(
+                y=0, line_dash="dot", line_color="gray", opacity=0.3, row=i, col=1
+            )
 
         fig.update_yaxes(title_text="Intensity (arb.)", row=1, col=1)
         fig.update_yaxes(title_text="Amplitude (arb.)", row=2, col=1)
@@ -1796,7 +2381,7 @@ class RamanPulseInteraction:
 
         fig.update_layout(
             title_text=f"Pulse-Raman Interaction: {self.spec.name}  "
-                       f"(n₂={self.n2:.2e} m²/W, fR={self.response.fR:.2f})",
+            f"(n₂={self.n2:.2e} m²/W, fR={self.response.fR:.2f})",
             height=800,
             showlegend=True,
         )
@@ -1834,7 +2419,7 @@ class RamanPulseInteraction:
         import matplotlib.pyplot as plt
         import matplotlib.animation as animation
 
-        t = self.grid.t
+        t = self.grid.t  # type: ignore
         t_ps = t * 1e12
         I_t = self.pulse.envelope_intensity
         R_t = self.response.combined_response(t)
@@ -1843,12 +2428,15 @@ class RamanPulseInteraction:
         fig, axes = plt.subplots(2, 1, figsize=figsize or (10, 8), sharex=True)
         fig.suptitle(
             f"Pulse-Raman Interaction Animation: {self.spec.name}",
-            fontsize=13, fontweight="bold",
+            fontsize=13,
+            fontweight="bold",
         )
 
         # Line objects for animation
         (line_pulse,) = axes[0].plot(t_ps, I_t, color="#00d4ff", linewidth=1.5)
-        (line_PNL,) = axes[1].plot(t_ps, np.zeros_like(t_ps), color="#34d399", linewidth=1.5)
+        (line_PNL,) = axes[1].plot(
+            t_ps, np.zeros_like(t_ps), color="#34d399", linewidth=1.5
+        )
 
         axes[0].set_ylabel("Intensity (arb.)", fontsize=10)
         axes[0].set_title("Input Pulse", fontsize=11)
@@ -1878,13 +2466,15 @@ class RamanPulseInteraction:
             fig.suptitle(
                 f"Pulse-Raman Interaction: {self.spec.name}  "
                 f"(frame {frame}/{frames})",
-                fontsize=13, fontweight="bold",
+                fontsize=13,
+                fontweight="bold",
             )
             return line_pulse, line_PNL
 
         anim = animation.FuncAnimation(
             fig, update, frames=frames, interval=100, blit=False
         )
+        fig._animation = anim  # type: ignore[attr-defined]  # keep reference alive to prevent GC warning
 
         plt.tight_layout()
         return fig
@@ -1898,13 +2488,14 @@ class RamanPulseInteraction:
         import plotly.graph_objects as go
         from plotly.subplots import make_subplots
 
-        t = self.grid.t
+        t = self.grid.t  # type: ignore
         t_ps = t * 1e12
         I_t = self.pulse.envelope_intensity
         P_NL = self.nonlinear_polarization
 
         fig = make_subplots(
-            rows=2, cols=1,
+            rows=2,
+            cols=1,
             subplot_titles=("Input Pulse", "Nonlinear Polarization"),
             shared_xaxes=True,
             vertical_spacing=0.1,
@@ -1913,14 +2504,26 @@ class RamanPulseInteraction:
         pNL_max = np.max(np.abs(P_NL)) if np.max(np.abs(P_NL)) > 0 else 1
 
         fig.add_trace(
-            go.Scatter(x=t_ps, y=I_t, mode="lines", name="Intensity",
-                       line=dict(color="#00d4ff", width=1.5)),
-            row=1, col=1,
+            go.Scatter(
+                x=t_ps,
+                y=I_t,
+                mode="lines",
+                name="Intensity",
+                line=dict(color="#00d4ff", width=1.5),
+            ),
+            row=1,
+            col=1,
         )
         fig.add_trace(
-            go.Scatter(x=t_ps, y=P_NL, mode="lines", name="P_NL",
-                       line=dict(color="#34d399", width=1.5)),
-            row=2, col=1,
+            go.Scatter(
+                x=t_ps,
+                y=P_NL,
+                mode="lines",
+                name="P_NL",
+                line=dict(color="#34d399", width=1.5),
+            ),
+            row=2,
+            col=1,
         )
 
         fig.update_yaxes(title_text="Intensity (arb.)", row=1, col=1)
@@ -2087,7 +2690,10 @@ class PumpWavelengthExplorer:
     # ── Matplotlib implementations ──
 
     def _plot_freq_matplotlib(
-        self, pump_wl: Wavelength, freq_range_THz: float, figsize: tuple[float, float] | None,
+        self,
+        pump_wl: Wavelength,
+        freq_range_THz: float,
+        figsize: tuple[float, float] | None,
     ):
         """Frequency axis plot (equidistant markers)."""
         import matplotlib.pyplot as plt
@@ -2099,30 +2705,68 @@ class PumpWavelengthExplorer:
         fig, ax = plt.subplots(figsize=figsize or (10, 5))
 
         # Draw a frequency axis line
-        ax.hlines(0, nu_pump - freq_range_THz, nu_pump + freq_range_THz,
-                  colors="gray", linewidth=2)
+        ax.hlines(
+            0,
+            nu_pump - freq_range_THz,
+            nu_pump + freq_range_THz,
+            colors="gray",
+            linewidth=2,
+        )
 
         # Mark Anti-Stokes (blue), Pump (red), Stokes (green)
-        ax.vlines(nu_anti, -0.1, 0.15, colors="#3b82f6", linewidth=3,
-                  label=f"Anti-Stokes ({C_MS/nu_anti*1e12:.0f} nm)")
-        ax.vlines(nu_pump, -0.1, 0.15, colors="#ef4444", linewidth=3,
-                  label=f"Pump ({pump_wl.as_nm:.0f} nm)")
-        ax.vlines(nu_stokes, -0.1, 0.15, colors="#22c55e", linewidth=3,
-                  label=f"Stokes ({C_MS/nu_stokes*1e12:.0f} nm)")
+        ax.vlines(
+            nu_anti,
+            -0.1,
+            0.15,
+            colors="#3b82f6",
+            linewidth=3,
+            label=f"Anti-Stokes ({C_MS/nu_anti*1e12:.0f} nm)",
+        )
+        ax.vlines(
+            nu_pump,
+            -0.1,
+            0.15,
+            colors="#ef4444",
+            linewidth=3,
+            label=f"Pump ({pump_wl.as_nm:.0f} nm)",
+        )
+        ax.vlines(
+            nu_stokes,
+            -0.1,
+            0.15,
+            colors="#22c55e",
+            linewidth=3,
+            label=f"Stokes ({C_MS/nu_stokes*1e12:.0f} nm)",
+        )
 
         # Annotations
-        ax.annotate("Anti-Stokes\n(higher ν)", xy=(nu_anti, 0.18),
-                    ha="center", fontsize=9, color="#3b82f6")
-        ax.annotate("Pump", xy=(nu_pump, -0.18),
-                    ha="center", fontsize=9, color="#ef4444")
-        ax.annotate("Stokes\n(lower ν)", xy=(nu_stokes, 0.18),
-                    ha="center", fontsize=9, color="#22c55e")
+        ax.annotate(
+            "Anti-Stokes\n(higher ν)",
+            xy=(nu_anti, 0.18),
+            ha="center",
+            fontsize=9,
+            color="#3b82f6",
+        )
+        ax.annotate(
+            "Pump", xy=(nu_pump, -0.18), ha="center", fontsize=9, color="#ef4444"
+        )
+        ax.annotate(
+            "Stokes\n(lower ν)",
+            xy=(nu_stokes, 0.18),
+            ha="center",
+            fontsize=9,
+            color="#22c55e",
+        )
 
         # Mark the equal shift
-        ax.annotate(f"Δν = {self.spec.raman_shift_THz:.2f} THz", xy=(
-            (nu_pump + nu_stokes) / 2, -0.05),
-            ha="center", fontsize=8, color="gray",
-            bbox=dict(boxstyle="round,pad=0.3", facecolor="wheat", alpha=0.7))
+        ax.annotate(
+            f"Δν = {self.spec.raman_shift_THz:.2f} THz",
+            xy=((nu_pump + nu_stokes) / 2, -0.05),
+            ha="center",
+            fontsize=8,
+            color="gray",
+            bbox=dict(boxstyle="round,pad=0.3", facecolor="wheat", alpha=0.7),
+        )
 
         ax.set_xlim(nu_pump - freq_range_THz, nu_pump + freq_range_THz)
         ax.set_ylim(-0.3, 0.35)
@@ -2130,7 +2774,8 @@ class PumpWavelengthExplorer:
         ax.set_title(
             f"Frequency Axis: {self.spec.name}  "
             f"(Δν = {self.spec.raman_shift_THz:.2f} THz = {self.spec.raman_shift_cm:.0f} cm⁻¹)",
-            fontsize=13, fontweight="bold",
+            fontsize=13,
+            fontweight="bold",
         )
         ax.set_yticks([])
         ax.legend(fontsize=9, loc="upper right")
@@ -2140,7 +2785,10 @@ class PumpWavelengthExplorer:
         return fig
 
     def _plot_wl_matplotlib(
-        self, pump_wl: Wavelength, wl_range_nm: float, figsize: tuple[float, float] | None,
+        self,
+        pump_wl: Wavelength,
+        wl_range_nm: float,
+        figsize: tuple[float, float] | None,
     ):
         """Wavelength axis plot (unequal spacing)."""
         import matplotlib.pyplot as plt
@@ -2152,36 +2800,72 @@ class PumpWavelengthExplorer:
         fig, ax = plt.subplots(figsize=figsize or (10, 5))
 
         # Draw a wavelength axis line
-        ax.hlines(0, anti - 50, stokes + 50,
-                  colors="gray", linewidth=2)
+        ax.hlines(0, anti - 50, stokes + 50, colors="gray", linewidth=2)
 
         # Mark Anti-Stokes (blue), Pump (red), Stokes (green)
-        ax.vlines(anti, -0.1, 0.15, colors="#3b82f6", linewidth=3,
-                  label=f"Anti-Stokes ({anti:.0f} nm)")
-        ax.vlines(wl_pump, -0.1, 0.15, colors="#ef4444", linewidth=3,
-                  label=f"Pump ({wl_pump:.0f} nm)")
-        ax.vlines(stokes, -0.1, 0.15, colors="#22c55e", linewidth=3,
-                  label=f"Stokes ({stokes:.0f} nm)")
+        ax.vlines(
+            anti,
+            -0.1,
+            0.15,
+            colors="#3b82f6",
+            linewidth=3,
+            label=f"Anti-Stokes ({anti:.0f} nm)",
+        )
+        ax.vlines(
+            wl_pump,
+            -0.1,
+            0.15,
+            colors="#ef4444",
+            linewidth=3,
+            label=f"Pump ({wl_pump:.0f} nm)",
+        )
+        ax.vlines(
+            stokes,
+            -0.1,
+            0.15,
+            colors="#22c55e",
+            linewidth=3,
+            label=f"Stokes ({stokes:.0f} nm)",
+        )
 
         # Annotations
-        ax.annotate("Anti-Stokes\n(shorter λ)", xy=(anti, 0.18),
-                    ha="center", fontsize=9, color="#3b82f6")
-        ax.annotate("Pump", xy=(wl_pump, -0.18),
-                    ha="center", fontsize=9, color="#ef4444")
-        ax.annotate("Stokes\n(longer λ)", xy=(stokes, 0.18),
-                    ha="center", fontsize=9, color="#22c55e")
+        ax.annotate(
+            "Anti-Stokes\n(shorter λ)",
+            xy=(anti, 0.18),
+            ha="center",
+            fontsize=9,
+            color="#3b82f6",
+        )
+        ax.annotate(
+            "Pump", xy=(wl_pump, -0.18), ha="center", fontsize=9, color="#ef4444"
+        )
+        ax.annotate(
+            "Stokes\n(longer λ)",
+            xy=(stokes, 0.18),
+            ha="center",
+            fontsize=9,
+            color="#22c55e",
+        )
 
         # Mark unequal shifts
         delta_stokes = stokes - wl_pump
         delta_anti = wl_pump - anti
-        ax.annotate(f"Δλ_S = {delta_stokes:.1f} nm", xy=(
-            (wl_pump + stokes) / 2, -0.05),
-            ha="center", fontsize=8, color="#22c55e",
-            bbox=dict(boxstyle="round,pad=0.3", facecolor="lightgreen", alpha=0.7))
-        ax.annotate(f"Δλ_AS = {delta_anti:.1f} nm", xy=(
-            (anti + wl_pump) / 2, -0.12),
-            ha="center", fontsize=8, color="#3b82f6",
-            bbox=dict(boxstyle="round,pad=0.3", facecolor="lightblue", alpha=0.7))
+        ax.annotate(
+            f"Δλ_S = {delta_stokes:.1f} nm",
+            xy=((wl_pump + stokes) / 2, -0.05),
+            ha="center",
+            fontsize=8,
+            color="#22c55e",
+            bbox=dict(boxstyle="round,pad=0.3", facecolor="lightgreen", alpha=0.7),
+        )
+        ax.annotate(
+            f"Δλ_AS = {delta_anti:.1f} nm",
+            xy=((anti + wl_pump) / 2, -0.12),
+            ha="center",
+            fontsize=8,
+            color="#3b82f6",
+            bbox=dict(boxstyle="round,pad=0.3", facecolor="lightblue", alpha=0.7),
+        )
 
         ax.set_xlim(anti - 50, stokes + 50)
         ax.set_ylim(-0.3, 0.35)
@@ -2189,7 +2873,8 @@ class PumpWavelengthExplorer:
         ax.set_title(
             f"Wavelength Axis: {self.spec.name}  "
             f"(Pump = {wl_pump:.0f} nm — unequal spacing!)",
-            fontsize=13, fontweight="bold",
+            fontsize=13,
+            fontweight="bold",
         )
         ax.set_yticks([])
         ax.legend(fontsize=9, loc="upper right")
@@ -2199,20 +2884,23 @@ class PumpWavelengthExplorer:
         return fig
 
     def _plot_both_matplotlib(
-        self, pump_wl: Wavelength, freq_range_THz: float,
-        wl_range_nm: float, figsize: tuple[float, float] | None,
+        self,
+        pump_wl: Wavelength,
+        freq_range_THz: float,
+        wl_range_nm: float,
+        figsize: tuple[float, float] | None,
     ):
         """Side-by-side frequency and wavelength axis plots."""
         import matplotlib.pyplot as plt
 
         fig, (ax1, ax2) = plt.subplots(
-            1, 2, figsize=figsize or (16, 5),
-            gridspec_kw={"width_ratios": [1, 1]}
+            1, 2, figsize=figsize or (16, 5), gridspec_kw={"width_ratios": [1, 1]}
         )
         fig.suptitle(
             f"Pump Wavelength Explorer: {self.spec.name}  "
             f"(Pump = {pump_wl.as_nm:.0f} nm)",
-            fontsize=13, fontweight="bold",
+            fontsize=13,
+            fontweight="bold",
         )
 
         # Frequency axis (left)
@@ -2220,14 +2908,37 @@ class PumpWavelengthExplorer:
         nu_stokes = nu_pump - self.spec.raman_shift_THz
         nu_anti = nu_pump + self.spec.raman_shift_THz
 
-        ax1.hlines(0, nu_pump - freq_range_THz, nu_pump + freq_range_THz,
-                   colors="gray", linewidth=2)
-        ax1.vlines(nu_anti, -0.1, 0.15, colors="#3b82f6", linewidth=3,
-                   label=f"AS ({C_MS/nu_anti*1e12:.0f} nm)")
-        ax1.vlines(nu_pump, -0.1, 0.15, colors="#ef4444", linewidth=3,
-                   label=f"Pump ({pump_wl.as_nm:.0f} nm)")
-        ax1.vlines(nu_stokes, -0.1, 0.15, colors="#22c55e", linewidth=3,
-                   label=f"S ({C_MS/nu_stokes*1e12:.0f} nm)")
+        ax1.hlines(
+            0,
+            nu_pump - freq_range_THz,
+            nu_pump + freq_range_THz,
+            colors="gray",
+            linewidth=2,
+        )
+        ax1.vlines(
+            nu_anti,
+            -0.1,
+            0.15,
+            colors="#3b82f6",
+            linewidth=3,
+            label=f"AS ({C_MS/nu_anti*1e12:.0f} nm)",
+        )
+        ax1.vlines(
+            nu_pump,
+            -0.1,
+            0.15,
+            colors="#ef4444",
+            linewidth=3,
+            label=f"Pump ({pump_wl.as_nm:.0f} nm)",
+        )
+        ax1.vlines(
+            nu_stokes,
+            -0.1,
+            0.15,
+            colors="#22c55e",
+            linewidth=3,
+            label=f"S ({C_MS/nu_stokes*1e12:.0f} nm)",
+        )
         ax1.set_xlabel("Frequency (THz)", fontsize=11)
         ax1.set_title("Frequency Axis (equidistant)", fontsize=11)
         ax1.set_yticks([])
@@ -2242,12 +2953,25 @@ class PumpWavelengthExplorer:
         anti = self.pump_to_anti_stokes(pump_wl).as_nm
 
         ax2.hlines(0, anti - 50, stokes + 50, colors="gray", linewidth=2)
-        ax2.vlines(anti, -0.1, 0.15, colors="#3b82f6", linewidth=3,
-                   label=f"AS ({anti:.0f} nm)")
-        ax2.vlines(wl_pump, -0.1, 0.15, colors="#ef4444", linewidth=3,
-                   label=f"Pump ({wl_pump:.0f} nm)")
-        ax2.vlines(stokes, -0.1, 0.15, colors="#22c55e", linewidth=3,
-                   label=f"S ({stokes:.0f} nm)")
+        ax2.vlines(
+            anti, -0.1, 0.15, colors="#3b82f6", linewidth=3, label=f"AS ({anti:.0f} nm)"
+        )
+        ax2.vlines(
+            wl_pump,
+            -0.1,
+            0.15,
+            colors="#ef4444",
+            linewidth=3,
+            label=f"Pump ({wl_pump:.0f} nm)",
+        )
+        ax2.vlines(
+            stokes,
+            -0.1,
+            0.15,
+            colors="#22c55e",
+            linewidth=3,
+            label=f"S ({stokes:.0f} nm)",
+        )
         ax2.set_xlabel("Wavelength (nm)", fontsize=11)
         ax2.set_title("Wavelength Axis (unequal spacing!)", fontsize=11)
         ax2.set_yticks([])
@@ -2260,7 +2984,10 @@ class PumpWavelengthExplorer:
         return fig
 
     def _plot_vs_pump_matplotlib(
-        self, pump_range_um: tuple[float, float], n_points: int, figsize: tuple[float, float] | None,
+        self,
+        pump_range_um: tuple[float, float],
+        n_points: int,
+        figsize: tuple[float, float] | None,
     ):
         """Sweep pump wavelength: Stokes/Anti-Stokes vs pump."""
         import matplotlib.pyplot as plt
@@ -2276,23 +3003,38 @@ class PumpWavelengthExplorer:
 
         fig, ax = plt.subplots(figsize=figsize or (10, 6))
 
-        ax.plot(pump_wls_um, stokes_wls_um, color="#22c55e", linewidth=2,
-                label="Stokes")
-        ax.plot(pump_wls_um, pump_wls_um, color="#ef4444", linewidth=1.5,
-                linestyle="--", label="Pump = Stokes (identity)")
-        ax.plot(pump_wls_um, anti_wls_um, color="#3b82f6", linewidth=2,
-                label="Anti-Stokes")
+        ax.plot(
+            pump_wls_um, stokes_wls_um, color="#22c55e", linewidth=2, label="Stokes"
+        )
+        ax.plot(
+            pump_wls_um,
+            pump_wls_um,
+            color="#ef4444",
+            linewidth=1.5,
+            linestyle="--",
+            label="Pump = Stokes (identity)",
+        )
+        ax.plot(
+            pump_wls_um, anti_wls_um, color="#3b82f6", linewidth=2, label="Anti-Stokes"
+        )
 
         # Shade the Raman shift regions
-        ax.fill_between(pump_wls_um, pump_wls_um, stokes_wls_um,
-                        alpha=0.15, color="#22c55e", label="Stokes shift")
+        ax.fill_between(
+            pump_wls_um,
+            pump_wls_um,
+            stokes_wls_um,
+            alpha=0.15,
+            color="#22c55e",
+            label="Stokes shift",
+        )
 
         ax.set_xlabel("Pump Wavelength (μm)", fontsize=12)
         ax.set_ylabel("Signal Wavelength (μm)", fontsize=12)
         ax.set_title(
             f"Stokes/Anti-Stokes vs Pump: {self.spec.name}  "
             f"(Δν̃ = {self.spec.raman_shift_cm:.0f} cm⁻¹)",
-            fontsize=13, fontweight="bold",
+            fontsize=13,
+            fontweight="bold",
         )
         ax.grid(True, alpha=0.3)
         ax.legend(fontsize=10)
@@ -2304,7 +3046,10 @@ class PumpWavelengthExplorer:
     # ── Plotly implementations ──
 
     def _plot_freq_plotly(
-        self, pump_wl: Wavelength, freq_range_THz: float, figsize: tuple[float, float] | None,
+        self,
+        pump_wl: Wavelength,
+        freq_range_THz: float,
+        figsize: tuple[float, float] | None,
     ):
         """Frequency axis plot (plotly)."""
         import plotly.graph_objects as go
@@ -2316,16 +3061,33 @@ class PumpWavelengthExplorer:
         fig = go.Figure()
 
         # Use add_shape for the axis line (xrange not supported)
-        fig.add_shape(type="line", x0=nu_pump - freq_range_THz,
-                      x1=nu_pump + freq_range_THz, y0=0, y1=0,
-                      line=dict(color="gray", width=3))
+        fig.add_shape(
+            type="line",
+            x0=nu_pump - freq_range_THz,
+            x1=nu_pump + freq_range_THz,
+            y0=0,
+            y1=0,
+            line=dict(color="gray", width=3),
+        )
 
-        fig.add_vline(x=nu_anti, y1=0.15, line=dict(color="#3b82f6", width=3),
-                      annotation_text=f"AS ({C_MS/nu_anti*1e12:.0f} nm)")
-        fig.add_vline(x=nu_pump, y1=0.15, line=dict(color="#ef4444", width=3),
-                      annotation_text=f"Pump ({pump_wl.as_nm:.0f} nm)")
-        fig.add_vline(x=nu_stokes, y1=0.15, line=dict(color="#22c55e", width=3),
-                      annotation_text=f"S ({C_MS/nu_stokes*1e12:.0f} nm)")
+        fig.add_vline(
+            x=nu_anti,
+            y1=0.15,
+            line=dict(color="#3b82f6", width=3),
+            annotation_text=f"AS ({C_MS/nu_anti*1e12:.0f} nm)",
+        )
+        fig.add_vline(
+            x=nu_pump,
+            y1=0.15,
+            line=dict(color="#ef4444", width=3),
+            annotation_text=f"Pump ({pump_wl.as_nm:.0f} nm)",
+        )
+        fig.add_vline(
+            x=nu_stokes,
+            y1=0.15,
+            line=dict(color="#22c55e", width=3),
+            annotation_text=f"S ({C_MS/nu_stokes*1e12:.0f} nm)",
+        )
 
         fig.update_layout(
             title=f"Frequency Axis: {self.spec.name} (Δν = {self.spec.raman_shift_THz:.2f} THz)",
@@ -2337,7 +3099,10 @@ class PumpWavelengthExplorer:
         return fig
 
     def _plot_wl_plotly(
-        self, pump_wl: Wavelength, wl_range_nm: float, figsize: tuple[float, float] | None,
+        self,
+        pump_wl: Wavelength,
+        wl_range_nm: float,
+        figsize: tuple[float, float] | None,
     ):
         """Wavelength axis plot (plotly)."""
         import plotly.graph_objects as go
@@ -2348,14 +3113,32 @@ class PumpWavelengthExplorer:
 
         fig = go.Figure()
 
-        fig.add_shape(type="line", x0=anti - 50, x1=stokes + 50,
-                      y0=0, y1=0, line=dict(color="gray", width=3))
-        fig.add_vline(x=anti, y1=0.15, line=dict(color="#3b82f6", width=3),
-                      annotation_text=f"AS ({anti:.0f} nm)")
-        fig.add_vline(x=wl_pump, y1=0.15, line=dict(color="#ef4444", width=3),
-                      annotation_text=f"Pump ({wl_pump:.0f} nm)")
-        fig.add_vline(x=stokes, y1=0.15, line=dict(color="#22c55e", width=3),
-                      annotation_text=f"S ({stokes:.0f} nm)")
+        fig.add_shape(
+            type="line",
+            x0=anti - 50,
+            x1=stokes + 50,
+            y0=0,
+            y1=0,
+            line=dict(color="gray", width=3),
+        )
+        fig.add_vline(
+            x=anti,
+            y1=0.15,
+            line=dict(color="#3b82f6", width=3),
+            annotation_text=f"AS ({anti:.0f} nm)",
+        )
+        fig.add_vline(
+            x=wl_pump,
+            y1=0.15,
+            line=dict(color="#ef4444", width=3),
+            annotation_text=f"Pump ({wl_pump:.0f} nm)",
+        )
+        fig.add_vline(
+            x=stokes,
+            y1=0.15,
+            line=dict(color="#22c55e", width=3),
+            annotation_text=f"S ({stokes:.0f} nm)",
+        )
 
         fig.update_layout(
             title=f"Wavelength Axis: {self.spec.name} (Pump = {wl_pump:.0f} nm)",
@@ -2367,15 +3150,19 @@ class PumpWavelengthExplorer:
         return fig
 
     def _plot_both_plotly(
-        self, pump_wl: Wavelength, freq_range_THz: float,
-        wl_range_nm: float, figsize: tuple[float, float] | None,
+        self,
+        pump_wl: Wavelength,
+        freq_range_THz: float,
+        wl_range_nm: float,
+        figsize: tuple[float, float] | None,
     ):
         """Side-by-side frequency and wavelength axis (plotly)."""
         import plotly.graph_objects as go
         from plotly.subplots import make_subplots
 
         fig = make_subplots(
-            rows=1, cols=2,
+            rows=1,
+            cols=2,
             subplot_titles=(
                 f"Frequency Axis: {self.spec.name}",
                 f"Wavelength Axis: {self.spec.name}",
@@ -2387,29 +3174,59 @@ class PumpWavelengthExplorer:
         nu_stokes = nu_pump - self.spec.raman_shift_THz
         nu_anti = nu_pump + self.spec.raman_shift_THz
 
-        fig.add_shape(type="line", x0=nu_pump - freq_range_THz,
-                      x1=nu_pump + freq_range_THz, y0=0, y1=0,
-                      line=dict(color="gray", width=2), row=1, col=1)
-        fig.add_vline(x=nu_anti, y1=0.15, line=dict(color="#3b82f6", width=3), row=1, col=1)
-        fig.add_vline(x=nu_pump, y1=0.15, line=dict(color="#ef4444", width=3), row=1, col=1)
-        fig.add_vline(x=nu_stokes, y1=0.15, line=dict(color="#22c55e", width=3), row=1, col=1)
+        fig.add_shape(
+            type="line",
+            x0=nu_pump - freq_range_THz,
+            x1=nu_pump + freq_range_THz,
+            y0=0,
+            y1=0,
+            line=dict(color="gray", width=2),
+            row=1,
+            col=1,
+        )
+        fig.add_vline(
+            x=nu_anti, y1=0.15, line=dict(color="#3b82f6", width=3), row=1, col=1
+        )
+        fig.add_vline(
+            x=nu_pump, y1=0.15, line=dict(color="#ef4444", width=3), row=1, col=1
+        )
+        fig.add_vline(
+            x=nu_stokes, y1=0.15, line=dict(color="#22c55e", width=3), row=1, col=1
+        )
 
         # Wavelength axis
         wl_pump = pump_wl.as_nm
         stokes = self.pump_to_stokes(pump_wl).as_nm
         anti = self.pump_to_anti_stokes(pump_wl).as_nm
 
-        fig.add_shape(type="line", x0=anti - 50, x1=stokes + 50,
-                      y0=0, y1=0, line=dict(color="gray", width=2), row=1, col=2)
-        fig.add_vline(x=anti, y1=0.15, line=dict(color="#3b82f6", width=3), row=1, col=2)
-        fig.add_vline(x=wl_pump, y1=0.15, line=dict(color="#ef4444", width=3), row=1, col=2)
-        fig.add_vline(x=stokes, y1=0.15, line=dict(color="#22c55e", width=3), row=1, col=2)
+        fig.add_shape(
+            type="line",
+            x0=anti - 50,
+            x1=stokes + 50,
+            y0=0,
+            y1=0,
+            line=dict(color="gray", width=2),
+            row=1,
+            col=2,
+        )
+        fig.add_vline(
+            x=anti, y1=0.15, line=dict(color="#3b82f6", width=3), row=1, col=2
+        )
+        fig.add_vline(
+            x=wl_pump, y1=0.15, line=dict(color="#ef4444", width=3), row=1, col=2
+        )
+        fig.add_vline(
+            x=stokes, y1=0.15, line=dict(color="#22c55e", width=3), row=1, col=2
+        )
 
         fig.update_layout(height=350, showlegend=False)
         return fig
 
     def _plot_vs_pump_plotly(
-        self, pump_range_um: tuple[float, float], n_points: int, figsize: tuple[float, float] | None,
+        self,
+        pump_range_um: tuple[float, float],
+        n_points: int,
+        figsize: tuple[float, float] | None,
     ):
         """Sweep pump wavelength (plotly)."""
         import plotly.graph_objects as go
@@ -2424,17 +3241,37 @@ class PumpWavelengthExplorer:
             anti_wls_um.append(self.pump_to_anti_stokes(pump).as_um)
 
         fig = go.Figure()
-        fig.add_trace(go.Scatter(x=pump_wls_um, y=stokes_wls_um, mode="lines",
-                                  name="Stokes", line=dict(color="#22c55e", width=2)))
-        fig.add_trace(go.Scatter(x=pump_wls_um, y=pump_wls_um, mode="lines",
-                                  name="Pump = Stokes (identity)",
-                                  line=dict(color="#ef4444", width=1.5, dash="dash")))
-        fig.add_trace(go.Scatter(x=pump_wls_um, y=anti_wls_um, mode="lines",
-                                  name="Anti-Stokes", line=dict(color="#3b82f6", width=2)))
+        fig.add_trace(
+            go.Scatter(
+                x=pump_wls_um,
+                y=stokes_wls_um,
+                mode="lines",
+                name="Stokes",
+                line=dict(color="#22c55e", width=2),
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=pump_wls_um,
+                y=pump_wls_um,
+                mode="lines",
+                name="Pump = Stokes (identity)",
+                line=dict(color="#ef4444", width=1.5, dash="dash"),
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=pump_wls_um,
+                y=anti_wls_um,
+                mode="lines",
+                name="Anti-Stokes",
+                line=dict(color="#3b82f6", width=2),
+            )
+        )
 
         fig.update_layout(
             title=f"Stokes/Anti-Stokes vs Pump: {self.spec.name}  "
-                  f"(Δν̃ = {self.spec.raman_shift_cm:.0f} cm⁻¹)",
+            f"(Δν̃ = {self.spec.raman_shift_cm:.0f} cm⁻¹)",
             xaxis_title="Pump Wavelength (μm)",
             yaxis_title="Signal Wavelength (μm)",
             height=500,
@@ -2571,30 +3408,46 @@ class MaterialComparison:
                 continue
 
             color = self._color_for_index(idx)
-            center = spec.raman_shift_cm
-            width = spec.raman_linewidth_cm / 2
 
-            shift = np.linspace(-shift_range_cm, shift_range_cm, n_points)
-            intensity = (width / np.pi) / ((shift - center) ** 2 + width ** 2)
-            intensity /= np.max(intensity)
+            # Use PhononResponse for multi-mode materials
+            if spec.phonon_modes:
+                pr = spec.phonon_response
+                if pr is None:
+                    continue
+                shift = np.linspace(-shift_range_cm, shift_range_cm, n_points)
+                intensity = pr.frequency_domain(shift)
+                ax.plot(
+                    shift,
+                    intensity,
+                    linewidth=2,
+                    color=color,
+                    label=f"{spec.name} ({len(spec.phonon_modes)} modes)",
+                )
+            else:
+                center = spec.raman_shift_cm
+                width = spec.raman_linewidth_cm / 2
 
-            ax.plot(shift, intensity, linewidth=2, color=color, label=spec.name)
+                shift = np.linspace(-shift_range_cm, shift_range_cm, n_points)
+                intensity = (width / np.pi) / ((shift - center) ** 2 + width**2)
+                intensity /= np.max(intensity)
+
+                ax.plot(shift, intensity, linewidth=2, color=color, label=spec.name)
+
             name_labels.append(spec.name)
 
         ax.set_xlabel("Raman shift (cm⁻¹)", fontsize=12)
         ax.set_ylabel("Intensity (arb.)", fontsize=12)
         ax.set_title(
             f"Raman Spectra Comparison: {', '.join(name_labels)}",
-            fontsize=13, fontweight="bold",
+            fontsize=13,
+            fontweight="bold",
         )
         ax.legend(fontsize=10)
         ax.grid(True, alpha=0.3)
         plt.tight_layout()
         return fig
 
-    def _plot_spectra_plotly(
-        self, shift_range_cm: float, n_points: int
-    ):
+    def _plot_spectra_plotly(self, shift_range_cm: float, n_points: int):
         """Plotly spectra overlay."""
         import plotly.graph_objects as go
 
@@ -2606,17 +3459,33 @@ class MaterialComparison:
                 continue
 
             color = self._color_for_index(idx)
-            center = spec.raman_shift_cm
-            width = spec.raman_linewidth_cm / 2
 
-            shift = np.linspace(-shift_range_cm, shift_range_cm, n_points)
-            intensity = (width / np.pi) / ((shift - center) ** 2 + width ** 2)
-            intensity /= np.max(intensity)
+            # Use PhononResponse for multi-mode materials
+            if spec.phonon_modes:
+                pr = spec.phonon_response
+                if pr is None:
+                    continue
+                shift = np.linspace(-shift_range_cm, shift_range_cm, n_points)
+                intensity = pr.frequency_domain(shift)
+                label = f"{spec.name} ({len(spec.phonon_modes)} modes)"
+            else:
+                center = spec.raman_shift_cm
+                width = spec.raman_linewidth_cm / 2
 
-            fig.add_trace(go.Scatter(
-                x=shift, y=intensity, mode="lines", name=spec.name,
-                line=dict(color=color, width=2),
-            ))
+                shift = np.linspace(-shift_range_cm, shift_range_cm, n_points)
+                intensity = (width / np.pi) / ((shift - center) ** 2 + width**2)
+                intensity /= np.max(intensity)
+                label = spec.name
+
+            fig.add_trace(
+                go.Scatter(
+                    x=shift,
+                    y=intensity,
+                    mode="lines",
+                    name=label,
+                    line=dict(color=color, width=2),
+                )
+            )
             name_labels.append(spec.name)
 
         fig.update_layout(
@@ -2671,13 +3540,14 @@ class MaterialComparison:
     def _compute_h_R(spec: "RamanSpec", t: np.ndarray) -> np.ndarray:
         """Compute delayed Raman response fR·h_R(t) for a single material.
 
-        Implements the Agrawal model: h_R(t) = (τ₁² + ατ₂²)/τ₂³ · exp(-t²/2τ₂²) · sin(2πν_R·t)
-        for t ≥ 0, zero otherwise.
+        Standard Agrawal exponential-damped form:
+        h_R(t) = (τ₁² + τ₂²)/(τ₁·τ₂²) · exp(-t/τ₂) · sin(t/τ₁)   for t ≥ 0
+        h_R(t) = 0                                                  for t < 0
 
         Parameters
         ----------
         spec : RamanSpec
-            Material with raman_shift_Hz, linewidth_Hz, fR, alpha.
+            Material with raman_shift_Hz, linewidth_Hz, fR.
         t : np.ndarray
             Time array.
 
@@ -2685,14 +3555,14 @@ class MaterialComparison:
         -------
         np.ndarray — delayed response fR·h_R(t).
         """
-        tau1 = 1.0 / spec.raman_shift_Hz
+        tau1 = 1.0 / (2 * np.pi * spec.raman_shift_Hz)
         tau2 = 1.0 / (np.pi * spec.linewidth_Hz) if spec.linewidth_Hz > 0 else 1e-12
-        prefactor = (tau1 ** 2 + spec.alpha * tau2 ** 2) / tau2 ** 3
-        gaussian = np.exp(-t ** 2 / (2 * tau2 ** 2))
-        oscillation = np.sin(2 * np.pi * spec.raman_shift_Hz * t)
+        prefactor = (tau1**2 + tau2**2) / (tau1 * tau2**2)
+        exponential = np.exp(-t / tau2)
+        oscillation = np.sin(t / tau1)
         mask = t >= 0
         delayed = np.zeros_like(t)
-        raw_h = prefactor * gaussian[mask] * oscillation[mask]
+        raw_h = prefactor * exponential[mask] * oscillation[mask]
         integral = np.trapezoid(raw_h, t[mask])
         if integral > 0:
             raw_h /= integral
@@ -2739,7 +3609,8 @@ class MaterialComparison:
         ax.set_ylabel("Delayed response h_R(t) (normalized)", fontsize=11)
         ax.set_title(
             f"Raman Response Overlay: {', '.join(name_labels)}",
-            fontsize=13, fontweight="bold",
+            fontsize=13,
+            fontweight="bold",
         )
         ax.grid(True, alpha=0.3)
         ax.axhline(0, color="k", linewidth=0.5)
@@ -2776,10 +3647,15 @@ class MaterialComparison:
             if peak > 0:
                 delayed /= peak
 
-            fig.add_trace(go.Scatter(
-                x=t * 1e12, y=delayed, mode="lines", name=spec.name,
-                line=dict(color=color, width=1.5),
-            ))
+            fig.add_trace(
+                go.Scatter(
+                    x=t * 1e12,
+                    y=delayed,
+                    mode="lines",
+                    name=spec.name,
+                    line=dict(color=color, width=1.5),
+                )
+            )
             name_labels.append(spec.name)
 
         fig.update_layout(
@@ -2859,14 +3735,14 @@ class MaterialComparison:
             # Annotate resonance frequency
             if np.max(np.abs(H_imag)) > 0:
                 f_res = w_THz[np.argmax(np.abs(H_imag))]
-                ax.axvline(f_res, color=color, linestyle=":", alpha=0.5,
-                           linewidth=0.8)
+                ax.axvline(f_res, color=color, linestyle=":", alpha=0.5, linewidth=0.8)
 
         ax.set_xlabel("Angular frequency (THz)", fontsize=12)
         ax.set_ylabel("Im(H(Ω))", fontsize=12)
         ax.set_title(
             f"Raman Gain Spectrum: {', '.join(name_labels)}",
-            fontsize=13, fontweight="bold",
+            fontsize=13,
+            fontweight="bold",
         )
         ax.grid(True, alpha=0.3)
         ax.axhline(0, color="k", linewidth=0.5)
@@ -2897,10 +3773,15 @@ class MaterialComparison:
             H_imag = np.imag(H)
 
             w_THz = grid.w / (2 * np.pi * 1e12)
-            fig.add_trace(go.Scatter(
-                x=w_THz, y=H_imag, mode="lines", name=spec.name,
-                line=dict(color=color, width=1.5),
-            ))
+            fig.add_trace(
+                go.Scatter(
+                    x=w_THz,
+                    y=H_imag,
+                    mode="lines",
+                    name=spec.name,
+                    line=dict(color=color, width=1.5),
+                )
+            )
             name_labels.append(spec.name)
 
         fig.update_layout(
@@ -2935,7 +3816,9 @@ class MaterialComparison:
             n2_str = f"{spec.n2:.2e}" if spec.n2 else "N/A"
             fr_str = f"{spec.fR:.2f}" if spec.fR is not None else "N/A"
             shift_str = f"{spec.raman_shift_cm:.0f}" if spec.raman_shift_cm else "N/A"
-            fwhm_str = f"{spec.raman_linewidth_cm:.0f}" if spec.raman_linewidth_cm else "N/A"
+            fwhm_str = (
+                f"{spec.raman_linewidth_cm:.0f}" if spec.raman_linewidth_cm else "N/A"
+            )
 
             if spec.raman_shift_Hz > 0:
                 tau1_fs = (1.0 / spec.raman_shift_Hz) * 1e15
@@ -3012,7 +3895,8 @@ class MaterialComparison:
         fig, axes = plt.subplots(3, 1, figsize=figsize or (12, 12), sharex=False)
         fig.suptitle(
             f"Raman Material Comparison: {', '.join(s.name for s in self.materials)}",
-            fontsize=14, fontweight="bold",
+            fontsize=14,
+            fontweight="bold",
         )
 
         name_labels = [s.name for s in self.materials if s.raman_shift_cm]
@@ -3029,7 +3913,7 @@ class MaterialComparison:
             center = spec.raman_shift_cm
             width = spec.raman_linewidth_cm / 2
             shift = np.linspace(-200, 200, 1000)
-            intensity = (width / np.pi) / ((shift - center) ** 2 + width ** 2)
+            intensity = (width / np.pi) / ((shift - center) ** 2 + width**2)
             intensity /= np.max(intensity)
             axes[0].plot(shift, intensity, linewidth=2, color=color, label=spec.name)
         axes[0].legend(fontsize=9)
@@ -3047,13 +3931,17 @@ class MaterialComparison:
             peak = np.max(np.abs(delayed))
             if peak > 0:
                 delayed /= peak
-            axes[1].plot(grid.t * 1e12, delayed, linewidth=1.5, color=color, label=spec.name)
+            axes[1].plot(
+                grid.t * 1e12, delayed, linewidth=1.5, color=color, label=spec.name
+            )
         axes[1].grid(True, alpha=0.3)
         axes[1].axhline(0, color="k", linewidth=0.5)
         axes[1].legend(fontsize=9)
 
         # Panel 3: Frequency
-        axes[2].set_title("Raman Gain Spectrum Im(H(Ω))", fontsize=12, fontweight="bold")
+        axes[2].set_title(
+            "Raman Gain Spectrum Im(H(Ω))", fontsize=12, fontweight="bold"
+        )
         axes[2].set_xlabel("Angular frequency (THz)", fontsize=10)
         axes[2].set_ylabel("Im(H(Ω))", fontsize=10)
         for idx, spec in enumerate(self.materials):
@@ -3078,8 +3966,13 @@ class MaterialComparison:
         from plotly.subplots import make_subplots
 
         fig = make_subplots(
-            rows=3, cols=1,
-            subplot_titles=("Raman Spectra", "Time-Domain Response h_R(t)", "Raman Gain Spectrum Im(H(Ω))"),
+            rows=3,
+            cols=1,
+            subplot_titles=(
+                "Raman Spectra",
+                "Time-Domain Response h_R(t)",
+                "Raman Gain Spectrum Im(H(Ω))",
+            ),
             shared_xaxes=False,
             vertical_spacing=0.1,
         )
@@ -3094,12 +3987,19 @@ class MaterialComparison:
             center = spec.raman_shift_cm
             width = spec.raman_linewidth_cm / 2
             shift = np.linspace(-200, 200, 1000)
-            intensity = (width / np.pi) / ((shift - center) ** 2 + width ** 2)
+            intensity = (width / np.pi) / ((shift - center) ** 2 + width**2)
             intensity /= np.max(intensity)
-            fig.add_trace(go.Scatter(
-                x=shift, y=intensity, mode="lines", name=spec.name,
-                line=dict(color=color, width=2),
-            ), row=1, col=1)
+            fig.add_trace(
+                go.Scatter(
+                    x=shift,
+                    y=intensity,
+                    mode="lines",
+                    name=spec.name,
+                    line=dict(color=color, width=2),
+                ),
+                row=1,
+                col=1,
+            )
 
         # Panel 2: Response
         for idx, spec in enumerate(self.materials):
@@ -3110,10 +4010,17 @@ class MaterialComparison:
             peak = np.max(np.abs(delayed))
             if peak > 0:
                 delayed /= peak
-            fig.add_trace(go.Scatter(
-                x=grid.t * 1e12, y=delayed, mode="lines", name=spec.name,
-                line=dict(color=color, width=1.5),
-            ), row=2, col=1)
+            fig.add_trace(
+                go.Scatter(
+                    x=grid.t * 1e12,
+                    y=delayed,
+                    mode="lines",
+                    name=spec.name,
+                    line=dict(color=color, width=1.5),
+                ),
+                row=2,
+                col=1,
+            )
 
         # Panel 3: Frequency
         for idx, spec in enumerate(self.materials):
@@ -3124,10 +4031,17 @@ class MaterialComparison:
             H = grid.fft(h_R_t)
             H_imag = np.imag(H)
             w_THz = grid.w / (2 * np.pi * 1e12)
-            fig.add_trace(go.Scatter(
-                x=w_THz, y=H_imag, mode="lines", name=spec.name,
-                line=dict(color=color, width=1.5),
-            ), row=3, col=1)
+            fig.add_trace(
+                go.Scatter(
+                    x=w_THz,
+                    y=H_imag,
+                    mode="lines",
+                    name=spec.name,
+                    line=dict(color=color, width=1.5),
+                ),
+                row=3,
+                col=1,
+            )
 
         fig.update_layout(height=900, showlegend=True)
         return fig
@@ -3136,7 +4050,7 @@ class MaterialComparison:
 # ─── Dash App (Layer 7) ──────────────────────────────────────────────────────
 
 
-def app() -> "dash.Dash":
+def app() -> "dash.Dash":  # type: ignore[valid-type]
     """Interactive Dash app tying all 6 Raman layers together.
 
     Layout::
@@ -3154,7 +4068,7 @@ def app() -> "dash.Dash":
         │ τ1 slider│  │                              │    │
         │          │  └──────────────────────────────┘    │
         │ τ2 slider│                                      │
-        │          │  [Data table / summary]               │
+        │          │  [Data table / summary]              │
         │ Pump λ   │                                      │
         │ slider   │                                      │
         │          │                                      │
@@ -3175,7 +4089,16 @@ def app() -> "dash.Dash":
     """
     try:
         import dash
-        from dash import html, dcc, dash_table, Input, Output, State, callback, no_update
+        from dash import (
+            html,
+            dcc,
+            dash_table,
+            Input,
+            Output,
+            State,
+            callback,
+            no_update,
+        )
     except ImportError as exc:
         raise ImportError(
             "Dash is required for the interactive app. "
@@ -3186,100 +4109,138 @@ def app() -> "dash.Dash":
 
     # ── Build layout ──────────────────────────────────────────────────────────
 
-    sidebar = html.Div([
-        html.H4("Material", style={"marginBottom": "5px"}),
-        dcc.Dropdown(
-            id="material-selector",
-            options=[{"label": name, "value": name} for name in sorted(RAMAN_MATERIALS.keys())],
-            value="Silica",
-            clearable=False,
-        ),
-        html.Hr(),
+    sidebar = html.Div(
+        [
+            html.H4("Material", style={"marginBottom": "5px"}),
+            dcc.Dropdown(
+                id="material-selector",
+                options=[
+                    {"label": name, "value": name}
+                    for name in sorted(RAMAN_MATERIALS.keys())
+                ],
+                value="Silica",
+                clearable=False,
+            ),
+            html.Hr(),
+            html.H4("Response Parameters", style={"marginBottom": "5px"}),
+            html.Label("fR:"),
+            dcc.Slider(
+                id="fr-slider",
+                min=0.0,
+                max=1.0,
+                step=0.01,
+                value=0.18,
+                marks={0.0: "0", 0.25: "0.25", 0.5: "0.5", 0.75: "0.75", 1.0: "1.0"},
+            ),
+            html.Label("τ1 (fs):"),
+            dcc.Slider(
+                id="tau1-slider",
+                min=0.1,
+                max=50.0,
+                step=0.1,
+                marks={1: "1", 5: "5", 10: "10", 20: "20", 50: "50"},
+            ),
+            html.Label("τ2 (fs):"),
+            dcc.Slider(
+                id="tau2-slider",
+                min=0.5,
+                max=100.0,
+                step=0.5,
+                marks={1: "1", 10: "10", 25: "25", 50: "50", 100: "100"},
+            ),
+            html.Div(id="tau1-display", style={"fontSize": "11px", "color": "#666"}),
+            html.Div(id="tau2-display", style={"fontSize": "11px", "color": "#666"}),
+            html.Hr(),
+            html.H4("Pump Wavelength", style={"marginBottom": "5px"}),
+            dcc.Slider(
+                id="pump-wl-slider",
+                min=400,
+                max=2500,
+                step=10,
+                marks={
+                    500: "500nm",
+                    800: "800nm",
+                    1000: "1μm",
+                    1550: "1550nm",
+                    2000: "2μm",
+                },
+                value=800,
+            ),
+            html.Div(id="pump-wl-display", style={"fontSize": "11px", "color": "#666"}),
+            html.Hr(),
+            html.H4("Compare", style={"marginBottom": "5px"}),
+            html.Button("+ Add to Compare", id="add-to-compare-btn", n_clicks=0),
+            html.Div(id="compare-list", style={"marginTop": "8px", "fontSize": "12px"}),
+        ],
+        style={
+            "width": "280px",
+            "minWidth": "280px",
+            "padding": "15px",
+            "backgroundColor": "#f8f9fa",
+            "borderRight": "1px solid #dee2e6",
+            "overflowY": "auto",
+            "height": "100vh",
+        },
+    )
 
-        html.H4("Response Parameters", style={"marginBottom": "5px"}),
-        html.Label("fR:"),
-        dcc.Slider(
-            id="fr-slider",
-            min=0.0, max=1.0, step=0.01, value=0.18,
-            marks={0.0: "0", 0.25: "0.25", 0.5: "0.5", 0.75: "0.75", 1.0: "1.0"},
-        ),
-        html.Label("τ1 (fs):"),
-        dcc.Slider(
-            id="tau1-slider",
-            min=0.1, max=50.0, step=0.1,
-            marks={1: "1", 5: "5", 10: "10", 20: "20", 50: "50"},
-        ),
-        html.Label("τ2 (fs):"),
-        dcc.Slider(
-            id="tau2-slider",
-            min=0.5, max=100.0, step=0.5,
-            marks={1: "1", 10: "10", 25: "25", 50: "50", 100: "100"},
-        ),
-        html.Div(id="tau1-display", style={"fontSize": "11px", "color": "#666"}),
-        html.Div(id="tau2-display", style={"fontSize": "11px", "color": "#666"}),
-        html.Hr(),
+    main_content = html.Div(
+        [
+            html.H2(
+                "Photonics Helper — Raman Explorer",
+                style={"textAlign": "center", "marginBottom": "5px"},
+            ),
+            html.P(
+                "Interactive Raman scattering explorer — connect equations, intuition, and visualization",
+                style={"textAlign": "center", "color": "#666", "marginBottom": "15px"},
+            ),
+            # Layer selector tabs
+            dcc.Tabs(
+                id="layer-tabs",
+                value="layer-2-response",
+                children=[
+                    dcc.Tab(label="1 — Material", value="layer-1-material"),
+                    dcc.Tab(label="2 — Response", value="layer-2-response"),
+                    dcc.Tab(label="3 — Frequency", value="layer-3-frequency"),
+                    dcc.Tab(label="4 — Pulse", value="layer-4-pulse"),
+                    dcc.Tab(label="5 — Pump λ", value="layer-5-pump"),
+                    dcc.Tab(label="6 — Compare", value="layer-6-compare"),
+                ],
+            ),
+            html.Br(),
+            # Output area
+            html.Div(id="output-container", style={"margin": "10px 0"}),
+            # Summary / data table
+            html.Div(
+                id="summary-container",
+                style={
+                    "padding": "10px",
+                    "backgroundColor": "#fff",
+                    "border": "1px solid #dee2e6",
+                    "borderRadius": "4px",
+                    "fontFamily": "monospace",
+                    "whiteSpace": "pre-wrap",
+                },
+            ),
+        ],
+        style={"flex": "1", "padding": "10px", "overflowY": "auto"},
+    )
 
-        html.H4("Pump Wavelength", style={"marginBottom": "5px"}),
-        dcc.Slider(
-            id="pump-wl-slider",
-            min=400, max=2500, step=10,
-            marks={500: "500nm", 800: "800nm", 1000: "1μm", 1550: "1550nm", 2000: "2μm"},
-            value=800,
-        ),
-        html.Div(id="pump-wl-display", style={"fontSize": "11px", "color": "#666"}),
-        html.Hr(),
-
-        html.H4("Compare", style={"marginBottom": "5px"}),
-        html.Button("+ Add to Compare", id="add-to-compare-btn", n_clicks=0),
-        html.Div(id="compare-list", style={"marginTop": "8px", "fontSize": "12px"}),
-    ], style={
-        "width": "280px",
-        "minWidth": "280px",
-        "padding": "15px",
-        "backgroundColor": "#f8f9fa",
-        "borderRight": "1px solid #dee2e6",
-        "overflowY": "auto",
-        "height": "100vh",
-    })
-
-    main_content = html.Div([
-        html.H2("Photonics Helper — Raman Explorer", style={"textAlign": "center", "marginBottom": "5px"}),
-        html.P("Interactive Raman scattering explorer — connect equations, intuition, and visualization",
-               style={"textAlign": "center", "color": "#666", "marginBottom": "15px"}),
-
-        # Layer selector tabs
-        dcc.Tabs(id="layer-tabs", value="layer-2-response", children=[
-            dcc.Tab(label="1 — Material", value="layer-1-material"),
-            dcc.Tab(label="2 — Response", value="layer-2-response"),
-            dcc.Tab(label="3 — Frequency", value="layer-3-frequency"),
-            dcc.Tab(label="4 — Pulse", value="layer-4-pulse"),
-            dcc.Tab(label="5 — Pump λ", value="layer-5-pump"),
-            dcc.Tab(label="6 — Compare", value="layer-6-compare"),
-        ]),
-
-        html.Br(),
-
-        # Output area
-        html.Div(id="output-container", style={"margin": "10px 0"}),
-
-        # Summary / data table
-        html.Div(id="summary-container", style={
-            "padding": "10px", "backgroundColor": "#fff", "border": "1px solid #dee2e6",
-            "borderRadius": "4px", "fontFamily": "monospace", "whiteSpace": "pre-wrap",
-        }),
-    ], style={"flex": "1", "padding": "10px", "overflowY": "auto"})
-
-    dash_app.layout = html.Div([
-        html.Div([sidebar, main_content], style={
-            "display": "flex", "minHeight": "100vh",
-        }),
-    ])
+    dash_app.layout = html.Div(
+        [
+            html.Div(
+                [sidebar, main_content],
+                style={
+                    "display": "flex",
+                    "minHeight": "100vh",
+                },
+            ),
+        ]
+    )
 
     # ── Callbacks ─────────────────────────────────────────────────────────────
 
     @dash_app.callback(
-        [Output("tau1-display", "children"),
-         Output("tau2-display", "children")],
+        [Output("tau1-display", "children"), Output("tau2-display", "children")],
         Input("material-selector", "value"),
         Input("fr-slider", "value"),
         Input("tau1-slider", "value"),
@@ -3327,6 +4288,7 @@ def app() -> "dash.Dash":
     def _update_output(layer, material_name, fr_val, tau1_val, tau2_val, pump_wl_nm):
         """Main callback: render the active layer visualization."""
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
         from io import BytesIO
@@ -3336,7 +4298,9 @@ def app() -> "dash.Dash":
         pump_wl = Wavelength(pump_wl_nm, "nm")
 
         # Build RamanResponse with user overrides
-        resp = RamanResponse(spec=spec, fR=fr_val, tau1=tau1_val * 1e-15, tau2=tau2_val * 1e-15)
+        resp = RamanResponse(
+            spec=spec, fR=fr_val, tau1=tau1_val * 1e-15, tau2=tau2_val * 1e-15
+        )
 
         summary_lines = [spec.summary()]
         img_html = ""
@@ -3348,7 +4312,11 @@ def app() -> "dash.Dash":
             shift = np.linspace(-200, 800, 1000)
             center = spec.raman_shift_cm or 0
             width = (spec.raman_linewidth_cm or 1) / 2
-            intensity = (width / np.pi) / ((shift - center) ** 2 + width ** 2) if width > 0 else np.zeros_like(shift)
+            intensity = (
+                (width / np.pi) / ((shift - center) ** 2 + width**2)
+                if width > 0
+                else np.zeros_like(shift)
+            )
             intensity /= np.max(intensity) if np.max(intensity) > 0 else 1
             ax1.plot(shift, intensity, linewidth=2, color="#00d4ff")
             ax1.axvline(x=center, color="r", linestyle="--", alpha=0.5)
@@ -3365,33 +4333,46 @@ def app() -> "dash.Dash":
             ax2.set_title("Phonon Modes")
             plt.tight_layout()
             summary_lines.append(f"Q factor: {spec.quality_factor:.1f}")
-            summary_lines.append(f"Stokes @ {pump_wl_nm}nm: {spec.stokes_wavelength(pump_wl).as_nm:.1f} nm")
-            summary_lines.append(f"Anti-Stokes @ {pump_wl_nm}nm: {spec.anti_stokes_wavelength(pump_wl).as_nm:.1f} nm")
+            summary_lines.append(
+                f"Stokes @ {pump_wl_nm}nm: {spec.stokes_wavelength(pump_wl).as_nm:.1f} nm"
+            )
+            summary_lines.append(
+                f"Anti-Stokes @ {pump_wl_nm}nm: {spec.anti_stokes_wavelength(pump_wl).as_nm:.1f} nm"
+            )
 
         elif layer == "layer-2-response":
             # Layer 2: Time-domain response
             fig = resp.plot_components(backend="matplotlib", figsize=(12, 8))
             summary_lines.append(f"fR = {fr_val:.2f}")
             summary_lines.append(f"τ1 = {tau1_val:.2f} fs, τ2 = {tau2_val:.2f} fs")
-            summary_lines.append(f"h_R(0) = {resp.delayed_response(np.array([0.0]))[0]:.2e}")
+            summary_lines.append(
+                f"h_R(0) = {resp.delayed_response(np.array([0.0]))[0]:.2e}"
+            )
 
         elif layer == "layer-3-frequency":
             # Layer 3: Frequency response
             freq_resp = RamanFrequencyResponse(response=resp)
             fig = freq_resp.plot_all(backend="matplotlib", figsize=(12, 9))
-            summary_lines.append(f"Resonance: {freq_resp.resonance_frequency_THz:.2f} THz")
+            summary_lines.append(
+                f"Resonance: {freq_resp.resonance_frequency_THz:.2f} THz"
+            )
             summary_lines.append(f"FWHM: {freq_resp.resonance_FWHM_THz:.2f} THz")
             summary_lines.append(f"Q = {freq_resp.quality_factor:.1f}")
 
         elif layer == "layer-4-pulse":
             # Layer 4: Pulse interaction
             from photonics_helper.pulse import Wave, Envelope
+
             grid = TemporalGrid(N=2**14, Tmax=20e-12)
-            envelope = Envelope(shape="gaussian", peak_amplitude=1.0, pulse_width=100e-15)
+            envelope = Envelope(
+                shape="gaussian", peak_amplitude=1.0, pulse_width=100e-15
+            )
             wave = Wave(grid=grid, envelope=envelope, central_wavelength=pump_wl)
             interaction = RamanPulseInteraction(pulse=wave, response=resp, spec=spec)
             fig = interaction.plot_interaction(backend="matplotlib", figsize=(12, 10))
-            summary_lines.append(f"P_NL max: {np.max(np.abs(interaction.nonlinear_polarization)):.2e}")
+            summary_lines.append(
+                f"P_NL max: {np.max(np.abs(interaction.nonlinear_polarization)):.2e}"
+            )
             summary_lines.append(f"n₂ = {spec.n2 or 'N/A'} m²/W")
 
         elif layer == "layer-5-pump":
@@ -3401,28 +4382,44 @@ def app() -> "dash.Dash":
             stokes = explorer.pump_to_stokes(pump_wl)
             anti = explorer.pump_to_anti_stokes(pump_wl)
             summary_lines.append(f"Pump: {pump_wl_nm} nm")
-            summary_lines.append(f"Stokes: {stokes.as_nm:.1f} nm (Δλ = {stokes.as_nm - pump_wl_nm:.1f} nm)")
-            summary_lines.append(f"Anti-Stokes: {anti.as_nm:.1f} nm (Δλ = {pump_wl_nm - anti.as_nm:.1f} nm)")
+            summary_lines.append(
+                f"Stokes: {stokes.as_nm:.1f} nm (Δλ = {stokes.as_nm - pump_wl_nm:.1f} nm)"
+            )
+            summary_lines.append(
+                f"Anti-Stokes: {anti.as_nm:.1f} nm (Δλ = {pump_wl_nm - anti.as_nm:.1f} nm)"
+            )
 
         elif layer == "layer-6-compare":
             # Layer 6: Material comparison (current + Silica as default comparison)
-            comp = MaterialComparison(materials=[spec, RamanSpec.from_database("Silica")])
+            comp = MaterialComparison(
+                materials=[spec, RamanSpec.from_database("Silica")]
+            )
             grid = TemporalGrid(N=2**14, Tmax=10e-12)
             fig = comp.plot_all(backend="matplotlib", grid=grid, figsize=(12, 11))
             summary_lines.append(comp.comparison_table())
 
         else:
             fig, ax = plt.subplots()
-            ax.text(0.5, 0.5, "Select a layer", ha="center", va="center", transform=ax.transAxes)
+            ax.text(
+                0.5,
+                0.5,
+                "Select a layer",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
+            )
             summary_lines.append("Select a layer tab to view visualization.")
 
         # Convert figure to base64 image
         buf = BytesIO()
-        fig.savefig(buf, format="png", dpi=120, bbox_inches="tight")
-        plt.close(fig)
+        if hasattr(fig, "savefig"):
+            fig.savefig(buf, format="png", dpi=120, bbox_inches="tight")  # type: ignore[union-attr]
+            plt.close(fig)  # type: ignore[arg-type]
         buf.seek(0)
         img_base64 = base64.b64encode(buf.read()).decode()
-        img_html = html.Img(src=f"data:image/png;base64,{img_base64}", style={"width": "100%"})
+        img_html = html.Img(
+            src=f"data:image/png;base64,{img_base64}", style={"width": "100%"}
+        )
 
         return img_html, "\n".join(summary_lines)
 

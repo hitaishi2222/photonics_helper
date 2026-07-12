@@ -3,7 +3,7 @@
 import warnings
 from .base import PI, WavelengthArray
 
-from typing import List, Self, Tuple
+from typing import Any, List, Self, Tuple
 from numpy.typing import NDArray
 from functools import cached_property
 from pydantic.dataclasses import dataclass
@@ -33,8 +33,8 @@ class RefractiveIndex:
     _n: NDArray = Field(alias="n")
     _k: NDArray = Field(alias="k")
     _wl: WavelengthArray = Field(alias="wl")
-    _n_spline: object = None
-    _k_spline: object = None
+    _n_spline: Any = None
+    _k_spline: Any = None
 
     @model_validator(mode="after")
     def _setup_splines(self) -> "RefractiveIndex":
@@ -127,7 +127,7 @@ class RefractiveIndex:
             B_arr = np.array(B)
             terms = A_arr * wl_arr[:, None] ** 2 / (wl_arr[:, None] ** 2 - B_arr)
             n = np.sqrt(A0 + terms.sum(axis=1))
-            k = np.zeros(len(wls.value))
+            k = np.zeros(len(wls.value))  # type: ignore[arg-type]
 
         return cls(n=np.array(n), k=k, wl=wls)
 
@@ -152,7 +152,7 @@ class RefractiveIndex:
                 for i in range(len(A)):
                     sum += A[i] / (wl**2 - B[i] ** 2)
                 n.append(np.sqrt(A0 + sum))
-            k = np.zeros(len(wls.value))
+            k = np.zeros(len(wls.value))  # type: ignore[arg-type]
 
         return cls(n=np.array(n), k=k, wl=wls)
 
