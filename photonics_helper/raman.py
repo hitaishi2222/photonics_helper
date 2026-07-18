@@ -34,6 +34,8 @@ from .base import (
     WavelengthArray,
     FrequencyArray,
     AngularFrequencyArray,
+    Energy,
+    Time,
 )
 from .pulse import TemporalGrid, Wave
 
@@ -476,17 +478,34 @@ class RamanSpec:
     raman_shift_cm: float | None = None
     raman_linewidth_cm: float | None = None
     crystal: str | None = None
-    bandgap_eV: float | None = None
+    bandgap_eV: Energy | None = None
     n2: float | None = None
     fR: float | None = None
     gain_coeff: float | None = None
-    tau1: float | None = None
-    tau2: float | None = None
+    tau1: Time | None = None
+    tau2: Time | None = None
     alpha: float = 0.52
     lo_phonon_cm: float | None = None
     to_phonon_cm: float | None = None
     references: str | None = None
     phonon_modes: list | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_types(cls, values) -> dict:
+        # Handle ArgsKwargs from pydantic.dataclasses
+        if hasattr(values, "kwargs"):
+            values = values.kwargs
+        if isinstance(values, dict):
+            for key, target_type, unit in [
+                ("bandgap_eV", Energy, "eV"),
+                ("tau1", Time, "s"),
+                ("tau2", Time, "s"),
+            ]:
+                v = values.get(key)
+                if v is not None and not isinstance(v, target_type):
+                    values[key] = target_type(v, unit)
+        return values
 
     @model_validator(mode="after")
     def _validate(self) -> "RamanSpec":
@@ -1534,7 +1553,7 @@ class RamanResponse:
         # Use grid.dt * 5 as the delta width — narrow enough to look like a spike
         return self.grid.dt * 5  # type: ignore
 
-    def _h_R(self, t: np.ndarray) -> np.ndarray:
+    def _h_R(self, t: NDArray) -> NDArray:
         """Raw delayed response h_R(t) (without fR scaling).
 
         Standard Agrawal exponential-damped form:
@@ -1556,7 +1575,7 @@ class RamanResponse:
             result[mask] /= integral
         return result
 
-    def instantaneous_response(self, t: np.ndarray | None = None) -> np.ndarray:
+    def instantaneous_response(self, t: NDArray | None = None) -> NDArray:
         """Electronic Kerr response: (1 - fR)·δ(t).
 
         δ(t) approximated as a narrow Gaussian: exp(-t²/(2ε²)) / (ε·√(2π)).
@@ -1567,7 +1586,7 @@ class RamanResponse:
 
         Returns
         -------
-        np.ndarray — instantaneous response values.
+        NDArray — instantaneous response values.
         """
         if t is None:
             t = self.grid.t  # type: ignore
@@ -1576,7 +1595,7 @@ class RamanResponse:
         delta = np.exp(-(t**2) / (2 * eps**2)) / (eps * np.sqrt(2 * np.pi))
         return (1.0 - self.fR) * delta  # type: ignore
 
-    def delayed_response(self, t: np.ndarray | None = None) -> np.ndarray:
+    def delayed_response(self, t: NDArray | None = None) -> NDArray:
         """Lattice oscillation: fR·h_R(t).
 
         Parameters
@@ -1585,14 +1604,14 @@ class RamanResponse:
 
         Returns
         -------
-        np.ndarray — delayed (Raman) response values.
+        NDArray — delayed (Raman) response values.
         """
         if t is None:
             t = self.grid.t  # type: ignore
         t = np.asarray(t, dtype=float)
         return self.fR * self._h_R(t)  # type: ignore
 
-    def combined_response(self, t: np.ndarray | None = None) -> np.ndarray:
+    def combined_response(self, t: NDArray | None = None) -> NDArray:
         """Total Raman response R(t) = (1-fR)δ(t) + fR·h_R(t).
 
         Parameters
@@ -1601,7 +1620,7 @@ class RamanResponse:
 
         Returns
         -------
-        np.ndarray — combined response values.
+        NDArray — combined response values.
         """
         if t is None:
             t = self.grid.t  # type: ignore
@@ -1802,7 +1821,7 @@ class RamanFrequencyResponse:
         return self
 
     @property
-    def H(self) -> np.ndarray:
+    def H(self) -> NDArray:
         """Complex frequency response H(Ω)."""
         h_R_t = (
             self.response.delayed_response(self.grid.t) / self.response.fR  # type: ignore
@@ -1812,22 +1831,22 @@ class RamanFrequencyResponse:
         return self.grid.fft(h_R_t)  # type: ignore
 
     @property
-    def H_real(self) -> np.ndarray:
+    def H_real(self) -> NDArray:
         """Real part Re(H(Ω))."""
         return np.real(self.H)
 
     @property
-    def H_imag(self) -> np.ndarray:
+    def H_imag(self) -> NDArray:
         """Imaginary part Im(H(Ω))."""
         return np.imag(self.H)
 
     @property
-    def H_magnitude(self) -> np.ndarray:
+    def H_magnitude(self) -> NDArray:
         """Magnitude |H(Ω)|."""
         return np.abs(self.H)
 
     @property
-    def H_phase(self) -> np.ndarray:
+    def H_phase(self) -> NDArray:
         """Phase ∠H(Ω)."""
         return np.angle(self.H)
 
@@ -1951,7 +1970,7 @@ class RamanFrequencyResponse:
     def _plot_dispersion_matplotlib(
         self,
         title: str,
-        data: np.ndarray,
+        data: NDArray,
         ylabel: str,
         figsize: tuple[float, float] | None,
     ):
@@ -1985,7 +2004,7 @@ class RamanFrequencyResponse:
     def _plot_dispersion_plotly(
         self,
         title: str,
-        data: np.ndarray,
+        data: NDArray,
         ylabel: str,
         figsize: tuple[float, float] | None,
     ):
@@ -2137,7 +2156,7 @@ class RamanPulseInteraction:
         return self
 
     @property
-    def nonlinear_polarization(self) -> np.ndarray:
+    def nonlinear_polarization(self) -> NDArray:
         """Nonlinear polarization P_NL(t) = n₂ · (R(t) ⊗ I(t)).
 
         Computed via FFT-based convolution using scipy.signal.fftconvolve.
@@ -2145,7 +2164,7 @@ class RamanPulseInteraction:
 
         Returns
         -------
-        np.ndarray — nonlinear polarization values.
+        NDArray — nonlinear polarization values.
         """
         from scipy.signal import fftconvolve
 
@@ -3537,7 +3556,7 @@ class MaterialComparison:
         return self._plot_response_matplotlib(grid, figsize, t_range_ps)
 
     @staticmethod
-    def _compute_h_R(spec: "RamanSpec", t: np.ndarray) -> np.ndarray:
+    def _compute_h_R(spec: "RamanSpec", t: NDArray) -> NDArray:
         """Compute delayed Raman response fR·h_R(t) for a single material.
 
         Standard Agrawal exponential-damped form:
@@ -3548,12 +3567,12 @@ class MaterialComparison:
         ----------
         spec : RamanSpec
             Material with raman_shift_Hz, linewidth_Hz, fR.
-        t : np.ndarray
+        t : NDArray
             Time array.
 
         Returns
         -------
-        np.ndarray — delayed response fR·h_R(t).
+        NDArray — delayed response fR·h_R(t).
         """
         tau1 = 1.0 / (2 * np.pi * spec.raman_shift_Hz)
         tau2 = 1.0 / (np.pi * spec.linewidth_Hz) if spec.linewidth_Hz > 0 else 1e-12
@@ -4362,10 +4381,11 @@ def app() -> "dash.Dash":  # type: ignore[valid-type]
         elif layer == "layer-4-pulse":
             # Layer 4: Pulse interaction
             from photonics_helper.pulse import Wave, Envelope
+            from photonics_helper.base import Time
 
             grid = TemporalGrid(N=2**14, Tmax=20e-12)
             envelope = Envelope(
-                shape="gaussian", peak_amplitude=1.0, pulse_width=100e-15
+                shape="gaussian", peak_amplitude=1.0, pulse_width=Time(100, "fs")
             )
             wave = Wave(grid=grid, envelope=envelope, central_wavelength=pump_wl)
             interaction = RamanPulseInteraction(pulse=wave, response=resp, spec=spec)

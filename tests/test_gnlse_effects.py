@@ -5,16 +5,17 @@ import pytest
 
 from photonics_helper.gnlse import FiberProfile, kerr_step, raman_step, self_steepening_step, tpa_step
 from photonics_helper.pulse import TemporalGrid
+from photonics_helper.base import Area, Length, Time
 
 
 @pytest.fixture
 def fiber():
-    return FiberProfile(n2=1e-19, alpha=1e-5, A_eff=5e-11, length=1.0)
+    return FiberProfile(n2=1e-19, alpha=1e-5, A_eff=Area(5e-11, "m^2"), length=Length(1.0, "m"))
 
 
 @pytest.fixture
 def grid():
-    return TemporalGrid(N=256, Tmax=10e-12)
+    return TemporalGrid(N=256, Tmax=Time(10e-12, "s"))
 
 
 @pytest.fixture
@@ -30,7 +31,7 @@ def test_kerr_step_phase_shift(fiber, grid, A):
     assert np.allclose(np.abs(A_new), np.abs(A))
     # Phase should be non-zero for non-zero intensity
     phase_shift = np.angle(A_new / A)
-    expected = fiber.n2 * 2e15 * np.abs(A) ** 2 * 1e-3 / (299792458.0 * fiber.A_eff)
+    expected = fiber.n2 * 2e15 * np.abs(A) ** 2 * 1e-3 / (299792458.0 * fiber.A_eff.as_m2)
     assert np.allclose(phase_shift, expected, rtol=1e-10)
 
 
@@ -67,7 +68,7 @@ def test_self_steepening_step_amplitude_modulation(fiber, grid, A):
     dz = 1.0
     A_new = self_steepening_step(A, fiber, grid, dz=dz, omega0=omega0, include_self_steepening=True)
 
-    gamma = fiber.n2 * omega0 / (299792458.0 * fiber.A_eff)
+    gamma = fiber.n2 * omega0 / (299792458.0 * fiber.A_eff.as_m2)
     P_NL = np.abs(A) ** 2
     omega_ratio = grid.w / omega0
     factor = 1j * gamma * (1 - omega_ratio)

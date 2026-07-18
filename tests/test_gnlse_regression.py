@@ -12,21 +12,21 @@ import pytest
 
 from photonics_helper.gnlse import FiberProfile, GNLSESolver, SplitStepEngine
 from photonics_helper.pulse import Wave, Envelope, TemporalGrid
-from photonics_helper.base import Wavelength
+from photonics_helper.base import Wavelength, Time, Length, Area
 
 
 @pytest.fixture
 def linear_setup():
     """Setup for loss/no-drift tests: pure dispersion, no nonlinear effects."""
-    grid = TemporalGrid(N=512, Tmax=40e-12)
-    env = Envelope(shape="gaussian", peak_amplitude=1.0, pulse_width=2e-12)
+    grid = TemporalGrid(N=512, Tmax=Time(40e-12, "s"))
+    env = Envelope(shape="gaussian", peak_amplitude=1.0, pulse_width=Time(2, "ps"))
     pulse = Wave(
         grid=grid,
         envelope=env,
         central_wavelength=Wavelength(1550, "nm"),
     )
     # Low loss for measurable but small attenuation
-    fiber = FiberProfile(n2=0.0, alpha=0.1, A_eff=1e-10, length=0.1)
+    fiber = FiberProfile(n2=0.0, alpha=0.1, A_eff=Area(1e-10, "m^2"), length=Length(0.1, "m"))
     # Zero dispersion for pure loss test
     betas = np.array([])
     return pulse, fiber, betas
@@ -35,14 +35,14 @@ def linear_setup():
 @pytest.fixture
 def dispersion_setup():
     """Setup for no-drift test: dispersion only, no loss, no nonlinearity."""
-    grid = TemporalGrid(N=512, Tmax=40e-12)
-    env = Envelope(shape="gaussian", peak_amplitude=1.0, pulse_width=2e-12)
+    grid = TemporalGrid(N=512, Tmax=Time(40e-12, "s"))
+    env = Envelope(shape="gaussian", peak_amplitude=1.0, pulse_width=Time(2, "ps"))
     pulse = Wave(
         grid=grid,
         envelope=env,
         central_wavelength=Wavelength(1550, "nm"),
     )
-    fiber = FiberProfile(n2=0.0, alpha=0.0, A_eff=1e-10, length=0.01)
+    fiber = FiberProfile(n2=0.0, alpha=0.0, A_eff=Area(1e-10, "m^2"), length=Length(0.01, "m"))
     # Some dispersion but no loss
     betas = np.array([0.01])  # 10 ps²/km (= 0.01 ps²/m)
     return pulse, fiber, betas
@@ -82,7 +82,7 @@ class TestLossApplication:
         final_energy = np.sum(np.abs(solver.evolution[-1].envelope_field) ** 2) * pulse.grid.dt
 
         # Energy decays as exp(-α·L) (intensity, not field)
-        expected_ratio = np.exp(-alpha * length)
+        expected_ratio = np.exp(-alpha * length.as_m)
         actual_ratio = final_energy / initial_energy
 
         assert np.isclose(actual_ratio, expected_ratio, rtol=0.05)
@@ -131,8 +131,8 @@ class TestRamanFullResponse:
         """Raman convolution produces phase shift with full response."""
         from photonics_helper.raman import RamanResponse, RamanSpec
 
-        grid = TemporalGrid(N=256, Tmax=20e-12)
-        env = Envelope(shape="gaussian", peak_amplitude=10.0, pulse_width=1e-12)
+        grid = TemporalGrid(N=256, Tmax=Time(20e-12, "s"))
+        env = Envelope(shape="gaussian", peak_amplitude=10.0, pulse_width=Time(1, "ps"))
         pulse = Wave(
             grid=grid,
             envelope=env,
@@ -151,8 +151,8 @@ class TestRamanFullResponse:
         fiber = FiberProfile(
             n2=2.6e-20,
             alpha=0.0,
-            A_eff=5e-11,
-            length=0.01,
+            A_eff=Area(5e-11, "m^2"),
+            length=Length(0.01, "m"),
             raman_response=raman,
         )
         betas = np.array([])
@@ -176,8 +176,8 @@ class TestRamanFullResponse:
         from photonics_helper.raman import RamanResponse, RamanSpec
         from photonics_helper.gnlse import SplitStepEngine
 
-        grid = TemporalGrid(N=512, Tmax=40e-12)
-        env = Envelope(shape="gaussian", peak_amplitude=100.0, pulse_width=2e-12)
+        grid = TemporalGrid(N=512, Tmax=Time(40e-12, "s"))
+        env = Envelope(shape="gaussian", peak_amplitude=100.0, pulse_width=Time(2, "ps"))
         pulse = Wave(
             grid=grid,
             envelope=env,
@@ -193,11 +193,11 @@ class TestRamanFullResponse:
         raman = RamanResponse(spec=spec, grid=grid)
 
         fiber_raman = FiberProfile(
-            n2=2.6e-20, alpha=0.0, A_eff=5e-11, length=0.1,
+            n2=2.6e-20, alpha=0.0, A_eff=Area(5e-11, "m^2"), length=Length(0.1, "m"),
             raman_response=raman,
         )
         fiber_kerr = FiberProfile(
-            n2=2.6e-20, alpha=0.0, A_eff=5e-11, length=0.1,
+            n2=2.6e-20, alpha=0.0, A_eff=Area(5e-11, "m^2"), length=Length(0.1, "m"),
         )
 
         betas = np.array([])

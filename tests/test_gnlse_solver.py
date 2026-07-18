@@ -5,20 +5,20 @@ import pytest
 
 from photonics_helper.gnlse import FiberProfile, GNLSESolver
 from photonics_helper.pulse import Wave, Envelope, TemporalGrid
-from photonics_helper.base import Wavelength
+from photonics_helper.base import Wavelength, Time, Length, Area
 
 
 @pytest.fixture
 def setup():
     """Create a basic pulse, fiber, and solver for testing."""
-    grid = TemporalGrid(N=256, Tmax=20e-12)
-    env = Envelope(shape="gaussian", peak_amplitude=1.0, pulse_width=1e-12)
+    grid = TemporalGrid(N=256, Tmax=Time(20e-12, "s"))
+    env = Envelope(shape="gaussian", peak_amplitude=1.0, pulse_width=Time(1, "ps"))
     pulse = Wave(
         grid=grid,
         envelope=env,
         central_wavelength=Wavelength(1550, "nm"),
     )
-    fiber = FiberProfile(n2=1e-19, alpha=1e-5, A_eff=5e-11, length=1e-3)
+    fiber = FiberProfile(n2=1e-19, alpha=1e-5, A_eff=Area(5e-11, "m^2"), length=Length(1e-3, "m"))
     betas = np.array([0.02])  # normal dispersion, 20 ps²/km
     return pulse, fiber, betas
 

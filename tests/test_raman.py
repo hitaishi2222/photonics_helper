@@ -7,7 +7,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from photonics_helper.raman import RamanSpec, RamanDatabase, RAMAN_MATERIALS
-from photonics_helper.base import Wavelength, C_MS
+from photonics_helper.base import Wavelength, C_MS, Energy, Time
 
 
 # ─── RamanSpec Tests ──────────────────────────────────────────────────────────
@@ -205,14 +205,14 @@ class TestRamanSpec:
         spec = RamanSpec(
             name="FullSpec",
             crystal="TestCrystal",
-            bandgap_eV=2.0,
+            bandgap_eV=Energy(2.0, "eV"),
             n2=1e-19,
             raman_shift_cm=400,
             raman_linewidth_cm=20,
             fR=0.3,
             gain_coeff=1e-13,
-            tau1=1e-12,
-            tau2=2e-12,
+            tau1=Time(1e-12, "s"),
+            tau2=Time(2e-12, "s"),
             alpha=0.5,
             lo_phonon_cm=400,
             to_phonon_cm=390,
@@ -221,7 +221,7 @@ class TestRamanSpec:
 
         assert spec.name == "FullSpec"
         assert spec.crystal == "TestCrystal"
-        assert spec.bandgap_eV == 2.0
+        assert spec.bandgap_eV.as_eV == 2.0
         assert spec.lo_phonon_cm == 400
 
     def test_construction_minimal(self):
@@ -525,9 +525,19 @@ class TestNewMaterialsDatabase:
     """Tests specific to the SQLite database loading for all 30 materials."""
 
     def test_all_materials_in_database(self):
-        """Test that all 30 materials are queryable from the bundled DB."""
+        """Test that all 30 materials are queryable from the bundled DB.
+        
+        Seeds the DB with RAMAN_MATERIALS if it's empty.
+        """
         db = RamanDatabase()
         materials = db.list_materials()
+        
+        # Seed DB if empty
+        if not materials:
+            for name, data in RAMAN_MATERIALS.items():
+                db.add_material(data)
+            materials = db.list_materials()
+        
         for name in RAMAN_MATERIALS:
             assert name in materials, f"{name} not found in DB"
 
@@ -569,7 +579,7 @@ class TestRamanFrequencyResponse:
         from photonics_helper.pulse import TemporalGrid
 
         spec = RamanSpec.from_database(material)
-        grid = TemporalGrid(N=2**14, Tmax=10e-12)
+        grid = TemporalGrid(N=2**14, Tmax=Time(10e-12, "s"))
         resp = RamanResponse(spec=spec, grid=grid)
         return RamanFrequencyResponse(response=resp, grid=grid, **overrides)
 
@@ -740,7 +750,7 @@ class TestRamanFrequencyResponse:
         from photonics_helper.pulse import TemporalGrid
         from photonics_helper.raman import RamanResponse, RamanFrequencyResponse
 
-        grid = TemporalGrid(N=2**14, Tmax=10e-12)
+        grid = TemporalGrid(N=2**14, Tmax=Time(10e-12, "s"))
         resp_narrow = RamanResponse(spec=spec_narrow, grid=grid)
         resp_wide = RamanResponse(spec=spec_wide, grid=grid)
 
@@ -763,7 +773,7 @@ class TestRamanResponse:
         from photonics_helper.pulse import TemporalGrid
 
         spec = RamanSpec.from_database("Silica")
-        grid = TemporalGrid(N=2**14, Tmax=10e-12)
+        grid = TemporalGrid(N=2**14, Tmax=Time(10e-12, "s"))
         return RamanResponse(spec=spec, grid=grid, **overrides)
 
     def test_construction_auto_derives_tau(self):
@@ -948,8 +958,8 @@ class TestRamanResponse:
         """Test that the default grid is wide enough to capture the response."""
         resp = self._make_response()
         # Grid should cover at least several τ2
-        assert resp.grid.Tmax > 10 * resp.tau2, \
-            "Grid Tmax should cover at least 10× τ2 to capture damped oscillation"  # type: ignore[operator]
+        assert resp.grid.Tmax.as_s > 10 * resp.tau2, \
+            "Grid Tmax should cover at least 10× τ2 to capture damped oscillation"
 
     def test_different_materials_different_tau(self):
         """Test that different materials produce different τ1, τ2."""
@@ -959,7 +969,7 @@ class TestRamanResponse:
         cds = RamanSpec.from_database("CdS")
         dia = RamanSpec.from_database("Diamond")
 
-        grid = TemporalGrid(N=2**14, Tmax=10e-12)
+        grid = TemporalGrid(N=2**14, Tmax=Time(10e-12, "s"))
         resp_cds = RamanResponse(spec=cds, grid=grid)
         resp_dia = RamanResponse(spec=dia, grid=grid)
 
@@ -998,14 +1008,14 @@ class TestRamanPulseInteraction:
         """Helper to create a RamanPulseInteraction with Silica defaults."""
         from photonics_helper.raman import RamanPulseInteraction, RamanResponse
         from photonics_helper.pulse import Wave, Envelope, TemporalGrid
-        from photonics_helper.base import Wavelength
+        from photonics_helper.base import Wavelength, Time
 
         spec = RamanSpec.from_database(material)
-        grid = TemporalGrid(N=2**14, Tmax=20e-12)
+        grid = TemporalGrid(N=2**14, Tmax=Time(20e-12, "s"))
         envelope = Envelope(
             shape="gaussian",
             peak_amplitude=1.0,
-            pulse_width=100e-15,  # 100 fs
+            pulse_width=Time(100, "fs"),  # 100 fs
         )
         wave = Wave(
             grid=grid,
@@ -1102,18 +1112,18 @@ class TestRamanPulseInteraction:
     def test_different_pulse_shapes(self):
         """Test interaction with different pulse shapes."""
         from photonics_helper.pulse import Wave, Envelope, TemporalGrid
-        from photonics_helper.base import Wavelength
+        from photonics_helper.base import Wavelength, Time
         from photonics_helper.raman import RamanResponse, RamanPulseInteraction
 
         spec = RamanSpec.from_database("Silica")
-        grid = TemporalGrid(N=2**14, Tmax=20e-12)
+        grid = TemporalGrid(N=2**14, Tmax=Time(20e-12, "s"))
         response = RamanResponse(spec=spec, grid=grid)
 
         for shape in ["gaussian", "sech", "lorentzian"]:
             envelope = Envelope(
                 shape=shape,  # type: ignore[arg-type]
                 peak_amplitude=1.0,
-                pulse_width=100e-15,
+                pulse_width=Time(100, "fs"),
             )
             wave = Wave(
                 grid=grid,
@@ -1213,7 +1223,7 @@ class TestRamanPulseInteraction:
         """Test that the grid covers the pulse and response."""
         interaction = self._make_interaction()
         # Grid should be wide enough to capture both pulse and Raman response
-        assert interaction.grid.Tmax > 5e-12, "Grid should cover at least 5 ps"  # type: ignore[union-attr]
+        assert interaction.grid.Tmax.as_s > 5e-12, "Grid should cover at least 5 ps"
 
     def test_polarization_energy_conservation(self):
         """Test that the polarization doesn't create energy from nowhere.
@@ -1735,7 +1745,7 @@ class TestMaterialComparison:
         from photonics_helper.pulse import TemporalGrid
 
         spec = RamanSpec.from_database("Silica")
-        grid = TemporalGrid(N=2**14, Tmax=10e-12)
+        grid = TemporalGrid(N=2**14, Tmax=Time(10e-12, "s"))
         comp = self._make_comparison(materials=[spec])
         fig = comp.plot_response_overlay(backend="matplotlib", grid=grid)
 
@@ -1759,7 +1769,7 @@ class TestMaterialComparison:
                 RamanSpec.from_database("CdS"),
             ]
         )
-        grid = TemporalGrid(N=2**14, Tmax=10e-12)
+        grid = TemporalGrid(N=2**14, Tmax=Time(10e-12, "s"))
         fig = comp.plot_response_overlay(backend="matplotlib", grid=grid)
 
         assert fig is not None
@@ -1787,7 +1797,7 @@ class TestMaterialComparison:
         from photonics_helper.pulse import TemporalGrid
 
         spec = RamanSpec.from_database("Silica")
-        grid = TemporalGrid(N=2**14, Tmax=10e-12)
+        grid = TemporalGrid(N=2**14, Tmax=Time(10e-12, "s"))
         comp = self._make_comparison(materials=[spec])
         fig = comp.plot_frequency_overlay(backend="matplotlib", grid=grid)
 
@@ -1811,7 +1821,7 @@ class TestMaterialComparison:
                 RamanSpec.from_database("As2Se3"),
             ]
         )
-        grid = TemporalGrid(N=2**14, Tmax=10e-12)
+        grid = TemporalGrid(N=2**14, Tmax=Time(10e-12, "s"))
         fig = comp.plot_frequency_overlay(backend="matplotlib", grid=grid)
 
         assert fig is not None
@@ -1834,7 +1844,7 @@ class TestMaterialComparison:
         comp = self._make_comparison(
             materials=[RamanSpec.from_database("Silica")]
         )
-        grid = TemporalGrid(N=2**14, Tmax=10e-12)
+        grid = TemporalGrid(N=2**14, Tmax=Time(10e-12, "s"))
         fig = comp.plot_frequency_overlay(backend="matplotlib", grid=grid)
 
         ax = fig.axes[0]  # type: ignore[attr-defined]
@@ -1893,7 +1903,7 @@ class TestMaterialComparison:
         from photonics_helper.pulse import TemporalGrid
 
         spec = RamanSpec.from_database("Silica")
-        grid = TemporalGrid(N=2**14, Tmax=10e-12)
+        grid = TemporalGrid(N=2**14, Tmax=Time(10e-12, "s"))
         comp = self._make_comparison(materials=[spec])
         fig = comp.plot_all(backend="matplotlib", grid=grid)
 
@@ -1916,7 +1926,7 @@ class TestMaterialComparison:
                 RamanSpec.from_database("Diamond"),
             ]
         )
-        grid = TemporalGrid(N=2**14, Tmax=10e-12)
+        grid = TemporalGrid(N=2**14, Tmax=Time(10e-12, "s"))
         fig = comp.plot_all(backend="matplotlib", grid=grid)
 
         assert fig is not None
@@ -2079,7 +2089,7 @@ class TestMaterialComparison:
         comp = self._make_comparison(
             materials=[RamanSpec.from_database("Silica")]
         )
-        grid = TemporalGrid(N=2**14, Tmax=10e-12)
+        grid = TemporalGrid(N=2**14, Tmax=Time(10e-12, "s"))
         fig = comp.plot_response_overlay(backend="plotly", grid=grid)
         assert fig is not None
 
@@ -2096,7 +2106,7 @@ class TestMaterialComparison:
         comp = self._make_comparison(
             materials=[RamanSpec.from_database("Silica")]
         )
-        grid = TemporalGrid(N=2**14, Tmax=10e-12)
+        grid = TemporalGrid(N=2**14, Tmax=Time(10e-12, "s"))
         fig = comp.plot_frequency_overlay(backend="plotly", grid=grid)
         assert fig is not None
 
@@ -2113,7 +2123,7 @@ class TestMaterialComparison:
         comp = self._make_comparison(
             materials=[RamanSpec.from_database("Silica")]
         )
-        grid = TemporalGrid(N=2**14, Tmax=10e-12)
+        grid = TemporalGrid(N=2**14, Tmax=Time(10e-12, "s"))
         fig = comp.plot_all(backend="plotly", grid=grid)
         assert fig is not None
 

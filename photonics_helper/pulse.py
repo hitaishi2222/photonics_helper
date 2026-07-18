@@ -1,11 +1,12 @@
 from __future__ import annotations
 from pydantic.dataclasses import dataclass
 from math import sqrt, log, acosh, pi
-from typing import Any, Callable, Dict, Literal, Self, Optional
+from typing import Any, Callable, Dict, Literal, Self
 from functools import cached_property
 import logging
 from matplotlib import gridspec
-from photonics_helper.base import Wavelength, Frequency
+from numpy.typing import NDArray
+from photonics_helper.base import Wavelength, Frequency, Time, Length
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -38,47 +39,39 @@ class Envelope:
         "custom",
     ]
     peak_amplitude: float
-    pulse_width: float  # T0
+    pulse_width: Time  # T0
     chirp: float = 0.0
 
     # Shape-specific extra parameters
     super_gaussian_order: int = 2  # for "super-gaussian"
-    beam_waist: Optional[float] = None  # for "gauss-hermite"
+    beam_waist: Time | None = None  # for "gauss-hermite"
     hg_mode: int = 0  # Hermite polynomial mode index m
-    func: Optional[Callable] = None  # for "custom": func(t, T0, A0)
-    phase_func: Optional[Callable] = None  # for "custom": phase_func(t, T0, chirp)
-    _is_pulse_train: bool = False
-    _n_pulses: int = 1
-    _repetition_rate: Optional[Frequency] = None
+    func: Callable | None = None  # for "custom": func(t, T0, A0)
+    phase_func: Callable | None = None  # for "custom": phase_func(t, T0, chirp)
 
     @property
-    def fwhm(self) -> float:
+    def fwhm(self) -> Time:
+        T0 = self.pulse_width.as_s
         if self.shape == "super-gaussian":
-            return (
-                2.0
-                * self.pulse_width
-                * (log(2) / 2) ** (1.0 / (2 * self.super_gaussian_order))
-            )
+            val = 2.0 * T0 * (log(2) / 2) ** (1.0 / (2 * self.super_gaussian_order))
         elif self.shape == "triangular":
-            return 2.0 * self.pulse_width * (1.0 - 1.0 / sqrt(2))
+            val = 2.0 * T0 * (1.0 - 1.0 / sqrt(2))
         elif self.shape == "cosine":
-            return self.pulse_width
+            val = T0
         elif self.shape == "exponential":
-            return 2.0 * self.pulse_width * log(2)
+            val = 2.0 * T0 * log(2)
         elif self.shape == "airy":
             from scipy.optimize import brentq
 
-            # Ai(0) ≈ 0.35503, half-max of intensity = sqrt(0.5) * Ai(0) ≈ 0.25104
             target = 0.35503 * sqrt(0.5)
             f = lambda x: airy(-x)[0] - target
             root = brentq(f, 0.1, 2.0)  # type: ignore[operator]
-            return 2.0 * root * self.pulse_width  # type: ignore[operator]
-
+            val = 2.0 * root * T0  # type: ignore[operator]
         elif self.shape in SHAPE_FACTORS:
-            return SHAPE_FACTORS[self.shape] * self.pulse_width
+            val = SHAPE_FACTORS[self.shape] * T0
         else:
-            # custom, parabolic, gauss-hermite — return pulse_width as a lower-bound
-            return self.pulse_width
+            val = T0
+        return Time(val, "s")
 
     @classmethod
     def from_fwhm(
@@ -95,11 +88,14 @@ class Envelope:
             "airy",
         ],
         peak_amplitude: float,
-        fwhm: float,
+        fwhm: Time,
     ) -> Self:
         """Construct an Envelope from a desired full-width at half-maximum."""
+        f = fwhm.as_s
         if shape == "super-gaussian":
-            T0 = fwhm / (2.0 * (log(2) / 2) ** (1.0 / (2 * 2)))  # default order=2
+            T0 = Time(
+                f / (2.0 * (log(2) / 2) ** (1.0 / (2 * 2))), "s"
+            )  # default order=2
             return cls(
                 shape="super-gaussian",
                 peak_amplitude=peak_amplitude,
@@ -107,15 +103,15 @@ class Envelope:
                 super_gaussian_order=2,
             )
         elif shape == "triangular":
-            T0 = fwhm / (2.0 * (1.0 - 1.0 / sqrt(2)))
+            T0 = Time(f / (2.0 * (1.0 - 1.0 / sqrt(2))), "s")
             return cls(
                 shape="triangular", peak_amplitude=peak_amplitude, pulse_width=T0
             )
         elif shape == "cosine":
-            T0 = fwhm  # FWHM = T0
+            T0 = Time(f, "s")  # FWHM = T0
             return cls(shape="cosine", peak_amplitude=peak_amplitude, pulse_width=T0)
         elif shape == "exponential":
-            T0 = fwhm / (2.0 * log(2))
+            T0 = Time(f / (2.0 * log(2)), "s")
             return cls(
                 shape="exponential", peak_amplitude=peak_amplitude, pulse_width=T0
             )
@@ -123,22 +119,22 @@ class Envelope:
             from scipy.optimize import brentq
 
             target = 0.35503 * sqrt(0.5)
-            f = lambda x: airy(-x)[0] - target
-            root = brentq(f, 0.1, 2.0)  # type: ignore[operator]
-            T0 = fwhm / (2.0 * root)  # type: ignore[operator]
+            ff = lambda x: airy(-x)[0] - target
+            root = brentq(ff, 0.1, 2.0)  # type: ignore[operator]
+            T0 = Time(f / (2.0 * root), "s")  # type: ignore[operator]
 
             return cls(shape="airy", peak_amplitude=peak_amplitude, pulse_width=T0)
         else:
-            T0 = fwhm / SHAPE_FACTORS[shape]
+            T0 = Time(f / SHAPE_FACTORS[shape], "s")
             return cls(
                 shape=shape,
                 peak_amplitude=peak_amplitude,
                 pulse_width=T0,
             )
 
-    def field(self, t: np.ndarray) -> np.ndarray:
+    def field(self, t: NDArray) -> NDArray:
         """Returns complex envelope A(t)."""
-        T0 = self.pulse_width
+        T0 = self.pulse_width.as_s
         A0 = self.peak_amplitude
 
         match self.shape:
@@ -165,7 +161,7 @@ class Envelope:
             case "exponential":
                 amp = A0 * np.exp(-abs(t) / T0)
             case "gauss-hermite":
-                w = self.beam_waist if self.beam_waist is not None else T0
+                w = self.beam_waist.as_s if self.beam_waist is not None else T0
                 x = sqrt(2) * t / w
                 H_m = hermite_poly(self.hg_mode)
                 amp = A0 * H_m(x) * np.exp(-(x**2) / 2)
@@ -194,15 +190,15 @@ class Envelope:
 
         return amp * np.exp(1j * phase)
 
-    def intensity(self, t: np.ndarray) -> np.ndarray:
+    def intensity(self, t: NDArray) -> NDArray:
         A = self.field(t)
         return np.abs(A) ** 2
 
     def _make_grid(self, N: int = 2**12) -> TemporalGrid:
         """Create a TemporalGrid sized for this envelope."""
         # Window must cover ~10x pulse width for tails to decay
-        Tmax = 10.0 * self.pulse_width
-        return TemporalGrid(N=N, Tmax=Tmax)
+        Tmax = 10.0 * self.pulse_width.as_s
+        return TemporalGrid(N=N, Tmax=Time(Tmax, "s"))
 
     def visualize_2d(
         self,
@@ -238,7 +234,7 @@ class Envelope:
         phase = np.unwrap(np.angle(A))
 
         if title is None:
-            title = f"{self.shape.title()} Pulse Envelope (T₀={self.pulse_width*1e15:.1f} fs)"
+            title = f"{self.shape.title()} Pulse Envelope (T₀={self.pulse_width.as_s*1e15:.1f} fs)"
 
         if theme not in ("light", "dark"):
             raise ValueError("theme must be 'light' or 'dark'")
@@ -317,7 +313,7 @@ class Envelope:
             col=1,
         )
         if show_fwhm:
-            fwhm_val = self.fwhm
+            fwhm_val = self.fwhm.as_s
             fig.add_vrect(
                 x0=-fwhm_val / 2,
                 x1=fwhm_val / 2,
@@ -333,7 +329,7 @@ class Envelope:
             )
             # Pulse width markers at ±T₀
             fig.add_vline(
-                x=-self.pulse_width,
+                x=-self.pulse_width.as_s,
                 line_dash="dot",
                 line_color="#fbbf24",
                 opacity=0.7,
@@ -341,7 +337,7 @@ class Envelope:
                 col=1,
             )
             fig.add_vline(
-                x=self.pulse_width,
+                x=self.pulse_width.as_s,
                 line_dash="dot",
                 line_color="#fbbf24",
                 opacity=0.7,
@@ -349,7 +345,7 @@ class Envelope:
                 col=1,
             )
             fig.add_annotation(
-                x=self.pulse_width,
+                x=self.pulse_width.as_s,
                 y=0,
                 text="T₀",
                 showarrow=True,
@@ -364,7 +360,7 @@ class Envelope:
                 col=1,
             )
             fig.add_annotation(
-                x=-self.pulse_width,
+                x=-self.pulse_width.as_s,
                 y=0,
                 text="T₀",
                 showarrow=True,
@@ -381,8 +377,8 @@ class Envelope:
         # Parameters text box
         params_text = (
             f"Shape: {self.shape}<br>"
-            f"T₀ = {self.pulse_width:.3g} s ({self.pulse_width*1e15:.1f} fs)<br>"
-            f"FWHM = {self.fwhm:.3g} s ({self.fwhm*1e15:.1f} fs)<br>"
+            f"T₀ = {self.pulse_width.as_s:.3g} s ({self.pulse_width.as_s*1e15:.1f} fs)<br>"
+            f"FWHM = {self.fwhm.as_s:.3g} s ({self.fwhm.as_s*1e15:.1f} fs)<br>"
             f"Chirp = {self.chirp:.2f}"
         )
         fig.add_annotation(
@@ -484,21 +480,21 @@ class Envelope:
         ax_t.set_ylabel("Intensity")
         ax_t.set_title("Temporal Profile")
         if show_fwhm:
-            fwhm_val = self.fwhm
+            fwhm_val = self.fwhm.as_s
             ax_t.axvspan(-fwhm_val / 2, fwhm_val / 2, alpha=0.1, color="orange")
             ax_t.axhline(
                 y=np.max(intensity_t) / 2, color="orange", linestyle="--", alpha=0.5
             )
             # Pulse width markers at ±T₀
             ax_t.axvline(
-                x=-self.pulse_width,
+                x=-self.pulse_width.as_s,
                 color="#fbbf24",
                 linewidth=1.0,
                 linestyle="-.",
                 alpha=0.7,
             )
             ax_t.axvline(
-                x=self.pulse_width,
+                x=self.pulse_width.as_s,
                 color="#fbbf24",
                 linewidth=1.0,
                 linestyle="-.",
@@ -506,8 +502,8 @@ class Envelope:
             )
             ax_t.annotate(
                 "T₀",
-                xy=(self.pulse_width, 0),
-                xytext=(self.pulse_width, 0.15),
+                xy=(self.pulse_width.as_s, 0),
+                xytext=(self.pulse_width.as_s, 0.15),
                 color="#fbbf24",
                 fontsize=10,
                 fontweight="bold",
@@ -516,8 +512,8 @@ class Envelope:
             )
             ax_t.annotate(
                 "T₀",
-                xy=(-self.pulse_width, 0),
-                xytext=(-self.pulse_width, 0.15),
+                xy=(-self.pulse_width.as_s, 0),
+                xytext=(-self.pulse_width.as_s, 0.15),
                 color="#fbbf24",
                 fontsize=10,
                 fontweight="bold",
@@ -526,8 +522,8 @@ class Envelope:
         # Parameters text box
         params_text = (
             f"Shape: {self.shape}\n"
-            f"T₀ = {self.pulse_width:.3g} s ({self.pulse_width*1e15:.1f} fs)\n"
-            f"FWHM = {self.fwhm:.3g} s ({self.fwhm*1e15:.1f} fs)\n"
+            f"T₀ = {self.pulse_width.as_s:.3g} s ({self.pulse_width.as_s*1e15:.1f} fs)\n"
+            f"FWHM = {self.fwhm.as_s:.3g} s ({self.fwhm.as_s*1e15:.1f} fs)\n"
             f"Chirp = {self.chirp:.2f}"
         )
         ax_t.text(
@@ -593,7 +589,7 @@ class Envelope:
 
         # Compute spectrogram using scipy
         # Window size ~1/10 of pulse width for good time-frequency resolution
-        win_size = max(32, int(self.pulse_width / grid.dt / 10))
+        win_size = max(32, int(self.pulse_width.as_s / grid.dt / 10))
         win_size = min(win_size, N // 4)
         win_size = win_size if win_size % 2 == 0 else win_size + 1
 
@@ -641,7 +637,7 @@ class Envelope:
     def from_parabolic_asymptotic(
         cls,
         peak_amplitude: float,
-        pulse_width: float,
+        pulse_width: Time,
         gain: float,
         length: float,
         chirp: float = 0.0,
@@ -675,16 +671,16 @@ class Envelope:
 @dataclass
 class TemporalGrid:
     N: int
-    Tmax: float  # total time window
+    Tmax: Time  # total time window
 
     @cached_property
     def dt(self):
-        return self.Tmax / self.N
+        return self.Tmax.as_s / self.N
 
     @cached_property
     def t(self):
         dt = self.dt
-        return np.linspace(-self.Tmax / 2, self.Tmax / 2 - dt, self.N)
+        return np.linspace(-self.Tmax.as_s / 2, self.Tmax.as_s / 2 - dt, self.N)
 
     @cached_property
     def w(self):
@@ -714,7 +710,7 @@ class TemporalGrid:
         cls,
         repetition_rate: Frequency,
         n_pulses: int,
-        pulse_width: float,
+        pulse_width: Time,
         N: int = 2**12,
     ) -> Self:
         """Compute the right Tmax to cover a pulse train.
@@ -728,7 +724,7 @@ class TemporalGrid:
         """
         spacing = 1.0 / repetition_rate.as_Hz
         # Window must cover all pulses + padding for tails
-        Tmax = n_pulses * spacing + 10 * pulse_width
+        Tmax = Time(n_pulses * spacing + 10 * pulse_width.as_s, "s")
         return cls(N=N, Tmax=Tmax)
 
 
@@ -819,9 +815,6 @@ class Wave:
             func=envelope.func,
             phase_func=envelope.phase_func,
         )
-        train_env._is_pulse_train = True
-        train_env._n_pulses = n_pulses
-        train_env._repetition_rate = repetition_rate
 
         wave = cls(
             grid=grid,
@@ -841,7 +834,7 @@ class Wave:
         return self.envelope.field(self.grid.t)
 
     @cached_property
-    def spectrum(self) -> np.ndarray:
+    def spectrum(self) -> NDArray:
         return self.grid.fft(self.envelope_field)
 
     def time_bandwidth_product(self) -> float:
@@ -950,7 +943,7 @@ class Wave:
         )
 
         # FWHM marker
-        fwhm_val = self.envelope.fwhm * t_scale
+        fwhm_val = self.envelope.fwhm.as_s * t_scale
         ax_t.axvspan(-fwhm_val / 2, fwhm_val / 2, alpha=0.08, color=COLORS["fwhm"])
         ax_t.axhline(0.5, color=COLORS["fwhm"], linewidth=0.8, linestyle=":")
         ax_t.annotate(
@@ -1056,7 +1049,7 @@ class Wave:
             row += 1
 
             # Use a window ~1/5 of pulse width for STFT
-            win_size = max(16, int(self.envelope.pulse_width / self.grid.dt / 5))
+            win_size = max(16, int(self.envelope.pulse_width.as_s / self.grid.dt / 5))
             win_size = min(win_size, self.grid.N // 4)
             # Make even
             win_size = win_size if win_size % 2 == 0 else win_size + 1
@@ -1071,7 +1064,7 @@ class Wave:
                 noverlap=win_size * 3 // 4,
                 mode="complex",
             )
-            t_sg_scaled = (t_sg - self.grid.Tmax / 2) * t_scale
+            t_sg_scaled = (t_sg - self.grid.Tmax.as_s / 2) * t_scale
             f_sg_scaled = np.fft.fftshift(f_sg) * 2 * np.pi * w_scale
 
             im = ax_sg.pcolormesh(
@@ -1122,18 +1115,18 @@ class FROGTrace:
     field : reconstructed field E(t) (set after retrieval).
     """
 
-    trace: np.ndarray
-    unnormalized_trace: np.ndarray
-    omega: np.ndarray
-    tau: np.ndarray
+    trace: NDArray
+    unnormalized_trace: NDArray
+    omega: NDArray
+    tau: NDArray
     dt: float
     dw: float
-    field: Optional[np.ndarray] = None
+    field: NDArray | None = None
 
     @classmethod
     def from_field(
         cls,
-        E_field: np.ndarray,
+        E_field: NDArray,
         dt: float,
         normalize: bool = True,
     ) -> "FROGTrace":
@@ -1188,7 +1181,7 @@ class FROGTrace:
 
     def visualize(
         self,
-        retrieved: Optional["FROGTrace"] = None,
+        retrieved: "FROGTrace | None" = None,
         figsize: tuple[float, float] | None = None,
         save_path: str | None = None,
     ):
@@ -1266,7 +1259,7 @@ class FROGTrace:
 
 
 def generate_trace(
-    E_field: np.ndarray,
+    E_field: NDArray,
     dt: float,
     normalize: bool = True,
 ) -> FROGTrace:
@@ -1337,7 +1330,11 @@ def retrieve(
     dw = trace.dw
 
     # Use unnormalized trace if available (preserves amplitude info)
-    measured_trace = trace.unnormalized_trace if trace.unnormalized_trace is not None else trace.trace
+    measured_trace = (
+        trace.unnormalized_trace
+        if trace.unnormalized_trace is not None
+        else trace.trace
+    )
 
     # --- Step 1: SVD initialization ---
     U, S, Vt = np.linalg.svd(measured_trace, full_matrices=False)
@@ -1363,16 +1360,16 @@ def retrieve(
             G[i] = E * E_shifted
 
         # b. FFT along time axis
-        G_hat = np.fft.fftshift(
-            np.fft.fft(np.fft.ifftshift(G, axes=1), axis=1), axes=1
-        )
+        G_hat = np.fft.fftshift(np.fft.fft(np.fft.ifftshift(G, axes=1), axis=1), axes=1)
 
         # c. Replace magnitude with sqrt(I_meas), keep phase
         measured_mag = np.sqrt(measured_trace)
         G_new = measured_mag * np.exp(1j * np.angle(G_hat))
 
         # d. Inverse FFT along frequency axis
-        G_new_time = np.fft.fftshift(np.fft.ifft(np.fft.ifftshift(G_new, axes=1), axis=1), axes=1)
+        G_new_time = np.fft.fftshift(
+            np.fft.ifft(np.fft.ifftshift(G_new, axes=1), axis=1), axes=1
+        )
 
         # e. Extract new E from G_new_time at tau = 0 (center column)
         E_new = G_new_time[:, N_tau // 2].copy()
@@ -1394,21 +1391,26 @@ def retrieve(
         if trace_calc.max() > 0:
             trace_calc /= trace_calc.max()
 
-        curr_fidelity = fidelity(trace, FROGTrace(
-            trace=trace_calc,
-            unnormalized_trace=trace_calc,
-            omega=trace.omega,
-            tau=trace.tau,
-            dt=trace.dt,
-            dw=trace.dw,
-        ))
+        curr_fidelity = fidelity(
+            trace,
+            FROGTrace(
+                trace=trace_calc,
+                unnormalized_trace=trace_calc,
+                omega=trace.omega,
+                tau=trace.tau,
+                dt=trace.dt,
+                dw=trace.dw,
+            ),
+        )
 
         if verbose and (iteration % 10 == 0 or iteration == max_iter - 1):
             print(f"  Iter {iteration:3d}: fidelity = {curr_fidelity:.6f}")
 
         if abs(curr_fidelity - prev_fidelity) < tol and iteration > 5:
             if verbose:
-                print(f"  Converged at iteration {iteration}, fidelity = {curr_fidelity:.6f}")
+                print(
+                    f"  Converged at iteration {iteration}, fidelity = {curr_fidelity:.6f}"
+                )
             break
 
         prev_fidelity = curr_fidelity

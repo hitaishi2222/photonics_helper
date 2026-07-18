@@ -5,20 +5,20 @@ import pytest
 
 from photonics_helper.gnlse import FiberProfile, SplitStepEngine
 from photonics_helper.pulse import Wave, Envelope, TemporalGrid
-from photonics_helper.base import Wavelength, Frequency
+from photonics_helper.base import Wavelength, Frequency, Time, Area, Length
 
 
 @pytest.fixture
 def setup():
     """Create a basic pulse and fiber for testing."""
-    grid = TemporalGrid(N=256, Tmax=20e-12)
-    env = Envelope(shape="gaussian", peak_amplitude=1.0, pulse_width=1e-12)
+    grid = TemporalGrid(N=256, Tmax=Time(20e-12, "s"))
+    env = Envelope(shape="gaussian", peak_amplitude=1.0, pulse_width=Time(1, "ps"))
     pulse = Wave(
         grid=grid,
         envelope=env,
         central_wavelength=Wavelength(1550, "nm"),
     )
-    fiber = FiberProfile(n2=1e-19, alpha=1e-5, A_eff=5e-11, length=1e-3)
+    fiber = FiberProfile(n2=1e-19, alpha=1e-5, A_eff=Area(5e-11, "m^2"), length=Length(1e-3, "m"))
     betas = np.array([0.02])  # beta2 = +20 ps²/km (= 0.02 ps²/m)
     return pulse, fiber, betas
 
@@ -53,9 +53,9 @@ def test_engine_constant_step_size(setup):
     """Engine uses constant step size when specified."""
     pulse, fiber, betas = setup
     engine = SplitStepEngine(
-        pulse=pulse, fiber=fiber, betas=betas, step_size=1e-4
+        pulse=pulse, fiber=fiber, betas=betas, step_size=Length(1e-4, "m")
     )
-    assert engine.step_size == 1e-4
+    assert engine.step_size.as_m == 1e-4
 
 
 def test_engine_energy_conservation_pure_kerr(setup):

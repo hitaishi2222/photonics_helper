@@ -7,7 +7,7 @@
 
 import matplotlib.pyplot as plt
 
-from photonics_helper.base import Wavelength
+from photonics_helper.base import Wavelength, Time
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
 
@@ -20,7 +20,7 @@ def example_gaussian_pulse():
     """
     # ---- parameters -------------------------------------------------
     central_wl = Wavelength(800e-9, "m")  # 800 nm
-    fwhm_intensity = 50e-15  # 50 fs (intensity FWHM)
+    fwhm_intensity = Time(50, "fs")
 
     # Build an Envelope from the desired FWHM.
     env = Envelope.from_fwhm(
@@ -31,7 +31,7 @@ def example_gaussian_pulse():
 
     # ---- temporal grid -----------------------------------------------
     N = 2**12  # power‑of‑2 for FFT efficiency
-    Tmax = 10 * env.pulse_width  # total simulation window (≈10 × T0)
+    Tmax = 10 * env.pulse_width.as_s  # total simulation window (≈10 × T0)
     grid = TemporalGrid(N=N, Tmax=Tmax)
 
     # ---- wave (the full pulse) ----------------------------------------
@@ -47,7 +47,7 @@ def example_gaussian_pulse():
     print(f"Pulse energy      : {pulse.pulse_energy():.3e} J")
     print(f"Peak power        : {pulse.peak_power():.3e} W")
     print(f"TBP (≈0.44)       : {pulse.time_bandwidth_product():.3f}")
-    print(f"FWHM (intensity) : {env.fwhm * 1e15:.2f} fs")
+    print(f"FWHM (intensity) : {env.fwhm.as_fs:.2f} fs")
 
     # ---- visualisation ------------------------------------------------
     pulse.visualize(
@@ -70,10 +70,10 @@ def example_sech_pulse():
     envelope shapes (``gaussian``, ``sech``, ``lorentzian`` and ``rectangular``).
     """
     central_wl = Wavelength(1550e-9, "m")  # telecom wavelength
-    env = Envelope(shape="sech", peak_amplitude=1.0, pulse_width=60e-15, chirp=5e-27)
+    env = Envelope(shape="sech", peak_amplitude=1.0, pulse_width=Time(60, "fs"), chirp=5e-27)
 
     N = 2**12
-    Tmax = 12 * env.pulse_width
+    Tmax = 12 * env.pulse_width.as_s
     grid = TemporalGrid(N=N, Tmax=Tmax)
 
     pulse = Wave(grid=grid, envelope=env, central_wavelength=central_wl)

@@ -1,5 +1,6 @@
 """Fiber dispersion and propagation constant calculations."""
 
+from scipy.interpolate import BSpline
 from photonics_helper.base import (
     C_MS,
     PI,
@@ -7,13 +8,12 @@ from photonics_helper.base import (
     Wavelength,
     WavelengthArray,
 )
-from photonics_helper.looks import c_info
 
 from functools import cached_property
 from numpy.typing import NDArray
 from typing import Literal, Self
 from pydantic.dataclasses import dataclass
-from pydantic import model_validator, Field
+from pydantic import model_validator
 
 import warnings
 import numpy as np
@@ -38,69 +38,61 @@ class Dispersion:
     central_wavelength : design central wavelength.
     """
 
+    values: NDArray
+    unit: Literal["ps/nm.km", "s/m^2"]
+    wavelengths: WavelengthArray
     central_wavelength: Wavelength
-    _wavelengths: WavelengthArray = Field(alias="wavelengths")
-    _values: NDArray = Field(alias="values")
-    _unit: Literal["ps/nm.km", "s/m^2"] = Field(default="s/m^2", alias="unit")
-
-    @model_validator(mode="after")
-    def _setup(self) -> "Dispersion":
-        # unit conversion handled externally; _unit is always "s/m^2" internally
-        return self
 
     def __repr__(self):
-        return f"Dispersion: from wl: {self._wavelengths.as_m.min()} to {self._wavelengths.as_m.max()}"
+        return f"Dispersion: from wl: {self.wavelengths.as_m.min()} to {self.wavelengths.as_m.max()}"
 
     def __str__(self):
-        return f"Dispersion D(λ) in ps/(nm·km), range {self._wavelengths.as_nm.min():.0f}–{self._wavelengths.as_nm.max():.0f} nm"
+        return f"Dispersion D(λ) in ps/(nm·km), range {self.wavelengths.as_nm.min():.0f}–{self.wavelengths.as_nm.max():.0f} nm"
 
     @cached_property
     def as_ps_nm_km(self) -> NDArray:
         """Dispersion values in ps/(nm·km)."""
-        return self._values * 1e6
+        return self.values
 
     @cached_property
     def as_s_m_m(self) -> NDArray:
         """Dispersion values in s/m² (internal units)."""
-        return self._values
+        return self.values
 
     def get_wls(self) -> WavelengthArray:
         """Return the wavelength array."""
-        return self._wavelengths
+        return self.wavelengths
 
-    def _disp_fn(self):
+    @cached_property
+    def _disp_fn(self) -> BSpline:
         """Return a cubic spline interpolant for dispersion vs wavelength."""
-        return make_splrep(self._wavelengths.as_m, self.as_s_m_m)
+        try:
+            return make_splrep(self.wavelengths.as_m, self.as_s_m_m)
+        except Exception as e:
+            raise Exception(f"{e}")
 
-    def _check_wl(self, wavelength_m: float):
+    def _check_wl(self, wavelength: Wavelength):
         """Raise ValueError if wavelength is outside the interpolation range."""
-        if wavelength_m < self._wavelengths.as_m.min() or wavelength_m > self._wavelengths.as_m.max():
+        if (
+            wavelength.as_m < self.wavelengths.as_m.min()
+            or wavelength.as_m > self.wavelengths.as_m.max()
+        ):
             raise ValueError(
                 f"values of dispersion available between "
-                f"{self._wavelengths.as_m.min():.3e} and {self._wavelengths.as_m.max():.3e} m"
+                f"{self.wavelengths.as_m.min():.3e} and {self.wavelengths.as_m.max():.3e} m"
             )
 
-    def fn(self, wavelength: float) -> float:
-        """Interpolated dispersion at wavelength (m), returned in s/m²."""
+    def fn(self, wavelength: Wavelength) -> float:
+        """Interpolated dispersion at wavelength (m)"""
         self._check_wl(wavelength)
-        c_info("Dispersion unit: s/m^2")
-        spl = self._disp_fn()
-        return spl(wavelength).item()
-
-    def fn_s_m_m(self, wavelength_nm: float) -> float:
-        """Interpolated dispersion at wavelength (nm), returned in s/m²."""
-        return self.fn(wavelength_nm * 1e-9)
-
-    def fn_ps_nm_km(self, wavelength_nm: float) -> float:
-        """Interpolated dispersion at wavelength (nm), returned in ps/(nm·km)."""
-        return self.fn(wavelength_nm * 1e-9) * 1e6
+        return self._disp_fn(wavelength.as_m).item()
 
     @classmethod
     def from_neff(
         cls,
         neff: NDArray,
         wavelengths: WavelengthArray,
-        central_wavelength_nm: float,
+        central_wavelength: Wavelength,
         ignore_fit_error: bool = False,
     ) -> Self:
         """Compute dispersion D(λ) from effective index neff(λ).
@@ -135,7 +127,7 @@ class Dispersion:
             wavelengths=wavelengths,
             values=dispersion,
             unit="s/m^2",
-            central_wavelength=Wavelength(central_wavelength_nm, "nm"),
+            central_wavelength=central_wavelength,
         )
 
     @classmethod
@@ -143,7 +135,7 @@ class Dispersion:
         cls,
         beta: NDArray,
         wavelengths: WavelengthArray,
-        central_wavelength_nm: float,
+        central_wavelength: Wavelength,
         ignore_fit_error: bool = False,
     ) -> Self:
         """Compute dispersion D(λ) from propagation constant β(ω).
@@ -184,19 +176,19 @@ class Dispersion:
             wavelengths=wavelengths,
             values=dispersion,
             unit="s/m^2",
-            central_wavelength=Wavelength(central_wavelength_nm, "nm"),
+            central_wavelength=central_wavelength,
         )
 
     def get_beta2(self, wavelength_nm: float):
         """Return β₂ at wavelength_nm (s²/m) via spline interpolation."""
-        _min_wl = self._wavelengths.as_nm.min()
-        _max_wl = self._wavelengths.as_nm.max()
+        _min_wl = self.wavelengths.as_nm.min()
+        _max_wl = self.wavelengths.as_nm.max()
         if wavelength_nm > _max_wl or wavelength_nm < _min_wl:
             raise ValueError(
                 f"values of disersion available between {_min_wl} and {_max_wl} nm."
             )
-        beta2 = -self._wavelengths.as_m**2 / (2 * PI * C_MS) * self.as_s_m_m
-        spline = make_splrep(self._wavelengths.as_nm, beta2)
+        beta2 = -self.wavelengths.as_m**2 / (2 * PI * C_MS) * self.as_s_m_m
+        spline = make_splrep(self.wavelengths.as_nm, beta2)
         return float(spline(wavelength_nm))
 
     def get_betas(
@@ -214,9 +206,6 @@ class Dispersion:
 
         if wavelength is None:
             wavelength = self.central_wavelength
-
-        if wavelength is None:
-            raise ValueError("No central wavelength available")
 
         min_nm = self.get_wls().as_nm
         maximum = max(min_nm)
@@ -270,17 +259,17 @@ class PropagationConstant:
     x_values : wavelength or angular frequency array.
     """
 
-    _values: NDArray = Field(alias="values")
-    _x_values: WavelengthArray | AngularFrequencyArray = Field(alias="x_values")
-    _wavelengths: WavelengthArray | None = None
-    _omegas: AngularFrequencyArray | None = None
+    values: NDArray
+    x_values: WavelengthArray | AngularFrequencyArray
 
     @model_validator(mode="after")
     def _setup(self) -> "PropagationConstant":
-        if isinstance(self._x_values, WavelengthArray):
-            self._wavelengths = self._x_values
-        elif isinstance(self._x_values, AngularFrequencyArray):
-            self._omegas = self._x_values
+        if isinstance(self.x_values, WavelengthArray):
+            self.wavelengths = self.x_values
+            self.omegas = self.x_values.to_omega()
+        elif isinstance(self.x_values, AngularFrequencyArray):
+            self.omegas = self.x_values
+            self.wavelengths = self.x_values.to_wl()
         return self
 
     @classmethod
@@ -289,7 +278,9 @@ class PropagationConstant:
     ):
         """Compute β₂ = neff × ω / c from effective index."""
         if not isinstance(x_values, (WavelengthArray, AngularFrequencyArray)):
-            raise TypeError("x_values should be a type of either `WavelengthArray` or `AngularFrequencyArray`")
+            raise TypeError(
+                "x_values should be a type of either `WavelengthArray` or `AngularFrequencyArray`"
+            )
         if len(neff) != len(x_values.value):  # type: ignore[arg-type]
             raise ValueError("both neff and x_values must be of same length.")
 

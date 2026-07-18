@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Optional, Tuple
 import numpy as np
 from numpy.typing import NDArray
 
-from photonics_helper.base import C_MS
+from photonics_helper.base import C_MS, Area, Length, Time
 
 if TYPE_CHECKING:
     from photonics_helper.pulse import Wave, TemporalGrid
@@ -41,10 +41,10 @@ class FiberProfile:
 
     n2: float
     alpha: float
-    A_eff: float
-    length: float
+    A_eff: Area
+    length: Length
     sigma_tpa: float = 0.0
-    carrier_lifetime: Optional[float] = None
+    carrier_lifetime: Optional[Time] = None
     raman_response: Optional[object] = None
 
 
@@ -52,9 +52,9 @@ class FiberProfile:
 # Nonlinear effect functions
 # ---------------------------------------------------------------------------
 
-def _gamma(n2: float, omega0: float, A_eff: float) -> float:
+def _gamma(n2: float, omega0: float, A_eff: Area) -> float:
     """Nonlinear coefficient γ = n₂·ω₀ / (c·A_eff)."""
-    return n2 * omega0 / (C_MS * A_eff)
+    return n2 * omega0 / (C_MS * A_eff.as_m2)
 
 
 def kerr_step(
@@ -240,7 +240,7 @@ def tpa_step(
         return A, U
 
     sigma = fiber.sigma_tpa
-    tau_c = fiber.carrier_lifetime if fiber.carrier_lifetime is not None else 1e-9
+    tau_c = fiber.carrier_lifetime.as_s if fiber.carrier_lifetime is not None else 1e-9
 
     if sigma <= 0:
         return A, U
@@ -291,7 +291,7 @@ class SplitStepEngine:
         Include self-steepening. Default False.
     include_tpa : bool
         Include TPA. Default False.
-    step_size : float | None
+    step_size : Length | None
         Fixed step size (m). If None, adaptive stepping is used.
     """
 
@@ -303,7 +303,7 @@ class SplitStepEngine:
         include_raman: bool = False,
         include_self_steepening: bool = False,
         include_tpa: bool = False,
-        step_size: float | None = None,
+        step_size: Length | None = None,
     ):
         self.pulse = pulse
         self.fiber = fiber
@@ -425,14 +425,14 @@ class SplitStepEngine:
         alpha = self.fiber.alpha
         dz_loss = 1.0 / max(alpha, 1e-10) * 0.01
 
-        T0 = self.pulse.envelope.pulse_width
+        T0 = self.pulse.envelope.pulse_width.as_s
         if len(self.betas) > 0:
             beta2 = abs(self.betas[0]) * 1e-24  # ps²/m → s²/m for dispersion length
             dz_disp = T0**2 / max(beta2, 1e-30) * 0.01
         else:
             dz_disp = float("inf")
 
-        gamma = self.fiber.n2 * self.omega0 / (299792458.0 * self.fiber.A_eff) if self.fiber.A_eff > 0 else 1e10
+        gamma = self.fiber.n2 * self.omega0 / (299792458.0 * self.fiber.A_eff.as_m2) if self.fiber.A_eff.as_m2 > 0 else 1e10
         I_max = np.max(np.abs(A) ** 2) if np.any(A) else 0.0
         dz_nl = 1.0 / max(gamma * I_max, 1e-30) * 0.01
 
@@ -442,7 +442,7 @@ class SplitStepEngine:
         """Run split-step simulation for num_steps steps."""
         from photonics_helper.pulse import Envelope, Wave
 
-        length = self.fiber.length
+        length = self.fiber.length.as_m
         dz_base = length / num_steps
         z = 0.0
 
@@ -453,7 +453,7 @@ class SplitStepEngine:
 
         while z < length:
             if self.step_size is not None:
-                dz = min(self.step_size, length - z)
+                dz = min(self.step_size.as_m, length - z)
             else:
                 dz = min(self._adaptive_step_size(self.A), dz_base, length - z)
 
@@ -665,7 +665,7 @@ def plot_spectrum_vs_distance(solver: "GNLSESolver", ax=None, dB: bool = True) -
     wavelength_nm = wavelength_nm[sort_idx]
     spectra = spectra[:, sort_idx]
 
-    z_steps = np.linspace(0, solver.fiber.length, spectra.shape[0])
+    z_steps = np.linspace(0, solver.fiber.length.as_m, spectra.shape[0])
 
     if dB:
         spectra_dB = 10 * np.log10(spectra + 1e-30)

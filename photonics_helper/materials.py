@@ -1,13 +1,14 @@
 """Refractive index data with spline interpolation and Sellmeier models."""
 
+from scipy.interpolate import BSpline
 import warnings
 from .base import PI, WavelengthArray
 
-from typing import Any, List, Self, Tuple
-from numpy.typing import NDArray
+from typing import List, Self, Tuple
+from numpy.typing import ArrayLike, NDArray
 from functools import cached_property
 from pydantic.dataclasses import dataclass
-from pydantic import model_validator, Field
+from pydantic import model_validator
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -30,43 +31,40 @@ class RefractiveIndex:
     wl : wavelength array (um).
     """
 
-    _n: NDArray = Field(alias="n")
-    _k: NDArray = Field(alias="k")
-    _wl: WavelengthArray = Field(alias="wl")
-    _n_spline: Any = None
-    _k_spline: Any = None
+    n: NDArray
+    k: NDArray
+    wl: WavelengthArray
 
     @model_validator(mode="after")
     def _setup_splines(self) -> "RefractiveIndex":
-        self._wl_min = float(self._wl.as_um.min())
-        self._wl_max = float(self._wl.as_um.max())
-        try:
-            self._n_spline = make_splrep(self._wl.as_um, self._n)
-            self._k_spline = make_splrep(self._wl.as_um, self._k)
-        except Exception:
-            # insufficient data for cubic spline (e.g. single-point material)
-            self._n_spline = None
-            self._k_spline = None
+        self._wl_min = float(self.wl.as_um.min())
+        self._wl_max = float(self.wl.as_um.max())
         return self
 
     @cached_property
-    def n(self) -> NDArray:
-        return self._n
-
-    @cached_property
-    def k(self) -> NDArray:
-        return self._k
-
-    @cached_property
-    def wl(self) -> WavelengthArray:
-        return self._wl
-
-    @cached_property
     def nk(self) -> NDArray:
-        return self._n + 1j * self._k
+        return self.n + 1j * self.k
+
+    @cached_property
+    def _n_spline(self) -> BSpline:
+        try:
+            return make_splrep(self.wl.as_um, self.n)
+        except Exception as e:
+            raise ValueError(
+                f"insufficient data for cubic spline (e.g. single-point material) {e}"
+            )
+
+    @cached_property
+    def _k_spline(self) -> BSpline:
+        try:
+            return make_splrep(self.wl.as_um, self.k)
+        except Exception as e:
+            raise ValueError(
+                f"insufficient data for cubic spline (e.g. single-point material) {e}"
+            )
 
     @classmethod
-    def from_complex(cls, nk: NDArray, wl: WavelengthArray) -> Self:
+    def from_complex(cls, nk: ArrayLike, wl: WavelengthArray) -> Self:
         """Construct from a complex refractive index array."""
         return cls(n=np.real(nk), k=np.imag(nk), wl=wl)
 
@@ -96,12 +94,12 @@ class RefractiveIndex:
     def plot(self, include_k: bool = True):
         """Plot n (and optionally k) versus wavelength."""
 
-        plt.plot(self._wl.as_um, self.n, label="n")
+        plt.plot(self.wl.as_um, self.n, label="n")
         plt.xlabel("wavelength [μm]")
         plt.ylabel("n")
 
         if include_k:
-            plt.plot(self._wl.as_um, self._k, label="k")
+            plt.plot(self.wl.as_um, self.k, label="k")
             plt.ylabel("n,k")
             plt.legend()
 

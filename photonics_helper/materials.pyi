@@ -3,6 +3,7 @@ from __future__ import annotations
 from numpy.typing import NDArray
 from typing import List, Optional, Self, Tuple
 from functools import cached_property
+from scipy.interpolate import BSpline
 from pydantic.dataclasses import dataclass
 
 from .base import WavelengthArray
@@ -43,6 +44,17 @@ class RefractiveIndex:
     def nk(self) -> NDArray:
         """Complex refractive index (n + ik)."""
         ...
+
+    @cached_property
+    def _n_spline(self) -> BSpline:
+        ...
+
+    @cached_property
+    def _k_spline(self) -> BSpline:
+        ...
+
+    _wl_min: float
+    _wl_max: float
 
     @classmethod
     def from_complex(cls, nk: NDArray, wl: WavelengthArray) -> Self:
@@ -85,7 +97,7 @@ class RefractiveIndex:
         """
         ...
 
-    def nk_func(self, wavelength: float) -> float:
+    def nk_func(self, wavelength: float) -> complex:
         """Interpolate complex refractive index at a specific wavelength.
 
         Args:
@@ -95,7 +107,7 @@ class RefractiveIndex:
             Interpolated complex n+ik value
 
         Raises:
-            AttributeError: If wavelength is outside valid range
+            ValueError: If wavelength is outside valid range
         """
         ...
 
@@ -159,6 +171,6 @@ class RefractiveIndex:
         """
         ...
 
-    def propagation_loss(self):
+    def propagation_loss(self) -> NDArray:
         """Compute propagation loss (dB/m) from the extinction coefficient k."""
         ...

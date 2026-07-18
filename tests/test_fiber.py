@@ -36,7 +36,7 @@ def test_dispersion_from_neff_zero_dispersion():
     disp = Dispersion.from_neff(
         neff=neff,
         wavelengths=wl_arr,
-        central_wavelength_nm=1550.0,
+        central_wavelength=Wavelength(1550, "nm"),
         ignore_fit_error=True,  # we expect a smooth fit
     )
 
@@ -67,12 +67,11 @@ def test_dispersion_accessor_functions():
 
     # Test at an intermediate wavelength (in meters for ``fn``).
     test_wl_m = 1550e-9
-    assert pytest.approx(disp.fn(test_wl_m), rel=1e-12) == 1e-6
+    assert pytest.approx(disp.fn(Wavelength(test_wl_m, "m")), rel=1e-12) == 1e-6
 
-    # The two convenience wrappers should give identical results.
-    test_wl_nm = 1550.0
-    assert pytest.approx(disp.fn_ps_nm_km(test_wl_nm), rel=1e-12) == 1e-6 * 1e6
-    assert pytest.approx(disp.fn_s_m_m(test_wl_nm), rel=1e-12) == 1e-6
+    # Both should give identical results via fn with different Wavelength units.
+    assert pytest.approx(disp.fn(Wavelength(test_wl_m, "m")), rel=1e-12) == 1e-6
+    assert pytest.approx(disp.fn(Wavelength(1550, "nm")), rel=1e-12) == 1e-6
 
 
 def test_dispersion_from_neff_error_conditions():
@@ -89,7 +88,7 @@ def test_dispersion_from_neff_error_conditions():
         Dispersion.from_neff(
             neff=neff,
             wavelengths=wl_arr,
-            central_wavelength_nm=1550.0,
+            central_wavelength=Wavelength(1550, "nm"),
         )
 
     # Passing a plain list instead of a ``WavelengthArray`` should raise ``TypeError``.
@@ -97,7 +96,7 @@ def test_dispersion_from_neff_error_conditions():
         Dispersion.from_neff(
             neff=np.array([1.5, 1.51]),
             wavelengths=[1500.0, 1550.0],  # type: ignore[arg-type]  # not a WavelengthArray
-            central_wavelength_nm=1550.0,
+            central_wavelength=Wavelength(1550, "nm"),
         )
 
 
@@ -149,4 +148,4 @@ def test_propagation_constant_from_neff_omega_error_handling():
     from photonics_helper.base import C_MS
 
     expected = omega.as_rad_s * neff / C_MS
-    np.testing.assert_allclose(getattr(pc, "_values"), expected, rtol=1e-12)
+    np.testing.assert_allclose(getattr(pc, "values"), expected, rtol=1e-12)

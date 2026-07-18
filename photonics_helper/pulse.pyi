@@ -16,12 +16,13 @@ pulses:
 from __future__ import annotations
 
 from functools import cached_property
-from typing import Callable, Literal, Optional, Self
+from typing import Callable, Literal, Self
 
 import numpy as np
+from numpy.typing import NDArray
 from matplotlib.figure import Figure
 
-from photonics_helper.base import Wavelength, Frequency
+from photonics_helper.base import Wavelength, Frequency, Time
 
 class Envelope:
     """
@@ -50,13 +51,13 @@ class Envelope:
         "exponential", "gauss-hermite", "airy", "custom",
     ]
     peak_amplitude: float
-    pulse_width: float  # T0
+    pulse_width: Time  # T0
     chirp: float
     super_gaussian_order: int
-    beam_waist: Optional[float]
+    beam_waist: Time | None
     hg_mode: int
-    func: Optional[Callable]
-    phase_func: Optional[Callable]
+    func: Callable | None
+    phase_func: Callable | None
 
     def __init__(
         self,
@@ -69,14 +70,14 @@ class Envelope:
         pulse_width: float,
         chirp: float = ...,
         super_gaussian_order: int = ...,
-        beam_waist: Optional[float] = ...,
+        beam_waist: Time | None = ...,
         hg_mode: int = ...,
-        func: Optional[Callable] = ...,
-        phase_func: Optional[Callable] = ...,
+        func: Callable | None = ...,
+        phase_func: Callable | None = ...,
     ) -> None: ...
 
     @property
-    def fwhm(self) -> float:
+    def fwhm(self) -> Time:
         """
         Full‑width at half‑maximum of the intensity profile.
 
@@ -93,7 +94,7 @@ class Envelope:
             "super-gaussian", "triangular", "cosine", "exponential", "airy",
         ],
         peak_amplitude: float,
-        fwhm: float,
+        fwhm: Time,
     ) -> Self:
         """
         Construct an :class:`Envelope` from a desired full‑width at half‑maximum.
@@ -106,24 +107,24 @@ class Envelope:
         """
         ...
 
-    def field(self, t: np.ndarray) -> np.ndarray:
+    def field(self, t: NDArray) -> NDArray:
         """
         Complex envelope :math:`A(t)` evaluated on a time array ``t``.
 
         Returns
         -------
-        np.ndarray
+        NDArray
             Complex‑valued array of the same shape as ``t``.
         """
         ...
 
-    def intensity(self, t: np.ndarray) -> np.ndarray:
+    def intensity(self, t: NDArray) -> NDArray:
         """
         Intensity :math:`|A(t)|^2` (the squared magnitude of the envelope).
 
         Returns
         -------
-        np.ndarray
+        NDArray
             Real‑valued intensity evaluated on ``t``.
         """
         ...
@@ -182,7 +183,7 @@ class Envelope:
     def from_parabolic_asymptotic(
         cls,
         peak_amplitude: float,
-        pulse_width: float,
+        pulse_width: Time,
         gain: float,
         length: float,
         chirp: float = ...,
@@ -223,12 +224,12 @@ class TemporalGrid:
         ...
 
     @property
-    def t(self) -> np.ndarray:
+    def t(self) -> NDArray:
         """Array of time points centred around zero, shape ``(N,)``."""
         ...
 
     @property
-    def w(self) -> np.ndarray:
+    def w(self) -> NDArray:
         """Angular‑frequency axis (rad·s⁻¹) corresponding to ``t``."""
         ...
 
@@ -237,7 +238,7 @@ class TemporalGrid:
         """Frequency step ``Δω`` derived from the ``w`` axis."""
         ...
 
-    def fft(self, A_t: np.ndarray) -> np.ndarray:
+    def fft(self, A_t: NDArray) -> NDArray:
         """
         Forward FFT that respects the ``dt`` scaling used internally.
 
@@ -248,13 +249,13 @@ class TemporalGrid:
 
         Returns
         -------
-        np.ndarray
+        NDArray
             Frequency‑domain representation, shifted so that zero frequency is
             centred.
         """
         ...
 
-    def ifft(self, A_w: np.ndarray) -> np.ndarray:
+    def ifft(self, A_w: NDArray) -> NDArray:
         """
         Inverse FFT that undoes :meth:`fft`.
 
@@ -265,7 +266,7 @@ class TemporalGrid:
 
         Returns
         -------
-        np.ndarray
+        NDArray
             Time‑domain array with the same scaling as the original input to
             :meth:`fft`.
         """
@@ -286,7 +287,7 @@ class TemporalGrid:
         cls,
         repetition_rate: Frequency,
         n_pulses: int,
-        pulse_width: float,
+        pulse_width: Time,
         N: int = ...,
     ) -> Self:
         """
@@ -317,7 +318,7 @@ class Wave:
 
     central_wavelength: Wavelength
     refractive_index: float
-    repetition_rate: Optional[Frequency]
+    repetition_rate: Frequency | None
 
     def __init__(
         self,
@@ -325,7 +326,7 @@ class Wave:
         envelope: Envelope,
         central_wavelength: Wavelength,
         refractive_index: float = ...,
-        repetition_rate: Optional[Frequency] = ...,
+        repetition_rate: Frequency | None = ...,
     ) -> None: ...
 
     @cached_property
@@ -337,23 +338,23 @@ class Wave:
         ...
 
     @property
-    def envelope_field(self) -> np.ndarray:
+    def envelope_field(self) -> NDArray:
         """Complex envelope :math:`A(t)` sampled on ``self.grid.t``."""
         ...
 
     @property
-    def electric_field(self) -> np.ndarray:
+    def electric_field(self) -> NDArray:
         """
         Real electric field :math:`E(t)=\\Re\\{A(t)\\exp(-j\\omega_0 t)\\}`.
         """
         ...
 
-    def instantaneous_intensity(self) -> np.ndarray:
+    def instantaneous_intensity(self) -> NDArray:
         """Instantaneous intensity :math:`|E(t)|^2`."""
         ...
 
     @property
-    def envelope_intensity(self) -> np.ndarray:
+    def envelope_intensity(self) -> NDArray:
         """Intensity of the envelope :math:`|A(t)|^2`."""
         ...
 
@@ -402,7 +403,7 @@ class Wave:
         ...
 
     @cached_property
-    def spectrum(self) -> np.ndarray:
+    def spectrum(self) -> NDArray:
         """
         Frequency‑domain representation of the envelope ``A(ω)`` obtained via
         :meth:`TemporalGrid.fft`.

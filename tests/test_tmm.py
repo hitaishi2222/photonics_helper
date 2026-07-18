@@ -8,7 +8,7 @@ spectral response (reflectance and transmittance) and the electric‑field profi
 import numpy as np
 import pytest
 
-from photonics_helper.base import Wavelength, WavelengthArray
+from photonics_helper.base import Wavelength, WavelengthArray, Length
 from photonics_helper.dbr import TMM, Block, Material, Pattren
 
 
@@ -41,8 +41,8 @@ def simple_pattern() -> Pattren:
     mat_a = _simple_material("mat_a", 2.0)
     mat_b = _simple_material("mat_b", 1.0)
 
-    block_a = Block(length=200e-9, material=mat_a, colour="red")
-    block_b = Block(length=200e-9, material=mat_b, colour="blue")
+    block_a = Block(length=Length(200e-9, "m"), material=mat_a, colour="red")
+    block_b = Block(length=Length(200e-9, "m"), material=mat_b, colour="blue")
 
     mapping = {"A": block_a, "B": block_b}
     central = Wavelength(1550, "nm")
@@ -62,7 +62,7 @@ def test_fresnel_reflection_normal_incidence(simple_pattern: Pattren):
     n_layer = 2.0
     d = wl.as_m / (4 * n_layer)  # quarter-wave optical thickness (meters)
     mat = _simple_material("layer", n_layer, 1550.0)
-    block = Block(length=d, material=mat, colour="gray")
+    block = Block(length=Length(d, "m"), material=mat, colour="gray")
     pat = Pattren(
         style="Q",
         mapping={"Q": block},

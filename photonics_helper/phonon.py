@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Literal
 
 import numpy as np
+from numpy.typing import NDArray
 import matplotlib.pyplot as plt
 from pydantic.dataclasses import dataclass
 
@@ -83,7 +84,7 @@ class PhononResponse:
         if self.fR is None:
             object.__setattr__(self, "fR", sum(m.relative_strength for m in self.modes))
 
-    def _lorentzian(self, shift_cm: float, gamma_cm: float, w_cm: np.ndarray) -> np.ndarray:
+    def _lorentzian(self, shift_cm: float, gamma_cm: float, w_cm: NDArray) -> NDArray:
         """Single Lorentzian lineshape.
 
         Parameters
@@ -92,27 +93,27 @@ class PhononResponse:
             Center shift in cm⁻¹.
         gamma_cm : float
             FWHM in cm⁻¹.
-        w_cm : np.ndarray
+        w_cm : NDArray
             Frequency axis in cm⁻¹.
 
         Returns
         -------
-        np.ndarray — Lorentzian values (unnormalized).
+        NDArray — Lorentzian values (unnormalized).
         """
         half_gamma = gamma_cm / 2.0
         return (half_gamma / np.pi) / ((w_cm - shift_cm) ** 2 + half_gamma ** 2)
 
-    def frequency_domain(self, w_cm: np.ndarray) -> np.ndarray:
+    def frequency_domain(self, w_cm: NDArray) -> NDArray:
         """Frequency-domain response: sum of Lorentzian mode lineshapes.
 
         Parameters
         ----------
-        w_cm : np.ndarray
+        w_cm : NDArray
             Frequency axis in cm⁻¹.
 
         Returns
         -------
-        np.ndarray — Total response (sum of weighted Lorentzians).
+        NDArray — Total response (sum of weighted Lorentzians).
         """
         if not self.modes:
             return np.zeros_like(w_cm)
@@ -128,7 +129,7 @@ class PhononResponse:
 
         return total
 
-    def time_domain(self, t: np.ndarray) -> np.ndarray:
+    def time_domain(self, t: NDArray) -> NDArray:
         """Time-domain response via inverse FFT of frequency-domain response.
 
         The time-domain response is the inverse FFT of the frequency-domain
@@ -136,12 +137,12 @@ class PhononResponse:
 
         Parameters
         ----------
-        t : np.ndarray
+        t : NDArray
             Time array in seconds.
 
         Returns
         -------
-        np.ndarray — Time-domain response (sum of damped oscillations).
+        NDArray — Time-domain response (sum of damped oscillations).
         """
         if not self.modes:
             return np.zeros_like(t)
