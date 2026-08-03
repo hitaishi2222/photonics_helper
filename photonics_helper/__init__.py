@@ -26,7 +26,15 @@ from .base import (
 
 from .materials import RefractiveIndex
 from .fiber import Dispersion, PropagationConstant
-from .pulse import FROGTrace, generate_trace, retrieve, fidelity  # type: ignore
+from .pulse import (
+    FROGTrace,
+    generate_trace,
+    retrieve,
+    fidelity,
+    Envelope,
+    Wave,
+    TemporalGrid,
+)  # type: ignore
 from .raman import (
     RamanSpec,
     RamanDatabase,
@@ -40,6 +48,8 @@ from .raman import (
     app,
 )
 from .phonon import PhononMode, PhononResponse, PHONON_MATERIALS
+from .soliton import SolitonAnalyzer
+from .gnlse import FiberProfile, GNLSESolver, SplitStepEngine
 
 __all__ = [
     "Wavelength",
@@ -70,6 +80,9 @@ __all__ = [
     "generate_trace",
     "retrieve",
     "fidelity",
+    "Envelope",
+    "Wave",
+    "TemporalGrid",
     "RamanSpec",
     "RamanDatabase",
     "RamanResponse",
@@ -83,4 +96,8 @@ __all__ = [
     "PhononMode",
     "PhononResponse",
     "PHONON_MATERIALS",
+    "SolitonAnalyzer",
+    "FiberProfile",
+    "GNLSESolver",
+    "SplitStepEngine",
 ]

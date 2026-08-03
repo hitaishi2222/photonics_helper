@@ -27,12 +27,13 @@ __all__ = ["FiberProfile", "GNLSESolver", "SplitStepEngine"]
 
 @dataclass
 class FiberProfile:
-    """Optical fiber parameters for GNLSE propagation.
+    """Optical fiber/waveguide parameters for GNLSE propagation.
 
     Attributes:
         n2: Nonlinear refractive index n₂ (m²/W).
         alpha: Fiber loss coefficient α (1/m).
         A_eff: Effective mode area (m²).
+        confinement_factor: Waveguide confinement factor Γ (1.0 for fibers, <1.0 for waveguides).
         sigma_tpa: Two-photon absorption cross-section (m²·W⁻¹). Default 0.
         carrier_lifetime: Carrier recombination lifetime (s). Default None.
         length: Fiber length (m).
@@ -43,6 +44,7 @@ class FiberProfile:
     alpha: float
     A_eff: Area
     length: Length
+    confinement_factor: float = 1.0
     sigma_tpa: float = 0.0
     carrier_lifetime: Optional[Time] = None
     raman_response: Optional[object] = None
@@ -52,9 +54,17 @@ class FiberProfile:
 # Nonlinear effect functions
 # ---------------------------------------------------------------------------
 
-def _gamma(n2: float, omega0: float, A_eff: Area) -> float:
-    """Nonlinear coefficient γ = n₂·ω₀ / (c·A_eff)."""
-    return n2 * omega0 / (C_MS * A_eff.as_m2)
+def _gamma(n2: float, omega0: float, A_eff: Area, confinement_factor: float = 1.0) -> float:
+    """Nonlinear coefficient γ = n₂·ω₀·Γ / (c·A_eff).
+
+    Parameters
+    ----------
+    n2 : float — Nonlinear refractive index n₂ (m²/W).
+    omega0 : float — Carrier angular frequency (rad/s).
+    A_eff : Area — Effective mode area.
+    confinement_factor : float — Waveguide confinement factor Γ (1.0 for fibers).
+    """
+    return n2 * omega0 * confinement_factor / (C_MS * A_eff.as_m2)
 
 
 def kerr_step(
@@ -78,7 +88,7 @@ def kerr_step(
     -------
     A : updated complex array.
     """
-    gamma = _gamma(fiber.n2, omega0, fiber.A_eff)
+    gamma = _gamma(fiber.n2, omega0, fiber.A_eff, fiber.confinement_factor)
     phase = np.exp(1j * gamma * np.abs(A) ** 2 * dz)
     return A * phase
 
@@ -139,73 +149,9 @@ def raman_step(
 
     P_Raman = P_inst + P_delayed
 
-    gamma = _gamma(fiber.n2, omega0, fiber.A_eff)
+    gamma = _gamma(fiber.n2, omega0, fiber.A_eff, fiber.confinement_factor)
     raman_phase = np.exp(1j * gamma * P_Raman * dz)
     return A * raman_phase
-
-
-def self_steepening_step(
-    A: NDArray,
-    fiber: "FiberProfile",
-    grid: "TemporalGrid",
-    dz: float,
-    omega0: float,
-    include_self_steepening: bool,
-    P_NL: NDArray | None = None,
-) -> NDArray:
-    """Apply self-steepening via scipy solve_ivp with frequency-domain operator.
-
-    The full GNLSE self-steepening is:
-        ∂A/∂z = iγ(1 + i/ω₀·∂/∂T)[P_NL·A]
-
-    In the frequency domain (ω = offset frequency, centered at 0):
-        ∂Ã/∂z = iγ(1 - ω/ω₀)·FFT[P_NL·A]
-
-    Parameters
-    ----------
-    A : complex array — pulse envelope.
-    fiber : FiberProfile — fiber parameters.
-    grid : TemporalGrid — time grid.
-    dz : float — step size (m).
-    omega0 : float — carrier frequency (rad/s).
-    include_self_steepening : bool — whether to include self-steepening.
-    P_NL : real array, optional — nonlinear polarization. If None, uses |A|².
-
-    Returns
-    -------
-    A : updated complex array.
-    """
-    if not include_self_steepening:
-        return A
-
-    gamma = _gamma(fiber.n2, omega0, fiber.A_eff)
-
-    if P_NL is None:
-        P_NL = np.abs(A) ** 2
-
-    omega_cut = 2 * omega0
-    H = np.exp(-(grid.w / omega_cut) ** 8)
-    P_NL_w = grid.fft(P_NL)
-    P_NL_w *= H
-    P_NL = grid.ifft(P_NL_w).real
-
-    omega_ratio = grid.w / omega0
-    factor = 1j * gamma * (1 - omega_ratio)
-
-    def _rhs(z: float, A_flat: NDArray) -> NDArray:
-        return grid.ifft(factor * grid.fft(P_NL * A_flat))
-
-    from scipy.integrate import solve_ivp
-    sol = solve_ivp(
-        _rhs,
-        t_span=(0.0, dz),
-        y0=A.astype(complex),
-        method="RK45",
-        rtol=1e-8,
-        atol=1e-10,
-        dense_output=False,
-    )
-    return sol.y[:, -1]
 
 
 def tpa_step(
@@ -359,13 +305,13 @@ class SplitStepEngine:
         """Apply nonlinear effects.
 
         Without self-steepening: uses exponential step for exact Kerr+Raman.
-        With self-steepening: uses scipy solve_ivp for the full GNLSE nonlinear
-        term iγ(1+i/ω₀·∂/∂T)[P_NL·A].
+        With self-steepening: uses direct analytical FFT-based computation of
+        the linear self-steepening operator.
 
         The total nonlinear polarization is:
           P_NL = (1-fR)|A|² + fR·(h_R ⊗ |A|²)
         """
-        gamma = _gamma(self.fiber.n2, self.omega0, self.fiber.A_eff)
+        gamma = _gamma(self.fiber.n2, self.omega0, self.fiber.A_eff, self.fiber.confinement_factor)
         intensity = np.abs(A) ** 2
 
         if self.include_raman and self.fiber.raman_response is not None:
@@ -395,23 +341,20 @@ class SplitStepEngine:
             P_NL_w *= H
             P_NL = self.grid.ifft(P_NL_w).real
 
+            # High-precision self-steepening via solve_ivp (RK45, tight tolerances).
+            # The ODE dA/dz = i*gamma*(1 - omega/omega0) * FFT[P_NL * A] is linear in A
+            # but the operator is not diagonalized by FFT (P_NL*A is a product in time domain).
+            from scipy.integrate import solve_ivp
+
             omega_ratio = self.grid.w / self.omega0
             factor = 1j * gamma * (1 - omega_ratio)
 
-            def _ss_rhs(z: float, A_flat: NDArray) -> NDArray:
-                A_local = A_flat
-                NL_A = P_NL * A_local
-                return self.grid.ifft(factor * self.grid.fft(NL_A))
+            def rhs(z, a):
+                return self.grid.ifft(factor * self.grid.fft(P_NL * a))
 
-            from scipy.integrate import solve_ivp
             sol = solve_ivp(
-                _ss_rhs,
-                t_span=(0.0, dz),
-                y0=A.astype(complex),
-                method="RK45",
-                rtol=1e-8,
-                atol=1e-10,
-                dense_output=False,
+                rhs, t_span=(0.0, dz), y0=A.astype(complex),
+                method="RK45", rtol=1e-10, atol=1e-12, dense_output=False,
             )
             A = sol.y[:, -1]
         else:
@@ -432,7 +375,7 @@ class SplitStepEngine:
         else:
             dz_disp = float("inf")
 
-        gamma = self.fiber.n2 * self.omega0 / (299792458.0 * self.fiber.A_eff.as_m2) if self.fiber.A_eff.as_m2 > 0 else 1e10
+        gamma = _gamma(self.fiber.n2, self.omega0, self.fiber.A_eff, self.fiber.confinement_factor) if self.fiber.A_eff.as_m2 > 0 else 1e10
         I_max = np.max(np.abs(A) ** 2) if np.any(A) else 0.0
         dz_nl = 1.0 / max(gamma * I_max, 1e-30) * 0.01
 

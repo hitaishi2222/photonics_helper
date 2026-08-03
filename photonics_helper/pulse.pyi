@@ -459,3 +459,59 @@ class Wave:
             The created figure object, allowing further user customisation.
         """
         ...
+
+
+class FROGTrace:
+    """Represents a FROG trace I(ω, τ).
+    """
+
+    trace: NDArray
+    unnormalized_trace: NDArray
+    omega: NDArray
+    tau: NDArray
+    dt: float
+    dw: float
+    field: NDArray | None
+
+    @classmethod
+    def from_field(
+        cls,
+        E_field: NDArray,
+        dt: float,
+        normalize: bool = ...,
+    ) -> Self:
+        """Generate a FROG trace from a complex electric field."""
+        ...
+
+    def visualize(
+        self,
+        retrieved: "FROGTrace | None" = ...,
+        figsize: tuple[float, float] | None = ...,
+        save_path: str | None = ...,
+    ) -> Figure:
+        """Plot the FROG trace and optionally the retrieved pulse."""
+        ...
+
+
+def generate_trace(
+    E_field: NDArray,
+    dt: float,
+    normalize: bool = ...,
+) -> FROGTrace:
+    """Generate a SHG-FROG trace from an electric field."""
+    ...
+
+
+def fidelity(trace1: FROGTrace, trace2: FROGTrace) -> float:
+    """Compute FROG fidelity between two traces."""
+    ...
+
+
+def retrieve(
+    trace: FROGTrace,
+    max_iter: int = ...,
+    tol: float = ...,
+    verbose: bool = ...,
+) -> FROGTrace:
+    """Retrieve the electric field E(t) from a FROG trace."""
+    ...

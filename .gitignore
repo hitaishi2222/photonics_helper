@@ -19,7 +19,8 @@ REPORT.md
 AGENTS.md
 DATABASE.md
 
-#graphify
 graphify-out
 .pi
-openspec
+# openspec
+
+graphify-out/

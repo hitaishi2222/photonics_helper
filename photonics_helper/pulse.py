@@ -167,7 +167,7 @@ class Envelope:
                 amp = A0 * H_m(x) * np.exp(-(x**2) / 2)
             case "airy":
                 # Standard Airy pulse: Ai(-(t-t0)/T0), t0=0, accelerating towards +t
-                amp = A0 * airy(t / T0)[0]
+                amp = A0 * airy(-t / T0)[0]
             case "custom":
                 if self.func is None:
                     raise ValueError("'custom' shape requires 'func' to be set")
@@ -202,7 +202,7 @@ class Envelope:
 
     def visualize_2d(
         self,
-        backend: Literal["plotly", "matplotlib"] = "plotly",
+        backend: Literal["plotly", "matplotlib", "xy"] = "plotly",
         N: int = 2**12,
         show_phase: bool = True,
         show_fwhm: bool = True,
@@ -214,7 +214,7 @@ class Envelope:
 
         Parameters
         ----------
-        backend : "plotly" or "matplotlib" (default "plotly")
+        backend : "plotly", "matplotlib", or "xy" (default "plotly")
         N : number of time points (default 2^12)
         show_phase : show instantaneous phase overlay (default True)
         show_fwhm : show FWHM markers (default True)
@@ -222,8 +222,8 @@ class Envelope:
         title : optional title override (default uses shape name)
         theme : "light" or "dark" (default "light")
         """
-        if backend not in ("plotly", "matplotlib"):
-            raise ValueError("backend must be 'plotly' or 'matplotlib'")
+        if backend not in ("plotly", "matplotlib", "xy"):
+            raise ValueError("backend must be 'plotly', 'matplotlib', or 'xy'")
 
         grid = self._make_grid(N)
         t = grid.t
@@ -241,6 +241,19 @@ class Envelope:
 
         if backend == "plotly":
             return self._visualize_2d_plotly(
+                t,
+                A,
+                intensity_t,
+                intensity_w,
+                phase,
+                grid,
+                show_phase,
+                show_fwhm,
+                title,
+                theme,
+            )
+        elif backend == "xy":
+            return self._visualize_2d_xy(
                 t,
                 A,
                 intensity_t,
@@ -666,6 +679,120 @@ class Envelope:
             pulse_width=pulse_width,
             chirp=alpha_asym,
         )
+
+
+class _XyHtmlView:
+    """Lightweight wrapper so xy backends return an object with .to_html()."""
+
+    def __init__(self, html: str) -> None:
+        self._html = html
+
+    def to_html(self, full_html: bool = False, include_plotlyjs: str | None = None) -> str:
+        return self._html
+
+
+def _visualize_2d_xy(
+    self,
+    t,
+    A,
+    intensity_t,
+    intensity_w,
+    phase,
+    grid,
+    show_phase,
+    show_fwhm,
+    title,
+    theme,
+):
+    """XY backend implementation of 2D visualization."""
+    import re
+
+    import xy
+
+    # Convert to fs and THz for readable axes
+    t_fs = t * 1e15
+    w_THz = grid.w / (2 * np.pi * 1e12)  # rad/s -> THz
+
+    # Theme colors
+    colors = {
+        "dark": {
+            "bg": "#1a1a2e",
+            "intensity": "#00d4ff",
+            "spectrum": "#a78bfa",
+            "phase": "#ff6b6b",
+            "polar": "#34d399",
+            "text": "#e0e0e0",
+        },
+        "light": {
+            "bg": "#ffffff",
+            "intensity": "#0088cc",
+            "spectrum": "#7c3aed",
+            "phase": "#dc2626",
+            "polar": "#059669",
+            "text": "#1a1a1a",
+        },
+    }
+    c = colors[theme]
+
+    # Temporal intensity chart
+    t_children = [xy.line(x=t_fs, y=intensity_t, color=c["intensity"])]
+    if show_fwhm:
+        t0_fs = self.pulse_width.as_s * 1e15
+        t_children.extend([xy.vline(x=-t0_fs, color="#fbbf24"), xy.vline(x=t0_fs, color="#fbbf24")])
+    t_chart = xy.line_chart(*t_children, title="Temporal Intensity", width=400, height=280)
+
+    # Spectral intensity chart
+    s_chart = xy.line_chart(
+        xy.line(x=w_THz, y=intensity_w, color=c["spectrum"]),
+        title="Spectral Intensity",
+        width=400,
+        height=280,
+    )
+
+    # Phase chart
+    if show_phase:
+        p_chart = xy.line_chart(
+            xy.line(x=t_fs, y=phase, color=c["phase"]),
+            title="Instantaneous Phase",
+            width=400,
+            height=280,
+        )
+    else:
+        p_chart = xy.line_chart(
+            xy.line(x=t_fs[:0], y=np.array([])),
+            title="Instantaneous Phase",
+            width=400,
+            height=280,
+        )
+
+    # Polar plot (Re vs Im)
+    polar_chart = xy.line_chart(
+        xy.line(x=np.real(A), y=np.imag(A), color=c["polar"]),
+        title="Polar Plot",
+        width=400,
+        height=280,
+    )
+
+    # Combine into grid HTML
+    charts = [t_chart, s_chart, p_chart, polar_chart]
+    chart_htmls = []
+    for ch in charts:
+        full_html = ch.to_html()
+        body_match = re.search(r"<body>(.*?)</body>", full_html, re.DOTALL)
+        if body_match:
+            chart_htmls.append(body_match.group(1))
+
+    grid_html = (
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:8px;background:'
+        + ("#1a1a2e" if theme == "dark" else "#ffffff")
+        + '">\n'
+        + "".join(chart_htmls)
+        + "\n</div>"
+    )
+    return _XyHtmlView(grid_html)
+
+
+Envelope._visualize_2d_xy = _visualize_2d_xy
 
 
 @dataclass

@@ -211,10 +211,10 @@ class Dispersion:
         maximum = max(min_nm)
         minimum = min(min_nm)
         if wavelength.as_nm < minimum or wavelength.as_nm > maximum:
-            warnings.warn(
-                f"wavelength given is not in the range of dispersion: \nit should be between {minimum} and {maximum}"
+            raise ValueError(
+                f"wavelength {wavelength.as_nm:.3f} nm is outside the dispersion range "
+                f"[{minimum:.3f}, {maximum:.3f}] nm"
             )
-            return
 
         # omega - omega_0
         omegaAxis = 2 * np.pi * C_MS / (self.get_wls().as_m) - 2 * np.pi * C_MS / (

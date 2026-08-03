@@ -34,7 +34,7 @@ pip install photonics-helper
   - Frequency-domain gain spectrum
   - Stokes / anti-Stokes wavelength calculation
   - Pump-wavelength explorer and material comparison overlays
-  - SQLite material database (`materials.db`) with 30 materials
+  - SQLite material database (`materials.db`) with 31 materials
   - Interactive Dash dashboard for comparing Raman properties
 - **Comprehensive Documentation**: Clear documentation with examples
 - **Easy to Use**: Intuitive API design
@@ -155,7 +155,7 @@ print(silica.summary())
 # n₂: 3.2e-20 m²/W
 ```
 
-All 30 available materials:
+All 31 available materials:
 
 | Category | Materials |
 |----------|-----------|
@@ -163,6 +163,7 @@ All 30 available materials:
 | Semiconductors | Si, Ge, GaAs, GaN, AlN, InP, InGaAs, AlGaAs, SiC, Si₃N₄ |
 | II-VI | CdS, CdTe, ZnO |
 | Oxides | Ga₂O₃, Al₂O₃ (sapphire), BaTiO₃, LiNbO₃, LiTaO₃, KTP |
+| Chalcogenides | GeAsSe |
 | Crystals & Hosts | Diamond, YAG, YLF |
 | NLO Crystals | LBO, AgGaS₂, AgGaSe₂ |
 
@@ -174,6 +175,53 @@ pump = Wavelength(800, "nm")
 stokes = silica.stokes_wavelength(pump)
 anti = silica.anti_stokes_wavelength(pump)
 print(f"Stokes: {stokes.as_nm:.1f} nm, Anti-Stokes: {anti.as_nm:.1f} nm")
+```
+
+# Soliton Analysis
+
+Analyze soliton dynamics from GNLSE simulation results:
+
+```python
+from photonics_helper.gnlse import GNLSESolver, FiberProfile
+from photonics_helper.pulse import Wave, Envelope, TemporalGrid
+from photonics_helper.soliton import SolitonAnalyzer, plot_soliton_trajectories
+from photonics_helper.base import Wavelength, Time, Area, Length
+import numpy as np
+
+# Create pulse and fiber (waveguide with confinement factor)
+grid = TemporalGrid(N=256, Tmax=Time(20e-12, "s"))
+pulse = Wave(
+    grid=grid,
+    envelope=Envelope(shape="sech", peak_amplitude=1.0, pulse_width=Time(100e-15, "s")),
+    central_wavelength=Wavelength(1550, "nm"),
+)
+fiber = FiberProfile(
+    n2=6.0e-18,  # GeAsSe
+    alpha=0.0,
+    A_eff=Area(0.2e-12, "m^2"),
+    length=Length(5e-3, "m"),
+    confinement_factor=0.8,  # waveguide
+)
+
+# Run GNLSE
+solver = GNLSESolver(
+    pulse, fiber,
+    betas=np.array([-0.2, 0.001]),  # β₂=-0.2 ps²/m, β₃=0.001 ps³/m
+    include_raman=True,
+)
+solver.propagate(num_steps=200)
+
+# Analyze soliton dynamics
+analyzer = SolitonAnalyzer(
+    pulse, fiber, solver.betas, solver.z_array, solver.spectra_vs_z
+)
+print(f"Soliton order: {analyzer.soliton_order():.2f}")
+print(f"Fission length: {analyzer.fission_length():.2f} mm")
+print(f"DW wavelength: {analyzer.dispersive_wave_wavelength()*1e9:.1f} nm")
+
+# Plot results
+fig = plot_soliton_trajectories(solver)
+fig.savefig("trajectories.png", dpi=150)
 ```
 
 # Development
@@ -212,14 +260,26 @@ pip install -e .
   - SQLite material database (30 entries)
   - Interactive Dash dashboard
   - Catalog explorer example (`examples/11_raman_material_catalog.py`)
-- **GNLSE** ✅ (in development)
+- **GNLSE** ✅
   - Dispersion (arbitrary-order β_k)
   - Kerr effect
   - Raman scattering (delayed response)
-  - Self-steepening
+  - Self-steepening (energy-conserving RK45 integrator)
   - Two-photon absorption (TPA)
   - Adaptive step-size (SSFM)
   - Soliton propagation, fission, supercontinuum
+- **Soliton Analysis** ✅
+  - Soliton order, dispersion/nonlinear/fission lengths
+  - Dispersive wave (Cherenkov) wavelength
+  - Soliton trajectory extraction and RSFS rate
+  - Soliton counting via peak detection
+  - Publication-ready visualization (trajectories, fission dynamics, DW spectrum)
+- **Waveguide Support** ✅
+  - Confinement factor Γ in γ formula: `γ = n₂·ω₀·Γ/(c·A_eff)`
+  - Backward compatible (Γ=1.0 recovers fiber behavior)
+- **Chalcogenide Materials** ✅
+  - GeAsSe added (n₂=6e-18 m²/W, 31 materials total)
+  - Suitable for soliton fission in chalcogenide waveguides
 - Structured Light
 - Add methods for bandwidth calculations
 - Add methods for power/intensity conversions

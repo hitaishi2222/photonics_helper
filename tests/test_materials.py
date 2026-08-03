@@ -70,3 +70,87 @@ def test_sellmeier_coefficient_mismatch():
 
     with pytest.raises(ValueError):
         RefractiveIndex.from_alt_sellmeier(A0=1, A=A, B=B, wl_from_to_in_um=wl_range)
+
+
+# ---------- group-dispersion tests ----------
+
+def _silica_sellmeier():
+    A0 = 1
+    A = [0.6961663, 0.4079426, 0.8974794]
+    B = [0.0684043, 0.1162414, 9.896161]
+    return RefractiveIndex.from_sellmeier(
+        A0=A0, A=A, B=B, wl_from_to_in_um=(0.5, 2.0), n_points=200
+    )
+
+
+def test_dn_dlambda_tabulated():
+    """dn/dλ is finite and negative for normal dispersion (decreasing n)."""
+    wl = np.linspace(0.5e-6, 2.0e-6, 200)
+    # Silica-like: n decreases with wavelength
+    A0, A, B = 1, [0.6961663, 0.4079426, 0.8974794], [0.0684043, 0.1162414, 9.896161]
+    n_vals = np.sqrt(A0 + np.array(A)[:, None] * wl[None, :] ** 2 /
+                     (wl[None, :] ** 2 - np.array(B)[:, None])).sum(axis=0)
+    n_vals = n_vals / np.max(n_vals) * 1.45  # scale to realistic range
+    ri = RefractiveIndex(n=n_vals, k=np.zeros_like(wl), wl=WavelengthArray(wl, "m"))
+    val = ri.dn_dlambda(1.0)
+    assert np.isfinite(val)
+    assert val < 0  # normal dispersion: n decreases as λ increases
+
+
+def test_dn_dlambda_sellmeier():
+    """dn/dλ works on Sellmeier-constructed material."""
+    ri = _silica_sellmeier()
+    val = ri.dn_dlambda(1.0)
+    assert np.isfinite(val)
+    assert val < 0  # silica has normal dispersion at 1 μm
+
+
+def test_group_index_scalar_valid():
+    """group_index returns finite value within valid range."""
+    ri = _silica_sellmeier()
+    val = ri.group_index(1.0)
+    assert np.isfinite(val)
+    assert val > 1.0  # normal dispersion in transparent region
+
+
+def test_group_index_scalar_out_of_range():
+    """group_index raises ValueError for out-of-range wavelength."""
+    ri = _silica_sellmeier()
+    with pytest.raises(ValueError):
+        ri.group_index(5.0)
+
+
+def test_group_index_sellmeier_reasonable():
+    """n_g > 1 for silica at 1.55 μm (normal dispersion)."""
+    ri = _silica_sellmeier()
+    n_g = ri.group_index(1.55)
+    assert n_g > 1.0
+    assert n_g < 3.0  # physically reasonable bound
+
+
+def test_group_index_array_shape_and_consistency():
+    """Array output matches grid size; midpoint matches scalar call."""
+    ri = _silica_sellmeier()
+    arr = ri.group_index_array()
+    assert len(arr) == 200
+    mid_idx = 100
+    mid_wl = ri.wl.as_um[mid_idx]
+    assert abs(arr[mid_idx] - ri.group_index(mid_wl)) < 1e-10
+
+
+def test_group_velocity_scalar_subluminal():
+    """v_g < c for normal dispersion; out-of-range raises ValueError."""
+    ri = _silica_sellmeier()
+    v_g = ri.group_velocity(1.0)
+    c = 2.99792458e8
+    assert 0 < v_g < c
+    with pytest.raises(ValueError):
+        ri.group_velocity(10.0)
+
+
+def test_group_velocity_array_shape():
+    """v_g array has correct shape and values in physical range."""
+    ri = _silica_sellmeier()
+    arr = ri.group_velocity_array()
+    assert len(arr) == 200
+    assert np.all(arr > 1e8) and np.all(arr < 3e8)

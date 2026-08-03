@@ -25,6 +25,17 @@ class TestRamanSpec:
         assert silica.fR == 0.18
         assert silica.n2 == 3.2e-20
 
+    def test_from_database_geasse(self):
+        """Test loading GeAsSe (chalcogenide waveguide material)."""
+        geasse = RamanSpec.from_database("GeAsSe")
+        assert geasse.name == "GeAsSe"
+        assert geasse.n2 == 6.0e-18
+        assert geasse.raman_shift_cm == 250
+        assert geasse.raman_linewidth_cm == 50
+        assert geasse.fR == 0.50
+        assert geasse.bandgap_eV.as_eV == 1.6
+        assert "Richardson" in geasse.references
+
     def test_from_database_multiple_materials(self):
         """Test loading multiple hardcoded materials."""
         materials = ["Silica", "CdS", "GaAs", "Diamond", "As2Se3", "Si", "Ge", "LiNbO3"]
@@ -437,9 +448,9 @@ class TestRAMAN_MATERIALS:
             spec = RamanSpec.from_database(name)
             assert spec.name == name
 
-    def test_exactly_thirty_materials(self):
-        """Test that RAMAN_MATERIALS has exactly 30 entries."""
-        assert len(RAMAN_MATERIALS) == 30
+    def test_material_count(self):
+        """Test that RAMAN_MATERIALS has the expected number of entries (30 + GeAsSe)."""
+        assert len(RAMAN_MATERIALS) == 31
 
     def test_all_original_materials_present(self):
         """Test original 8 materials are still present."""

@@ -18,13 +18,17 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Physics",
 ]
 dependencies = [
-    "dash>=2.18.0",
     "matplotlib>=3.10.3",
     "numpy>=2.2.6",
     "pydantic>=2.12.5",
     "rich>=14.3.3",
     "scipy>=1.15.3",
 ]
+
+[project.optional-dependencies]
+plotting = ["plotly>=5.0"]
+webapp = ["dash>=2.18.0"]
+all = ["plotly>=5.0", "dash>=2.18.0"]
 
 [build-system]
 requires = ["setuptools>=61.0.0", "wheel"]
@@ -45,7 +49,39 @@ project-includes = [
 ]
 permissive-ignores = true
 
-[dependency-groups]
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+ignore_missing_imports = true
+strict_optional = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::UserWarning",
+]
+
+[tool.coverage.run]
+source = ["photonics_helper"]
+omit = ["tests/*", "examples/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.",
+    "raise NotImplementedError",
+]
+
+[tool.dependency-groups]
 dev = [
     "pytest>=9.0.2",
+    "mypy>=1.15.0",
+    "ruff>=0.11.0",
+    "pre-commit>=3.8.0",
+    "coverage>=7.0",
 ]

@@ -38,6 +38,7 @@ from .base import (
     Time,
 )
 from .pulse import TemporalGrid, Wave
+from .phonon import PhononMode
 
 try:
     import plotly.graph_objects as go
@@ -442,6 +443,19 @@ RAMAN_MATERIALS = {
         "lo_phonon_cm": None,
         "to_phonon_cm": None,
         "references": "Davey et al., IEE Proc. J 136, 301 (1989); Bromage et al., IEEE Photon. Technol. Lett. 14, 24 (2002)",
+    },
+    "GeAsSe": {
+        "name": "GeAsSe",
+        "crystal": "Amorphous",
+        "bandgap_eV": 1.6,
+        "n2": 6.0e-18,
+        "raman_shift_cm": 250,
+        "raman_linewidth_cm": 50,
+        "fR": 0.50,
+        "gain_coeff": None,
+        "lo_phonon_cm": None,
+        "to_phonon_cm": None,
+        "references": "Richardson, Chalcogenide glass fibers for nonlinear optics; ~2× As2Se3 (Slusher et al., JOSA B 21, 1146)",
     },
 }
 

@@ -91,6 +91,51 @@ class RefractiveIndex:
             self._n_spline(wavelength).item(), self._k_spline(wavelength).item()
         )
 
+    def dn_dlambda(self, wavelength: float) -> float:
+        """Derivative dn/dλ at a scalar wavelength (μm). Returns value in μm⁻¹."""
+        self._validate_range(wavelength)
+        return self._dn_spline(wavelength).item()
+
+    def group_index(self, wavelength: float) -> float:
+        """Group index n_g = n - λ·(dn/dλ) at a scalar wavelength (μm). Dimensionless."""
+        self._validate_range(wavelength)
+        n_val = self.n_func(wavelength)
+        return n_val - wavelength * self.dn_dlambda(wavelength)
+
+    def group_index_array(self) -> NDArray:
+        """Group index n_g across the full wavelength grid. Dimensionless."""
+        wl_um = self.wl.as_um
+        n_arr = self._n_spline(wl_um)
+        dn_dl_arr = self._dn_spline(wl_um)
+        return n_arr - wl_um * dn_dl_arr
+
+    def group_velocity(self, wavelength: float) -> float:
+        """Group velocity v_g = c / n_g at a scalar wavelength (μm). Returns m/s.
+
+        Warns if n_g approaches zero (division-by-zero guard).
+        """
+        self._validate_range(wavelength)
+        n_g = self.group_index(wavelength)
+        if abs(n_g) < 1e-10:
+            warnings.warn(
+                f"group_index ≈ 0 at {wavelength} μm — group_velocity will diverge"
+            )
+        return self._C / n_g
+
+    def group_velocity_array(self) -> NDArray:
+        """Group velocity v_g across the full wavelength grid. Returns m/s."""
+        n_g_arr = self.group_index_array()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            return self._C / n_g_arr
+
+    @cached_property
+    def _dn_spline(self) -> BSpline:
+        """Cached derivative of the n-spline."""
+        return self._n_spline.derivative()
+
+    _C = 2.99792458e8  # speed of light in vacuum (m/s)
+
     def plot(self, include_k: bool = True):
         """Plot n (and optionally k) versus wavelength."""
 

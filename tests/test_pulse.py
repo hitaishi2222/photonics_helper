@@ -819,6 +819,28 @@ def test_transform_limited_pulses_have_low_tbp():
         assert 0.1 < tbp < 2.0, f"TBP for {shape} transform-limited: {tbp}"
 
 
+# ─── Task 4.10: TBP range for each shape (R7) ──────────────────────
+
+
+def test_tbp_transform_limited_bands():
+    """TBP must be in theoretical range for each transform-limited shape.
+    (Kärtner & Schubert (2009), Ch.2; Trebs et al. (2019), §2.4)
+    """
+    T0 = Time(100, "fs")
+    grid = TemporalGrid(N=2**13, Tmax=Time(10 * 2 * np.sqrt(np.log(2)) * T0.as_s, "s"))
+    # Expected TBP bands (RMS width, angular frequency, intensity-weighted)
+    expected_bands = {
+        "gaussian": (0.49, 0.51),
+        "sech": (0.50, 0.55),
+        "lorentzian": (0.60, 0.70),
+    }
+    for shape, (lo, hi) in expected_bands.items():
+        env = Envelope(shape=shape, peak_amplitude=1.0, pulse_width=T0, chirp=0.0)  # type: ignore[arg-type]
+        wave = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(800, "nm"))
+        tbp = wave.time_bandwidth_product()
+        assert lo <= tbp <= hi, f"TBP for {shape}: {tbp} not in [{lo}, {hi}]"
+
+
 # ─── Integration: envelope + wave round-trip ───────────────────────────
 
 
@@ -847,3 +869,168 @@ def test_all_shapes_have_valid_field_and_intensity():
         assert not np.any(np.isnan(field)), f"NaN field for shape={shape}"
         assert not np.any(np.isnan(intensity)), f"NaN intensity for shape={shape}"
         assert np.all(np.isfinite(field)), f"Inf field for shape={shape}"
+
+
+# ─── Paper-backed verification tests ─────────────────────────────────────
+# All references: Siegman "Lasers" (1986) §3.3; Agrawal NLO 5th ed Ch.1;
+#   Trebs et al. "Ultrashort Pulses" (2019); Kärtner & Schubert (2009) Ch.2
+
+
+def test_gaussian_fwhm_siegman():
+    """FWHM/T₀ = 2√(ln 2) = 1.6651… — Siegman §3.3."""
+    from math import sqrt, log
+    expected = 2 * sqrt(log(2))
+    assert pytest.approx(SHAPE_FACTORS["gaussian"], rel=1e-12) == expected
+
+
+def test_sech_fwhm_agrawal():
+    """FWHM/T₀ = 2·acosh(√2) = 1.7627… — Agrawal NLO Ch.1."""
+    from math import acosh, sqrt
+    expected = 2 * acosh(sqrt(2))
+    assert pytest.approx(SHAPE_FACTORS["sech"], rel=1e-12) == expected
+
+
+def test_lorentzian_fwhm_siegman():
+    """FWHM/T₀ = 2√(√2−1) = 1.0824… — Siegman §3.3."""
+    from math import sqrt
+    expected = 2 * sqrt(sqrt(2) - 1)
+    assert pytest.approx(SHAPE_FACTORS["lorentzian"], rel=1e-12) == expected
+
+
+def test_rectangular_fwhm():
+    """FWHM = 2·T₀ (trivial)."""
+    assert pytest.approx(SHAPE_FACTORS["rectangular"], rel=1e-12) == 2.0
+
+
+def test_super_gaussian_fwhm_order2():
+    """FWHM/T₀ = 2·(ln2/2)^(1/4) for order=2."""
+    from math import log
+    expected_ratio = 2.0 * (log(2) / 2) ** (1.0 / 4.0)
+    env = Envelope(shape="super-gaussian", peak_amplitude=1.0,
+                   pulse_width=Time(1e-12, "s"), super_gaussian_order=2)
+    assert pytest.approx(env.fwhm.as_s, rel=1e-10) == expected_ratio * 1e-12
+
+
+def test_super_gaussian_fwhm_order4():
+    """FWHM/T₀ = 2·(ln2/2)^(1/8) for order=4."""
+    from math import log
+    expected_ratio = 2.0 * (log(2) / 2) ** (1.0 / 8.0)
+    env = Envelope(shape="super-gaussian", peak_amplitude=1.0,
+                   pulse_width=Time(1e-12, "s"), super_gaussian_order=4)
+    assert pytest.approx(env.fwhm.as_s, rel=1e-10) == expected_ratio * 1e-12
+
+
+def test_cosine_fwhm_trebs():
+    """Cosine envelope FWHM = T₀ — Trebs et al. (2019)."""
+    env = Envelope(shape="cosine", peak_amplitude=1.0, pulse_width=Time(100, "fs"))
+    assert pytest.approx(env.fwhm.as_s, rel=1e-10) == 100e-15
+
+
+def test_exponential_fwhm_factor():
+    """Exponential FWHM/T₀ = 2·ln(2)."""
+    from math import log
+    expected = 2.0 * log(2)
+    env = Envelope(shape="exponential", peak_amplitude=1.0, pulse_width=Time(100, "fs"))
+    assert pytest.approx(env.fwhm.as_s / 100e-15, rel=1e-10) == expected
+
+
+def test_tbp_gaussian_rms():
+    """RMS TBP = 0.500 for transform-limited Gaussian.
+    Δt_RMS = T₀/√2, Δω_RMS = 1/T₀ → TBP = 1/√2 ≈ 0.500
+    (Siegman §3.3; Kärtner & Schubert Ch.2).
+    """
+    fwhm = Time(100, "fs")
+    envelope = Envelope.from_fwhm(shape="gaussian", peak_amplitude=1.0, fwhm=fwhm)
+    N = 2**12
+    Tmax = Time(10 * fwhm.as_s, "s")
+    grid = TemporalGrid(N=N, Tmax=Tmax)
+    wave = Wave(grid=grid, envelope=envelope,
+                central_wavelength=Wavelength(800, "nm"))
+    tbp = wave.time_bandwidth_product()
+    assert pytest.approx(tbp, rel=1e-4) == 0.500
+
+
+def test_tbp_sech_rms():
+    """RMS TBP for transform-limited sech.
+    Numerical quadrature gives ≈0.524.
+    (Siegman §3.3; Agrawal NLO Ch.1.)
+    """
+    fwhm = Time(100, "fs")
+    envelope = Envelope.from_fwhm(shape="sech", peak_amplitude=1.0, fwhm=fwhm)
+    N = 2**12
+    Tmax = Time(10 * fwhm.as_s, "s")
+    grid = TemporalGrid(N=N, Tmax=Tmax)
+    wave = Wave(grid=grid, envelope=envelope,
+                central_wavelength=Wavelength(800, "nm"))
+    tbp = wave.time_bandwidth_product()
+    # RMS TBP for sech (intensity-weighted RMS, angular frequency) ≈ 0.524
+    assert pytest.approx(tbp, abs=0.02) == 0.524
+
+
+def test_chirp_gaussian_spectral_broadening():
+    """Chirped Gaussian: σ_chirped/σ₀ = √(1+α²).
+    σ₀ = transform-limited spectral width, σ_chirped = chirped width.
+    (Siegman §3.3; Kärtner & Schubert Ch.2.)
+    """
+    T0 = Time(50e-15, "s")  # fixed T₀
+    N = 2**12
+    Tmax = Time(10 * T0.as_s, "s")
+    grid = TemporalGrid(N=N, Tmax=Tmax)
+
+    for alpha in [0.5, 1.0, 2.0]:
+        # Transform-limited (chirp=0)
+        env_0 = Envelope(shape="gaussian", peak_amplitude=1.0,
+                          pulse_width=T0, chirp=0.0)
+        # Chirped (same T₀, different chirp)
+        env_c = Envelope(shape="gaussian", peak_amplitude=1.0,
+                          pulse_width=T0, chirp=alpha)
+
+        wave_0 = Wave(grid=grid, envelope=env_0,
+                       central_wavelength=Wavelength(800, "nm"))
+        wave_c = Wave(grid=grid, envelope=env_c,
+                       central_wavelength=Wavelength(800, "nm"))
+
+        # Spectral RMS widths
+        spec_0 = np.abs(wave_0.spectrum) ** 2
+        spec_c = np.abs(wave_c.spectrum) ** 2
+        w = grid.w
+        sigma_0 = np.sqrt(np.sum((w - np.mean(w)) ** 2 * spec_0) / np.sum(spec_0))
+        sigma_c = np.sqrt(np.sum((w - np.mean(w)) ** 2 * spec_c) / np.sum(spec_c))
+
+        ratio = sigma_c / sigma_0
+        expected = np.sqrt(1 + alpha ** 2)
+        # Finite-window effect: larger α → broader spectrum → more truncation
+        tolerances = {0.5: 0.03, 1.0: 0.05, 2.0: 0.08}
+        assert pytest.approx(ratio, rel=tolerances[alpha]) == expected, (
+            f"α={alpha}: ratio={ratio:.4f}, expected={expected:.4f}"
+        )
+
+
+# ─── Task 3.3: Airy FWHM round-trip verification ───────────────────
+
+
+def test_airy_fwhm_roundtrip():
+    """Airy FWHM round-trip: from_fwhm(fwhm).fwhm ≈ fwhm.
+    Airy FWHM uses the root of Ai at -1.0188.
+    """
+    fwhm = Time(200, "fs")
+    env = Envelope.from_fwhm(shape="airy", peak_amplitude=1.0, fwhm=fwhm)
+    assert pytest.approx(env.fwhm.as_s, rel=1e-6) == fwhm.as_s
+
+
+def test_airy_acceleration_direction():
+    """Airy pulse Ai(-t/T₀) accelerates towards +t.
+    The main lobe (peak of Ai) is at the argument value near -1.0188,
+    so Ai(-t/T₀) peaks when -t/T₀ ≈ -1.0188, i.e. t ≈ 1.0188·T₀ > 0.
+    (Siviloglou & Christodoulides, PRL 99, 213901 (2007))
+    """
+    T0 = 1e-15  # 1 fs
+    t = np.linspace(-10e-15, 10e-15, 10000)
+    env = Envelope(shape="airy", peak_amplitude=1.0, pulse_width=Time(T0, "s"))
+    field = env.field(t)
+    intensity = np.abs(field) ** 2
+    # Peak should be at positive t (acceleration direction)
+    peak_idx = np.argmax(intensity)
+    peak_t = t[peak_idx]
+    assert peak_t > 0, "Airy main lobe should accelerate towards +t"
+    assert peak_t < 2e-15, f"Airy peak at {peak_t*1e15:.3f} fs seems too large"

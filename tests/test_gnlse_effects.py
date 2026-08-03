@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from photonics_helper.gnlse import FiberProfile, kerr_step, raman_step, self_steepening_step, tpa_step
+from photonics_helper.gnlse import FiberProfile, kerr_step, raman_step, tpa_step
 from photonics_helper.pulse import TemporalGrid
 from photonics_helper.base import Area, Length, Time
 
@@ -52,42 +52,6 @@ def test_raman_step_missing_response(fiber, grid, A):
     """Raman step raises when response is missing but enabled."""
     with pytest.raises(ValueError, match="raman_response is None"):
         raman_step(A, fiber, grid, dz=1e-3, include_raman=True)
-
-
-def test_self_steepening_step_disabled(fiber, grid, A):
-    """Self-steepening step returns unchanged field when disabled."""
-    A_new = self_steepening_step(A, fiber, grid, dz=1e-3, omega0=2e15, include_self_steepening=False)
-    assert np.allclose(A_new, A)
-
-
-def test_self_steepening_step_amplitude_modulation(fiber, grid, A):
-    """Self-steepening applies frequency-domain (1-ω/ω₀) operator via solve_ivp."""
-    from scipy.integrate import solve_ivp
-
-    omega0 = 2e15
-    dz = 1.0
-    A_new = self_steepening_step(A, fiber, grid, dz=dz, omega0=omega0, include_self_steepening=True)
-
-    gamma = fiber.n2 * omega0 / (299792458.0 * fiber.A_eff.as_m2)
-    P_NL = np.abs(A) ** 2
-    omega_ratio = grid.w / omega0
-    factor = 1j * gamma * (1 - omega_ratio)
-
-    def rhs(z, a):
-        return grid.ifft(factor * grid.fft(P_NL * a))
-
-    sol = solve_ivp(
-        rhs,
-        t_span=(0.0, dz),
-        y0=A.astype(complex),
-        method="RK45",
-        rtol=1e-8,
-        atol=1e-10,
-        dense_output=False,
-    )
-    A_expected = sol.y[:, -1]
-
-    assert np.allclose(A_new, A_expected)
 
 
 def test_tpa_step_disabled(fiber, grid, A):

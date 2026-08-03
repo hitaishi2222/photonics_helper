@@ -84,3 +84,33 @@ def test_engine_dispersion_spreads_pulse(setup):
     final_width = np.sqrt(np.sum(pulse.grid.t**2 * np.abs(final_field)**2) / np.sum(np.abs(final_field)**2))
     # Pulse should broaden due to dispersion
     assert final_width > initial_width
+
+
+def test_confinement_factor_backward_compatibility():
+    """Γ=1.0 gives same γ as fiber-only formula (task 2.5)."""
+    from photonics_helper.gnlse import _gamma
+    from photonics_helper.base import C_MS
+
+    n2 = 1e-19
+    omega0 = 2 * np.pi * C_MS / 1550e-9
+    A_eff = Area(5e-11, "m^2")
+
+    gamma_default = _gamma(n2, omega0, A_eff)  # confinement_factor defaults to 1.0
+    gamma_explicit = _gamma(n2, omega0, A_eff, confinement_factor=1.0)
+
+    assert np.isclose(gamma_default, gamma_explicit)
+
+
+def test_confinement_factor_reduces_gamma():
+    """Γ=0.8 reduces γ by 20% (task 2.6)."""
+    from photonics_helper.gnlse import _gamma
+    from photonics_helper.base import C_MS
+
+    n2 = 1e-19
+    omega0 = 2 * np.pi * C_MS / 1550e-9
+    A_eff = Area(5e-11, "m^2")
+
+    gamma_full = _gamma(n2, omega0, A_eff, confinement_factor=1.0)
+    gamma_partial = _gamma(n2, omega0, A_eff, confinement_factor=0.8)
+
+    assert np.isclose(gamma_partial / gamma_full, 0.8, rtol=1e-10)
