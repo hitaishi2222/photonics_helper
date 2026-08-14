@@ -74,6 +74,34 @@ def test_dispersion_accessor_functions():
     assert pytest.approx(disp.fn(Wavelength(1550, "nm")), rel=1e-12) == 1e-6
 
 
+def test_dispersion_unit_conversion_ps_nm_km():
+    """
+    ps/(nm.km) inputs must be normalised to SI (s/m^2) internally so that
+    get_betas/get_beta2 are correct (1 ps/(nm.km) = 1e-6 s/m^2).
+    Regression test for the raw-storage bug flagged in revision.md item 1.
+    """
+    wl_arr = WavelengthArray(np.linspace(1500.0, 1600.0, 51), "nm")
+    cw = Wavelength(1550, "nm")
+
+    disp_ps = Dispersion(
+        values=np.full(51, 17.0), unit="ps/nm.km",
+        wavelengths=wl_arr, central_wavelength=cw,
+    )
+    disp_si = Dispersion(
+        values=np.full(51, 17.0e-6), unit="s/m^2",
+        wavelengths=wl_arr, central_wavelength=cw,
+    )
+
+    # Accessors reflect correct, converted units on both sides.
+    assert np.allclose(disp_ps.as_s_m_m, 17.0e-6)
+    assert np.allclose(disp_ps.as_ps_nm_km, 17.0)
+    # Equivalent values in either unit must agree internally.
+    assert np.allclose(disp_ps.as_s_m_m, disp_si.as_s_m_m)
+    # get_betas feeds the GNLSE solver: silica D=17 -> beta2 ~= -21.7 ps^2/km
+    b = disp_ps.get_betas(2)
+    assert -3e-2 < b[0] < -1e-2  # ps^2/m, negative & in the silica ballpark
+
+
 def test_dispersion_from_neff_error_conditions():
     """
     Verify that ``Dispersion.from_neff`` raises the appropriate exceptions when
@@ -100,9 +128,9 @@ def test_dispersion_from_neff_error_conditions():
         )
 
 
-def test_propagation_constant_beta2_from_neff():
+def test_propagation_constant_beta_from_neff():
     """
-    ``PropagationConstant.beta2_from_neff`` should compute β₂ = n·ω / c.
+    ``PropagationConstant.beta_from_neff`` should compute β = n·ω / c.
     We verify the result against a manual calculation for a simple case.
     """
     neff = np.array([1.0, 1.2, 1.5])
@@ -110,13 +138,13 @@ def test_propagation_constant_beta2_from_neff():
     wl_arr = WavelengthArray(np.array([1500.0, 1550.0, 1600.0]), "nm")
     omega_arr = wl_arr.to_omega()
 
-    # Expected β₂ values: β₂ = n·ω / c (c = C_MS)
+    # Expected β values: β = n·ω / c (c = C_MS)
     from photonics_helper.base import C_MS
 
-    expected_beta2 = neff * omega_arr.as_rad_s / C_MS
+    expected_beta = neff * omega_arr.as_rad_s / C_MS
 
-    beta2 = PropagationConstant.beta2_from_neff(neff=neff, x_values=wl_arr)
-    np.testing.assert_allclose(beta2, expected_beta2, rtol=1e-12)
+    beta = PropagationConstant.beta_from_neff(neff=neff, x_values=wl_arr)
+    np.testing.assert_allclose(beta, expected_beta, rtol=1e-12)
 
 
 def test_propagation_constant_from_neff_omega_error_handling():

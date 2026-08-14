@@ -15,7 +15,7 @@ from numpy.typing import NDArray
 if TYPE_CHECKING:
     from photonics_helper.pulse import Wave, TemporalGrid
 
-__all__ = ["FiberProfile", "GNLSESolver", "SplitStepEngine"]
+__all__ = ["FiberProfile", "GNLSESolver", "SplitStepEngine", "TaperedGNLSESolver"]
 
 
 @dataclass
@@ -26,6 +26,7 @@ class FiberProfile:
         n2: Nonlinear refractive index n₂ (m²/W).
         alpha: Fiber loss coefficient α (1/m).
         A_eff: Effective mode area (m²).
+        confinement_factor: Waveguide confinement factor Γ (1.0 for fibers, <1.0 for waveguides).
         sigma_tpa: Two-photon absorption cross-section (m²·W⁻¹). Default 0.
         carrier_lifetime: Carrier recombination lifetime (s). Default None.
         length: Fiber length (m).
@@ -36,13 +37,34 @@ class FiberProfile:
     alpha: float
     A_eff: float
     length: float
+    confinement_factor: float = 1.0
     sigma_tpa: float = 0.0
     carrier_lifetime: Optional[float] = None
     raman_response: Optional[object] = None
 
+    @classmethod
+    def from_gamma(
+        cls,
+        gamma: float,
+        n2: float,
+        omega0: float,
+        alpha: float = ...,
+        length: float = ...,
+        confinement_factor: float = ...,
+        sigma_tpa: float = ...,
+        carrier_lifetime: Optional[float] = ...,
+        raman_response: Optional[object] = ...,
+    ) -> "FiberProfile":
+        """Create a FiberProfile from a target nonlinear coefficient γ.
 
-def _gamma(n2: float, omega0: float, A_eff: float) -> float:
-    """Nonlinear coefficient γ = n₂·ω₀ / (c·A_eff)."""
+        Computes A_eff = n₂·ω₀·Γ / (c·γ) from the relation
+        γ = n₂·ω₀·Γ / (c·A_eff).
+        """
+        ...
+
+
+def _gamma(n2: float, omega0: float, A_eff: float, confinement_factor: float = ...) -> float:
+    """Nonlinear coefficient γ = n₂·ω₀·Γ / (c·A_eff)."""
     ...
 
 
@@ -153,8 +175,71 @@ class GNLSESolver:
 
     def propagate(self, num_steps: int = 100) -> None: ...
 
+    @classmethod
+    def estimate_num_steps(
+        cls,
+        pulse: "Wave",
+        fiber: "FiberProfile",
+        betas: NDArray,
+        *,
+        include_self_steepening: bool = False,
+        include_raman: bool = False,
+        safety_factor: float = 2.0,
+    ) -> int: ...
+
+    def interpolated_spectrum_db(
+        self,
+        wl_min: float,
+        wl_max: float,
+        n_wl: int,
+        *,
+        step_index: int = -1,
+    ) -> Tuple[NDArray, NDArray]: ...
+
     @property
     def evolution(self) -> list["Wave"]: ...
+
+    @property
+    def spectra_vs_z(self) -> Tuple[NDArray, NDArray]: ...
+
+
+class TaperedGNLSESolver:
+    """High-level GNLSE solver for z-dependent (tapered/dispersion-managed) waveguides."""
+
+    pulse: "Wave"
+    fiber: "FiberProfile"
+    dispersion_profile: object
+    a_eff_fn: Optional[Callable[[float], float]]
+    alpha_fn: Optional[Callable[[float], float]]
+    include_raman: bool
+    include_self_steepening: bool
+    include_tpa: bool
+    _evolution: list["Wave"]
+    _z_positions: Optional[NDArray]
+    _spectra_vs_z: Optional[Tuple[NDArray, NDArray]]
+
+    def __init__(
+        self,
+        pulse: "Wave",
+        fiber: "FiberProfile",
+        dispersion_profile: object,
+        a_eff_fn: Optional[Callable[[float], float]] = None,
+        alpha_fn: Optional[Callable[[float], float]] = None,
+        include_raman: bool = True,
+        include_self_steepening: bool = False,
+        include_tpa: bool = False,
+    ) -> None: ...
+
+    def propagate(self, num_steps: int = 100) -> None: ...
+
+    @property
+    def evolution(self) -> list["Wave"]: ...
+
+    @property
+    def z_array(self) -> NDArray: ...
+
+    @property
+    def omega0(self) -> float: ...
 
     @property
     def spectra_vs_z(self) -> Tuple[NDArray, NDArray]: ...
@@ -167,11 +252,43 @@ def plot_waterfall(
 ) -> "plt.Figure": ...
 
 
-def plot_spectrum_vs_distance(
+def plot_spectral_evolution(
     solver: "GNLSESolver",
     ax: Optional["plt.Axes"] = None,
+    *,
+    wl_min: Optional[float] = None,
+    wl_max: Optional[float] = None,
+    n_wl: int = 400,
+    dynamic_range_db: float = 40.0,
     dB: bool = True,
+    cmap: str = "jet",
+    z_scale: str = "m",
 ) -> "plt.Figure": ...
+
+
+def plot_temporal_evolution(
+    solver: "GNLSESolver",
+    ax: Optional["plt.Axes"] = None,
+    *,
+    t_min: Optional[float] = None,
+    t_max: Optional[float] = None,
+    dynamic_range_db: float = 40.0,
+    cmap: str = "jet",
+    z_scale: str = "m",
+) -> "plt.Figure": ...
+
+
+def spectral_evolution_on_wavelength_grid(
+    solver: "GNLSESolver",
+    wl_min: float,
+    wl_max: float,
+    n_wl: int,
+) -> Tuple[NDArray, NDArray, NDArray]: ...
+
+
+def temporal_evolution_intensity(
+    solver: "GNLSESolver",
+) -> Tuple[NDArray, NDArray, NDArray]: ...
 
 
 def plot_intensity_metrics(

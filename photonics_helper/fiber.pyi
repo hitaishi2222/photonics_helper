@@ -3,7 +3,7 @@ from photonics_helper.base import AngularFrequencyArray, Wavelength, WavelengthA
 from functools import cached_property
 from numpy.typing import NDArray
 from typing import Literal, Self, Tuple
-from scipy.interpolate import BSpline
+from scipy.interpolate import BSpline, RegularGridInterpolator
 from pydantic import model_validator
 from pydantic.dataclasses import dataclass
 
@@ -151,6 +151,54 @@ class Dispersion:
                 - fit: The polynomial fit of β₂ data.
         """
         ...
+
+@dataclass(config={"arbitrary_types_allowed": True})
+class ZDependentDispersion:
+    """Z-dependent dispersion profile β(ω, z) for tapered/dispersion-managed waveguides.
+
+    Holds a 2-D table of propagation constants β[ω_idx, z_idx] with axis arrays,
+    plus a `fn(omega, z)` interpolant built via `RegularGridInterpolator`.
+    """
+
+    omegas: NDArray
+    z_positions: NDArray
+    beta: NDArray
+    central_wavelength: float
+
+    def __post_init__(self) -> None: ...
+    def __repr__(self) -> str: ...
+    def fn(self, omega: float | NDArray, z: float) -> float | NDArray: ...
+    @property
+    def n_omega(self) -> int: ...
+    @property
+    def n_z(self) -> int: ...
+    def get_betas_at_z(
+        self,
+        z: float,
+        order: int = 7,
+        omega0: float | None = None,
+        halfwidth: float | None = None,
+    ) -> NDArray:
+        """Return [β₂, β₃, …, β_order] in SI units (s^k/m) fitted near omega0."""
+        ...
+    def get_betas_vs_z(
+        self,
+        order: int = 7,
+        omega0: float | None = None,
+        halfwidth: float | None = None,
+    ) -> NDArray:
+        """Return shape (n_z, order - 1) Taylor coefficients in SI units (s^k/m)."""
+        ...
+    @classmethod
+    def from_arrays(
+        cls,
+        omegas: NDArray,
+        z_positions: NDArray,
+        beta: NDArray,
+        central_wavelength: float,
+    ) -> Self: ...
+    @classmethod
+    def from_npz(path: str, central_wavelength: float | None = None) -> Self: ...
 
 @dataclass(config={"arbitrary_types_allowed": True})
 class PropagationConstant:

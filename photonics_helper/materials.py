@@ -189,7 +189,7 @@ class RefractiveIndex:
         else:
             n = []
             wl = np.linspace(wl_from_to_in_um[0], wl_from_to_in_um[1], n_points)
-            wls = WavelengthArray(wl, "m")
+            wls = WavelengthArray(wl, "um")
             for wl in wls.as_um:
                 sum = 0.0
                 for i in range(len(A)):
@@ -199,11 +199,35 @@ class RefractiveIndex:
 
         return cls(n=np.array(n), k=k, wl=wls)
 
-    def propagation_loss(self):
-        """Compute propagation loss (dB/m) from the extinction coefficient k."""
+    @classmethod
+    def from_material_database(cls, material: str, n_points: int = 200) -> Self:
+        """Build a tabulated RefractiveIndex from Sellmeier data in materials.db."""
+        from .raman import RamanDatabase
+
+        db = RamanDatabase()
+        sellmeier = db.get_sellmeier(material)
+        if sellmeier is None:
+            raise ValueError(f"No Sellmeier data for {material} in materials.db")
+
+        wl_range = (sellmeier["valid_from_um"], sellmeier["valid_to_um"])
+        return cls.from_sellmeier(
+            A0=sellmeier["a0"],
+            A=sellmeier["coefficients"],
+            B=sellmeier["wavelengths"],
+            wl_from_to_in_um=wl_range,
+            n_points=n_points,
+        )
+
+    def propagation_loss(self) -> NDArray:
+        """Compute propagation loss (dB/m) from the extinction coefficient k.
+
+        Uses intensity attenuation α(λ) = 4πk(λ)/λ, then converts to dB/m:
+            loss = 10·log₁₀(e)·α ≈ 4.343·α
+        """
         if not np.all(self.k):
             warnings.warn(
-                "RefractiveIndex doesn't have imaginary index values. please provide it before loss calculation"
+                "RefractiveIndex doesn't have imaginary index values. "
+                "Please provide it before loss calculation."
             )
-        else:
-            return -20 * np.log10(np.exp(-2 * PI * self.k / self.wl.as_m))
+        alpha = 4 * PI * self.k / self.wl.as_m  # 1/m (intensity attenuation)
+        return 10 * np.log10(np.e) * alpha  # dB/m

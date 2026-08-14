@@ -25,7 +25,7 @@ from .base import (
 )
 
 from .materials import RefractiveIndex
-from .fiber import Dispersion, PropagationConstant
+from .fiber import Dispersion, PropagationConstant, ZDependentDispersion
 from .pulse import (
     FROGTrace,
     generate_trace,
@@ -49,7 +49,7 @@ from .raman import (
 )
 from .phonon import PhononMode, PhononResponse, PHONON_MATERIALS
 from .soliton import SolitonAnalyzer
-from .gnlse import FiberProfile, GNLSESolver, SplitStepEngine
+from .gnlse import FiberProfile, GNLSESolver, SplitStepEngine, TaperedGNLSESolver
 
 __all__ = [
     "Wavelength",
@@ -76,6 +76,7 @@ __all__ = [
     "RefractiveIndex",
     "Dispersion",
     "PropagationConstant",
+    "ZDependentDispersion",
     "FROGTrace",
     "generate_trace",
     "retrieve",
@@ -100,4 +101,5 @@ __all__ = [
     "FiberProfile",
     "GNLSESolver",
     "SplitStepEngine",
+    "TaperedGNLSESolver",
 ]

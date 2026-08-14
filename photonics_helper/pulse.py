@@ -6,7 +6,7 @@ from functools import cached_property
 import logging
 from matplotlib import gridspec
 from numpy.typing import NDArray
-from photonics_helper.base import Wavelength, Frequency, Time, Length
+from photonics_helper.base import Wavelength, Frequency, Time, Length, C_MS
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -193,6 +193,128 @@ class Envelope:
     def intensity(self, t: NDArray) -> NDArray:
         A = self.field(t)
         return np.abs(A) ** 2
+
+    def calc_width(self, level: float = 0.5) -> Time:
+        """Calculate the pulse width using linear interpolation at crossing points.
+
+        Finds the width between the widest pair of crossings where the
+        intensity envelope drops to ``level * peak_intensity``.
+
+        Parameters
+        ----------
+        level : float — fraction of peak to calculate width at.
+            0.5 gives FWHM, 1/e ≈ 0.368, 1/e² ≈ 0.135. Default 0.5.
+
+        Returns
+        -------
+        width : Time — pulse width in picoseconds.
+        """
+        grid = self._make_grid()
+        t = grid.t
+        intensity = self.intensity(t)
+        peak = np.max(intensity)
+        if peak == 0:
+            return Time(0.0, "s")
+
+        target = intensity - level * peak
+        # Find sign changes (crossings)
+        sign_changes = np.where(np.diff(np.sign(target)))[0]
+        if len(sign_changes) < 2:
+            # Fewer than 2 crossings — return 0
+            return Time(0.0, "s")
+
+        # Linear interpolation at each crossing
+        roots = []
+        for idx in sign_changes:
+            t0, t1 = t[idx], t[idx + 1]
+            y0, y1 = target[idx], target[idx + 1]
+            # y = y0 + (y1 - y0) * (t - t0) / (t1 - t0)
+            # root at y = 0: t = t0 - y0 * (t1 - t0) / (y1 - y0)
+            denom = y1 - y0
+            if abs(denom) < 1e-30:
+                continue
+            root = t0 - y0 * (t1 - t0) / denom
+            roots.append(root)
+
+        if len(roots) < 2:
+            return Time(0.0, "s")
+
+        width_s = float(np.max(roots)) - float(np.min(roots))
+        return Time(width_s, "s")
+
+    def apply_dispersion(
+        self,
+        GDD: float = 0.0,
+        TOD: float = 0.0,
+        FOD: float = 0.0,
+        N: int = 2**12,
+    ) -> "Envelope":
+        """Apply group-delay dispersion (GDD), TOD, FOD in the frequency domain.
+
+        Multiplies the spectral amplitude by ``exp(i·φ(ω))`` where
+        ``φ(ω) = ½·GDD·Ω² + ⅙·TOD·Ω³ + ¹⁄₂₄·FOD·Ω⁴`` and ``Ω`` is the
+        offset from the central angular frequency.
+
+        This is the frequency-domain equivalent of laserfun's
+        ``chirp_pulse_W(GDD, TOD, FOD)``.
+
+        Parameters
+        ----------
+        GDD : float — group-delay dispersion (ps²). Default 0.
+        TOD : float — third-order dispersion (ps³). Default 0.
+        FOD : float — fourth-order dispersion (ps⁴). Default 0.
+        N : int — number of points for the internal grid (default 2¹²).
+
+        Returns
+        -------
+        Envelope — a new Envelope with the dispersion-applied field.
+        """
+        # Build a grid to hold the spectral field
+        grid = TemporalGrid(N=N, Tmax=Time(10.0 * self.pulse_width.as_s, "s"))
+        t = grid.t
+
+        # Original field
+        A_t = self.field(t)
+
+        # FFT to frequency domain
+        A_w = grid.fft(A_t)
+
+        # Angular frequency offset from center (rad/s)
+        omega = grid.w  # already centered at 0
+
+        # Build dispersion phase: φ(Ω) = ½·GDD·Ω² + ⅙·TOD·Ω³ + ¹⁄₂₄·FOD·Ω⁴
+        # GDD, TOD, FOD are in ps², ps³, ps⁴. Convert omega from rad/s to rad/ps.
+        omega_ps = omega * 1e-12  # rad/s → rad/ps
+
+        phase = np.zeros_like(omega_ps, dtype=float)
+        if GDD != 0.0:
+            phase += 0.5 * GDD * omega_ps ** 2
+        if TOD != 0.0:
+            phase += (1.0 / 6.0) * TOD * omega_ps ** 3
+        if FOD != 0.0:
+            phase += (1.0 / 24.0) * FOD * omega_ps ** 4
+
+        # Apply dispersion phase in frequency domain
+        A_w_disp = A_w * np.exp(1j * phase)
+
+        # IFFT back to time domain
+        A_t_disp = grid.ifft(A_w_disp)
+
+        # Create a new Envelope that holds the modified field
+        disp_field = A_t_disp.copy()
+
+        new_env = Envelope(
+            shape=self.shape,
+            peak_amplitude=self.peak_amplitude,
+            pulse_width=self.pulse_width,
+            chirp=self.chirp,
+            super_gaussian_order=getattr(self, "super_gaussian_order", 2),
+            beam_waist=getattr(self, "beam_waist", None),
+            hg_mode=getattr(self, "hg_mode", 0),
+            func=lambda _t, _T0, _A0: disp_field,  # type: ignore[arg-type]
+            phase_func=self.phase_func,
+        )
+        return new_env
 
     def _make_grid(self, N: int = 2**12) -> TemporalGrid:
         """Create a TemporalGrid sized for this envelope."""
@@ -819,9 +941,17 @@ class TemporalGrid:
         return w[1] - w[0]
 
     def fft(self, A_t):
+        """Forward FFT with photonics_helper convention: ``FFT(A)·dt``.
+
+        The result is fftshifted and scaled by ``dt`` so that Parseval's
+        theorem holds with the companion :meth:`ifft`. Raw FFT magnitudes
+        differ from laserfun (which uses unshifted ``fft`` without ``dt``);
+        compare normalized spectra or time-domain intensities across tools.
+        """
         return np.fft.fftshift(np.fft.fft(np.fft.ifftshift(A_t))) * self.dt
 
     def ifft(self, A_w):
+        """Inverse FFT paired with :meth:`fft` (includes ``1/dt`` scaling)."""
         return np.fft.fftshift(np.fft.ifft(np.fft.ifftshift(A_w))) / self.dt
 
     @property
@@ -870,6 +1000,12 @@ class Wave:
         return self.central_wavelength.to_omega().as_rad_s
 
     @property
+    def wavelength_nm(self) -> NDArray:
+        """Absolute wavelength grid (nm) for each frequency sample on ``grid.w``."""
+        omega_abs = self.central_frequency + self.grid.w
+        return 2 * np.pi * C_MS / omega_abs * 1e9
+
+    @property
     def envelope_field(self):
         return self.envelope.field(self.grid.t)
 
@@ -888,6 +1024,50 @@ class Wave:
 
     def pulse_energy(self):
         return np.sum(self.envelope.intensity(self.grid.t)) * self.grid.dt
+
+    def calc_width(self, level: float = 0.5) -> Time:
+        """Calculate the pulse width using linear interpolation at crossing points.
+
+        Finds the width between the widest pair of crossings where the
+        intensity envelope drops to ``level * peak_intensity``.
+
+        Parameters
+        ----------
+        level : float — fraction of peak to calculate width at.
+            0.5 gives FWHM, 1/e ≈ 0.368, 1/e² ≈ 0.135. Default 0.5.
+
+        Returns
+        -------
+        width : Time — pulse width in picoseconds.
+        """
+        intensity = self.envelope_intensity
+        peak = np.max(intensity)
+        if peak == 0:
+            return Time(0.0, "s")
+
+        target = intensity - level * peak
+        t = self.grid.t
+        # Find sign changes (crossings)
+        sign_changes = np.where(np.diff(np.sign(target)))[0]
+        if len(sign_changes) < 2:
+            return Time(0.0, "s")
+
+        # Linear interpolation at each crossing
+        roots = []
+        for idx in sign_changes:
+            t0, t1 = t[idx], t[idx + 1]
+            y0, y1 = target[idx], target[idx + 1]
+            denom = y1 - y0
+            if abs(denom) < 1e-30:
+                continue
+            root = t0 - y0 * (t1 - t0) / denom
+            roots.append(root)
+
+        if len(roots) < 2:
+            return Time(0.0, "s")
+
+        width_s = float(np.max(roots)) - float(np.min(roots))
+        return Time(width_s, "s")
 
     def peak_power(self):
         A = self.envelope_field

@@ -6,7 +6,7 @@ from numpy.testing import assert_almost_equal, assert_array_almost_equal
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from photonics_helper.raman import RamanSpec, RamanDatabase, RAMAN_MATERIALS
+from photonics_helper.raman import RamanSpec, RamanDatabase, RAMAN_MATERIALS, THORLABS_SUBSTRATE_MATERIALS
 from photonics_helper.base import Wavelength, C_MS, Energy, Time
 
 
@@ -576,6 +576,65 @@ class TestNewMaterialsDatabase:
             assert spec.name == "CustomDB"
             assert spec.raman_shift_cm == 500
             assert spec.fR == 0.3
+
+
+class TestThorlabsSubstrateMaterials:
+    """Tests for Thorlabs optical substrate entries in materials.db."""
+
+    THORLABS_NAMES = sorted(THORLABS_SUBSTRATE_MATERIALS.keys())
+
+    @pytest.fixture(autouse=True)
+    def _ensure_db_seeded(self):
+        db = RamanDatabase()
+        if not db.get_sellmeier("N-BK7"):
+            for data in THORLABS_SUBSTRATE_MATERIALS.values():
+                db.add_material(data)
+            from seed_db import THORLABS_SELLMEIER_MATERIALS
+
+            for name, sellmeier in THORLABS_SELLMEIER_MATERIALS.items():
+                db.add_sellmeier(material=name, **{
+                    k: sellmeier[k]
+                    for k in (
+                        "form",
+                        "a0",
+                        "coefficients",
+                        "wavelengths",
+                        "valid_from_um",
+                        "valid_to_um",
+                        "source",
+                    )
+                })
+
+    def test_thorlabs_material_count(self):
+        assert len(THORLABS_SUBSTRATE_MATERIALS) == 12
+
+    def test_thorlabs_materials_load_from_database(self):
+        for name in self.THORLABS_NAMES:
+            spec = RamanSpec.from_database(name)
+            assert spec.name == name
+            assert spec.fR == 0.0
+            assert spec.raman_shift_cm is None
+
+    def test_thorlabs_sellmeier_refractive_index(self):
+        checks = {
+            "N-BK7": (0.5876, 1.517, 0.01),
+            "N-SF11": (0.5876, 1.785, 0.01),
+            "CaF2": (0.5876, 1.434, 0.01),
+            "MgF2": (0.633, 1.425, 0.05),
+            "ZnSe": (1.06, 2.26, 0.1),
+            "PMMA": (0.5876, 1.491, 0.01),
+        }
+        for name, (wl_um, n_expected, tol) in checks.items():
+            spec = RamanSpec.from_database(name)
+            n = spec.nk(wl_um).real
+            assert abs(n - n_expected) < tol, f"{name}: n={n:.4f}, expected≈{n_expected}"
+
+    def test_refractive_index_from_material_database(self):
+        from photonics_helper.materials import RefractiveIndex
+
+        ri = RefractiveIndex.from_material_database("N-BK7")
+        n = ri.n_func(0.5876)
+        assert abs(n - 1.517) < 0.01
 
 
 # ─── RamanFrequencyResponse Tests ─────────────────────────────────────────────

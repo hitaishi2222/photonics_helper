@@ -129,6 +129,49 @@ class Envelope:
         """
         ...
 
+    def calc_width(self, level: float = ...) -> Time:
+        """
+        Calculate the pulse width using linear interpolation at half‑max
+        crossing points.
+
+        Parameters
+        ----------
+        level : float — fraction of peak to calculate width at.
+            0.5 gives FWHM, 1/e ≈ 0.368, 1/e² ≈ 0.135. Default 0.5.
+
+        Returns
+        -------
+        Time — pulse width in seconds.
+        """
+        ...
+
+    def apply_dispersion(
+        self,
+        GDD: float = ...,
+        TOD: float = ...,
+        FOD: float = ...,
+        N: int = ...,
+    ) -> Self:
+        """
+        Apply group‑delay dispersion (GDD), TOD, FOD in the frequency domain.
+
+        Multiplies the spectral amplitude by ``exp(i·φ(ω))`` where
+        ``φ(ω) = ½·GDD·Ω² + ⅙·TOD·Ω³ + ¹⁄₂₄·FOD·Ω⁴`` and ``Ω`` is the
+        offset from the central angular frequency.
+
+        Parameters
+        ----------
+        GDD : float — group‑delay dispersion (ps²). Default 0.
+        TOD : float — third‑order dispersion (ps³). Default 0.
+        FOD : float — fourth‑order dispersion (ps⁴). Default 0.
+        N : int — number of points for the internal grid (default 2¹²).
+
+        Returns
+        -------
+        Envelope — a new Envelope with the dispersion‑applied field.
+        """
+        ...
+
     def visualize_2d(
         self,
         backend: Literal["plotly", "matplotlib"] = "plotly",
@@ -214,9 +257,9 @@ class TemporalGrid:
     """
 
     N: int
-    Tmax: float
+    Tmax: Time
 
-    def __init__(self, N: int, Tmax: float) -> None: ...
+    def __init__(self, N: int, Tmax: Time) -> None: ...
 
     @property
     def dt(self) -> float:
@@ -338,6 +381,11 @@ class Wave:
         ...
 
     @property
+    def wavelength_nm(self) -> NDArray:
+        """Absolute wavelength grid (nm) for each frequency sample on ``grid.w``."""
+        ...
+
+    @property
     def envelope_field(self) -> NDArray:
         """Complex envelope :math:`A(t)` sampled on ``self.grid.t``."""
         ...
@@ -366,6 +414,22 @@ class Wave:
 
     def peak_power(self) -> float:
         """Maximum envelope intensity (peak power) in the same units."""
+        ...
+
+    def calc_width(self, level: float = ...) -> Time:
+        """
+        Calculate the pulse width using linear interpolation at half‑max
+        crossing points.
+
+        Parameters
+        ----------
+        level : float — fraction of peak to calculate width at.
+            0.5 gives FWHM, 1/e ≈ 0.368, 1/e² ≈ 0.135. Default 0.5.
+
+        Returns
+        -------
+        Time — pulse width in seconds.
+        """
         ...
 
     def average_power(self, repetition_rate: Frequency) -> float:

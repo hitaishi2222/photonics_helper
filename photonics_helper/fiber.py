@@ -1,6 +1,6 @@
 """Fiber dispersion and propagation constant calculations."""
 
-from scipy.interpolate import BSpline
+from scipy.interpolate import BSpline, RegularGridInterpolator
 from photonics_helper.base import (
     C_MS,
     PI,
@@ -43,6 +43,18 @@ class Dispersion:
     wavelengths: WavelengthArray
     central_wavelength: Wavelength
 
+    @model_validator(mode="after")
+    def _normalize_units(self) -> "Dispersion":
+        """Store values canonically in s/m².
+
+        ps/(nm·km) → s/m² requires x1e-6 (1 ps/(nm·km) = 1e-6 s/m²).
+        All internal accessors and get_betas()/get_beta2() consume the SI form.
+        """
+        if self.unit == "ps/nm.km":
+            self.values = np.asarray(self.values) * 1e-6
+            self.unit = "s/m^2"
+        return self
+
     def __repr__(self):
         return f"Dispersion: from wl: {self.wavelengths.as_m.min()} to {self.wavelengths.as_m.max()}"
 
@@ -52,7 +64,7 @@ class Dispersion:
     @cached_property
     def as_ps_nm_km(self) -> NDArray:
         """Dispersion values in ps/(nm·km)."""
-        return self.values
+        return self.values * 1e6
 
     @cached_property
     def as_s_m_m(self) -> NDArray:
@@ -273,10 +285,10 @@ class PropagationConstant:
         return self
 
     @classmethod
-    def beta2_from_neff(
+    def beta_from_neff(
         cls, neff: NDArray, x_values: WavelengthArray | AngularFrequencyArray
     ):
-        """Compute β₂ = neff × ω / c from effective index."""
+        """Compute β = neff × ω / c from effective index."""
         if not isinstance(x_values, (WavelengthArray, AngularFrequencyArray)):
             raise TypeError(
                 "x_values should be a type of either `WavelengthArray` or `AngularFrequencyArray`"
@@ -306,3 +318,212 @@ class PropagationConstant:
 
         betas = omega.as_rad_s * neff / C_MS
         return cls(values=betas, x_values=omega)
+
+
+@dataclass(config={"arbitrary_types_allowed": True})
+class ZDependentDispersion:
+    """Z-dependent dispersion profile β(ω, z) for tapered/dispersion-managed waveguides.
+
+    Holds a 2-D table of propagation constants β[ω_idx, z_idx] with axis arrays,
+    plus a `fn(omega, z)` interpolant built via `RegularGridInterpolator`.
+
+    Attributes
+    ----------
+    omegas : 1-D array of angular frequencies (rad/s).
+    z_positions : 1-D array of propagation positions (m).
+    beta : 2-D array of shape (n_omega, n_z) with β values.
+    central_wavelength : design central wavelength (m).
+
+    Notes
+    -----
+    The interpolant uses linear interpolation with `bounds_error=False` and
+    `fill_value=None` so out-of-range queries return NaN (caller decides what to do).
+    """
+
+    omegas: NDArray
+    z_positions: NDArray
+    beta: NDArray
+    central_wavelength: float
+
+    def __post_init__(self) -> None:
+        """Validate shapes and build the interpolant."""
+        self.omegas = np.asarray(self.omegas, dtype=float)
+        self.z_positions = np.asarray(self.z_positions, dtype=float)
+        self.beta = np.asarray(self.beta, dtype=float)
+        if self.beta.ndim != 2:
+            raise ValueError(f"beta must be 2-D, got shape {self.beta.shape}")
+        if self.beta.shape[0] != len(self.omegas):
+            raise ValueError(
+                f"beta.shape[0] ({self.beta.shape[0]}) must match len(omegas) ({len(self.omegas)})"
+            )
+        if self.beta.shape[1] != len(self.z_positions):
+            raise ValueError(
+                f"beta.shape[1] ({self.beta.shape[1]}) must match len(z_positions) ({len(self.z_positions)})"
+            )
+        # RegularGridInterpolator requires strictly ascending axes.
+        # Always sort to ascending order, reordering beta accordingly.
+        omega_idx = np.argsort(self.omegas)
+        self.omegas = self.omegas[omega_idx]
+        self.beta = self.beta[omega_idx, :]
+        z_idx = np.argsort(self.z_positions)
+        self.z_positions = self.z_positions[z_idx]
+        self.beta = self.beta[:, z_idx]
+        self._interpolator = RegularGridInterpolator(
+            (self.omegas, self.z_positions),
+            self.beta,
+            method="linear",
+            bounds_error=False,
+            fill_value=np.nan,
+        )
+
+    def __repr__(self) -> str:
+        return (
+            f"ZDependentDispersion: ω from {self.omegas[0]:.3e} to {self.omegas[-1]:.3e} rad/s, "
+            f"z from {self.z_positions[0]:.3e} to {self.z_positions[-1]:.3e} m"
+        )
+
+    def fn(self, omega: float | NDArray, z: float) -> float | NDArray:
+        """Interpolate β(ω, z) via the 2-D table.
+
+        Parameters
+        ----------
+        omega : float or 1-D array — absolute angular frequency(ies) in rad/s.
+        z : float — propagation position in m.
+
+        Returns
+        -------
+        β interpolated at (omega, z). Scalar if omega is scalar, array otherwise.
+        Out-of-range values return NaN (not an error).
+        """
+        omega_arr = np.atleast_1d(np.asarray(omega, dtype=float))
+        result = self._interpolator(np.column_stack([omega_arr, np.full_like(omega_arr, z)]))
+        if np.isscalar(omega):
+            return float(result[0])
+        return result
+
+    @property
+    def n_omega(self) -> int:
+        return len(self.omegas)
+
+    @property
+    def n_z(self) -> int:
+        return len(self.z_positions)
+
+    def _default_omega0(self) -> float:
+        """Carrier angular frequency (rad/s) from central_wavelength."""
+        return 2 * np.pi * C_MS / self.central_wavelength
+
+    def get_betas_at_z(
+        self,
+        z: float,
+        order: int = 7,
+        omega0: float | None = None,
+        halfwidth: float | None = None,
+    ) -> NDArray:
+        """Fit Taylor coefficients β₂…β_order near omega0 at position z.
+
+        Returns [β₂, β₃, …, β_order] in SI units (s^k/m). ω is in rad/s.
+        """
+        if order < 2:
+            raise ValueError(f"order must be >= 2, got {order}")
+        omega0 = float(omega0 if omega0 is not None else self._default_omega0())
+        omega_min, omega_max = float(self.omegas[0]), float(self.omegas[-1])
+        if halfwidth is None:
+            halfwidth = min(0.3e15, (omega_max - omega_min) / 2)
+        omega_low = max(omega_min, omega0 - halfwidth)
+        omega_high = min(omega_max, omega0 + halfwidth)
+
+        mask = (self.omegas >= omega_low) & (self.omegas <= omega_high)
+        omega_fit = self.omegas[mask]
+        beta_at_z = self.fn(omega_fit, z)
+        valid = ~np.isnan(beta_at_z)
+        if valid.sum() < order + 1:
+            return np.full(order - 1, np.nan)
+
+        omega_offset = omega_fit[valid] - omega0
+        beta_valid = np.asarray(beta_at_z[valid], dtype=float)
+        coeffs = np.polyfit(omega_offset, beta_valid, order)
+        return np.array(
+            [factorial(k) * coeffs[order - k] for k in range(2, order + 1)],
+            dtype=float,
+        )
+
+    def get_betas_vs_z(
+        self,
+        order: int = 7,
+        omega0: float | None = None,
+        halfwidth: float | None = None,
+    ) -> NDArray:
+        """Taylor coefficients β₂…β_order at every z position.
+
+        Returns array of shape (n_z, order - 1) in SI units (s^k/m).
+        """
+        return np.array(
+            [
+                self.get_betas_at_z(z, order=order, omega0=omega0, halfwidth=halfwidth)
+                for z in self.z_positions
+            ],
+            dtype=float,
+        )
+
+    @classmethod
+    def from_arrays(
+        cls,
+        omegas: NDArray,
+        z_positions: NDArray,
+        beta: NDArray,
+        central_wavelength: float,
+    ) -> "ZDependentDispersion":
+        """Construct from raw arrays.
+
+        Parameters
+        ----------
+        omegas : 1-D array — angular frequencies (rad/s).
+        z_positions : 1-D array — propagation positions (m).
+        beta : 2-D array — shape (n_omega, n_z).
+        central_wavelength : float — design central wavelength (m).
+        """
+        return cls(
+            omegas=np.asarray(omegas, dtype=float),
+            z_positions=np.asarray(z_positions, dtype=float),
+            beta=np.asarray(beta, dtype=float),
+            central_wavelength=float(central_wavelength),
+        )
+
+    @classmethod
+    def from_npz(cls, path: str, central_wavelength: float | None = None) -> "ZDependentDispersion":
+        """Load β(ω, z) from an NPZ file.
+
+        Expected keys:
+            - "omegas": 1-D array of angular frequencies (rad/s).
+            - "z_positions": 1-D array of propagation positions (m).
+            - "beta": 2-D array of shape (n_omega, n_z).
+            - "central_wavelength" (optional): if present, used; otherwise `central_wavelength` arg required.
+
+        Parameters
+        ----------
+        path : str — path to the .npz file.
+        central_wavelength : float — required if not stored in the NPZ file.
+        """
+        data = dict(np.load(path))
+        if central_wavelength is None:
+            if "central_wavelength" in data:
+                central_wavelength = float(data["central_wavelength"])
+            else:
+                raise ValueError(
+                    f"central_wavelength not found in NPZ keys or as argument. "
+                    f"Available keys: {list(data.keys())}"
+                )
+        obj = cls.from_arrays(
+            omegas=data["omegas"],
+            z_positions=data["z_positions"],
+            beta=data["beta"],
+            central_wavelength=central_wavelength,
+        )
+        if "betas_taylor" in data:
+            obj.betas_taylor = np.asarray(data["betas_taylor"], dtype=float)
+        if "beta_orders" in data:
+            obj.beta_orders = np.asarray(data["beta_orders"], dtype=int)
+        if "omega0" in data:
+            obj.omega0_fit = float(data["omega0"])
+        return obj
