@@ -6,7 +6,8 @@ from functools import cached_property
 import logging
 from matplotlib import gridspec
 from numpy.typing import NDArray
-from photonics_helper.base import Wavelength, Frequency, Time, Length, C_MS
+from photonics_helper.base import Wavelength, Frequency, Time, C_MS
+from photonics_helper._fftw import fft as _fft_backend, ifft as _ifft_backend
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -64,7 +65,10 @@ class Envelope:
             from scipy.optimize import brentq
 
             target = 0.35503 * sqrt(0.5)
-            f = lambda x: airy(-x)[0] - target
+
+            def f(x):
+                return airy(-x)[0] - target
+
             root = brentq(f, 0.1, 2.0)  # type: ignore[operator]
             val = 2.0 * root * T0  # type: ignore[operator]
         elif self.shape in SHAPE_FACTORS:
@@ -119,7 +123,10 @@ class Envelope:
             from scipy.optimize import brentq
 
             target = 0.35503 * sqrt(0.5)
-            ff = lambda x: airy(-x)[0] - target
+
+            def ff(x):
+                return airy(-x)[0] - target
+
             root = brentq(ff, 0.1, 2.0)  # type: ignore[operator]
             T0 = Time(f / (2.0 * root), "s")  # type: ignore[operator]
 
@@ -947,12 +954,18 @@ class TemporalGrid:
         theorem holds with the companion :meth:`ifft`. Raw FFT magnitudes
         differ from laserfun (which uses unshifted ``fft`` without ``dt``);
         compare normalized spectra or time-domain intensities across tools.
+
+        Executes on the FFTW3 backend (:mod:`photonics_helper._fftw`) when
+        ``pyfftw`` is installed, falling back to ``numpy.fft`` otherwise.
         """
-        return np.fft.fftshift(np.fft.fft(np.fft.ifftshift(A_t))) * self.dt
+        return _fft_backend(A_t) * self.dt
 
     def ifft(self, A_w):
-        """Inverse FFT paired with :meth:`fft` (includes ``1/dt`` scaling)."""
-        return np.fft.fftshift(np.fft.ifft(np.fft.ifftshift(A_w))) / self.dt
+        """Inverse FFT paired with :meth:`fft` (includes ``1/dt`` scaling).
+
+        Executes on the FFTW3 backend when ``pyfftw`` is installed.
+        """
+        return _ifft_backend(A_w) / self.dt
 
     @property
     def omega_max(self):
@@ -1004,10 +1017,6 @@ class Wave:
         """Absolute wavelength grid (nm) for each frequency sample on ``grid.w``."""
         omega_abs = self.central_frequency + self.grid.w
         return 2 * np.pi * C_MS / omega_abs * 1e9
-
-    @property
-    def envelope_field(self):
-        return self.envelope.field(self.grid.t)
 
     @property
     def electric_field(self):
@@ -1103,11 +1112,11 @@ class Wave:
         n_pulses : number of pulses (default 10)
         refractive_index : background refractive index (default 1.0)
         """
-        # Build the multi-pulse envelope field
+        # Build the multi-pulse envelope field, centered at t=0
         full_field = np.zeros_like(grid.t, dtype=complex)
         spacing = 1.0 / repetition_rate.as_Hz
         for k in range(n_pulses):
-            t_centered = grid.t - k * spacing
+            t_centered = grid.t - (k - (n_pulses - 1) / 2) * spacing
             full_field += envelope.field(t_centered)
 
         # Create a temporary "virtual" envelope that stores the train flag
@@ -1273,7 +1282,7 @@ class Wave:
                 alpha=0.8,
                 label="Phase",
             )
-            ax_ph.set_ylabel(f"Phase (rad)", color=COLORS["phase"], fontsize=9)
+            ax_ph.set_ylabel("Phase (rad)", color=COLORS["phase"], fontsize=9)
             ax_ph.tick_params(colors=COLORS["phase"], labelsize=9)
             ax_ph.spines["right"].set_edgecolor(COLORS["phase"])
 
@@ -1531,7 +1540,7 @@ class FROGTrace:
 
         if retrieved is not None and retrieved.field is not None:
             E = retrieved.field
-            t = np.arange(len(E)) * self.dt * 1e12  # ps
+            t = (np.arange(len(E)) - len(E) // 2) * self.dt * 1e12  # ps
 
             # Intensity
             ax_int = axes[1]
@@ -1551,6 +1560,36 @@ class FROGTrace:
             ax_phase.set_ylabel("Phase (rad)")
             ax_phase.set_title("Retrieved Phase")
             ax_phase.grid(True, alpha=0.3)
+
+            # Retrieved trace vs original trace comparison (axes[3])
+            ax_comp = axes[3]
+            # Integrated trace (over frequency) for comparison
+            orig_integrated = np.sum(self.trace, axis=0)
+            if orig_integrated.max() > 0:
+                orig_integrated = orig_integrated / orig_integrated.max()
+            if retrieved.trace is not None and retrieved.trace.size > 0:
+                ret_integrated = np.sum(retrieved.trace, axis=0)
+                if ret_integrated.max() > 0:
+                    ret_integrated = ret_integrated / ret_integrated.max()
+                tau_ps = self.tau * 1e12
+                ax_comp.plot(
+                    tau_ps, orig_integrated, color="#a78bfa",
+                    linewidth=1.2, label="Original", alpha=0.7
+                )
+                ax_comp.plot(
+                    tau_ps, ret_integrated, color="#ff6b6b",
+                    linewidth=1.2, linestyle="--", label="Retrieved", alpha=0.7
+                )
+                ax_comp.legend(fontsize=8)
+            ax_comp.set_xlabel("Delay (ps)")
+            ax_comp.set_ylabel("Integrated intensity (arb.)")
+            ax_comp.set_title("Trace Comparison (integrated over ω)")
+            ax_comp.grid(True, alpha=0.3)
+        else:
+            # Hide extra subplots when no retrieved field is available
+            # (axes has 1 element when retrieved is None, 4 otherwise).
+            for extra in axes[1:]:
+                extra.axis("off")
 
         fig.suptitle(
             "FROG Analysis" + (" — Retrieved" if retrieved is not None else ""),
@@ -1634,7 +1673,6 @@ def retrieve(
     """
     N_tau, N_omega = trace.trace.shape
     dt = trace.dt
-    dw = trace.dw
 
     # Use unnormalized trace if available (preserves amplitude info)
     measured_trace = (
@@ -1724,9 +1762,12 @@ def retrieve(
         E = E_new
 
     # Build result FROGTrace with retrieved field
+    # Regenerate the trace from the retrieved field for accurate fidelity comparison
+    retrieved_trace = FROGTrace.from_field(E, dt=dt, normalize=True)
+
     result = FROGTrace(
-        trace=trace.trace,
-        unnormalized_trace=trace.unnormalized_trace,
+        trace=retrieved_trace.trace,
+        unnormalized_trace=retrieved_trace.unnormalized_trace,
         omega=trace.omega,
         tau=trace.tau,
         dt=trace.dt,

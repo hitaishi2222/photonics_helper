@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Pulse Visualization</title>
+    <script src="https://cdn.jsdelivr.net/npm/htmx.org@4.0.0-beta6/dist/htmx.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .controls {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .control-group {
+            display: inline-block;
+            margin-right: 30px;
+            margin-bottom: 15px;
+        }
+        .control-group label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: #555;
+        }
+        select, input[type="range"] {
+            width: 200px;
+        }
+        input[type="range"] {
+            vertical-align: middle;
+        }
+        .value-display {
+            display: inline-block;
+            width: 80px;
+            text-align: right;
+            font-family: monospace;
+            color: #666;
+        }
+        .preset-buttons {
+            margin-top: 15px;
+        }
+        .preset-btn {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            margin-right: 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .preset-btn:hover {
+            background: #45a049;
+        }
+        #plot-container {
+            background: white;
+            padding: 10px 20px 20px 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            height: 800px;
+        }
+        .theme-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #333;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .theme-toggle:hover {
+            background: #555;
+        }
+        body.dark-theme {
+            background: #1a1a1a;
+        }
+        body.dark-theme h1 {
+            color: #fff;
+        }
+        body.dark-theme .controls,
+        body.dark-theme #plot-container {
+            background: #2d2d2d;
+            color: #fff;
+        }
+        body.dark-theme .control-group label {
+            color: #ccc;
+        }
+        body.dark-theme .value-display {
+            color: #999;
+        }
+        body.dark-theme select {
+            background: #444;
+            color: #fff;
+            border: 1px solid #666;
+        }
+    </style>
+</head>
+<body>
+    <button class="theme-toggle" onclick="toggleTheme()">Toggle Theme</button>
+    
+    <div class="container">
+        <h1>Interactive Pulse Visualization</h1>
+        
+        <div class="controls">
+            <div class="control-group">
+                <label>Pulse Shape</label>
+                <select id="shape-select" hx-on:change="updatePulse()">
+                    <option value="gaussian">Gaussian</option>
+                    <option value="sech">Sech</option>
+                    <option value="lorentzian">Lorentzian</option>
+                    <option value="rectangular">Rectangular</option>
+                    <option value="super-gaussian">Super-Gaussian</option>
+                    <option value="triangular">Triangular</option>
+                    <option value="parabolic">Parabolic</option>
+                    <option value="cosine">Cosine</option>
+                    <option value="exponential">Exponential</option>
+                    <option value="airy">Airy</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <label>T₀ (fs)</label>
+                <input type="range" id="t0-slider" min="10" max="500" value="50" step="1"
+                       hx-on:input="updatePulse()">
+                <span class="value-display" id="t0-value">50 fs</span>
+            </div>
+            
+            <div class="control-group">
+                <label>Chirp</label>
+                <input type="range" id="chirp-slider" min="-10" max="10" value="0" step="0.1"
+                       hx-on:input="updatePulse()">
+                <span class="value-display" id="chirp-value">0.00</span>
+            </div>
+            
+            <div class="control-group">
+                <label>Amplitude</label>
+                <input type="range" id="amp-slider" min="0.01" max="5" value="1" step="0.01"
+                       hx-on:input="updatePulse()">
+                <span class="value-display" id="amp-value">1.00</span>
+            </div>
+            
+            <div class="preset-buttons">
+                <label style="font-weight: 600; color: #555; margin-right: 10px;">Presets:</label>
+                <button class="preset-btn" onclick="setPreset('gaussian', 50, 0, 1)">Gaussian</button>
+                <button class="preset-btn" onclick="setPreset('sech', 50, 0, 1)">Sech</button>
+                <button class="preset-btn" onclick="setPreset('gaussian', 50, 2, 1)">Chirped</button>
+                <button class="preset-btn" onclick="setPreset('airy', 50, 0, 1)">Airy</button>
+                <button class="preset-btn" onclick="setPreset('cosine', 50, 0, 1)">Cosine</button>
+                <button class="preset-btn" onclick="setPreset('triangular', 50, 0, 1)">Triangular</button>
+                <button class="preset-btn" onclick="setPreset('parabolic', 50, 0, 1)">Parabolic</button>
+            </div>
+        </div>
+        
+        <div id="plot-container">
+            <div id="pulse-plot"></div>
+        </div>
+    </div>
+
+    <script>
+        // Pulse shape functions
+        function shapeGaussian(x) {
+            return Math.exp(-(x * x) / 2.0);
+        }
+        
+        function shapeSech(x) {
+            var xc = Math.max(-700, Math.min(700, x));
+            var c = Math.cosh(xc);
+            return 1.0 / c;
+        }
+        
+        function shapeLorentzian(x) {
+            return 1.0 / (1.0 + x * x);
+        }
+        
+        function shapeRectangular(x) {
+            return (Math.abs(x) <= 1.0) ? 1.0 : 0.0;
+        }
+        
+        function shapeSuperGaussian(x, order) {
+            var N = order || 2;
+            return Math.exp(-Math.pow(Math.abs(x), 2 * N));
+        }
+        
+        function shapeTriangular(x) {
+            var v = 1.0 - Math.abs(x);
+            return v > 0 ? v : 0.0;
+        }
+        
+        function shapeParabolic(x) {
+            if (Math.abs(x) <= 1.0) {
+                return 1.0 - x * x;
+            }
+            return 0.0;
+        }
+        
+        function shapeCosine(x) {
+            if (Math.abs(x) <= 1.0) {
+                return Math.cos(Math.PI * x / 2.0);
+            }
+            return 0.0;
+        }
+        
+        function shapeExponential(x) {
+            return Math.exp(-Math.abs(x));
+        }
+        
+        function shapeAiry(x) {
+            return airyAi(-x);
+        }
+        
+        function airyAi(z) {
+            var c1 = 0.355028053887817;
+            var c2 = -0.258819403792807;
+            
+            if (z < -5) {
+                var phi = Math.sqrt(-z * z * z / 3.0 + 5.0 / 48.0);
+                return Math.cos(phi - Math.PI / 4.0) / (2.0 * Math.sqrt(phi));
+            } else if (z > 5) {
+                var phi = Math.sqrt(z * z * z / 3.0 + 5.0 / 48.0);
+                return Math.exp(-phi) / (2.0 * Math.sqrt(phi));
+            } else {
+                var f1 = 1.0, f2 = 1.0;
+                var term1 = 1.0, term2 = 1.0;
+                for (var n = 1; n <= 40; n++) {
+                    term1 *= z * z * z / ((3 * n - 2) * (3 * n - 1));
+                    f1 += term1;
+                    term2 *= z * z * z / ((3 * n) * (3 * n + 1));
+                    f2 += term2;
+                }
+                return c1 * f1 + c2 * f2;
+            }
+        }
+        
+        function computeEnvelope(tArr, shape, T0, A0, chirp) {
+            var re = new Array(tArr.length);
+            var im = new Array(tArr.length);
+            var T0inv = 1.0 / T0;
+            
+            for (var i = 0; i < tArr.length; i++) {
+                var t = tArr[i];
+                var x = t * T0inv;
+                var absX = Math.abs(x);
+                
+                var amp;
+                switch (shape) {
+                    case "gaussian": amp = shapeGaussian(x); break;
+                    case "sech": amp = shapeSech(x); break;
+                    case "lorentzian": amp = shapeLorentzian(x); break;
+                    case "rectangular": amp = shapeRectangular(x); break;
+                    case "super-gaussian": amp = shapeSuperGaussian(x, 2); break;
+                    case "triangular": amp = shapeTriangular(x); break;
+                    case "parabolic": amp = shapeParabolic(x); break;
+                    case "cosine": amp = shapeCosine(x); break;
+                    case "exponential": amp = shapeExponential(x); break;
+                    case "airy": amp = shapeAiry(x); break;
+                    default: amp = shapeGaussian(x);
+                }
+                amp *= A0;
+                
+                var phase;
+                if (shape === "parabolic") {
+                    phase = (absX <= 1.0) ? (chirp * x * x) : 0.0;
+                } else {
+                    phase = 0.5 * chirp * x * x;
+                }
+                
+                re[i] = amp * Math.cos(phase);
+                im[i] = amp * Math.sin(phase);
+            }
+            
+            return { re: re, im: im };
+        }
+        
+        function computeIntensity(re, im) {
+            var n = re.length;
+            var result = new Array(n);
+            for (var i = 0; i < n; i++) {
+                result[i] = re[i] * re[i] + im[i] * im[i];
+            }
+            return result;
+        }
+        
+        function computePhase(re, im) {
+            var n = re.length;
+            var result = new Array(n);
+            for (var i = 0; i < n; i++) {
+                result[i] = Math.atan2(im[i], re[i]);
+            }
+            return result;
+        }
+        
+        function computeFWHM(shape, T0) {
+            switch (shape) {
+                case "gaussian": return 2.0 * T0 * Math.sqrt(Math.LN2);
+                case "sech": return 2.0 * T0 * Math.acosh(Math.SQRT2);
+                case "lorentzian": return 2.0 * T0 * Math.sqrt(Math.SQRT2 - 1);
+                case "rectangular": return 2.0 * T0;
+                case "triangular": return 2.0 * T0 * (1.0 - 1.0 / Math.SQRT2);
+                case "cosine": return T0;
+                case "exponential": return 2.0 * T0 * Math.LN2;
+                case "airy": return 1.191 * T0;
+                case "parabolic": return T0;
+                default: return T0;
+            }
+        }
+        
+        function fft(re, im) {
+            var N = re.length;
+            if (N <= 1) return;
+            
+            // Bit-reversal permutation
+            var j = 0;
+            for (var i = 0; i < N - 1; i++) {
+                if (i < j) {
+                    var tr = re[i]; re[i] = re[j]; re[j] = tr;
+                    var ti = im[i]; im[i] = im[j]; im[j] = ti;
+                }
+                var m = N >> 1;
+                while (m >= 1 && j >= m) {
+                    j -= m;
+                    m >>= 1;
+                }
+                j += m;
+            }
+            
+            // FFT butterfly
+            for (var size = 2; size <= N; size *= 2) {
+                var half = size >> 1;
+                var angle = -2.0 * Math.PI / size;
+                var wRe = Math.cos(angle);
+                var wIm = Math.sin(angle);
+                for (var start = 0; start < N; start += size) {
+                    var curRe = 1.0, curIm = 0.0;
+                    for (var k = 0; k < half; k++) {
+                        var evenRe = re[start + k];
+                        var evenIm = im[start + k];
+                        var oddRe = re[start + k + half];
+                        var oddIm = im[start + k + half];
+                        var twRe = curRe * oddRe - curIm * oddIm;
+                        var twIm = curRe * oddIm + curIm * oddRe;
+                        re[start + k] = evenRe + twRe;
+                        im[start + k] = evenIm + twIm;
+                        re[start + k + half] = evenRe - twRe;
+                        im[start + k + half] = evenIm - twIm;
+                        var newCurRe = curRe * wRe - curIm * wIm;
+                        var newCurIm = curRe * wIm + curIm * wRe;
+                        curRe = newCurRe;
+                        curIm = newCurIm;
+                    }
+                }
+            }
+        }
+        
+        function updatePulse() {
+            var shape = document.getElementById('shape-select').value;
+            var t0 = parseFloat(document.getElementById('t0-slider').value);
+            var chirp = parseFloat(document.getElementById('chirp-slider').value);
+            var amp = parseFloat(document.getElementById('amp-slider').value);
+            
+            // Update value displays
+            document.getElementById('t0-value').textContent = t0 + ' fs';
+            document.getElementById('chirp-value').textContent = chirp.toFixed(2);
+            document.getElementById('amp-value').textContent = amp.toFixed(2);
+            
+            // Convert T0 to seconds
+            var T0_s = t0 * 1e-15;
+            
+            // Generate time array
+            var N = 4096;
+            var Tmax = 10 * T0_s;
+            var dt = Tmax / N;
+            var tArr = new Array(N);
+            for (var i = 0; i < N; i++) {
+                tArr[i] = -Tmax / 2 + i * dt;
+            }
+            
+            // Compute pulse
+            var field = computeEnvelope(tArr, shape, T0_s, amp, chirp);
+            var intT = computeIntensity(field.re, field.im);
+            var ph = computePhase(field.re, field.im);
+            
+            // Compute spectrum via FFT
+            var specRe = new Array(N), specIm = new Array(N);
+            for (var i = 0; i < N; i++) {
+                specRe[i] = field.re[i];
+                specIm[i] = field.im[i];
+            }
+            
+            // FFT (Cooley-Tukey radix-2)
+            fft(specRe, specIm);
+            
+            // FFT shift
+            var halfN = N >> 1;
+            var shiftedRe = new Array(N), shiftedIm = new Array(N);
+            for (var i = 0; i < N; i++) {
+                var src = (i + halfN) % N;
+                shiftedRe[i] = specRe[src] * dt;
+                shiftedIm[i] = specIm[src] * dt;
+            }
+            var intW = computeIntensity(shiftedRe, shiftedIm);
+            
+            // Frequency axis
+            var df = 1.0 / (N * dt);
+            var wArr = new Array(N);
+            for (var i = 0; i < N; i++) {
+                var f = (i < N / 2) ? i * df : (i - N) * df;
+                wArr[i] = 2.0 * Math.PI * f;
+            }
+            
+            // FWHM
+            var fwhm = computeFWHM(shape, T0_s);
+            
+            // Create Plotly figure with subplots
+            var trace1 = {
+                x: tArr,
+                y: intT,
+                mode: 'lines',
+                name: 'Intensity',
+                line: { color: '#00d4ff' },
+                xaxis: 'x',
+                yaxis: 'y'
+            };
+            
+            var trace2 = {
+                x: wArr,
+                y: intW,
+                mode: 'lines',
+                name: 'Spectrum',
+                line: { color: '#a78bfa' },
+                xaxis: 'x2',
+                yaxis: 'y2'
+            };
+            
+            var trace3 = {
+                x: tArr,
+                y: ph,
+                mode: 'lines',
+                name: 'Phase',
+                line: { color: '#ff6b6b', dash: 'dot' },
+                xaxis: 'x3',
+                yaxis: 'y3'
+            };
+            
+            var trace4 = {
+                x: field.re,
+                y: field.im,
+                mode: 'lines',
+                name: 'Polar',
+                line: { color: '#34d399' },
+                xaxis: 'x4',
+                yaxis: 'y4'
+            };
+            
+            var layout = {
+                grid: { rows: 2, columns: 2, pattern: 'independent' },
+                showlegend: false,
+                template: 'plotly_white',
+                height: 820,
+                width: 1200,
+                title: {
+                    text: shape.charAt(0).toUpperCase() + shape.slice(1) + ' Pulse',
+                    x: 0.5,
+                    y: 1.02,
+                    xanchor: 'center',
+                    font: { size: 16, color: '#333' }
+                },
+                xaxis: { title: 'Time (s)', domain: [0.05, 0.47], gridcolor: '#eee' },
+                yaxis: { title: 'Intensity', domain: [0.52, 1], gridcolor: '#eee' },
+                xaxis2: { title: 'Angular frequency (rad/s)', domain: [0.53, 0.98], gridcolor: '#eee' },
+                yaxis2: { title: 'Intensity', domain: [0.52, 1], gridcolor: '#eee' },
+                xaxis3: { title: 'Time (s)', domain: [0.05, 0.47], gridcolor: '#eee' },
+                yaxis3: { title: 'Phase (rad)', domain: [0, 0.45], gridcolor: '#eee' },
+                xaxis4: { title: 'Re(A)', domain: [0.53, 0.98], gridcolor: '#eee' },
+                yaxis4: { title: 'Im(A)', domain: [0, 0.45], gridcolor: '#eee' },
+                annotations: [
+                    { text: 'Temporal Intensity', showarrow: false, x: 0.26, y: 1.02, xref: 'paper', yref: 'paper', font: { size: 12, color: '#666' } },
+                    { text: 'Spectral Intensity', showarrow: false, x: 0.755, y: 1.02, xref: 'paper', yref: 'paper', font: { size: 12, color: '#666' } },
+                    { text: 'Phase', showarrow: false, x: 0.26, y: 0.47, xref: 'paper', yref: 'paper', font: { size: 12, color: '#666' } },
+                    { text: 'Polar Plot', showarrow: false, x: 0.755, y: 0.47, xref: 'paper', yref: 'paper', font: { size: 12, color: '#666' } }
+                ]
+            };
+            
+            // Add FWHM markers to first subplot
+            if (shape !== 'rectangular' && shape !== 'airy') {
+                layout.shapes = [
+                    {
+                        type: 'rect',
+                        x0: -fwhm / 2,
+                        x1: fwhm / 2,
+                        fillcolor: 'orange',
+                        opacity: 0.1,
+                        line: { width: 0 },
+                        xref: 'x',
+                        yref: 'paper'
+                    }
+                ];
+            }
+            
+            var config = { responsive: true };
+            
+            Plotly.newPlot('pulse-plot', [trace1, trace2, trace3, trace4], layout, config);
+        }
+        
+        function setPreset(shape, t0, chirp, amp) {
+            document.getElementById('shape-select').value = shape;
+            document.getElementById('t0-slider').value = t0;
+            document.getElementById('chirp-slider').value = chirp;
+            document.getElementById('amp-slider').value = amp;
+            updatePulse();
+        }
+        
+        function toggleTheme() {
+            document.body.classList.toggle('dark-theme');
+        }
+        
+        // Initial plot
+        updatePulse();
+    </script>
+</body>
+</html>

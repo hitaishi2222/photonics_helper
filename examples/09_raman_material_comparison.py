@@ -20,6 +20,7 @@ from photonics_helper.raman import (
     COMMON_COMPARISONS,
 )
 from photonics_helper.pulse import TemporalGrid
+from photonics_helper.base import Time
 
 
 def main():
@@ -49,7 +50,7 @@ def main():
     print(comp2.comparison_table())
 
     # Frequency overlay — shows gain spectra
-    grid = TemporalGrid(N=2**14, Tmax=10e-12)
+    grid = TemporalGrid(N=2**14, Tmax=Time(10e-12, "s"))
     fig = comp2.plot_frequency_overlay(backend="matplotlib", grid=grid)
     plt.savefig("examples/images/09_raman_frequency_overlay.png", dpi=150, bbox_inches="tight")
     print("Saved: examples/09_raman_frequency_overlay.png")

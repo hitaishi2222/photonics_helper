@@ -7,7 +7,7 @@ supporting Kerr, Raman, self-steepening, and two-photon absorption effects.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Optional, Tuple
 
 import numpy as np
 from numpy.typing import NDArray
@@ -140,12 +140,18 @@ class SplitStepEngine:
         include_self_steepening: bool = False,
         include_tpa: bool = False,
         step_size: Optional[float] = None,
+        dispersion_profile: Optional[Any] = None,
+        a_eff_fn: Optional[Callable[[float], float]] = None,
+        alpha_fn: Optional[Callable[[float], float]] = None,
+        gamma_fn: Optional[Callable[[float], float]] = None,
     ) -> None: ...
 
     def _linear_step(self, A: NDArray, dz: float) -> NDArray: ...
     def _nonlinear_step(self, A: NDArray, dz: float) -> Tuple[NDArray, float]: ...
     def _adaptive_step_size(self, A: NDArray) -> float: ...
-    def propagate(self, num_steps: int) -> None: ...
+    def propagate(
+        self, num_steps: int, *, nsaves: int | None = None, show_progress: bool = False
+    ) -> None: ...
 
     @property
     def spectra_vs_z(self) -> Tuple[NDArray, NDArray]: ...
@@ -173,7 +179,9 @@ class GNLSESolver:
         include_tpa: bool = False,
     ) -> None: ...
 
-    def propagate(self, num_steps: int = 100) -> None: ...
+    def propagate(
+        self, num_steps: int = 100, *, nsaves: int | None = None, show_progress: bool = False
+    ) -> None: ...
 
     @classmethod
     def estimate_num_steps(
@@ -230,7 +238,14 @@ class TaperedGNLSESolver:
         include_tpa: bool = False,
     ) -> None: ...
 
-    def propagate(self, num_steps: int = 100) -> None: ...
+    def propagate(
+        self,
+        num_steps: int = 100,
+        strict: bool = False,
+        *,
+        nsaves: int | None = None,
+        show_progress: bool = False,
+    ) -> None: ...
 
     @property
     def evolution(self) -> list["Wave"]: ...

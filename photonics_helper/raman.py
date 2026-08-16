@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
-from typing import Literal, Self, Optional
+from typing import Literal, TYPE_CHECKING
 from functools import cached_property
 import warnings
 
@@ -28,25 +28,22 @@ from .base import (
     PI,
     C_MS,
     Wavelength,
-    Frequency,
-    AngularFrequency,
-    Wavenumber,
-    WavelengthArray,
-    FrequencyArray,
-    AngularFrequencyArray,
     Energy,
     Time,
 )
 from .pulse import TemporalGrid, Wave
 from .phonon import PhononMode
+from ._fftw import convolve_full as _fftw_convolve_full
 
 try:
     import plotly.graph_objects as go
-    from plotly.subplots import make_subplots
 
     HAS_PLOTLY = True
 except ImportError:
     HAS_PLOTLY = False
+
+if TYPE_CHECKING:
+    import dash
 
 
 # ─── Reference Materials ─────────────────────────────────────────────────────
@@ -834,8 +831,6 @@ class RamanSpec:
         ValueError : If no data available or wavelength outside valid range
         """
         from photonics_helper.raman import RamanDatabase  # type: ignore[import-not-found, self-import]
-        from photonics_helper.materials import RefractiveIndex
-        import numpy as np
 
         # Query tabulated data first
         db = RamanDatabase()
@@ -1392,7 +1387,7 @@ class RamanDatabase:
         int
             Number of modes seeded.
         """
-        from .phonon import PHONON_MATERIALS, PhononMode
+        from .phonon import PHONON_MATERIALS
 
         count = 0
         for material, modes in PHONON_MATERIALS.items():
@@ -2334,20 +2329,20 @@ class RamanPulseInteraction:
     def nonlinear_polarization(self) -> NDArray:
         """Nonlinear polarization P_NL(t) = n₂ · (R(t) ⊗ I(t)).
 
-        Computed via FFT-based convolution using scipy.signal.fftconvolve.
+        Computed via FFT-based convolution on the FFTW backend
+        (:func:`photonics_helper._fftw.convolve_full`), which reproduces
+        ``scipy.signal.fftconvolve(..., mode='full')``.
         The result is cropped to the central N points to match the grid.
 
         Returns
         -------
         NDArray — nonlinear polarization values.
         """
-        from scipy.signal import fftconvolve
-
         I_t = self.pulse.envelope_intensity
         R_t = self.response.combined_response(self.grid.t)  # type: ignore
 
         # Full convolution, then extract central N points
-        P_full = fftconvolve(I_t, R_t, mode="full")
+        P_full = _fftw_convolve_full(I_t, R_t)
 
         N = self.grid.N  # type: ignore
         if len(P_full) >= N:
@@ -2452,7 +2447,7 @@ class RamanPulseInteraction:
         ax3 = axes[2]
         ax3.plot(t_ps, P_NL, color="#34d399", linewidth=1.5, label="P_NL(t)")
         ax3.set_ylabel("P_NL (arb.)", fontsize=10)
-        ax3.set_title(f"Nonlinear Polarization P_NL(t) = n₂·(R⊗I)", fontsize=11)
+        ax3.set_title("Nonlinear Polarization P_NL(t) = n₂·(R⊗I)", fontsize=11)
         ax3.grid(True, alpha=0.3)
         ax3.axhline(0, color="k", linewidth=0.5)
         ax3.legend(loc="upper right")
@@ -2616,7 +2611,6 @@ class RamanPulseInteraction:
         t = self.grid.t  # type: ignore
         t_ps = t * 1e12
         I_t = self.pulse.envelope_intensity
-        R_t = self.response.combined_response(t)
         P_NL = self.nonlinear_polarization
 
         fig, axes = plt.subplots(2, 1, figsize=figsize or (10, 8), sharex=True)
@@ -2694,8 +2688,6 @@ class RamanPulseInteraction:
             shared_xaxes=True,
             vertical_spacing=0.1,
         )
-
-        pNL_max = np.max(np.abs(P_NL)) if np.max(np.abs(P_NL)) > 0 else 1
 
         fig.add_trace(
             go.Scatter(
@@ -3351,7 +3343,6 @@ class PumpWavelengthExplorer:
         figsize: tuple[float, float] | None,
     ):
         """Side-by-side frequency and wavelength axis (plotly)."""
-        import plotly.graph_objects as go
         from plotly.subplots import make_subplots
 
         fig = make_subplots(
@@ -4093,8 +4084,6 @@ class MaterialComparison:
             fontweight="bold",
         )
 
-        name_labels = [s.name for s in self.materials if s.raman_shift_cm]
-
         # Panel 1: Spectra
         axes[0].set_title("Raman Spectra", fontsize=12, fontweight="bold")
         axes[0].set_xlabel("Raman shift (cm⁻¹)", fontsize=10)
@@ -4170,8 +4159,6 @@ class MaterialComparison:
             shared_xaxes=False,
             vertical_spacing=0.1,
         )
-
-        name_labels = [s.name for s in self.materials if s.raman_shift_cm]
 
         # Panel 1: Spectra
         for idx, spec in enumerate(self.materials):
@@ -4286,12 +4273,9 @@ def app() -> "dash.Dash":  # type: ignore[valid-type]
         from dash import (
             html,
             dcc,
-            dash_table,
             Input,
             Output,
             State,
-            callback,
-            no_update,
         )
     except ImportError as exc:
         raise ImportError(

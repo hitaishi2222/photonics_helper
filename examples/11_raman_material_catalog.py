@@ -20,6 +20,7 @@ from photonics_helper.raman import (
     RamanSpec, RamanResponse, MaterialComparison, COMMON_COMPARISONS,
 )
 from photonics_helper.pulse import TemporalGrid
+from photonics_helper.base import Time
 
 
 def print_table(materials, title="Material Properties"):
@@ -83,7 +84,7 @@ def main():
 
     # ── 3. Plot: category-comparison panels ─────────────────────────────
 
-    grid = TemporalGrid(N=2**14, Tmax=10e-12)
+    grid = TemporalGrid(N=2**14, Tmax=Time(10e-12, "s"))
     fig, axes = plt.subplots(3, 2, figsize=(18, 14))
     fig.suptitle("Photonics Helper — Material Category Comparison",
                  fontsize=15, fontweight="bold")

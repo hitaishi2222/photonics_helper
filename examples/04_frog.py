@@ -16,7 +16,8 @@ import matplotlib.pyplot as plt
 # --- Setup: create test pulses ---
 N = 2**10
 T0 = 50e-15  # 50 fs pulse width
-Tmax = 10 * T0
+# sech has long tails (~exp(-|t|/T0)), need wider window than Gaussian
+Tmax = 15 * T0
 dt = Tmax / N
 t = np.arange(N) * dt - N * dt / 2
 

@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Pulse Visualization</title>
+    <script src="https://cdn.jsdelivr.net/npm/htmx.org@4.0.0-beta6/dist/htmx.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .controls {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .control-group {
+            display: inline-block;
+            margin-right: 30px;
+            margin-bottom: 15px;
+        }
+        .control-group label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: #555;
+        }
+        select, input[type="range"] {
+            width: 200px;
+        }
+        input[type="range"] {
+            vertical-align: middle;
+        }
+        .value-display {
+            display: inline-block;
+            width: 80px;
+            text-align: right;
+            font-family: monospace;
+            color: #666;
+        }
+        .preset-buttons {
+            margin-top: 15px;
+        }
+        .preset-btn {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            margin-right: 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .preset-btn:hover {
+            background: #45a049;
+        }
+        #plot-container {
+            background: white;
+            padding: 10px 20px 20px 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            height: 800px;
+        }
+        .theme-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #333;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .theme-toggle:hover {
+            background: #555;
+        }
+        .htmx-indicator {
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        .htmx-request .htmx-indicator {
+            opacity: 1;
+        }
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(0,0,0,0.1);
+            border-radius: 50%;
+            border-top-color: #4CAF50;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        body.dark-theme {
+            background: #1a1a1a;
+        }
+        body.dark-theme h1 {
+            color: #fff;
+        }
+        body.dark-theme .controls,
+        body.dark-theme #plot-container {
+            background: #2d2d2d;
+            color: #fff;
+        }
+        body.dark-theme .control-group label {
+            color: #ccc;
+        }
+        body.dark-theme .value-display {
+            color: #999;
+        }
+        body.dark-theme select {
+            background: #444;
+            color: #fff;
+            border: 1px solid #666;
+        }
+    </style>
+</head>
+<body>
+    <button class="theme-toggle" onclick="toggleTheme()">Toggle Theme</button>
+    
+    <div class="container">
+        <h1>Interactive Pulse Visualization</h1>
+        
+        <div class="controls">
+            <div class="control-group">
+                <label>Pulse Shape</label>
+                <select id="shape-select" 
+                        hx-post="/pulse" 
+                        hx-trigger="change, load" 
+                        hx-target="#plot-container"
+                        hx-include="#all-sliders">
+                    <option value="gaussian" selected>Gaussian</option>
+                    <option value="sech">Sech</option>
+                    <option value="lorentzian">Lorentzian</option>
+                    <option value="rectangular">Rectangular</option>
+                    <option value="super-gaussian">Super-Gaussian</option>
+                    <option value="triangular">Triangular</option>
+                    <option value="parabolic">Parabolic</option>
+                    <option value="cosine">Cosine</option>
+                    <option value="exponential">Exponential</option>
+                    <option value="airy">Airy</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <label>T₀ (fs)</label>
+                <input type="range" id="t0-slider" name="t0" min="10" max="500" value="50" step="1"
+                       hx-post="/pulse" 
+                       hx-trigger="change throttle:200ms" 
+                       hx-target="#plot-container"
+                       hx-include="#all-sliders"
+                       hx-sync="this:drop">
+                <span class="value-display" id="t0-value">50 fs</span>
+            </div>
+            
+            <div class="control-group">
+                <label>Chirp</label>
+                <input type="range" id="chirp-slider" name="chirp" min="-10" max="10" value="0" step="0.1"
+                       hx-post="/pulse" 
+                       hx-trigger="change throttle:200ms" 
+                       hx-target="#plot-container"
+                       hx-include="#all-sliders"
+                       hx-sync="this:drop">
+                <span class="value-display" id="chirp-value">0.00</span>
+            </div>
+            
+            <div class="control-group">
+                <label>Amplitude</label>
+                <input type="range" id="amp-slider" name="amplitude" min="0.01" max="5" value="1" step="0.01"
+                       hx-post="/pulse" 
+                       hx-trigger="change throttle:200ms" 
+                       hx-target="#plot-container"
+                       hx-include="#all-sliders"
+                       hx-sync="this:drop">
+                <span class="value-display" id="amp-value">1.00</span>
+            </div>
+            
+            <div class="preset-buttons">
+                <label style="font-weight: 600; color: #555; margin-right: 10px;">Presets:</label>
+                <button class="preset-btn" onclick="setPreset('gaussian', 50, 0, 1)">Gaussian</button>
+                <button class="preset-btn" onclick="setPreset('sech', 50, 0, 1)">Sech</button>
+                <button class="preset-btn" onclick="setPreset('gaussian', 50, 2, 1)">Chirped</button>
+                <button class="preset-btn" onclick="setPreset('airy', 50, 0, 1)">Airy</button>
+                <button class="preset-btn" onclick="setPreset('cosine', 50, 0, 1)">Cosine</button>
+                <button class="preset-btn" onclick="setPreset('triangular', 50, 0, 1)">Triangular</button>
+                <button class="preset-btn" onclick="setPreset('parabolic', 50, 0, 1)">Parabolic</button>
+            </div>
+        </div>
+        
+        <div id="plot-container" hx-indicator="#loading-indicator">
+            <div id="loading-indicator" class="htmx-indicator" style="text-align: center; padding-top: 100px;">
+                <div class="loading-spinner"></div>
+                <p style="color: #666; margin-top: 10px;">Loading pulse visualization...</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Hidden form to collect all slider values for HTMX -->
+    <form id="all-sliders" style="display:none;">
+        <select name="shape" id="hidden-shape">
+            <option value="gaussian" selected>Gaussian</option>
+            <option value="sech">Sech</option>
+            <option value="lorentzian">Lorentzian</option>
+            <option value="rectangular">Rectangular</option>
+            <option value="super-gaussian">Super-Gaussian</option>
+            <option value="triangular">Triangular</option>
+            <option value="parabolic">Parabolic</option>
+            <option value="cosine">Cosine</option>
+            <option value="exponential">Exponential</option>
+            <option value="airy">Airy</option>
+        </select>
+        <input type="number" name="t0" id="hidden-t0" value="50">
+        <input type="number" name="chirp" id="hidden-chirp" value="0">
+        <input type="number" name="amplitude" id="hidden-amplitude" value="1">
+        <input type="hidden" name="theme" id="hidden-theme" value="light">
+    </form>
+
+    <script>
+        // Reinitialize Plotly.js after HTMX swaps in new content
+        htmx.onLoad(function(target) {
+            if (typeof Plotly !== 'undefined') {
+                Plotly.Plots.resize(target);
+            }
+        });
+        
+        // Handle errors gracefully with HTMX events
+        document.body.addEventListener('htmx:beforeSwap', function(evt) {
+            if (evt.detail.xhr.status === 422) {
+                // Form validation error - swap as normal
+                evt.detail.shouldSwap = true;
+                evt.detail.isError = false;
+            } else if (evt.detail.xhr.status >= 500) {
+                // Server error - show friendly message
+                evt.detail.shouldSwap = true;
+                evt.detail.isError = false;
+                evt.detail.serverResponse = '<div style="padding: 20px; text-align: center; color: red;">Server error. Please try again.</div>';
+            }
+        });
+        
+        function updateValueDisplays() {
+            var t0 = document.getElementById('t0-slider').value;
+            var chirp = document.getElementById('chirp-slider').value;
+            var amp = document.getElementById('amp-slider').value;
+            
+            document.getElementById('t0-value').textContent = t0 + ' fs';
+            document.getElementById('chirp-value').textContent = parseFloat(chirp).toFixed(2);
+            document.getElementById('amp-value').textContent = parseFloat(amp).toFixed(2);
+        }
+        
+        function setPreset(shape, t0, chirp, amp) {
+            document.getElementById('shape-select').value = shape;
+            document.getElementById('t0-slider').value = t0;
+            document.getElementById('chirp-slider').value = chirp;
+            document.getElementById('amp-slider').value = amp;
+            
+            // Update hidden form values
+            document.getElementById('hidden-shape').value = shape;
+            document.getElementById('hidden-t0').value = t0;
+            document.getElementById('hidden-chirp').value = chirp;
+            document.getElementById('hidden-amplitude').value = amp;
+            
+            updateValueDisplays();
+            
+            // Trigger update
+            document.getElementById('shape-select').dispatchEvent(new Event('change'));
+        }
+        
+        function toggleTheme() {
+            document.body.classList.toggle('dark-theme');
+        }
+        
+        // Initialize
+        updateValueDisplays();
+        
+        // Sync visible sliders with hidden form
+        document.getElementById('shape-select').addEventListener('change', function() {
+            document.getElementById('hidden-shape').value = this.value;
+        });
+        document.getElementById('t0-slider').addEventListener('input', function() {
+            document.getElementById('hidden-t0').value = this.value;
+        });
+        document.getElementById('chirp-slider').addEventListener('input', function() {
+            document.getElementById('hidden-chirp').value = this.value;
+        });
+        document.getElementById('amp-slider').addEventListener('input', function() {
+            document.getElementById('hidden-amplitude').value = this.value;
+        });
+    </script>
+</body>
+</html>

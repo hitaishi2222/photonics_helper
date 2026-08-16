@@ -109,7 +109,10 @@ class TestRetrieve:
         T0 = 50e-15
         chirp = 2.0
         N = 512
-        dt = 10 * T0 * 1.5 / N  # Wider window for chirped
+        # Window = 8·T0 so the pulse fills ~30% of the FROG window. PCGPA is
+        # documented to stall on spurious fixed points when the pulse underfills
+        # the window (e.g. 15·T0 → ~16% fill); ¼–½ window fill is the sweet spot.
+        dt = 8 * T0 / N
         t = np.arange(N) * dt - N * dt / 2
         E = (
             np.exp(-t**2 / (2 * T0**2))

@@ -25,6 +25,7 @@ import matplotlib.pyplot as plt
 
 from photonics_helper.raman import RamanSpec, RamanResponse, RamanFrequencyResponse
 from photonics_helper.pulse import TemporalGrid
+from photonics_helper.base import Time
 
 
 def main():
@@ -40,7 +41,7 @@ def main():
         if spec.fR is None or spec.fR == 0:
             print(f"{name:10s}: fR=0 — no delayed response (pure Kerr)")
             continue
-        grid = TemporalGrid(N=2**14, Tmax=10e-12)
+        grid = TemporalGrid(N=2**14, Tmax=Time(10e-12, "s"))
         resp = RamanResponse(spec=spec, grid=grid)
         fr = RamanFrequencyResponse(response=resp, grid=grid)
         freq_responses[name] = fr
@@ -160,7 +161,7 @@ def main():
             raman_linewidth_cm=lw,
             fR=0.18,
         )
-        grid = TemporalGrid(N=2**14, Tmax=10e-12)
+        grid = TemporalGrid(N=2**14, Tmax=Time(10e-12, "s"))
         resp = RamanResponse(spec=spec, grid=grid)
         fr = RamanFrequencyResponse(response=resp, grid=grid)
 

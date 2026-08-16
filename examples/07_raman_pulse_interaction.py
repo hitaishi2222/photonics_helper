@@ -25,25 +25,26 @@ import matplotlib.pyplot as plt
 
 from photonics_helper.raman import RamanSpec, RamanResponse, RamanPulseInteraction
 from photonics_helper.pulse import Wave, Envelope, TemporalGrid
-from photonics_helper.base import Wavelength
+from photonics_helper.base import Wavelength, Time
 
 
 def main():
     # ── Create a Gaussian pulse ─────────────────────────────────────────────
 
-    grid = TemporalGrid(N=2**14, Tmax=20e-12)
+    grid = TemporalGrid(N=2**14, Tmax=Time(20e-12, "s"))
     envelope = Envelope(
         shape="gaussian",
         peak_amplitude=1.0,
-        pulse_width=100e-15,  # 100 fs FWHM ≈ 118 fs
+        pulse_width=Time(100, "fs"),  # 100 fs FWHM ≈ 118 fs
     )
     wave = Wave(
         grid=grid,
         envelope=envelope,
         central_wavelength=Wavelength(800, "nm"),
     )
-    print(f"Pulse: {envelope.shape}, T₀={envelope.pulse_width*1e15:.1f} fs, "
-          f"FWHM={envelope.fwhm*1e15:.1f} fs, peak power={wave.peak_power():.3f} W")
+    fwhm_fs = envelope.fwhm.as_fs if hasattr(envelope.fwhm, 'as_fs') else envelope.fwhm * 1e15
+    print(f"Pulse: {envelope.shape}, T₀={envelope.pulse_width.as_fs:.1f} fs, "
+              f"FWHM={fwhm_fs:.1f} fs, peak power={wave.peak_power():.3f} W")
 
     # ── Create Raman responses for different materials ──────────────────────
 
@@ -168,7 +169,7 @@ def main():
     for idx, (shape, label) in enumerate(zip(shapes, shape_labels)):
         ax = axes[idx]
 
-        env = Envelope(shape=shape, peak_amplitude=1.0, pulse_width=100e-15)
+        env = Envelope(shape=shape, peak_amplitude=1.0, pulse_width=Time(100, "fs"))
         w = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(800, "nm"))
         resp = RamanResponse(spec=silica.spec, grid=grid)
         interact = RamanPulseInteraction(pulse=w, response=resp, spec=silica.spec)

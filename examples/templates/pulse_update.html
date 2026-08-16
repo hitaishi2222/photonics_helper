@@ -1,0 +1,18 @@
+<!-- HTMX fragment: replaces plot container content -->
+{{ param_text }}
+{{ fig_html }}
+
+<script>
+    // Update value displays after HTMX swap
+    var t0 = {{ params.t0 }};
+    var chirp = {{ params.chirp }};
+    var amp = {{ params.amplitude }};
+    
+    document.getElementById('t0-slider').value = t0;
+    document.getElementById('chirp-slider').value = chirp;
+    document.getElementById('amp-slider').value = amp;
+    
+    document.getElementById('t0-value').textContent = t0 + ' fs';
+    document.getElementById('chirp-value').textContent = chirp.toFixed(2);
+    document.getElementById('amp-value').textContent = amp.toFixed(2);
+</script>

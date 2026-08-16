@@ -42,6 +42,16 @@ class SolitonAnalyzer:
         Propagation distances (m) for each saved evolution step.
     spectra_vs_z : tuple
         (omega_array, spectra_matrix) from solver.spectra_vs_z.
+
+    Notes
+    -----
+    The ``dispersive_wave_wavelength(dispersion=None)`` method accepts an
+    optional ``dispersion`` source for the full β(ω) root finder. When a
+    dispersion source is provided, it uses ``dispersive_wave_roots`` from
+    the phase_matching module. When ``dispersion=None`` (default), it falls
+    back to the β₂/β₃ analytic formula (Δω = −2β₂/β₃). This is backward
+    compatible with existing code that relied on the implicit
+    ``pulse._dispersion`` attribute.
     """
 
     def __init__(
@@ -128,11 +138,27 @@ class SolitonAnalyzer:
             raise ValueError("Soliton order is zero; fission length undefined.")
         return L_D / (N * eta)
 
-    def dispersive_wave_wavelength(self) -> float:
+    def dispersive_wave_wavelength(
+        self,
+        dispersion=None,
+        wl_range_nm: tuple[float, float] | None = None,
+        n_brackets: int = 100,
+    ) -> float:
         """Compute dispersive wave (Cherenkov) wavelength from phase-matching.
 
-        Delta_omega_DW = -2*beta2/beta3
-        lambda_DW = 2*pi*c / (omega0 + Delta_omega_DW)
+        Accepts an optional ``dispersion`` source for the full β(ω) root finder.
+        When no dispersion source is supplied, falls back to the β₂/β₃ formula
+        (Δω = −2β₂/β₃) for the common case.
+
+        Parameters
+        ----------
+        dispersion : Dispersion or PropagationConstant or ZDependentDispersion, optional
+            Dispersion source for full β(ω) root finding. When None, uses the
+            β₂/β₃ analytic fallback.
+        wl_range_nm : tuple[float, float], optional
+            Search range in nm. Defaults to 0.5× to 3× the pump wavelength.
+        n_brackets : int, optional
+            Number of bracket intervals for the root finder. Default 100.
 
         Returns
         -------
@@ -142,8 +168,45 @@ class SolitonAnalyzer:
         Raises
         ------
         ValueError
-            If beta3 is zero or not available.
+            If no valid root is found and β₂/β₃ data unavailable.
         """
+        if wl_range_nm is None:
+            wl_range_nm = (
+                self.pulse.central_wavelength.as_nm * 0.5,
+                self.pulse.central_wavelength.as_nm * 3.0,
+            )
+
+        # Try full root finder if a dispersion source is provided
+        if dispersion is not None:
+            try:
+                from .phase_matching import (
+                    DispersionAdaptor,
+                    PropagationConstantAdaptor,
+                    ZDependentDispersionAdaptor,
+                    dispersive_wave_roots,
+                )
+                # Build an appropriate adaptor
+                if hasattr(dispersion, 'get_betas'):
+                    adaptor = DispersionAdaptor(dispersion, self.pulse.central_frequency)
+                elif hasattr(dispersion, 'omegas') and hasattr(dispersion, 'fn'):
+                    # ZDependentDispersion — fix at z=0
+                    adaptor = ZDependentDispersionAdaptor(dispersion, z=0.0)
+                else:
+                    # PropagationConstant or similar
+                    adaptor = PropagationConstantAdaptor(dispersion)
+
+                result = dispersive_wave_roots(
+                    adaptor,
+                    self.pulse.central_frequency,
+                    wl_range_nm=wl_range_nm,
+                    n_brackets=n_brackets,
+                )
+                if len(result.wavelengths_nm) > 0:
+                    return float(result.wavelengths_m[0])
+            except Exception:
+                pass  # Fall through to β₂/β₃
+
+        # β₂/β₃ fast fallback
         if self.beta3_si == 0:
             raise ValueError("beta3 is zero or not available; DW wavelength undefined.")
         delta_omega = -2 * self.beta2_si / self.beta3_si

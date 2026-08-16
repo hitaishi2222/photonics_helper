@@ -10,6 +10,18 @@ A comprehensive helper library for photonics and optics calculations, providing 
 pip install photonics-helper
 ```
 
+For the **FFTW3-accelerated GNLSE / Raman solver** (recommended for large grids
+and long propagation runs):
+
+```bash
+pip install photonics-helper[fftw]
+```
+
+When `pyfftw` is present, every FFT in `gnlse.py` and `raman.py` executes on
+the system FFTW3 library with cached plans; otherwise the solver transparently
+falls back to `numpy.fft`. See `photonics_helper._fftw` (env vars
+`PHOTONICS_FFTW_PLANNER`, `PHOTONICS_FFTW_THREADS`).
+
 # Key Features
 
 - **Type Safety**: Full type hints support with stub files
@@ -264,7 +276,7 @@ pip install -e .
   - Dispersion (arbitrary-order β_k)
   - Kerr effect
   - Raman scattering (delayed response)
-  - Self-steepening (energy-conserving RK45 integrator)
+  - Self-steepening (optional; default off — set `include_self_steepening=True` to match laserfun's `shock=True`)
   - Two-photon absorption (TPA)
   - Adaptive step-size (SSFM)
   - Soliton propagation, fission, supercontinuum
