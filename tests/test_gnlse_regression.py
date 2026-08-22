@@ -324,3 +324,114 @@ class TestEstimateNumSteps:
             pulse, fiber, betas, include_self_steepening=True
         )
         assert n_steep >= n_plain
+
+
+class TestGNLSEPhysics:
+    """End-to-end physics checks for the Dudley-style supercontinuum regime."""
+
+    @staticmethod
+    def _dudley_setup(*, raman: bool, steep: bool, npts: int = 4096):
+        from photonics_helper.base import C_MS
+        from photonics_helper.raman import RamanResponse, RamanSpec
+
+        betas = np.array([-11.830e-3, 8.1038e-5])
+        grid = TemporalGrid(N=npts, Tmax=Time(12.5e-12, "s"))
+        env = Envelope.from_fwhm(
+            "sech",
+            peak_amplitude=np.sqrt(10_000.0),
+            fwhm=Time(0.0284 * 1.76, "ps"),
+        )
+        pulse = Wave(
+            grid=grid,
+            envelope=env,
+            central_wavelength=Wavelength(835.0, "nm"),
+        )
+        raman_resp = None
+        if raman:
+            raman_resp = RamanResponse(
+                spec=RamanSpec(
+                    name="Silica",
+                    raman_shift_cm=440,
+                    raman_linewidth_cm=45,
+                    fR=0.18,
+                ),
+                fR=0.18,
+                tau1=12.2e-15,
+                tau2=32.0e-15,
+                grid=grid,
+            )
+        fiber = FiberProfile.from_gamma(
+            gamma=0.11,
+            n2=2.7e-20,
+            omega0=pulse.central_frequency,
+            length=Length(0.15, "m"),
+            raman_response=raman_resp,
+        )
+        num_steps = GNLSESolver.estimate_num_steps(
+            pulse,
+            fiber,
+            betas,
+            include_self_steepening=steep,
+            include_raman=raman,
+            safety_factor=2.0,
+        )
+        engine = SplitStepEngine(
+            pulse,
+            fiber,
+            betas,
+            include_raman=raman,
+            include_self_steepening=steep,
+        )
+        engine.propagate(num_steps, nsaves=2)
+        return pulse, engine, betas, C_MS
+
+    def test_anomalous_dispersion_kerr_walks_to_positive_time(self):
+        """Dispersion + Kerr must not invert soliton walk-off (regression)."""
+        pulse, engine, _, _ = self._dudley_setup(raman=False, steep=False)
+        t = pulse.grid.t
+        I0 = np.abs(pulse.envelope_field) ** 2
+        I1 = np.abs(engine.A) ** 2
+
+        def centroid(I):
+            return np.trapezoid(t * I, t) / np.trapezoid(I, t)
+
+        assert (centroid(I1) - centroid(I0)) > 0.0
+
+    def test_raman_supercontinuum_red_shifts_and_delays(self):
+        """Raman + shock: spectral red shift and positive-time soliton structure."""
+        pulse, engine, _, c_ms = self._dudley_setup(raman=True, steep=True)
+        t = pulse.grid.t
+        A0 = np.asarray(pulse.envelope_field, dtype=complex)
+        A1 = engine.A
+        I0 = np.abs(A0) ** 2
+        I1 = np.abs(A1) ** 2
+
+        def centroid_time(I):
+            return np.trapezoid(t * I, t) / np.trapezoid(I, t)
+
+        assert (centroid_time(I1) - centroid_time(I0)) > 0.0
+
+        def wl_centroid(A):
+            Aw = pulse.grid.fft(A)
+            power = np.abs(Aw) ** 2
+            omega = pulse.grid.w + pulse.central_frequency
+            mask = omega > 0
+            wl = 2 * np.pi * c_ms / omega[mask] * 1e9
+            p = power[mask]
+            return np.trapezoid(wl * p, wl) / np.trapezoid(p, wl)
+
+        assert wl_centroid(A1) > wl_centroid(A0)
+
+        peak = I1.max()
+        thresh = peak * 10 ** (-20 / 10)
+        mask = t > 0.1e-12
+        Ipos = I1[mask]
+        n_peaks = sum(
+            1
+            for i in range(1, len(Ipos) - 1)
+            if Ipos[i] > thresh and Ipos[i] > Ipos[i - 1] and Ipos[i] > Ipos[i + 1]
+        )
+        assert n_peaks > 0
+
+        E_ratio = np.trapezoid(I1, t) / np.trapezoid(I0, t)
+        assert 0.97 <= E_ratio <= 1.05

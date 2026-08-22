@@ -1711,8 +1711,11 @@ class RamanResponse:
 
         if self.grid is None:
             # Default grid: cover ~20 τ2 for damped oscillation to decay
+            from .base import Time
+            tau2_val = self.tau2 or 1e-12
+            tmax = max(10e-12, 20 * tau2_val)
             self.grid = TemporalGrid(
-                N=2**14, Tmax=max(10e-12, 20 * (self.tau2 or 1e-12))
+                N=2**14, Tmax=Time(tmax, unit='s')
             )
 
         return self

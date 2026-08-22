@@ -37,8 +37,27 @@ class RefractiveIndex:
 
     @model_validator(mode="after")
     def _setup_splines(self) -> "RefractiveIndex":
-        self._wl_min = float(self.wl.as_um.min())
-        self._wl_max = float(self.wl.as_um.max())
+        n_arr = np.asarray(self.n)
+        k_arr = np.asarray(self.k)
+        wl_arr = np.asarray(self.wl.as_um)
+
+        if not (len(n_arr) == len(k_arr) == len(wl_arr)):
+            raise ValueError(
+                f"n, k and wl must have equal lengths, got "
+                f"n={len(n_arr)}, k={len(k_arr)}, wl={len(wl_arr)}"
+            )
+        if len(wl_arr) < 4:
+            raise ValueError(
+                "cubic spline interpolation requires at least 4 wavelength "
+                f"points, got {len(wl_arr)}"
+            )
+        if not np.all(np.diff(wl_arr) > 0):
+            raise ValueError(
+                "wl must be strictly increasing (sorted, no duplicate values)"
+            )
+
+        self._wl_min = float(wl_arr.min())
+        self._wl_max = float(wl_arr.max())
         return self
 
     @cached_property
@@ -50,18 +69,14 @@ class RefractiveIndex:
         try:
             return make_splrep(self.wl.as_um, self.n)
         except Exception as e:
-            raise ValueError(
-                f"insufficient data for cubic spline (e.g. single-point material) {e}"
-            )
+            raise ValueError(f"failed to build n-spline: {e}") from e
 
     @cached_property
     def _k_spline(self) -> BSpline:
         try:
             return make_splrep(self.wl.as_um, self.k)
         except Exception as e:
-            raise ValueError(
-                f"insufficient data for cubic spline (e.g. single-point material) {e}"
-            )
+            raise ValueError(f"failed to build k-spline: {e}") from e
 
     @classmethod
     def from_complex(cls, nk: ArrayLike, wl: WavelengthArray) -> Self:
@@ -118,7 +133,8 @@ class RefractiveIndex:
         n_g = self.group_index(wavelength)
         if abs(n_g) < 1e-10:
             warnings.warn(
-                f"group_index ≈ 0 at {wavelength} μm — group_velocity will diverge"
+                f"group_index ≈ 0 at {wavelength} μm — group_velocity will diverge",
+                stacklevel=2,
             )
         return self._C / n_g
 
@@ -138,16 +154,13 @@ class RefractiveIndex:
 
     def plot(self, include_k: bool = True):
         """Plot n (and optionally k) versus wavelength."""
-
         plt.plot(self.wl.as_um, self.n, label="n")
-        plt.xlabel("wavelength [μm]")
-        plt.ylabel("n")
-
         if include_k:
             plt.plot(self.wl.as_um, self.k, label="k")
-            plt.ylabel("n,k")
-            plt.legend()
 
+        plt.xlabel("wavelength [μm]")
+        plt.ylabel("n, k" if include_k else "n")
+        plt.legend()
         plt.show()
 
     @classmethod
@@ -159,7 +172,11 @@ class RefractiveIndex:
         wl_from_to_in_um: Tuple[float, float],
         n_points=200,
     ) -> Self:
-        """Construct from a Sellmeier equation: n² = A₀ + Σ Aᵢλ²/(λ² - Bᵢ)."""
+        """Construct from a Sellmeier equation: n² = A₀ + Σ Aᵢλ²/(λ² - Bᵢ).
+
+        Note: ``B`` entries must be **squared** resonance wavelengths
+        (Bᵢ = λ_res²) in μm², matching the convention in materials.db.
+        """
         if len(A) != len(B):
             raise ValueError("Length of A and B should be same")
         else:
@@ -168,8 +185,19 @@ class RefractiveIndex:
             wl_arr = np.array(wls.as_um)
             A_arr = np.array(A)
             B_arr = np.array(B)
-            terms = A_arr * wl_arr[:, None] ** 2 / (wl_arr[:, None] ** 2 - B_arr)
-            n = np.sqrt(A0 + terms.sum(axis=1))
+            with np.errstate(divide="ignore", invalid="ignore"):
+                terms = A_arr * wl_arr[:, None] ** 2 / (wl_arr[:, None] ** 2 - B_arr)
+                n_squared = A0 + terms.sum(axis=1)
+            invalid = ~np.isfinite(n_squared) | (n_squared < 0)
+            if np.any(invalid):
+                bad = wl_arr[invalid]
+                raise ValueError(
+                    "Sellmeier sum is negative/undefined for some wavelengths "
+                    f"(λ² approaches a resonance pole Bᵢ); offending range: "
+                    f"{bad.min():.4g}–{bad.max():.4g} μm. Restrict "
+                    "wl_from_to_in_um to the valid transparency window."
+                )
+            n = np.sqrt(n_squared)
             k = np.zeros(len(wls.value))  # type: ignore[arg-type]
 
         return cls(n=np.array(n), k=k, wl=wls)
@@ -183,7 +211,11 @@ class RefractiveIndex:
         wl_from_to_in_um: Tuple[float, float],
         n_points=200,
     ) -> Self:
-        """Construct from an alternative Sellmeier form: n² = A₀ + Σ Aᵢ/(λ² - Bᵢ²)."""
+        """Construct from an alternative Sellmeier form: n² = A₀ + Σ Aᵢ/(λ² - Bᵢ²).
+
+        Note: unlike :meth:`from_sellmeier`, ``B`` entries here are the
+        **unsquared** resonance wavelengths in μm (they are squared internally).
+        """
         if len(A) != len(B):
             raise ValueError("Length of A and B should be same")
         else:
@@ -210,12 +242,20 @@ class RefractiveIndex:
             raise ValueError(f"No Sellmeier data for {material} in materials.db")
 
         wl_range = (sellmeier["valid_from_um"], sellmeier["valid_to_um"])
-        return cls.from_sellmeier(
+        kwargs = dict(
             A0=sellmeier["a0"],
             A=sellmeier["coefficients"],
             B=sellmeier["wavelengths"],
             wl_from_to_in_um=wl_range,
             n_points=n_points,
+        )
+        form = sellmeier["form"]
+        if form == "standard":
+            return cls.from_sellmeier(**kwargs)
+        elif form == "alt":
+            return cls.from_alt_sellmeier(**kwargs)
+        raise ValueError(
+            f"Unknown Sellmeier form {form!r} for {material} in materials.db"
         )
 
     def propagation_loss(self) -> NDArray:
@@ -224,10 +264,18 @@ class RefractiveIndex:
         Uses intensity attenuation α(λ) = 4πk(λ)/λ, then converts to dB/m:
             loss = 10·log₁₀(e)·α ≈ 4.343·α
         """
-        if not np.all(self.k):
+        k_arr = np.asarray(self.k)
+        if np.any(k_arr < 0):
+            bad = self.wl.as_um[k_arr < 0]
+            raise ValueError(
+                f"k must be non-negative for loss calculation; found k < 0 "
+                f"at wavelengths {bad.min():.4g}–{bad.max():.4g} μm"
+            )
+        if not np.any(k_arr):
             warnings.warn(
-                "RefractiveIndex doesn't have imaginary index values. "
-                "Please provide it before loss calculation."
+                "RefractiveIndex has no imaginary index values (k = 0); "
+                "computed propagation loss will be zero.",
+                stacklevel=2,
             )
         alpha = 4 * PI * self.k / self.wl.as_m  # 1/m (intensity attenuation)
         return 10 * np.log10(np.e) * alpha  # dB/m

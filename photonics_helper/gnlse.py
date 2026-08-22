@@ -15,7 +15,6 @@ import numpy as np
 from numpy.typing import NDArray
 
 from photonics_helper.base import C_MS, Area, Length, Time
-from photonics_helper._fftw import fft as _fftw_fft, ifft as _fftw_ifft
 
 if TYPE_CHECKING:
     from photonics_helper.pulse import Wave, TemporalGrid
@@ -171,10 +170,10 @@ def raman_step(
     include_raman: bool,
     omega0: float = 0.0,
 ) -> NDArray:
-    """Apply Raman convolution: P_Raman = (1-fR)|A|² + fR·(h_R ⊗ |A|²).
+    """Apply Raman convolution: P_NL = (1-fR)|A|² + fR·(h_R ⊗ |A|²).
 
-    Uses FFT-based circular convolution with proper dt normalization.
-    h_R is evaluated on a causal delay grid [0, dt, 2dt, ...].
+    Uses FFT-based circular convolution on the centered ``grid.t`` axis with
+    the same ``grid.fft`` / ``grid.ifft`` convention as the split-step engine.
 
     Parameters
     ----------
@@ -213,12 +212,11 @@ def raman_step(
         # (centered) corrupts the circular convolution.
         h_R = fiber.raman_response._h_R(grid.t)  # causal: h_R[t<0] = 0
 
-        # FFTW-backed circular convolution.  fft()/ifft() embed the
-        # centered↔standard-order rolls, which cancel in the element-wise
-        # product — bit-identical to the former np.fft path.
-        h_R_fft = _fftw_fft(h_R)
-        I_fft = _fftw_fft(intensity)
-        P_delayed = fR * grid.dt * np.real(_fftw_ifft(h_R_fft * I_fft))
+        # Circular convolution via the same grid.fft/ifft convention as the
+        # linear and shock steps (dt scaling cancels in fft → ifft).
+        h_R_fft = grid.fft(h_R)
+        I_fft = grid.fft(intensity)
+        P_delayed = fR * np.real(grid.ifft(h_R_fft * I_fft))
     else:
         P_delayed = np.zeros_like(intensity)
 
@@ -319,6 +317,9 @@ class SplitStepEngine:
         Include TPA. Default False.
     step_size : Length | None
         Fixed step size (m). If None, adaptive stepping is used.
+    min_shrink_factor : float
+        Floor for the gradient-based step shrink factor in z-dependent mode.
+        Must be in (0, 1]. Default 0.1.
     """
 
     def __init__(
@@ -334,6 +335,7 @@ class SplitStepEngine:
         a_eff_fn: Callable[[float], float] | None = None,
         alpha_fn: Callable[[float], float] | None = None,
         gamma_fn: Callable[[float], float] | None = None,
+        min_shrink_factor: float = 0.1,
     ):
         self.pulse = pulse
         self.fiber = fiber
@@ -344,6 +346,11 @@ class SplitStepEngine:
         self.include_self_steepening = include_self_steepening
         self.include_tpa = include_tpa
         self.step_size = step_size
+
+        if not (0.0 < min_shrink_factor <= 1.0):
+            raise ValueError(f"min_shrink_factor must be in (0, 1], got {min_shrink_factor!r}")
+        self._min_shrink_factor = min_shrink_factor
+        self._h_R_fft_cache: NDArray | None = None
 
         # z-dependent hooks (all optional; None → uniform behavior)
         self._dispersion_profile = dispersion_profile
@@ -363,16 +370,15 @@ class SplitStepEngine:
         self._U = 0.0  # carrier density for TPA
 
     def _linear_step(self, A: NDArray, dz: float) -> NDArray:
-        """Apply dispersion via FFT: A(ω) ← A(ω) · exp(Σ D_k(ω) · Δz).
+        """Apply dispersion via FFT: A(ω) ← A(ω) · exp(−i·Σ β_k(Ω)·Δz).
 
         Also applies loss: multiply by exp(-α·Δz/2).
         Dispersion Taylor expansion starts at k=2 (β₂, β₃, ...).
         β₁ (group velocity) is not included — pulse stays in group-velocity frame.
 
-        Note: get_betas() returns β_k in ps^k/m with ω in rad/ps. We convert
-        the frequency axis to rad/ps here (matching get_betas() convention)
-        rather than converting betas to SI, because each β_k has different
-        power-of-ps units (ps²/m for β₂, ps³/m for β₃, etc.).
+        The minus sign pairs with :meth:`~photonics_helper.pulse.TemporalGrid.fft`
+        (numpy ``exp(−iωt)`` convention) for the standard GNLSE
+        ``i∂A/∂z + Σ (β_k/k!) ∂^k A/∂t^k + … = 0`` form.
         """
         A_w = self.grid.fft(A)
         omega_ps = self.grid.w * 1e-12  # rad/s → rad/ps
@@ -411,10 +417,7 @@ class SplitStepEngine:
                 loss_factor = np.exp(-alpha * dz / 2)
                 A_w = A_w * loss_factor
         else:
-            # Uniform path: Taylor expansion (unchanged behavior)
-            # Build real phase function: φ(Ω) = Σ_{k≥2} βₖ·Ωᵏ/k!
-            # where Ω is in rad/ps and β_k in ps^k/m.
-            # Propagation: A(ω) ← A(ω) · exp(i·φ(ω)·Δz) — pure phase shift (unitary).
+            # φ(Ω) = Σ_{k≥2} βₖ·Ωᵏ/k!  with Ω in rad/ps, β_k in ps^k/m.
             phi = np.zeros_like(omega_ps, dtype=float)
             for k, beta_k in enumerate(self.betas, start=2):
                 phi += beta_k * omega_ps ** k / factorial(k)
@@ -426,7 +429,7 @@ class SplitStepEngine:
                 loss_factor = np.exp(-alpha * dz / 2)
                 A_w = A_w * loss_factor
 
-        A_w = A_w * np.exp(1j * phi)
+        A_w = A_w * np.exp(-1j * phi)
         return self.grid.ifft(A_w)
 
     def _eval_dispersion(self, omega: NDArray, z: float) -> NDArray:
@@ -466,6 +469,34 @@ class SplitStepEngine:
         else:
             return self.fiber.alpha
 
+    def _nl_intensity(self, intensity: NDArray, h_R_fft: NDArray | None) -> NDArray:
+        """Kerr + Raman nonlinear driving intensity P_NL(|A|²).
+
+        Parameters
+        ----------
+        intensity : |A(t)|² on the simulation grid.
+        h_R_fft : FFT of h_R(t) on ``self.grid.t``, or None when Raman is off.
+        """
+        if h_R_fft is not None:
+            fR = self.fiber.raman_response.fR  # type: ignore[union-attr]
+            P_inst = (1.0 - fR) * intensity
+            I_fft = self.grid.fft(intensity)
+            P_delayed = fR * np.real(self.grid.ifft(h_R_fft * I_fft))
+            return P_inst + P_delayed
+        return intensity
+
+    def _get_h_R_fft(self) -> NDArray:
+        """FFT of the Raman response on ``self.grid.t`` (cached).
+
+        Depends only on the temporal grid and the fiber's Raman response,
+        both fixed for the engine's lifetime — recomputing it every
+        nonlinear step wasted an FFT per step.
+        """
+        if self._h_R_fft_cache is None:
+            h_R = self.fiber.raman_response._h_R(self.grid.t)  # causal: h_R[t<0] = 0
+            self._h_R_fft_cache = self.grid.fft(h_R)
+        return self._h_R_fft_cache
+
     def _nonlinear_step(self, A: NDArray, dz: float) -> Tuple[NDArray, float]:
         """Apply nonlinear effects.
 
@@ -479,30 +510,17 @@ class SplitStepEngine:
         gamma = self._get_gamma(self._current_z)
         intensity = np.abs(A) ** 2
 
+        h_R_fft: NDArray | None = None
         if self.include_raman and self.fiber.raman_response is not None:
-            fR = self.fiber.raman_response.fR
-            P_inst = (1.0 - fR) * intensity
-
-            # h_R must be evaluated on the SAME centered time grid as the field.
-            # Using np.arange(N)*dt (uncentered) while intensity is on self.grid.t
-            # (centered) corrupts the circular convolution.
-            h_R = self.fiber.raman_response._h_R(self.grid.t)  # causal: h_R[t<0] = 0
-
-            # FFTW-backed circular convolution.  fft()/ifft() embed the
-            # centered↔standard-order rolls, which cancel in the element-wise
-            # product — bit-identical to the former np.fft path.
-            h_R_fft = _fftw_fft(h_R)
-            I_fft = _fftw_fft(intensity)
-            P_delayed = fR * self.grid.dt * np.real(_fftw_ifft(h_R_fft * I_fft))
-
-            P_NL = P_inst + P_delayed
+            # Cached FFT of h_R on the same centered grid (see _get_h_R_fft).
+            h_R_fft = self._get_h_R_fft()
         elif self.include_raman and self.fiber.raman_response is None:
             raise ValueError(
                 "include_raman=True but fiber.raman_response is None. "
                 "Provide a RamanResponse or set include_raman=False."
             )
-        else:
-            P_NL = intensity
+
+        P_NL = self._nl_intensity(intensity, h_R_fft)
 
         if self.include_self_steepening:
             # Self-steepening: RK4 in frequency domain (laserfun / Dudley Eq. 3.13).
@@ -512,18 +530,15 @@ class SplitStepEngine:
             # shock term (1 + (i/ω₀)∂/∂t) acting on P_NL·A in the time domain.
             #
             # dÃ/dz = iγ · (ω/ω₀) · FFT(NL_src); NL_src = P_NL·A (Raman) or
-            # |A|²·A (Kerr). Field-dependent NL_src at each RK4 stage avoids
-            # energy drift when combined with the dispersion split-step.
+            # |A|²·A (Kerr). Recompute P_NL from the stage field so the Raman
+            # convolution tracks the evolving intensity profile.
             shock_factor = (self.omega0 + self.grid.w) / self.omega0
             A_w = self.grid.fft(A)
-            use_frozen_pnl = self.include_raman and self.fiber.raman_response is not None
 
             def shock_rhs_freq(A_w_stage: NDArray) -> NDArray:
                 a = self.grid.ifft(A_w_stage)
-                if use_frozen_pnl:
-                    nl_src = P_NL * a
-                else:
-                    nl_src = np.abs(a) ** 2 * a
+                p_nl = self._nl_intensity(np.abs(a) ** 2, h_R_fft)
+                nl_src = p_nl * a
                 nl_w = self.grid.fft(nl_src)
                 nl_w *= shock_factor
                 return 1j * gamma * nl_w
@@ -663,7 +678,7 @@ class SplitStepEngine:
 
         if dbeta_dz > threshold:
             factor = threshold / dbeta_dz
-            return max(0.1, min(factor, 1.0))
+            return max(self._min_shrink_factor, min(factor, 1.0))
         else:
             return 1.0
 
@@ -747,13 +762,23 @@ class SplitStepEngine:
             Wave(grid=self.grid, envelope=self.pulse.envelope, central_wavelength=self.pulse.central_wavelength)
         )
 
+        # Termination tolerance: must be >> 1 ulp of `length` so that
+        # `z + (length - z)` cannot round back to `z` (float limit-cycle hang).
+        z_tol = 1e-9 * max(length, 1.0)
+
         while z < length:
+            remaining = length - z
+            # Defense in depth: stop once within a negligible sliver of the end.
+            # Prevents infinite loop when shrink × remaining < ½ ulp(z).
+            if remaining <= z_tol:
+                break
+
             # Determine step size
             if self.step_size is not None:
-                dz = min(self.step_size.as_m, length - z)
+                dz = min(self.step_size.as_m, remaining)
             else:
                 dz_adaptive = self._adaptive_step_size(self.A)
-                dz = min(dz_adaptive, dz_base, length - z)
+                dz = min(dz_adaptive, dz_base, remaining)
                 if dz_base > 2.0 * dz_adaptive and z == 0.0:
                     recommended = max(
                         int(np.ceil(length / max(dz_adaptive, 1e-30))),
@@ -783,7 +808,14 @@ class SplitStepEngine:
             # Half linear step
             self.A = self._linear_step(self.A, dz / 2)
 
-            z += dz
+            z_new = z + dz
+            if z_new <= z:
+                raise RuntimeError(
+                    f"SplitStepEngine.propagate: no forward progress at z={z!r} m "
+                    f"(dz={dz!r} m, length={length!r} m). "
+                    "Floating-point limit cycle — check step-size logic."
+                )
+            z = z_new
             self._current_z = z
 
             if save_z is None:
@@ -803,6 +835,9 @@ class SplitStepEngine:
             _append_snapshot()
 
         if pbar is not None:
+            # Cosmetic: fill the bar to 100% if we stopped early via z_tol.
+            if z < length:
+                pbar.update(length - z)
             pbar.close()
 
         if save_z is not None:
@@ -1070,6 +1105,10 @@ class TaperedGNLSESolver:
         ``NLSE`` defaults to ``shock=True``).
     include_tpa : bool
         Include two-photon absorption. Default False.
+    min_shrink_factor : float
+        Floor for the gradient-based step shrink factor in z-dependent mode.
+        Must be in (0, 1]. Default 0.1. Raise it (e.g. 0.3) to trade a small
+        amount of accuracy for speed on tapers with mild dispersion gradients.
     """
 
     def __init__(
@@ -1084,6 +1123,7 @@ class TaperedGNLSESolver:
         include_self_steepening: bool = False,
         include_tpa: bool = False,
         check_phase_matching: bool = False,
+        min_shrink_factor: float = 0.1,
     ):
         self.pulse = pulse
         self.fiber = fiber
@@ -1095,6 +1135,7 @@ class TaperedGNLSESolver:
         self.include_self_steepening = include_self_steepening
         self.include_tpa = include_tpa
         self.check_phase_matching = check_phase_matching
+        self.min_shrink_factor = min_shrink_factor
         self._engine: SplitStepEngine | None = None
         self._evolution: list["Wave"] = []
         self._z_positions: NDArray | None = None
@@ -1148,6 +1189,7 @@ class TaperedGNLSESolver:
             a_eff_fn=self.a_eff_fn,
             alpha_fn=self.alpha_fn,
             gamma_fn=self.gamma_fn,
+            min_shrink_factor=self.min_shrink_factor,
         )
         self._engine.propagate(num_steps, nsaves=nsaves, show_progress=show_progress)
         self._evolution = self._engine.evolution

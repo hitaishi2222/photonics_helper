@@ -437,6 +437,7 @@ class ZDependentDispersion:
         omega_fit = self.omegas[mask]
         beta_at_z = self.fn(omega_fit, z)
         valid = ~np.isnan(beta_at_z)
+        
         if valid.sum() < order + 1:
             return np.full(order - 1, np.nan)
 
@@ -483,11 +484,16 @@ class ZDependentDispersion:
         beta : 2-D array — shape (n_omega, n_z).
         central_wavelength : float — design central wavelength (m).
         """
+        # Convert to meters if needed (detect by checking magnitude)
+        cw = float(central_wavelength)
+        if cw > 1.0:  # Likely in micrometers
+            cw_um = cw
+            cw = cw * 1e-6  # Convert to meters
         return cls(
             omegas=np.asarray(omegas, dtype=float),
             z_positions=np.asarray(z_positions, dtype=float),
             beta=np.asarray(beta, dtype=float),
-            central_wavelength=float(central_wavelength),
+            central_wavelength=cw,
         )
 
     @classmethod

@@ -25,3 +25,5 @@ graphify-out
 openspec
 
 graphify-out/
+./examples/images/
+./examples/*.html

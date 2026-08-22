@@ -288,9 +288,9 @@ def test_exponential_decay():
 
 
 def test_exponential_fwhm():
-    """Exponential FWHM = 2*T0*log(2)."""
+    """Exponential intensity I ∝ exp(−2|t|/T0) → FWHM = T0*log(2)."""
     T0 = Time(1, "ps")
-    expected = 2.0 * T0.as_s * np.log(2.0)
+    expected = T0.as_s * np.log(2.0)
     env = Envelope(shape="exponential", peak_amplitude=1.0, pulse_width=T0)
     assert pytest.approx(env.fwhm.as_s, rel=1e-12) == expected
 
@@ -927,9 +927,9 @@ def test_cosine_fwhm_trebs():
 
 
 def test_exponential_fwhm_factor():
-    """Exponential FWHM/T₀ = 2·ln(2)."""
+    """Exponential FWHM/T₀ = ln(2) (intensity half-max)."""
     from math import log
-    expected = 2.0 * log(2)
+    expected = log(2)
     env = Envelope(shape="exponential", peak_amplitude=1.0, pulse_width=Time(100, "fs"))
     assert pytest.approx(env.fwhm.as_s / 100e-15, rel=1e-10) == expected
 

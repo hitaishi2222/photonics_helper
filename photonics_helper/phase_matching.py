@@ -52,7 +52,7 @@ from scipy.optimize import root_scalar
 from scipy.signal import find_peaks
 from scipy.integrate import cumulative_trapezoid
 
-from .base import C_MS, PI, WavelengthArray
+from .base import C_MS, PI, Wavelength, WavelengthArray, AngularFrequency, AngularFrequencyArray
 
 if TYPE_CHECKING:
     from .fiber import Dispersion, PropagationConstant, ZDependentDispersion
@@ -127,49 +127,38 @@ class DispersionAdaptor:
         # Build spline for β₂(ω)
         from scipy.interpolate import UnivariateSpline
         self._beta2_spline = UnivariateSpline(omega_sorted, beta2_sorted, s=0)
+        # Pre-compute β₁(ω) and β(ω) on the reference grid via double integration
+        # Reference: β₁(ω₀) = 0, β(ω₀) = 0 (absolute values not needed for PM)
+        domega_ref = omega_sorted - self.omega0
+        # First integration: β₁(ω) = ∫ β₂ dω (from ω₀ to ω)
+        beta1_sorted = cumulative_trapezoid(beta2_sorted, domega_ref, initial=0.0)
+        # Second integration: β(ω) = ∫ β₁ dω (from ω₀ to ω)
+        beta_sorted = cumulative_trapezoid(beta1_sorted, domega_ref, initial=0.0)
+        # Build splines for β₁(ω) and β(ω)
+        self._beta1_spline = UnivariateSpline(omega_sorted, beta1_sorted, s=0)
+        self._beta_spline = UnivariateSpline(omega_sorted, beta_sorted, s=0)
 
     def __call__(self, omega: NDArray | float) -> NDArray | float:
         """Return β(ω)."""
         return self.beta(omega)
 
     def beta(self, omega: NDArray | float) -> NDArray | float:
+        """Return β(ω) via spline interpolation of pre-integrated values."""
         scalar = np.isscalar(omega)
         omega_arr = np.atleast_1d(np.asarray(omega, dtype=float))
-        # Get β₂(ω) at each frequency
-        beta2_vals = self._beta2_spline(omega_arr)
-        # Numerical integration: β(ω) = β(ω₀) + ∫_{ω₀}^{ω} β₂(ω') dω'
-        # Compute cumulative integral from omega0 to each omega
-        domega = omega_arr - self.omega0
-        # Sort by omega for proper integration
-        sort_idx = np.argsort(omega_arr)
-        domega_sorted = domega[sort_idx]
-        beta2_sorted = beta2_vals[sort_idx]
-        beta_offset_sorted = cumulative_trapezoid(beta2_sorted, domega_sorted, initial=0.0)
-        # Reorder back
-        beta_offset = np.empty_like(beta_offset_sorted)
-        beta_offset[sort_idx] = beta_offset_sorted
-        # β(ω₀) = 0 as reference (absolute value not needed for PM)
-        result = beta_offset
+        result = self._beta_spline(omega_arr)
         if scalar:
             return float(result[0])
         return result
 
     def beta1(self, omega: NDArray | float) -> NDArray | float:
+        """Return β₁(ω) = dβ/dω via spline interpolation of pre-integrated values."""
         scalar = np.isscalar(omega)
         omega_arr = np.atleast_1d(np.asarray(omega, dtype=float))
-        # β₁ = dβ/dω ≈ β₂(ω) for practical purposes (group delay)
-        # More precisely β₁ = dβ/dω, computed via finite differences
-        domega = 1e12  # 1 THz offset
-        beta_plus = self._beta_no_scalar(omega_arr + domega)
-        beta_minus = self._beta_no_scalar(omega_arr - domega)
-        beta1_vals = (beta_plus - beta_minus) / (2 * domega)
+        result = self._beta1_spline(omega_arr)
         if scalar:
-            return float(beta1_vals[0])
-        return beta1_vals
-
-    def _beta_no_scalar(self, omega: NDArray) -> NDArray:
-        """Internal beta without scalar handling."""
-        return self.beta(omega)
+            return float(result[0])
+        return result
 
 
 class PropagationConstantAdaptor:
@@ -286,17 +275,15 @@ class DispersiveWaveResult:
 
     Attributes
     ----------
-    wavelengths_m : 1-D array — dispersive wave wavelengths (m).
-    wavelengths_nm : 1-D array — dispersive wave wavelengths (nm).
-    soliton_omega : float — soliton center frequency (rad/s).
-    soliton_lambda_m : float — soliton wavelength (m).
+    wavelengths : WavelengthArray — dispersive wave wavelengths.
+    soliton_omega : AngularFrequency — soliton center angular frequency.
+    soliton_wavelength : Wavelength — soliton wavelength.
     q_sol : float — soliton wavenumber correction (1/m).
     """
 
-    wavelengths_m: NDArray
-    wavelengths_nm: NDArray
-    soliton_omega: float
-    soliton_lambda_m: float
+    wavelengths: WavelengthArray
+    soliton_omega: AngularFrequency
+    soliton_wavelength: Wavelength
     q_sol: float = 0.0
 
 
@@ -307,10 +294,10 @@ class SimulationReadinessReport:
     Attributes
     ----------
     dispersion_covers_grid : bool — True if dispersion covers the pulse grid.
-    grid_omega_min : float — minimum grid angular frequency (rad/s).
-    grid_omega_max : float — maximum grid angular frequency (rad/s).
-    dispersion_min_omega : float — minimum dispersion model frequency (rad/s).
-    dispersion_max_omega : float — maximum dispersion model frequency (rad/s).
+    grid_omega_min : AngularFrequency — minimum grid angular frequency.
+    grid_omega_max : AngularFrequency — maximum grid angular frequency.
+    dispersion_min_omega : AngularFrequency — minimum dispersion model frequency.
+    dispersion_max_omega : AngularFrequency — maximum dispersion model frequency.
     soliton_order : float — estimated soliton order N.
     dispersion_length : float — L_D (m).
     nonlinear_length : float — L_NL (m).
@@ -319,16 +306,16 @@ class SimulationReadinessReport:
     predicted_processes : list[str] — predicted nonlinear processes.
     warnings : list[str] — warnings about simulation setup.
     recommendations : list[str] — suggestions for improvement.
-    fwm_predictions : list[dict] — predicted FWM idler wavelengths (nm).
-    mi_predictions : dict — predicted MI sideband info.
-    dw_predictions : list[float] — predicted DW wavelengths (nm).
+    fwm_predictions : list[dict] — predicted FWM idler wavelengths (contains Wavelength).
+    mi_predictions : dict — predicted MI sideband info (contains WavelengthArray).
+    dw_predictions : WavelengthArray — predicted DW wavelengths.
     """
 
     dispersion_covers_grid: bool
-    grid_omega_min: float
-    grid_omega_max: float
-    dispersion_min_omega: float
-    dispersion_max_omega: float
+    grid_omega_min: AngularFrequency
+    grid_omega_max: AngularFrequency
+    dispersion_min_omega: AngularFrequency
+    dispersion_max_omega: AngularFrequency
     soliton_order: float
     dispersion_length: float
     nonlinear_length: float
@@ -339,7 +326,7 @@ class SimulationReadinessReport:
     recommendations: list[str] = field(default_factory=list)
     fwm_predictions: list[dict] = field(default_factory=list)
     mi_predictions: dict = field(default_factory=dict)
-    dw_predictions: list[float] = field(default_factory=list)
+    dw_predictions: WavelengthArray = field(default_factory=lambda: WavelengthArray(np.array([]), "nm"))
 
 
 @dataclass
@@ -348,24 +335,18 @@ class ValidationReport:
 
     Attributes
     ----------
-    predictions : list[dict] — list of PM predictions with wavelength_nm key.
-    peaks_found : list[dict] — list of detected spectral peaks.
-    matches : list[dict] — each has prediction, matched_peak, residual_nm, pass.
+    predictions : list[dict] — list of PM predictions with Wavelength key.
+    peaks_found : list[dict] — list of detected spectral peaks with Wavelength.
+    matches : list[dict] — each has prediction, matched_peak, residual (Wavelength), pass.
     overall_pass : bool — True if all predictions have a matching peak.
-    tolerance_nm : float — wavelength tolerance used.
+    tolerance : Wavelength — wavelength tolerance used.
     """
 
     predictions: list[dict]
     peaks_found: list[dict]
     matches: list[dict]
     overall_pass: bool
-    tolerance_nm: float
-
-
-# ============================================================================
-# Helper: Wavelength type (needed for DispersionAdaptor)
-# ============================================================================
-from .base import Wavelength  # noqa: E402
+    tolerance: Wavelength
 
 
 # ============================================================================
@@ -425,10 +406,10 @@ def fwm_delta_beta_general(
 def fwm_efficiency(delta_beta: float | NDArray, length_m: float, alpha: float = 0.0) -> float | NDArray:
     """Compute FWM conversion efficiency η.
 
-    Lossless (α=0):  η = sinc²(Δβ·L/2) when γP ≪ |Δβ|
+    Lossless (α=0): η = sinc²(Δβ·L/2)
 
-    For the common case (no γP provided), returns the sinc² approximation
-    scaled by effective length for lossy media.
+    Lossy (α>0): Full formula from plan §2.3:
+        η = [α²/(α²+Δβ²)] · { 1 + [4 e^{-αL} sin²(Δβ·L/2)] / [(1−e^{-αL})² (α²+Δβ²)] }
 
     Parameters
     ----------
@@ -442,17 +423,43 @@ def fwm_efficiency(delta_beta: float | NDArray, length_m: float, alpha: float = 
     """
     delta_beta_arr = np.atleast_1d(np.asarray(delta_beta, dtype=float))
 
-    if alpha > 0:
-        L_eff = (1 - np.exp(-alpha * length_m)) / alpha
+    if alpha == 0:
+        # Lossless case: η = sinc²(Δβ·L/2)
+        arg = delta_beta_arr * length_m / 2.0
+        # Use safe division to avoid warning at arg=0
+        with np.errstate(divide='ignore', invalid='ignore'):
+            result = np.where(
+                np.isclose(arg, 0.0),
+                1.0,
+                (np.sin(arg) / arg) ** 2,
+            )
     else:
-        L_eff = length_m
-
-    arg = delta_beta_arr * L_eff / 2.0
-    result = np.where(
-        np.isclose(arg, 0.0),
-        1.0,
-        (np.sin(arg) / np.where(np.isclose(arg, 0.0), 1.0, arg)) ** 2,
-    )
+        # Lossy case: full formula from plan §2.3
+        # η = [α²/(α²+Δβ²)] · { 1 + [4 e^{-αL} sin²(Δβ·L/2)] / [(1−e^{-αL})² (α²+Δβ²)] }
+        alpha_sq = alpha * alpha
+        db_sq = delta_beta_arr * delta_beta_arr
+        denom = alpha_sq + db_sq
+        
+        # sin²(Δβ·L/2) uses actual length L (not L_eff) for phase accumulation
+        arg = delta_beta_arr * length_m / 2.0
+        sin_term = np.sin(arg) ** 2
+        
+        exp_term = np.exp(-alpha * length_m)
+        one_minus_exp = 1.0 - exp_term
+        
+        # First factor: α²/(α²+Δβ²)
+        factor1 = alpha_sq / denom
+        
+        # Second factor: 1 + [4 e^{-αL} sin²(Δβ·L/2)] / [(1−e^{-αL})² (α²+Δβ²)]
+        factor2 = 1.0 + (4.0 * exp_term * sin_term) / (one_minus_exp * one_minus_exp * denom)
+        
+        result = factor1 * factor2
+        
+        # Handle Δβ = 0 case: the formula limit gives η = 1
+        # This is the parametric gain limit at perfect phase matching
+        zero_mask = np.isclose(delta_beta_arr, 0.0)
+        if np.any(zero_mask):
+            result[zero_mask] = 1.0
 
     if np.isscalar(delta_beta):
         return float(result[0])
@@ -511,21 +518,16 @@ def scan_fwm_detuning(
     for i, omega_s in enumerate(omega_signal_grid):
         db = fwm_delta_beta_degenerate(beta_fn, omega_p, omega_s)
         delta_beta[i] = db
-        # Full FWM efficiency formula with γP
         gp = gamma * P_pump
         if np.abs(db) < 1e-15:
-            # Perfect phase matching: η → 1 (or limited by γP terms)
+            # Perfect phase matching (Δβ = 0): degenerate FWM efficiency
+            # η = sin²(γP·L_eff) where L_eff = (1 - e^{-αL})/α for α>0, else L
             if alpha > 0:
                 L_eff = (1 - np.exp(-alpha * L)) / alpha
             else:
                 L_eff = L
-            # With perfect PM, η = sin²(γP·L_eff) / (γP·L_eff)² ... 
-            # Actually for Δβ=0, η = (γP·L_eff)² for small γP·L_eff
-            # For large γP·L_eff, it oscillates
             arg = gp * L_eff
-            efficiency[i] = min(np.sin(arg) ** 2 / (arg ** 2 + 1e-30) * (arg ** 2 + 1e-30), 1.0)
-            # Simplified: for Δβ=0, η peaks at sin²(γP·L_eff)
-            efficiency[i] = min(np.sin(gp * L_eff) ** 2, 1.0) if gp * L_eff < np.pi else 1.0
+            efficiency[i] = np.sin(arg) ** 2
         else:
             efficiency[i] = fwm_efficiency(db, L, alpha)
 
@@ -558,7 +560,7 @@ def mi_gain_spectrum(
     where Ω_c² = 2γP/|β₂|
     g(Ω) = 0 for β₂ > 0 (normal dispersion)
 
-    Peak gain at Ω = Ω_c/√2: g_max = γP
+    Peak gain at Ω = Ω_c/√2: g_max = 2γP
 
     Classical result from Agrawal, Nonlinear Fiber Optics.
 
@@ -587,7 +589,7 @@ def mi_gain_spectrum(
         Omega_peak_sq = -gamma * P / beta2  # Ω_peak = Ω_c/√2
         Omega_cutoff = np.sqrt(max(Omega_cutoff_sq, 0))
         Omega_peak = np.sqrt(max(Omega_peak_sq, 0))
-        g_max = gamma * P  # peak gain
+        g_max = 2.0 * gamma * P  # peak gain
         return {"g_max": g_max, "Omega_peak": Omega_peak, "Omega_cutoff": Omega_cutoff}
 
     omega_arr = np.atleast_1d(np.asarray(omega_m, dtype=float))
@@ -645,12 +647,19 @@ def mi_gain_spectrum_extended(
     L: float | None = None,
     omega_m: NDArray | None = None,
 ) -> dict:
-    """Extended MI gain near ZDW using κ(Ω) root finder.
+    """Extended MI gain using full dispersion relation.
 
-    Uses the full dispersion expansion:
-      κ(Ω) = β(ω₀+Ω) + β(ω₀−Ω) − 2β(ω₀) − γP·Ω²/ω₀² ... simplified
-    Actually: κ(Ω) = Re[β(ω₀+Ω) + β(ω₀−Ω) − 2β(ω₀)] + 2γP
-    Gain exists when κ(Ω) > 0.
+    Computes the MI gain spectrum using the exact dispersion β(ω) instead of
+    a Taylor expansion. Based on the linear stability analysis of the NLSE,
+    the gain is consistent with the classical formula in this module:
+
+        g(Ω) = 2√[−D(Ω)·(D(Ω) + 4γP)/4]  for -4γP < D(Ω) < 0
+        g(Ω) = 0  otherwise
+
+    where D(Ω) = 2[β(ω₀+Ω) + β(ω₀−Ω) − 2β(ω₀)] is twice the even part of
+    the linear dispersion. This scaling ensures the extended formula reduces
+    exactly to the classical result g(Ω) = 2|β₂|Ω√(Ω_c² − Ω²) with
+    Ω_c² = 2γP/|β₂| when β(ω) ≈ β₀ + β₁Ω + ½β₂Ω².
 
     Parameters
     ----------
@@ -658,9 +667,10 @@ def mi_gain_spectrum_extended(
     omega0 : float — pump carrier frequency (rad/s).
     gamma : float — nonlinear coefficient (1/(W·m)).
     P : float — pump power (W).
-    alpha : float — loss (1/m). Default 0.
-    L : float — length (m). If None, 1/γ.
-    omega_m : 1-D array — modulation frequencies (rad/s).
+    alpha : float — loss (1/m). Default 0 (not used in gain formula).
+    L : float — length (m). If None, 1/γ (not used in gain formula).
+    omega_m : 1-D array — modulation frequencies (rad/s). If None,
+              auto-generates a grid based on classical estimate.
 
     Returns
     -------
@@ -670,37 +680,41 @@ def mi_gain_spectrum_extended(
         L = 1.0 / max(gamma, 1e-30)
 
     if omega_m is None:
-        # Auto-generate grid
-        # Use classical estimate for scale
-        beta2_approx = 0.0  # Will compute numerically
-        Omega_classical = np.sqrt(max(2 * gamma * P / 1e-23, 1e12))  # rough
+        # Auto-generate grid using classical estimate for scale
+        # Classical cutoff: Ω_c² = 2γP/|β₂|
+        domega = 1e12
+        beta2_est = (beta_fn(omega0 + domega) - 2 * beta_fn(omega0) + beta_fn(omega0 - domega)) / domega**2
+        if beta2_est < 0:
+            Omega_classical = np.sqrt(max(2 * gamma * P / abs(beta2_est), 1e12))
+        else:
+            Omega_classical = 1e12
         omega_m = np.linspace(-3 * Omega_classical, 3 * Omega_classical, 500)
 
     omega_arr = np.atleast_1d(np.asarray(omega_m, dtype=float))
     beta_pump = beta_fn(omega0)
 
-    # κ(Ω) = β(ω₀+Ω) + β(ω₀−Ω) − 2β(ω₀)
+    # D(Ω) = 2[β(ω₀+Ω) + β(ω₀−Ω) − 2β(ω₀)]
+    # This scaling matches the classical formula in mi_gain_spectrum
     omega_plus = omega0 + omega_arr
     omega_minus = omega0 - omega_arr
     beta_plus = beta_fn(omega_plus)
     beta_minus = beta_fn(omega_minus)
-    kappa = (beta_plus + beta_minus - 2 * beta_pump) * (2 * abs(beta_pump) + 1e-30) / (abs(beta_pump) + 1e-30)
+    D = 2.0 * (beta_plus + beta_minus - 2 * beta_pump)
 
-    # Actually, the extended criterion:
-    # g(Ω) = 2·|Im[kappa(Ω)]| where kappa(Ω) = β(ω₀+Ω)+β(ω₀−Ω)−2β(ω₀)−2γP
-    # Wait — the standard extended form:
-    # h(Ω) = [β(ω₀+Ω) + β(ω₀−Ω) − 2β(ω₀)] / 2 + γP
-    # Gain when h(Ω) < 0 (sign convention varies)
-    # Let's use the most common convention:
-    # g(Ω) = 2·|h(Ω)| where h(Ω) = (β(ω₀+Ω)+β(ω₀−Ω)−2β(ω₀))/2 + γP
-    h = (beta_plus + beta_minus - 2 * beta_pump) / 2.0 + gamma * P
-    gain = 2.0 * np.abs(np.where(h < 0, h, 0.0))
+    # Extended MI gain: g(Ω) = √[−D(Ω)·(D(Ω) + 4γP)]
+    # Gain exists when -4γP < D < 0
+    term = -D * (D + 4 * gamma * P)
+    gain = np.zeros_like(term)
+    mask = term > 0
+    gain[mask] = np.sqrt(term[mask])
 
     # Find peak and cutoff
-    mask = gain > 0
     if mask.any():
+        # Peak gain: occurs at D = -2γP
         Omega_peak = omega_arr[mask][np.argmax(gain[mask])]
-        Omega_cutoff = omega_arr[mask[-1]] if mask.any() else 0.0
+        # Cutoff: gain goes to zero at D = 0 and D = -4γP
+        # We want the largest |Ω| where gain > 0
+        Omega_cutoff = np.max(np.abs(omega_arr[mask]))
     else:
         Omega_peak = 0.0
         Omega_cutoff = 0.0
@@ -719,9 +733,9 @@ def mi_gain_spectrum_extended(
 
 def dispersive_wave_roots(
     beta_fn,
-    omega_sol: float,
+    omega_sol: float | AngularFrequency,
     q_sol: float = 0.0,
-    wl_range_nm: tuple[float, float] = (300.0, 2500.0),
+    wl_range: tuple[Wavelength, Wavelength] | None = None,
     n_brackets: int = 50,
 ) -> DispersiveWaveResult:
     """Find all dispersive wave (Cherenkov) frequencies.
@@ -733,18 +747,26 @@ def dispersive_wave_roots(
     Parameters
     ----------
     beta_fn : callable — β(ω) function (DispersionModel or similar).
-    omega_sol : float — soliton center frequency (rad/s).
+    omega_sol : float or AngularFrequency — soliton center angular frequency.
     q_sol : float — soliton wavenumber correction (1/m). Default 0.
-    wl_range_nm : tuple — (wl_min_nm, wl_max_nm) search range.
+    wl_range : tuple[Wavelength, Wavelength] — (wl_min, wl_max) search range.
+                    Defaults to 300 nm – 2500 nm.
     n_brackets : int — number of bracket intervals to scan.
 
     Returns
     -------
-    result : DispersiveWaveResult
+    result : DispersiveWaveResult with wavelengths as WavelengthArray
     """
-    wl_min, wl_max = wl_range_nm
-    wl_grid = np.linspace(wl_min, wl_max, n_brackets)
-    omega_grid = 2 * PI * C_MS / wl_grid * 1e-9
+    if wl_range is None:
+        wl_range = (Wavelength(300, "nm"), Wavelength(2500, "nm"))
+    
+    wl_min, wl_max = wl_range
+    # Create wavelength grid
+    wl_values_nm = np.linspace(wl_min.as_nm, wl_max.as_nm, n_brackets)
+    wl_grid = WavelengthArray(wl_values_nm, "nm")
+    omega_grid = wl_grid.to_omega().as_rad_s
+
+    omega_sol_val = omega_sol.as_rad_s if isinstance(omega_sol, AngularFrequency) else omega_sol
 
     beta_sol = beta_fn(omega_sol)
     # Get beta1 = dβ/dω
@@ -800,8 +822,8 @@ def dispersive_wave_roots(
                     fprime=lambda w, b1=beta1_sol: _beta1_fd(beta_fn, w, 1e6),
                 )
                 if res.converged:
-                    wl_check = 2 * PI * C_MS / res.root * 1e9
-                    if wl_min <= wl_check <= wl_max:
+                    wl_check = AngularFrequency(res.root).to_wl().as_nm
+                    if wl_min.as_nm <= wl_check <= wl_max.as_nm:
                         roots_omega.append(float(res.root))
             except Exception:
                 continue
@@ -813,16 +835,19 @@ def dispersive_wave_roots(
         if not any(np.isclose(r_val, u, atol=1e-6) for u in unique_roots):
             unique_roots.append(r_val)
     roots_omega = sorted(unique_roots)
-    roots_wl_m = np.array([2 * PI * C_MS / w * 1e-9 for w in roots_omega])
-    roots_wl_nm = roots_wl_m * 1e9
-
-    sol_wl_m = 2 * PI * C_MS / omega_sol * 1e-9
+    
+    # Convert roots to WavelengthArray
+    if roots_omega:
+        wl_values = np.array([AngularFrequency(w, "rad/s").to_wl().as_m for w in roots_omega])
+        roots_wavelengths = WavelengthArray(wl_values, "m")
+    else:
+        roots_wavelengths = WavelengthArray(np.array([]), "nm")
+    soliton_wavelength = AngularFrequency(omega_sol_val, "rad/s").to_wl()
 
     return DispersiveWaveResult(
-        wavelengths_m=roots_wl_m,
-        wavelengths_nm=roots_wl_nm,
-        soliton_omega=omega_sol,
-        soliton_lambda_m=sol_wl_m,
+        wavelengths=roots_wavelengths,
+        soliton_omega=AngularFrequency(omega_sol_val, "rad/s"),
+        soliton_wavelength=soliton_wavelength,
         q_sol=q_sol,
     )
 
@@ -880,20 +905,20 @@ def assess_simulation_readiness(
     # Determine dispersion bounds
     if hasattr(dispersion, 'omegas'):
         # ZDependentDispersion or PropagationConstant
-        disp_min_omega = float(dispersion.omegas.min())
-        disp_max_omega = float(dispersion.omegas.max())
+        disp_min_omega = AngularFrequency(dispersion.omegas.min())
+        disp_max_omega = AngularFrequency(dispersion.omegas.max())
     elif hasattr(dispersion, 'wavelengths'):
         # Dispersion — convert wavelengths to omega
-        wl_arr = dispersion.wavelengths.as_m
-        disp_min_omega = 2 * PI * C_MS / wl_arr.max()
-        disp_max_omega = 2 * PI * C_MS / wl_arr.min()
+        wl_arr = dispersion.wavelengths
+        disp_min_omega = wl_arr.to_omega().min()
+        disp_max_omega = wl_arr.to_omega().max()
     else:
         # Taylor mode — use a wide estimate
-        disp_min_omega = omega0 - 5e15
-        disp_max_omega = omega0 + 5e15
+        disp_min_omega = AngularFrequency(omega0 - 5e15, "rad/s")
+        disp_max_omega = AngularFrequency(omega0 + 5e15, "rad/s")
 
     # Check coverage
-    covers = (omega_min >= disp_min_omega - 1e12) and (omega_max <= disp_max_omega + 1e12)
+    covers = (omega_min >= disp_min_omega.as_rad_s - 1e12) and (omega_max <= disp_max_omega.as_rad_s + 1e12)
 
     # Compute soliton parameters
     if betas is not None and len(betas) > 0:
@@ -956,12 +981,17 @@ def assess_simulation_readiness(
     if beta2_si < 0 and gamma * P_peak > 0:
         mi_info = mi_gain_spectrum(beta2_si, gamma, P_peak)
         if isinstance(mi_info, dict):
+            omega_peak = AngularFrequency(mi_info["Omega_peak"], "rad/s")
+            omega_cutoff = AngularFrequency(mi_info["Omega_cutoff"], "rad/s")
+            sideband_plus = AngularFrequency(omega0 + mi_info["Omega_peak"], "rad/s").to_wl()
+            sideband_minus = AngularFrequency(omega0 - mi_info["Omega_peak"], "rad/s").to_wl()
+            # Create WavelengthArray from raw meter values
+            sb_values = np.array([sideband_plus.as_m, sideband_minus.as_m])
             mi_predictions = {
-                "Omega_peak": mi_info["Omega_peak"],
-                "Omega_cutoff": mi_info["Omega_cutoff"],
+                "Omega_peak": omega_peak,
+                "Omega_cutoff": omega_cutoff,
                 "g_max": mi_info["g_max"],
-                "sideband_wl_nm": (2 * PI * C_MS / (omega0 + mi_info["Omega_peak"]) * 1e9,
-                                    2 * PI * C_MS / (omega0 - mi_info["Omega_peak"]) * 1e9),
+                "sideband_wavelengths": WavelengthArray(sb_values, "m"),
             }
         else:
             mi_predictions = {}
@@ -969,7 +999,7 @@ def assess_simulation_readiness(
         mi_predictions = {}
 
     # DW predictions (if we have betas)
-    dw_preds = []
+    dw_preds = WavelengthArray(np.array([]), "nm")
     if betas is not None and len(betas) >= 2 and beta2_si != 0:
         try:
             # Quick DW estimate using β₂/β₃ formula
@@ -978,27 +1008,27 @@ def assess_simulation_readiness(
                 delta_omega_dw = -2 * beta2_si / beta3_si
                 omega_dw = omega0 + delta_omega_dw
                 if omega_dw > 0:
-                    dw_wl = 2 * PI * C_MS / omega_dw * 1e9
-                    dw_preds.append(float(dw_wl))
+                    dw_wavelength = AngularFrequency(omega_dw).to_wl()
+                    dw_preds = WavelengthArray([dw_wavelength])
         except Exception:
             pass
 
     # FWM predictions (degenerate, signal at DW wavelength if available)
     fwm_preds = []
-    if dw_preds and len(fwm_preds) == 0:
+    if dw_preds.as_m.shape[0] > 0 and len(fwm_preds) == 0:
         # Predict FWM idler for signal near DW
-        for dw_wl_nm in dw_preds:
-            omega_s = 2 * PI * C_MS / dw_wl_nm * 1e-9
+        for dw_wavelength in dw_preds:
+            omega_s = dw_wavelength.to_omega().as_rad_s
             omega_i = fwm_idler_frequency(omega0, omega_s)
             fwm_preds.append({
-                "idler_wavelength_nm": float(2 * PI * C_MS / omega_i * 1e9),
-                "signal_wavelength_nm": dw_wl_nm,
+                "idler_wavelength": AngularFrequency(omega_i).to_wl(),
+                "signal_wavelength": dw_wavelength,
             })
 
     return SimulationReadinessReport(
         dispersion_covers_grid=covers,
-        grid_omega_min=omega_min,
-        grid_omega_max=omega_max,
+        grid_omega_min=AngularFrequency(omega_min, "rad/s"),
+        grid_omega_max=AngularFrequency(omega_max, "rad/s"),
         dispersion_min_omega=disp_min_omega,
         dispersion_max_omega=disp_max_omega,
         soliton_order=N_sol,
@@ -1015,13 +1045,15 @@ def assess_simulation_readiness(
     )
 
 
-def _estimate_beta2(dispersion, omega0: float) -> float | None:
+def _estimate_beta2(dispersion, omega0: float | AngularFrequency) -> float | None:
     """Estimate β₂ from a dispersion source object."""
+    omega0_val = omega0.as_rad_s if isinstance(omega0, AngularFrequency) else omega0
+    
     if hasattr(dispersion, 'get_beta2'):
         # Dispersion object
-        wl_nm = 2 * PI * C_MS / omega0 * 1e9
+        wl = AngularFrequency(omega0_val).to_wl()
         try:
-            beta2 = dispersion.get_beta2(wl_nm)
+            beta2 = dispersion.get_beta2(wl)
             # get_beta2 returns in ps²/m (solver convention) or SI
             # Check magnitude to determine units
             if abs(beta2) > 1e-20:
@@ -1032,9 +1064,9 @@ def _estimate_beta2(dispersion, omega0: float) -> float | None:
     elif hasattr(dispersion, 'omegas') and hasattr(dispersion, 'fn'):
         # ZDependentDispersion or PropagationConstant
         domega = 1e12
-        beta_plus = dispersion.fn(omega0 + domega, 0.0) if hasattr(dispersion, 'fn') else dispersion.fn(omega0 + domega)
-        beta_center = dispersion.fn(omega0, 0.0) if hasattr(dispersion, 'fn') else dispersion.fn(omega0)
-        beta_minus = dispersion.fn(omega0 - domega, 0.0) if hasattr(dispersion, 'fn') else dispersion.fn(omega0 - domega)
+        beta_plus = dispersion.fn(omega0_val + domega, 0.0) if hasattr(dispersion, 'fn') else dispersion.fn(omega0_val + domega)
+        beta_center = dispersion.fn(omega0_val, 0.0) if hasattr(dispersion, 'fn') else dispersion.fn(omega0_val)
+        beta_minus = dispersion.fn(omega0_val - domega, 0.0) if hasattr(dispersion, 'fn') else dispersion.fn(omega0_val - domega)
         beta2 = (beta_plus - 2 * beta_center + beta_minus) / domega ** 2
         return float(beta2)
     return None
@@ -1047,12 +1079,12 @@ def _estimate_beta2(dispersion, omega0: float) -> float | None:
 def compare_spectrum_to_phase_matching(
     solver: "GNLSESolver",
     report: SimulationReadinessReport,
-    tolerance_nm: float = 2.0,
+    tolerance: Wavelength | float = 2.0,
     tolerance_frac: float = 0.01,
 ) -> ValidationReport:
     """Compare simulated spectral peaks to PM predictions.
 
-    Uses adaptive tolerance: narrowband (±tolerance_nm, default 2 nm) when
+    Uses adaptive tolerance: narrowband (±tolerance, default 2 nm) when
     pulse spectral FWHM ≤ 50 nm, or broadband (±tolerance_frac·λ, default 1%)
     when FWHM > 50 nm.
 
@@ -1060,7 +1092,8 @@ def compare_spectrum_to_phase_matching(
     ----------
     solver : GNLSESolver — solver with propagated results.
     report : SimulationReadinessReport — PM predictions from preflight.
-    tolerance_nm : float — narrowband wavelength tolerance (nm). Default 2.0.
+    tolerance : Wavelength or float — narrowband wavelength tolerance.
+                If float, interpreted as nm. Default 2.0 nm.
     tolerance_frac : float — broadband fractional tolerance. Default 0.01.
 
     Returns
@@ -1070,17 +1103,20 @@ def compare_spectrum_to_phase_matching(
     if solver._spectra_vs_z is None:
         raise RuntimeError("Call propagate() first.")
 
+    # Handle tolerance input
+    if isinstance(tolerance, (int, float)):
+        tolerance = Wavelength(tolerance, "nm")
+    
     omega, spectra = solver._spectra_vs_z
     final_spec = spectra[-1]
 
-    # Convert to wavelength
+    # Convert to wavelength using base classes
     omega_abs = omega + solver.omega0
-    wavelength_m = 2 * PI * C_MS / omega_abs
-    wavelength_nm = wavelength_m * 1e9
-
+    wavelength_array = AngularFrequencyArray(omega_abs, "rad/s").to_wl()
+    
     # Sort by wavelength
-    sort_idx = np.argsort(wavelength_nm)
-    wavelength_nm_sorted = wavelength_nm[sort_idx]
+    sort_idx = np.argsort(wavelength_array.as_nm)
+    wavelength_sorted = WavelengthArray(wavelength_array.as_nm[sort_idx], "nm")
     spec_sorted = final_spec[sort_idx]
 
     # Normalize and find peaks
@@ -1091,63 +1127,76 @@ def compare_spectrum_to_phase_matching(
             peaks_found=[],
             matches=[],
             overall_pass=True,
-            tolerance_nm=tolerance_nm,
+            tolerance=tolerance,
         )
 
     spec_norm = spec_sorted / max_val
     peaks, properties = find_peaks(spec_norm, height=0.05, distance=20)
-    peak_wl_nm = wavelength_nm_sorted[peaks]
+    peak_wavelengths = WavelengthArray(wavelength_sorted.as_nm[peaks], "nm")
 
     # Determine tolerance mode by pulse spectral FWHM
     # Compute FWHM of the final spectrum
-    spec_fwhm = _compute_spectrum_fwhm(wavelength_nm_sorted, spec_sorted)
+    spec_fwhm = _compute_spectrum_fwhm(wavelength_sorted.as_nm, spec_sorted)
     use_broadband = spec_fwhm > 50.0  # FWHM > 50 nm → broadband mode
-    effective_tolerance_nm = (
-        tolerance_frac * wavelength_nm_sorted[len(wavelength_nm_sorted) // 2]
-        if use_broadband
-        else tolerance_nm
-    )
+    
+    if use_broadband:
+        effective_tolerance = Wavelength(tolerance_frac * wavelength_sorted.as_nm[wavelength_sorted.as_m.shape[0] // 2], "nm")
+    else:
+        effective_tolerance = tolerance
 
     # Build prediction list from report
     predictions = []
 
     # DW predictions
-    for dw_wl in report.dw_predictions:
-        predictions.append({"type": "DW", "wavelength_nm": dw_wl})
+    for dw_wl in report.dw_predictions.as_nm:
+        if isinstance(dw_wl, Wavelength):
+            predictions.append({"type": "DW", "wavelength": dw_wl})
+        else:
+            # Handle legacy float nm values
+            predictions.append({"type": "DW", "wavelength": Wavelength(dw_wl, "nm")})
 
     # FWM predictions
     for fwm_pred in report.fwm_predictions:
-        predictions.append({
-            "type": "FWM",
-            "wavelength_nm": fwm_pred.get("idler_wavelength_nm", 0),
-        })
+        idler_wl = fwm_pred.get("idler_wavelength")
+        if idler_wl is not None:
+            if isinstance(idler_wl, Wavelength):
+                predictions.append({"type": "FWM", "wavelength": idler_wl})
+            else:
+                predictions.append({"type": "FWM", "wavelength": Wavelength(idler_wl, "nm")})
 
     # MI sideband predictions
     mi_pred = report.mi_predictions
-    if "sideband_wl_nm" in mi_pred:
-        for sb_wl in mi_pred["sideband_wl_nm"]:
-            predictions.append({"type": "MI", "wavelength_nm": float(sb_wl)})
+    if "sideband_wavelengths" in mi_pred:
+        for sb_wl in mi_pred["sideband_wavelengths"].as_nm:
+            if isinstance(sb_wl, Wavelength):
+                predictions.append({"type": "MI", "wavelength": sb_wl})
+            else:
+                predictions.append({"type": "MI", "wavelength": Wavelength(sb_wl, "nm")})
 
     # Match peaks to predictions
     matches = []
     for pred in predictions:
-        pred_wl = pred["wavelength_nm"]
-        residuals = np.abs(peak_wl_nm - pred_wl)
-        if len(residuals) > 0 and np.min(residuals) < effective_tolerance_nm:
+        pred_wl = pred["wavelength"]
+        if pred_wl is None:
+            continue
+        # Convert to nm for comparison
+        pred_wl_nm = pred_wl.as_nm if isinstance(pred_wl, Wavelength) else pred_wl
+        residuals = np.abs(peak_wavelengths.as_nm - pred_wl_nm)
+        if len(residuals) > 0 and np.min(residuals) < effective_tolerance.as_nm:
             best_idx = np.argmin(residuals)
             matches.append({
                 "prediction": pred,
                 "matched_peak": {
-                    "wavelength_nm": float(peak_wl_nm[best_idx]),
+                    "wavelength": Wavelength(peak_wavelengths.as_nm[best_idx], "nm"),
                 },
-                "residual_nm": float(residuals[best_idx]),
+                "residual": Wavelength(residuals[best_idx], "nm"),
                 "pass": True,
             })
         else:
             matches.append({
                 "prediction": pred,
                 "matched_peak": None,
-                "residual_nm": float(np.min(residuals)) if len(residuals) > 0 else float("inf"),
+                "residual": Wavelength(np.min(residuals) if len(residuals) > 0 else float("inf"), "nm"),
                 "pass": False,
             })
 
@@ -1155,15 +1204,20 @@ def compare_spectrum_to_phase_matching(
 
     return ValidationReport(
         predictions=predictions,
-        peaks_found=[{"wavelength_nm": float(wl)} for wl in peak_wl_nm],
+        peaks_found=[{"wavelength": Wavelength(wl, "nm")} for wl in peak_wavelengths.as_nm],
         matches=matches,
         overall_pass=overall_pass,
-        tolerance_nm=tolerance_nm,
+        tolerance=tolerance,
     )
 
 
 def _compute_spectrum_fwhm(wavelength_nm: NDArray, spectrum: NDArray) -> float:
-    """Compute full width at half maximum of a spectrum in nm."""
+    """Compute full width at half maximum of a spectrum in nm.
+    
+    Args:
+        wavelength_nm: Wavelength values in nm (can be WavelengthArray.as_nm)
+        spectrum: Spectrum values
+    """
     max_val = np.max(spectrum)
     if max_val == 0:
         return 0.0
@@ -1202,10 +1256,14 @@ def plot_fwm_efficiency(fwm_result: PhaseMatchResult, ax=None) -> "plt.Figure":
         fig = ax.figure
         ax1, ax2 = ax.subplots(2, 1)
 
-    # Convert omega to wavelength
-    wl_signal_nm = 2 * PI * C_MS / fwm_result.omega_signal * 1e9
-    wl_idler_nm = 2 * PI * C_MS / fwm_result.idler_omega * 1e9
-    wl_pump_nm = 2 * PI * C_MS / fwm_result.pump_omega * 1e9
+    # Convert omega to wavelength using base classes
+    wl_signal = AngularFrequencyArray(fwm_result.omega_signal, "rad/s").to_wl()
+    wl_idler = AngularFrequencyArray(fwm_result.idler_omega, "rad/s").to_wl()
+    wl_pump = AngularFrequency(fwm_result.pump_omega, "rad/s").to_wl()
+
+    wl_signal_nm = wl_signal.as_nm
+    wl_idler_nm = wl_idler.as_nm
+    wl_pump_nm = wl_pump.as_nm
 
     # Δβ plot
     ax1.plot(wl_signal_nm, fwm_result.delta_beta * 1e3, "b-", linewidth=1)
@@ -1251,7 +1309,12 @@ def plot_mi_gain(mi_result, ax=None) -> "plt.Figure":
         # Extended MI result
         omega_m = mi_result["omega_m"]
         gain = mi_result["gain"]
-        ax.plot(omega_m / 1e12, gain * 1e3, "b-", linewidth=1)
+        # Handle AngularFrequencyArray or raw array
+        if hasattr(omega_m, 'as_rad_s'):
+            omega_m_thz = omega_m.as_rad_s / 1e12
+        else:
+            omega_m_thz = np.asarray(omega_m) / 1e12
+        ax.plot(omega_m_thz, gain * 1e3, "b-", linewidth=1)
         ax.set_xlabel("Modulation Frequency (THz)")
         ax.set_ylabel(r"g(Ω) (1/mm)")
         ax.set_title("Modulation Instability Gain (Extended)")
@@ -1259,8 +1322,13 @@ def plot_mi_gain(mi_result, ax=None) -> "plt.Figure":
         # Classical MI result
         if isinstance(mi_result, dict):
             # It's the summary dict from mi_gain_spectrum with None omega_m
+            omega_peak = mi_result.get('Omega_peak', 0)
+            if hasattr(omega_peak, 'as_rad_s'):
+                omega_peak_thz = omega_peak.as_rad_s / 1e12
+            else:
+                omega_peak_thz = omega_peak / 1e12
             ax.text(0.5, 0.5, f"Peak gain: {mi_result.get('g_max', 0):.2f} 1/m\n"
-                              f"Omega peak: {mi_result.get('Omega_peak', 0)/1e12:.2f} THz",
+                              f"Omega peak: {omega_peak_thz:.2f} THz",
                     transform=ax.transAxes, ha="center", va="center")
             ax.set_title("MI Gain Summary (no grid provided)")
             fig.tight_layout()
@@ -1294,11 +1362,11 @@ def plot_readiness_report(report: SimulationReadinessReport, ax=None) -> "plt.Fi
     else:
         fig = ax.figure
 
-    # Convert omega to wavelength for display
-    wl_grid_min = 2 * PI * C_MS / report.grid_omega_max * 1e9
-    wl_grid_max = 2 * PI * C_MS / report.grid_omega_min * 1e9
-    wl_disp_min = 2 * PI * C_MS / report.dispersion_max_omega * 1e9
-    wl_disp_max = 2 * PI * C_MS / report.dispersion_min_omega * 1e9
+    # Convert omega to wavelength for display using base classes
+    wl_grid_min = report.grid_omega_max.to_wl().as_nm
+    wl_grid_max = report.grid_omega_min.to_wl().as_nm
+    wl_disp_min = report.dispersion_max_omega.to_wl().as_nm
+    wl_disp_max = report.dispersion_min_omega.to_wl().as_nm
 
     # Plot as horizontal bars
     y_pos = 0.5
@@ -1353,8 +1421,9 @@ def plot_spectrum_with_pm_overlay(solver, report: SimulationReadinessReport, ax=
     final_spec = spectra[-1]
 
     omega_abs = omega + solver.omega0
-    wavelength_nm = 2 * PI * C_MS / omega_abs * 1e9
-    sort_idx = np.argsort(wavelength_nm)
+    wavelength_array = AngularFrequencyArray(omega_abs, "rad/s").to_wl()
+    sort_idx = np.argsort(wavelength_array.as_nm)
+    wavelength_nm = wavelength_array.as_nm[sort_idx]
     wavelength_nm = wavelength_nm[sort_idx]
     final_spec = final_spec[sort_idx]
 
@@ -1368,19 +1437,20 @@ def plot_spectrum_with_pm_overlay(solver, report: SimulationReadinessReport, ax=
     ax.axvline(x=pump_wl, color="k", linestyle=":", alpha=0.5, label=f"Pump ({pump_wl:.1f} nm)")
 
     # Mark DW predictions
-    for dw_wl in report.dw_predictions:
+    for dw_wl in report.dw_predictions.as_nm:
         ax.axvline(x=dw_wl, color="r", linestyle="--", alpha=0.7, label=f"DW ({dw_wl:.1f} nm)")
 
     # Mark FWM predictions
     for fwm_pred in report.fwm_predictions:
-        idler_wl = fwm_pred.get("idler_wavelength_nm", 0)
-        ax.axvline(x=idler_wl, color="orange", linestyle=":", alpha=0.7, label=f"FWM ({idler_wl:.1f} nm)")
+        idler_wl = fwm_pred.get("idler_wavelength")
+        if idler_wl is not None:
+            ax.axvline(x=idler_wl.as_nm, color="orange", linestyle=":", alpha=0.7, label=f"FWM ({idler_wl.as_nm:.1f} nm)")
 
     # Mark MI sidebands
     mi_pred = report.mi_predictions
-    if "sideband_wl_nm" in mi_pred:
-        for sb_wl in mi_pred["sideband_wl_nm"]:
-            ax.axvline(x=sb_wl, color="g", linestyle="-.", alpha=0.7, label=f"MI ({sb_wl:.1f} nm)")
+    if "sideband_wavelengths" in mi_pred:
+        for sb_wl in mi_pred["sideband_wavelengths"]:
+            ax.axvline(x=sb_wl.as_nm, color="g", linestyle="-.", alpha=0.7, label=f"MI ({sb_wl.as_nm:.1f} nm)")
 
     ax.set_xlabel("Wavelength (nm)")
     ax.set_ylabel("Normalized spectrum")

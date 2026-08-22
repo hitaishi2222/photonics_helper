@@ -147,17 +147,18 @@ def test_fission_length_formula():
 
 def test_dispersive_wave_wavelength():
     """Task 3.7: DW wavelength from beta2 and beta3."""
+    from photonics_helper.base import Wavelength
     omega0 = 2 * PI * C_MS / 1550e-9
     beta2_si = -5e-24
     beta3_si = -5e-27
     delta_omega = -2 * beta2_si / beta3_si
     omega_dw = omega0 + delta_omega
-    lambda_dw = 2 * PI * C_MS / omega_dw
+    lambda_dw = Wavelength(2 * PI * C_MS / omega_dw, "m")
 
     analyzer = _make_analyzer_manual(T0_s=100e-15, P_peak_w=1.0, gamma_val=0.07,
                                      beta2_si=beta2_si, beta3_si=beta3_si)
     lambda_calc = analyzer.dispersive_wave_wavelength()
-    assert abs(lambda_calc - lambda_dw) / lambda_dw < 1e-6
+    assert abs(lambda_calc.as_m - lambda_dw.as_m) / lambda_dw.as_m < 1e-6
 
 
 def test_count_solitons_basic():

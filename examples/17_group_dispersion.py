@@ -33,7 +33,8 @@ def main():
 
     A0 = 1.0
     A = [0.6961663, 0.4079426, 0.8974794]
-    B = [0.0684043, 0.1162414, 9.896161]
+    # Malitson fused silica; from_sellmeier expects B_i = (resonance wavelength)^2
+    B = [0.004679148, 0.013512075, 97.953962]
 
     silica = RefractiveIndex.from_sellmeier(
         A0=A0, A=A, B=B, wl_from_to_in_um=(0.5, 2.0), n_points=500

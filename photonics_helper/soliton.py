@@ -17,7 +17,7 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy.signal import find_peaks
 
-from .base import C_MS, PI
+from .base import C_MS, PI, AngularFrequency, Wavelength, AngularFrequencyArray
 
 if TYPE_CHECKING:
     from photonics_helper.gnlse import FiberProfile, GNLSESolver
@@ -141,9 +141,9 @@ class SolitonAnalyzer:
     def dispersive_wave_wavelength(
         self,
         dispersion=None,
-        wl_range_nm: tuple[float, float] | None = None,
+        wl_range: tuple[Wavelength, Wavelength] | None = None,
         n_brackets: int = 100,
-    ) -> float:
+    ) -> Wavelength:
         """Compute dispersive wave (Cherenkov) wavelength from phase-matching.
 
         Accepts an optional ``dispersion`` source for the full β(ω) root finder.
@@ -155,25 +155,28 @@ class SolitonAnalyzer:
         dispersion : Dispersion or PropagationConstant or ZDependentDispersion, optional
             Dispersion source for full β(ω) root finding. When None, uses the
             β₂/β₃ analytic fallback.
-        wl_range_nm : tuple[float, float], optional
-            Search range in nm. Defaults to 0.5× to 3× the pump wavelength.
+        wl_range : tuple[Wavelength, Wavelength], optional
+            Search range as Wavelength objects. Defaults to 0.5× to 3× the pump wavelength.
         n_brackets : int, optional
             Number of bracket intervals for the root finder. Default 100.
 
         Returns
         -------
-        float
-            DW wavelength (m).
+        Wavelength
+            DW wavelength.
 
         Raises
         ------
         ValueError
             If no valid root is found and β₂/β₃ data unavailable.
         """
-        if wl_range_nm is None:
-            wl_range_nm = (
-                self.pulse.central_wavelength.as_nm * 0.5,
-                self.pulse.central_wavelength.as_nm * 3.0,
+        from photonics_helper.base import Wavelength
+        
+        if wl_range is None:
+            pump_wl = self.pulse.central_wavelength
+            wl_range = (
+                Wavelength(pump_wl.as_nm * 0.5, "nm"),
+                Wavelength(pump_wl.as_nm * 3.0, "nm"),
             )
 
         # Try full root finder if a dispersion source is provided
@@ -198,11 +201,11 @@ class SolitonAnalyzer:
                 result = dispersive_wave_roots(
                     adaptor,
                     self.pulse.central_frequency,
-                    wl_range_nm=wl_range_nm,
+                    wl_range=wl_range,
                     n_brackets=n_brackets,
                 )
-                if len(result.wavelengths_nm) > 0:
-                    return float(result.wavelengths_m[0])
+                if result.wavelengths.as_m.shape[0] > 0:
+                    return result.wavelengths[0]
             except Exception:
                 pass  # Fall through to β₂/β₃
 
@@ -213,7 +216,7 @@ class SolitonAnalyzer:
         omega_dw = self.pulse.central_frequency + delta_omega
         if omega_dw <= 0:
             raise ValueError("DW frequency would be non-positive.")
-        return 2 * PI * C_MS / omega_dw
+        return AngularFrequency(omega_dw, "rad/s").to_wl()
 
     def count_solitons(self, spectrum: Optional[NDArray] = None) -> int:
         """Count solitons in output spectrum using peak detection.
@@ -387,9 +390,9 @@ def plot_fission_dynamics(solver: "GNLSESolver", N: float, L_D: float,
 
     omega, spectra = solver.spectra_vs_z
     omega_abs = omega + solver.omega0
-    wavelength_nm = 2 * np.pi * C_MS / omega_abs * 1e9
-    sort_idx = np.argsort(wavelength_nm)
-    wavelength_nm = wavelength_nm[sort_idx]
+    wavelength_array = AngularFrequencyArray(omega_abs, "rad/s").to_wl()
+    sort_idx = np.argsort(wavelength_array.as_nm)
+    wavelength_nm = wavelength_array.as_nm[sort_idx]
     spectra = spectra[:, sort_idx]
 
     z_steps = solver.z_array * 1e3  # mm
@@ -492,9 +495,9 @@ def plot_dispersion_wave(solver: "GNLSESolver", ax=None) -> "plt.Figure":
 
     omega, spectra = solver.spectra_vs_z
     omega_abs = omega + solver.omega0
-    wavelength_nm = 2 * np.pi * C_MS / omega_abs * 1e9
-    sort_idx = np.argsort(wavelength_nm)
-    wavelength_nm = wavelength_nm[sort_idx]
+    wavelength_array = AngularFrequencyArray(omega_abs, "rad/s").to_wl()
+    sort_idx = np.argsort(wavelength_array.as_nm)
+    wavelength_nm = wavelength_array.as_nm[sort_idx]
     spectra = spectra[:, sort_idx]
 
     # Plot final spectrum
@@ -511,8 +514,8 @@ def plot_dispersion_wave(solver: "GNLSESolver", ax=None) -> "plt.Figure":
     ax.plot(wavelength_nm, final_spec, "b-", linewidth=1, label="Final spectrum")
 
     # Mark pump wavelength
-    pump_wl_nm = solver.pulse.central_wavelength.as_nm
-    ax.axvline(x=pump_wl_nm, color="k", linestyle=":", alpha=0.5, label="Pump")
+    pump_wl = solver.pulse.central_wavelength
+    ax.axvline(x=pump_wl.as_nm, color="k", linestyle=":", alpha=0.5, label=f"Pump ({pump_wl.as_nm:.1f} nm)")
 
     # Mark DW wavelength if available
     try:
@@ -523,8 +526,8 @@ def plot_dispersion_wave(solver: "GNLSESolver", ax=None) -> "plt.Figure":
             z_array=solver.z_array,
             spectra_vs_z=solver.spectra_vs_z,
         )
-        dw_wl_nm = analyzer.dispersive_wave_wavelength().as_nm if hasattr(analyzer.dispersive_wave_wavelength(), 'as_nm') else analyzer.dispersive_wave_wavelength() * 1e9
-        ax.axvline(x=dw_wl_nm, color="r", linestyle="--", alpha=0.5, label="DW")
+        dw_wl = analyzer.dispersive_wave_wavelength()
+        ax.axvline(x=dw_wl.as_nm, color="r", linestyle="--", alpha=0.5, label=f"DW ({dw_wl.as_nm:.1f} nm)")
     except (ValueError, IndexError):
         pass
 

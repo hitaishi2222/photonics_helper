@@ -44,10 +44,11 @@ def test_nk_property(sample_refractive_index):
 
 def test_sellmeier():
     """Test Sellmeier equation implementation"""
-    # Example coefficients for fused silica
+    # Example coefficients for fused silica (Malitson).
+    # NOTE: from_sellmeier expects B_i = (resonance wavelength)^2 in um^2.
     A0 = 1
     A = [0.6961663, 0.4079426, 0.8974794]
-    B = [0.0684043, 0.1162414, 9.896161]
+    B = [0.004679148, 0.013512075, 97.953962]
     wl_range = (0.5, 2)  # 0.5-2 µm
 
     ri = RefractiveIndex.from_sellmeier(
@@ -75,9 +76,10 @@ def test_sellmeier_coefficient_mismatch():
 # ---------- group-dispersion tests ----------
 
 def _silica_sellmeier():
+    # Malitson fused silica; B_i = (resonance wavelength)^2 in um^2
     A0 = 1
     A = [0.6961663, 0.4079426, 0.8974794]
-    B = [0.0684043, 0.1162414, 9.896161]
+    B = [0.004679148, 0.013512075, 97.953962]
     return RefractiveIndex.from_sellmeier(
         A0=A0, A=A, B=B, wl_from_to_in_um=(0.5, 2.0), n_points=200
     )
@@ -86,8 +88,8 @@ def _silica_sellmeier():
 def test_dn_dlambda_tabulated():
     """dn/dλ is finite and negative for normal dispersion (decreasing n)."""
     wl = np.linspace(0.5e-6, 2.0e-6, 200)
-    # Silica-like: n decreases with wavelength
-    A0, A, B = 1, [0.6961663, 0.4079426, 0.8974794], [0.0684043, 0.1162414, 9.896161]
+    # Silica-like: n decreases with wavelength (B_i = pole^2, um^2)
+    A0, A, B = 1, [0.6961663, 0.4079426, 0.8974794], [0.004679148, 0.013512075, 97.953962]
     n_vals = np.sqrt(A0 + np.array(A)[:, None] * wl[None, :] ** 2 /
                      (wl[None, :] ** 2 - np.array(B)[:, None])).sum(axis=0)
     n_vals = n_vals / np.max(n_vals) * 1.45  # scale to realistic range

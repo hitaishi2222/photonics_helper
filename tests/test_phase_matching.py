@@ -313,52 +313,55 @@ class TestDispersiveWave:
     def test_dw_matches_beta2_beta3_limit(self, omega0, beta2, beta3):
         """DW root matches Δω = −2β₂/β₃ in β₂/β₃ limiting case."""
         from photonics_helper.phase_matching import dispersive_wave_roots
+        from photonics_helper.base import Wavelength
 
         beta_fn = make_beta23(beta2, beta3, omega0)
         result = dispersive_wave_roots(
             beta_fn, omega0,
-            wl_range_nm=(1000, 2500),
+            wl_range=(Wavelength(1000, "nm"), Wavelength(2500, "nm")),
             n_brackets=100,
         )
 
-        if len(result.wavelengths_nm) > 0:
+        if result.wavelengths.as_m.shape[0] > 0:
             delta_omega_expected = -2 * beta2 / beta3
             omega_dw_expected = omega0 + delta_omega_expected
             dw_wl_expected = 2 * PI * C_MS / omega_dw_expected * 1e9
 
-            dw_wl_actual = result.wavelengths_nm[0]
+            dw_wl_actual = result.wavelengths.as_nm[0]
             # Allow 10% tolerance for numerical root finding
             assert np.abs(dw_wl_actual - dw_wl_expected) / dw_wl_expected < 0.1
 
     def test_dw_no_root_when_no_crossing(self, omega0):
         """DW finder returns empty when β is purely quadratic (no root)."""
         from photonics_helper.phase_matching import dispersive_wave_roots
+        from photonics_helper.base import Wavelength
 
         # Pure β₂ (no β₃) → β(ω) is quadratic, the line β(ωₛ)+β₁(ω−ωₛ) is tangent
         # so there may be no crossing for q_sol=0
         beta_fn = make_beta2_only(-20e-24, omega0)
         result = dispersive_wave_roots(
             beta_fn, omega0,
-            wl_range_nm=(1000, 2500),
+            wl_range=(Wavelength(1000, "nm"), Wavelength(2500, "nm")),
             n_brackets=100,
         )
         # May or may not find roots depending on the profile
         # Just check it doesn't crash
-        assert isinstance(result.wavelengths_nm, np.ndarray)
+        assert isinstance(result.wavelengths, np.ndarray) or hasattr(result.wavelengths, 'as_nm')
 
     def test_dw_q_sol_parameter(self, omega0, beta2, beta3):
         """q_sol parameter shifts the DW root."""
         from photonics_helper.phase_matching import dispersive_wave_roots
+        from photonics_helper.base import Wavelength
 
         beta_fn = make_beta23(beta2, beta3, omega0)
         result0 = dispersive_wave_roots(beta_fn, omega0, q_sol=0.0,
-                                         wl_range_nm=(1000, 2500), n_brackets=100)
+                                         wl_range=(Wavelength(1000, "nm"), Wavelength(2500, "nm")), n_brackets=100)
         result_q = dispersive_wave_roots(beta_fn, omega0, q_sol=100.0,
-                                          wl_range_nm=(1000, 2500), n_brackets=100)
+                                          wl_range=(Wavelength(1000, "nm"), Wavelength(2500, "nm")), n_brackets=100)
 
         # Results should be different (or both empty)
-        if len(result0.wavelengths_nm) > 0 and len(result_q.wavelengths_nm) > 0:
-            assert not np.allclose(result0.wavelengths_nm, result_q.wavelengths_nm)
+        if result0.wavelengths.as_m.shape[0] > 0 and result_q.wavelengths.as_m.shape[0] > 0:
+            assert not np.allclose(result0.wavelengths.as_nm, result_q.wavelengths.as_nm)
 
 
 # ============================================================================
@@ -656,10 +659,12 @@ class TestPostFlightValidation:
             fission_length=0.01,
             recommended_num_steps=100,
             predicted_processes=["dispersive_wave"],
-            dw_predictions=[1600.0],  # Predict DW at 1600 nm
+            dw_predictions=WavelengthArray(np.array([1600.0e-9]), "m"),  # Predict DW at 1600 nm
         )
 
-        validation = compare_spectrum_to_phase_matching(solver, report, tolerance_nm=10.0)
+        from photonics_helper.base import Wavelength
+
+        validation = compare_spectrum_to_phase_matching(solver, report, tolerance=Wavelength(10.0, "nm"))
         # Should find at least one match
         assert len(validation.matches) > 0
 
@@ -669,25 +674,26 @@ class TestPostFlightValidation:
             compare_spectrum_to_phase_matching,
             SimulationReadinessReport,
         )
+        from photonics_helper.base import Wavelength, AngularFrequency
 
         solver = self._make_solver_with_spectrum(omega0, has_peak_at=0.0)
 
         report = SimulationReadinessReport(
             dispersion_covers_grid=True,
-            grid_omega_min=omega0 - 1e14,
-            grid_omega_max=omega0 + 1e14,
-            dispersion_min_omega=omega0 - 2e14,
-            dispersion_max_omega=omega0 + 2e14,
+            grid_omega_min=AngularFrequency(omega0 - 1e14, "rad/s"),
+            grid_omega_max=AngularFrequency(omega0 + 1e14, "rad/s"),
+            dispersion_min_omega=AngularFrequency(omega0 - 2e14, "rad/s"),
+            dispersion_max_omega=AngularFrequency(omega0 + 2e14, "rad/s"),
             soliton_order=2.0,
             dispersion_length=0.05,
             nonlinear_length=0.001,
             fission_length=0.01,
             recommended_num_steps=100,
             predicted_processes=["dispersive_wave"],
-            dw_predictions=[2000.0],  # Predict DW far from any peak
+            dw_predictions=WavelengthArray(np.array([2000.0e-9]), "m"),  # Predict DW far from any peak
         )
 
-        validation = compare_spectrum_to_phase_matching(solver, report, tolerance_nm=2.0)
+        validation = compare_spectrum_to_phase_matching(solver, report, tolerance=Wavelength(2.0, "nm"))
         # Should report no match
         assert not validation.overall_pass
 
@@ -743,12 +749,13 @@ class TestVisualization:
             plot_readiness_report, SimulationReadinessReport,
         )
 
+        from photonics_helper.base import AngularFrequency
         report = SimulationReadinessReport(
             dispersion_covers_grid=True,
-            grid_omega_min=omega0 - 1e14,
-            grid_omega_max=omega0 + 1e14,
-            dispersion_min_omega=omega0 - 2e14,
-            dispersion_max_omega=omega0 + 2e14,
+            grid_omega_min=AngularFrequency(omega0 - 1e14, "rad/s"),
+            grid_omega_max=AngularFrequency(omega0 + 1e14, "rad/s"),
+            dispersion_min_omega=AngularFrequency(omega0 - 2e14, "rad/s"),
+            dispersion_max_omega=AngularFrequency(omega0 + 2e14, "rad/s"),
             soliton_order=2.0,
             dispersion_length=0.05,
             nonlinear_length=0.001,
@@ -795,18 +802,19 @@ class TestVisualization:
         solver = GNLSESolver(pulse, fiber, betas)
         solver._spectra_vs_z = (grid.w, np.array([np.abs(envelope_field)**2]))
 
+        from photonics_helper.base import AngularFrequency, WavelengthArray, Wavelength
         report = SimulationReadinessReport(
             dispersion_covers_grid=True,
-            grid_omega_min=omega0 - 1e14,
-            grid_omega_max=omega0 + 1e14,
-            dispersion_min_omega=omega0 - 2e14,
-            dispersion_max_omega=omega0 + 2e14,
+            grid_omega_min=AngularFrequency(omega0 - 1e14, "rad/s"),
+            grid_omega_max=AngularFrequency(omega0 + 1e14, "rad/s"),
+            dispersion_min_omega=AngularFrequency(omega0 - 2e14, "rad/s"),
+            dispersion_max_omega=AngularFrequency(omega0 + 2e14, "rad/s"),
             soliton_order=2.0,
             dispersion_length=0.05,
             nonlinear_length=0.001,
             fission_length=0.01,
             recommended_num_steps=100,
-            dw_predictions=[1600.0],
+            dw_predictions=WavelengthArray(np.array([1600.0e-9]), "m"),
         )
 
         fig = plot_spectrum_with_pm_overlay(solver, report)

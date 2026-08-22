@@ -23,6 +23,54 @@ SHAPE_FACTORS: Dict[str, float] = {
 }
 
 
+def _airy_fwhm_roots() -> tuple[float, float]:
+    """Half-maximum crossings of the Airy-pulse main lobe |Ai(−x)|².
+
+    Ai(−x) peaks at x ≈ 1.0188 (first zero of Ai′), not at x = 0, and the
+    pulse is asymmetric, so the FWHM spans two distinct roots on either
+    side of the peak. Returns ``(x_left, x_right)`` in units of T0.
+    """
+    from scipy.optimize import brentq
+
+    x_peak = brentq(lambda x: airy(-x)[1], 0.5, 2.0)
+    half = airy(-x_peak)[0] / sqrt(2.0)
+    x_left = brentq(lambda x: airy(-x)[0] - half, 0.0, x_peak)
+    x_right = brentq(lambda x: airy(-x)[0] - half, x_peak, 2.33)
+    return x_left, x_right
+
+
+def _crossing_width(t: NDArray, intensity: NDArray, level: float = 0.5) -> float:
+    """Width between the outermost crossings of ``level · peak`` intensity.
+
+    Crossings are located by linear interpolation between grid samples.
+    Returns 0.0 when fewer than two crossings are found.
+    """
+    peak = np.max(intensity)
+    if peak == 0:
+        return 0.0
+
+    target = intensity - level * peak
+    # Find sign changes (crossings)
+    sign_changes = np.where(np.diff(np.sign(target)))[0]
+    if len(sign_changes) < 2:
+        return 0.0
+
+    # Linear interpolation at each crossing
+    roots = []
+    for idx in sign_changes:
+        t0, t1 = t[idx], t[idx + 1]
+        y0, y1 = target[idx], target[idx + 1]
+        denom = y1 - y0
+        if abs(denom) < 1e-30:
+            continue
+        roots.append(t0 - y0 * (t1 - t0) / denom)
+
+    if len(roots) < 2:
+        return 0.0
+
+    return float(np.max(roots)) - float(np.min(roots))
+
+
 @dataclass
 class Envelope:
     shape: Literal[
@@ -60,17 +108,11 @@ class Envelope:
         elif self.shape == "cosine":
             val = T0
         elif self.shape == "exponential":
-            val = 2.0 * T0 * log(2)
+            # I(t) = A0²·exp(−2|t|/T0) → FWHM_intensity = T0·ln2
+            val = T0 * log(2)
         elif self.shape == "airy":
-            from scipy.optimize import brentq
-
-            target = 0.35503 * sqrt(0.5)
-
-            def f(x):
-                return airy(-x)[0] - target
-
-            root = brentq(f, 0.1, 2.0)  # type: ignore[operator]
-            val = 2.0 * root * T0  # type: ignore[operator]
+            x_left, x_right = _airy_fwhm_roots()
+            val = (x_right - x_left) * T0
         elif self.shape in SHAPE_FACTORS:
             val = SHAPE_FACTORS[self.shape] * T0
         else:
@@ -115,20 +157,13 @@ class Envelope:
             T0 = Time(f, "s")  # FWHM = T0
             return cls(shape="cosine", peak_amplitude=peak_amplitude, pulse_width=T0)
         elif shape == "exponential":
-            T0 = Time(f / (2.0 * log(2)), "s")
+            T0 = Time(f / log(2), "s")
             return cls(
                 shape="exponential", peak_amplitude=peak_amplitude, pulse_width=T0
             )
         elif shape == "airy":
-            from scipy.optimize import brentq
-
-            target = 0.35503 * sqrt(0.5)
-
-            def ff(x):
-                return airy(-x)[0] - target
-
-            root = brentq(ff, 0.1, 2.0)  # type: ignore[operator]
-            T0 = Time(f / (2.0 * root), "s")  # type: ignore[operator]
+            x_left, x_right = _airy_fwhm_roots()
+            T0 = Time(f / (x_right - x_left), "s")
 
             return cls(shape="airy", peak_amplitude=peak_amplitude, pulse_width=T0)
         else:
@@ -217,37 +252,7 @@ class Envelope:
         width : Time — pulse width in picoseconds.
         """
         grid = self._make_grid()
-        t = grid.t
-        intensity = self.intensity(t)
-        peak = np.max(intensity)
-        if peak == 0:
-            return Time(0.0, "s")
-
-        target = intensity - level * peak
-        # Find sign changes (crossings)
-        sign_changes = np.where(np.diff(np.sign(target)))[0]
-        if len(sign_changes) < 2:
-            # Fewer than 2 crossings — return 0
-            return Time(0.0, "s")
-
-        # Linear interpolation at each crossing
-        roots = []
-        for idx in sign_changes:
-            t0, t1 = t[idx], t[idx + 1]
-            y0, y1 = target[idx], target[idx + 1]
-            # y = y0 + (y1 - y0) * (t - t0) / (t1 - t0)
-            # root at y = 0: t = t0 - y0 * (t1 - t0) / (y1 - y0)
-            denom = y1 - y0
-            if abs(denom) < 1e-30:
-                continue
-            root = t0 - y0 * (t1 - t0) / denom
-            roots.append(root)
-
-        if len(roots) < 2:
-            return Time(0.0, "s")
-
-        width_s = float(np.max(roots)) - float(np.min(roots))
-        return Time(width_s, "s")
+        return Time(_crossing_width(grid.t, self.intensity(grid.t), level), "s")
 
     def apply_dispersion(
         self,
@@ -258,12 +263,10 @@ class Envelope:
     ) -> "Envelope":
         """Apply group-delay dispersion (GDD), TOD, FOD in the frequency domain.
 
-        Multiplies the spectral amplitude by ``exp(i·φ(ω))`` where
+        Multiplies the spectral amplitude by ``exp(−i·φ(ω))`` where
         ``φ(ω) = ½·GDD·Ω² + ⅙·TOD·Ω³ + ¹⁄₂₄·FOD·Ω⁴`` and ``Ω`` is the
-        offset from the central angular frequency.
-
-        This is the frequency-domain equivalent of laserfun's
-        ``chirp_pulse_W(GDD, TOD, FOD)``.
+        offset from the central angular frequency.  Uses the same sign as
+        :meth:`~photonics_helper.gnlse.SplitStepEngine._linear_step`.
 
         Parameters
         ----------
@@ -275,51 +278,109 @@ class Envelope:
         Returns
         -------
         Envelope — a new Envelope with the dispersion-applied field.
+
+        Notes
+        -----
+        The returned envelope has ``shape="custom"`` and owns the numerical
+        field computed on an internal grid sized to contain the broadened
+        pulse (estimated from the input bandwidth and the requested GDD,
+        TOD, FOD; ``N`` controls the sampling resolution). Requests outside
+        that window are clamped to the edge values. The analytic parameters
+        of the input envelope no longer describe the broadened pulse, so
+        ``peak_amplitude`` and ``pulse_width`` are re-measured numerically
+        and the chirp is reset to zero (any input chirp is already baked
+        into the dispersed field).
         """
-        # Build a grid to hold the spectral field
-        grid = TemporalGrid(N=N, Tmax=Time(10.0 * self.pulse_width.as_s, "s"))
-        t = grid.t
+        # Size the computation window so it can actually hold the broadened
+        # pulse: estimate the temporal and spectral RMS widths of the input
+        # on a provisional grid, then the group-delay spread implied by the
+        # requested dispersion orders.
+        T0 = self.pulse_width.as_s
+        prov = TemporalGrid(N=N, Tmax=Time(10.0 * T0, "s"))
+        A_prov = self.field(prov.t)
+        I_prov = np.abs(A_prov) ** 2
+        E_t = float(np.sum(I_prov))
+        dt_rms = (
+            sqrt(np.sum((prov.t - np.sum(prov.t * I_prov) / E_t) ** 2 * I_prov) / E_t)
+            if E_t > 0.0
+            else T0
+        )
+        S_prov = np.abs(prov.fft(A_prov)) ** 2
+        E_s = float(np.sum(S_prov))
+        w_ps = prov.w * 1e-12  # rad/s → rad/ps
+        dw_rms = (
+            sqrt(np.sum((w_ps - np.sum(w_ps * S_prov) / E_s) ** 2 * S_prov) / E_s)
+            if E_s > 0.0
+            else 0.0
+        )
+        # Characteristic group-delay spread (ps): τ ≈ GDD·Δω, ½·TOD·Δω², ⅙·FOD·Δω³
+        delay_ps = (
+            abs(GDD) * dw_rms
+            + 0.5 * abs(TOD) * dw_rms**2
+            + (1.0 / 6.0) * abs(FOD) * dw_rms**3
+        )
+        delay_s = delay_ps * 1e-12  # ps → s
 
-        # Original field
-        A_t = self.field(t)
+        if GDD == 0.0 and TOD == 0.0 and FOD == 0.0:
+            # Identity transform: keep the input field without an FFT round trip
+            grid = prov
+            disp_field = A_prov.copy()
+        else:
+            # Build a grid wide enough to hold the broadened pulse, growing
+            # N if needed so the input pulse stays resolved (dt ≲ T0/8).
+            # Capped at 2²² points to bound memory; extremely large
+            # dispersion ratios may require passing a larger N explicitly.
+            half_span = 8.0 * sqrt(dt_rms**2 + delay_s**2) + 5.0 * T0
+            n_needed = int(np.ceil((2.0 * half_span) / (T0 / 8.0)))
+            n_fft = max(N, 1 << max(n_needed - 1, 0).bit_length())
+            n_fft = min(n_fft, 2**22)
+            grid = TemporalGrid(N=n_fft, Tmax=Time(2.0 * half_span, "s"))
+            t = grid.t
 
-        # FFT to frequency domain
-        A_w = grid.fft(A_t)
+            # Original field
+            A_t = self.field(t)
 
-        # Angular frequency offset from center (rad/s)
-        omega = grid.w  # already centered at 0
+            # FFT to frequency domain
+            A_w = grid.fft(A_t)
 
-        # Build dispersion phase: φ(Ω) = ½·GDD·Ω² + ⅙·TOD·Ω³ + ¹⁄₂₄·FOD·Ω⁴
-        # GDD, TOD, FOD are in ps², ps³, ps⁴. Convert omega from rad/s to rad/ps.
-        omega_ps = omega * 1e-12  # rad/s → rad/ps
+            # Build dispersion phase: φ(Ω) = ½·GDD·Ω² + ⅙·TOD·Ω³ + ¹⁄₂₄·FOD·Ω⁴
+            # GDD, TOD, FOD are in ps², ps³, ps⁴. Convert omega from rad/s to rad/ps.
+            omega_ps = grid.w * 1e-12  # rad/s → rad/ps
 
-        phase = np.zeros_like(omega_ps, dtype=float)
-        if GDD != 0.0:
-            phase += 0.5 * GDD * omega_ps ** 2
-        if TOD != 0.0:
-            phase += (1.0 / 6.0) * TOD * omega_ps ** 3
-        if FOD != 0.0:
-            phase += (1.0 / 24.0) * FOD * omega_ps ** 4
+            phase = np.zeros_like(omega_ps, dtype=float)
+            if GDD != 0.0:
+                phase += 0.5 * GDD * omega_ps ** 2
+            if TOD != 0.0:
+                phase += (1.0 / 6.0) * TOD * omega_ps ** 3
+            if FOD != 0.0:
+                phase += (1.0 / 24.0) * FOD * omega_ps ** 4
 
-        # Apply dispersion phase in frequency domain
-        A_w_disp = A_w * np.exp(1j * phase)
+            # Apply dispersion phase (same sign convention as GNLSE linear step)
+            A_w_disp = A_w * np.exp(-1j * phase)
 
-        # IFFT back to time domain
-        A_t_disp = grid.ifft(A_w_disp)
+            # IFFT back to time domain
+            disp_field = grid.ifft(A_w_disp)
 
-        # Create a new Envelope that holds the modified field
-        disp_field = A_t_disp.copy()
+        # Create a new Envelope that holds the modified field. The shape must
+        # be "custom" so that Envelope.field() actually consults ``func``;
+        # for any built-in shape the analytic formula would silently discard
+        # the dispersed field. The callable interpolates onto whatever time
+        # axis the caller requests.
+        def _disp_field(t, _T0, _A0):
+            t = np.asarray(t, dtype=float)
+            real = np.interp(t, grid.t, disp_field.real)
+            imag = np.interp(t, grid.t, disp_field.imag)
+            return real + 1j * imag
+
+        measured_width = _crossing_width(grid.t, np.abs(disp_field) ** 2)
 
         new_env = Envelope(
-            shape=self.shape,
-            peak_amplitude=self.peak_amplitude,
-            pulse_width=self.pulse_width,
-            chirp=self.chirp,
-            super_gaussian_order=getattr(self, "super_gaussian_order", 2),
-            beam_waist=getattr(self, "beam_waist", None),
-            hg_mode=getattr(self, "hg_mode", 0),
-            func=lambda _t, _T0, _A0: disp_field,  # type: ignore[arg-type]
-            phase_func=self.phase_func,
+            shape="custom",
+            peak_amplitude=float(np.max(np.abs(disp_field))),
+            pulse_width=Time(measured_width, "s") if measured_width > 0.0 else self.pulse_width,
+            chirp=0.0,
+            func=_disp_field,
+            phase_func=None,
         )
         return new_env
 
@@ -1029,10 +1090,10 @@ class Wave:
 
     @property
     def envelope_intensity(self):
-        return self.envelope.intensity(self.grid.t)
+        return np.abs(self.envelope_field) ** 2
 
     def pulse_energy(self):
-        return np.sum(self.envelope.intensity(self.grid.t)) * self.grid.dt
+        return np.sum(self.envelope_intensity) * self.grid.dt
 
     def calc_width(self, level: float = 0.5) -> Time:
         """Calculate the pulse width using linear interpolation at crossing points.
@@ -1049,34 +1110,7 @@ class Wave:
         -------
         width : Time — pulse width in picoseconds.
         """
-        intensity = self.envelope_intensity
-        peak = np.max(intensity)
-        if peak == 0:
-            return Time(0.0, "s")
-
-        target = intensity - level * peak
-        t = self.grid.t
-        # Find sign changes (crossings)
-        sign_changes = np.where(np.diff(np.sign(target)))[0]
-        if len(sign_changes) < 2:
-            return Time(0.0, "s")
-
-        # Linear interpolation at each crossing
-        roots = []
-        for idx in sign_changes:
-            t0, t1 = t[idx], t[idx + 1]
-            y0, y1 = target[idx], target[idx + 1]
-            denom = y1 - y0
-            if abs(denom) < 1e-30:
-                continue
-            root = t0 - y0 * (t1 - t0) / denom
-            roots.append(root)
-
-        if len(roots) < 2:
-            return Time(0.0, "s")
-
-        width_s = float(np.max(roots)) - float(np.min(roots))
-        return Time(width_s, "s")
+        return Time(_crossing_width(self.grid.t, self.envelope_intensity, level), "s")
 
     def peak_power(self):
         A = self.envelope_field
