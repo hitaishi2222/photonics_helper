@@ -44,6 +44,7 @@ plot_spectrum_with_pm_overlay — spectrum + PM vertical lines
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from math import factorial
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 import numpy as np
@@ -822,7 +823,7 @@ def dispersive_wave_roots(
                     fprime=lambda w, b1=beta1_sol: _beta1_fd(beta_fn, w, 1e6),
                 )
                 if res.converged:
-                    wl_check = AngularFrequency(res.root).to_wl().as_nm
+                    wl_check = AngularFrequency(res.root, "rad/s").to_wl().as_nm
                     if wl_min.as_nm <= wl_check <= wl_max.as_nm:
                         roots_omega.append(float(res.root))
             except Exception:
@@ -863,6 +864,88 @@ def _beta1_fd(beta_fn, omega: float, domega: float = 1e6) -> float:
 # 5. Simulation readiness assessment
 # ============================================================================
 
+def _dispersion_omega_bounds(dispersion) -> tuple[AngularFrequency, AngularFrequency]:
+    """Return (ω_min, ω_max) covered by a dispersion table or spline source."""
+    if hasattr(dispersion, "omegas"):
+        raw = dispersion.omegas
+        if hasattr(raw, "as_rad_s"):
+            om = np.asarray(raw.as_rad_s, dtype=float)
+        else:
+            om = np.asarray(raw, dtype=float)
+    elif hasattr(dispersion, "wavelengths"):
+        omega_arr = dispersion.wavelengths.to_omega().as_rad_s
+        om = np.asarray(omega_arr, dtype=float)
+    elif hasattr(dispersion, "x_values"):
+        x = dispersion.x_values
+        if hasattr(x, "to_omega"):
+            om = np.asarray(x.to_omega().as_rad_s, dtype=float)
+        elif hasattr(x, "as_rad_s"):
+            om = np.asarray(x.as_rad_s, dtype=float)
+        else:
+            om = np.asarray(x, dtype=float)
+    else:
+        raise TypeError(
+            "dispersion must provide omegas, wavelengths, or x_values for coverage checks"
+        )
+    return (
+        AngularFrequency(float(np.min(om)), "rad/s"),
+        AngularFrequency(float(np.max(om)), "rad/s"),
+    )
+
+
+def _make_dispersion_adaptor(dispersion, omega0: float) -> DispersionAdaptor | PropagationConstantAdaptor | ZDependentDispersionAdaptor | None:
+    """Build a β(ω) adaptor when ``dispersion`` supports full-β phase matching."""
+    if dispersion is None:
+        return None
+    if hasattr(dispersion, "wavelengths") and hasattr(dispersion, "as_s_m_m"):
+        return DispersionAdaptor(dispersion, omega0)
+    if hasattr(dispersion, "omegas") and hasattr(dispersion, "fn"):
+        return ZDependentDispersionAdaptor(dispersion, z=0.0)
+    if hasattr(dispersion, "x_values"):
+        return PropagationConstantAdaptor(dispersion)
+    return None
+
+
+def _taylor_phase_max_error(
+    pulse: "Wave",
+    betas: NDArray,
+    adaptor: DispersionAdaptor | PropagationConstantAdaptor | ZDependentDispersionAdaptor,
+    omega0: float,
+) -> float | None:
+    """Max |φ_full − φ_Taylor| (1/m) over the pulse grid at unit length."""
+    omega_abs = omega0 + pulse.grid.w
+    # Clip to adaptor support when reference grid is known
+    if hasattr(adaptor, "_omega_ref"):
+        om_min = float(np.min(adaptor._omega_ref))
+        om_max = float(np.max(adaptor._omega_ref))
+        omega_abs = np.clip(omega_abs, om_min, om_max)
+
+    beta_carrier = adaptor.beta(omega0)
+    if np.isscalar(beta_carrier):
+        beta_carrier = float(beta_carrier)
+    else:
+        beta_carrier = float(np.asarray(beta_carrier)[0])
+
+    phi_full = np.asarray(adaptor.beta(omega_abs), dtype=float) - beta_carrier
+
+    omega_ps = pulse.grid.w * 1e-12
+    phi_taylor = np.zeros_like(omega_ps, dtype=float)
+    for k, beta_k in enumerate(betas, start=2):
+        phi_taylor += beta_k * omega_ps ** k / factorial(k)
+
+    return float(np.max(np.abs(phi_full - phi_taylor)))
+
+
+def emit_readiness_warnings(report: SimulationReadinessReport) -> None:
+    """Emit ``UserWarning`` for each readiness warning and recommendation."""
+    import warnings
+
+    for msg in report.warnings:
+        warnings.warn(msg, UserWarning, stacklevel=3)
+    for msg in report.recommendations:
+        warnings.warn(f"Recommendation: {msg}", UserWarning, stacklevel=3)
+
+
 def assess_simulation_readiness(
     pulse: "Wave",
     fiber: "FiberProfile",
@@ -896,29 +979,40 @@ def assess_simulation_readiness(
     T0 = pulse.envelope.pulse_width.as_s
     P_peak = pulse.peak_power()
     gamma = _gamma(fiber.n2, omega0, fiber.A_eff, fiber.confinement_factor)
+    omega0_val = omega0.as_rad_s if isinstance(omega0, AngularFrequency) else omega0
 
-    # Determine grid bounds
-    omega_grid = pulse.grid.w  # offsets from omega0
-    omega_min = omega0 + omega_grid.min()
-    omega_max = omega0 + omega_grid.max()
+    # Absolute angular frequencies on the simulation FFT grid
+    omega_abs = omega0_val + pulse.grid.w
+
+    adaptor = _make_dispersion_adaptor(dispersion, omega0_val)
 
     # Determine dispersion bounds
-    if hasattr(dispersion, 'omegas'):
-        # ZDependentDispersion or PropagationConstant
-        disp_min_omega = AngularFrequency(dispersion.omegas.min())
-        disp_max_omega = AngularFrequency(dispersion.omegas.max())
-    elif hasattr(dispersion, 'wavelengths'):
-        # Dispersion — convert wavelengths to omega
-        wl_arr = dispersion.wavelengths
-        disp_min_omega = wl_arr.to_omega().min()
-        disp_max_omega = wl_arr.to_omega().max()
+    if dispersion is not None and (
+        hasattr(dispersion, "omegas")
+        or hasattr(dispersion, "wavelengths")
+        or hasattr(dispersion, "x_values")
+    ):
+        disp_min_omega, disp_max_omega = _dispersion_omega_bounds(dispersion)
     else:
         # Taylor mode — use a wide estimate
-        disp_min_omega = AngularFrequency(omega0 - 5e15, "rad/s")
-        disp_max_omega = AngularFrequency(omega0 + 5e15, "rad/s")
+        disp_min_omega = AngularFrequency(omega0_val - 5e15, "rad/s")
+        disp_max_omega = AngularFrequency(omega0_val + 5e15, "rad/s")
 
-    # Check coverage
-    covers = (omega_min >= disp_min_omega.as_rad_s - 1e12) and (omega_max <= disp_max_omega.as_rad_s + 1e12)
+    margin = 1e12
+    phys_mask = omega_abs > 0
+    if phys_mask.any():
+        omega_pos = omega_abs[phys_mask]
+        omega_min = float(np.min(omega_pos))
+        omega_max = float(np.max(omega_abs))
+        in_bounds = (
+            (omega_pos >= disp_min_omega.as_rad_s - margin)
+            & (omega_pos <= disp_max_omega.as_rad_s + margin)
+        )
+        covers = bool(np.all(in_bounds))
+    else:
+        omega_min = float(np.min(omega_abs))
+        omega_max = float(np.max(omega_abs))
+        covers = False
 
     # Compute soliton parameters
     if betas is not None and len(betas) > 0:
@@ -961,7 +1055,7 @@ def assess_simulation_readiness(
         warnings_list.append(
             f"Dispersion model does not cover the full pulse grid: "
             f"[{omega_min:.2e}, {omega_max:.2e}] rad/s "
-            f"vs model [{disp_min_omega:.2e}, {disp_max_omega:.2e}] rad/s"
+            f"vs model [{disp_min_omega.as_rad_s:.2e}, {disp_max_omega.as_rad_s:.2e}] rad/s"
         )
         recommendations_list.append(
             "Consider using a broader dispersion table or Taylor expansion "
@@ -975,6 +1069,20 @@ def assess_simulation_readiness(
         recommendations_list.append(
             f"Increase num_steps to at least {recommended_steps} for accurate fission."
         )
+
+    if betas is not None and len(betas) > 0 and adaptor is not None and covers:
+        try:
+            max_phi_err = _taylor_phase_max_error(pulse, np.asarray(betas), adaptor, omega0_val)
+            if max_phi_err > PI / 4:
+                warnings_list.append(
+                    f"Taylor dispersion phase error up to {max_phi_err:.3f} rad/m "
+                    f"(> π/4) across the pulse grid — Taylor betas may be inadequate."
+                )
+                recommendations_list.append(
+                    "Use full β(ω) dispersion (e.g. TaperedGNLSESolver) for this bandwidth."
+                )
+        except Exception:
+            pass
 
     # MI predictions
     mi_info = {}
@@ -998,18 +1106,26 @@ def assess_simulation_readiness(
     else:
         mi_predictions = {}
 
-    # DW predictions (if we have betas)
+    # DW predictions
     dw_preds = WavelengthArray(np.array([]), "nm")
-    if betas is not None and len(betas) >= 2 and beta2_si != 0:
+    if adaptor is not None and N_sol > 1:
         try:
-            # Quick DW estimate using β₂/β₃ formula
+            dw_result = dispersive_wave_roots(
+                adaptor,
+                AngularFrequency(omega0_val, "rad/s"),
+            )
+            dw_preds = dw_result.wavelengths
+        except Exception:
+            pass
+    elif betas is not None and len(betas) >= 2 and beta2_si != 0:
+        try:
             beta3_si = betas[1] * 1e-27 if len(betas) > 1 else 0.0
             if beta3_si != 0 and abs(beta3_si) > 1e-40:
                 delta_omega_dw = -2 * beta2_si / beta3_si
-                omega_dw = omega0 + delta_omega_dw
+                omega_dw = omega0_val + delta_omega_dw
                 if omega_dw > 0:
-                    dw_wavelength = AngularFrequency(omega_dw).to_wl()
-                    dw_preds = WavelengthArray([dw_wavelength])
+                    dw_wavelength = AngularFrequency(omega_dw, "rad/s").to_wl()
+                    dw_preds = WavelengthArray(np.array([dw_wavelength.as_m]), "m")
         except Exception:
             pass
 
@@ -1019,9 +1135,9 @@ def assess_simulation_readiness(
         # Predict FWM idler for signal near DW
         for dw_wavelength in dw_preds:
             omega_s = dw_wavelength.to_omega().as_rad_s
-            omega_i = fwm_idler_frequency(omega0, omega_s)
+            omega_i = fwm_idler_frequency(omega0_val, omega_s)
             fwm_preds.append({
-                "idler_wavelength": AngularFrequency(omega_i).to_wl(),
+                "idler_wavelength": AngularFrequency(omega_i, "rad/s").to_wl(),
                 "signal_wavelength": dw_wavelength,
             })
 
@@ -1051,7 +1167,7 @@ def _estimate_beta2(dispersion, omega0: float | AngularFrequency) -> float | Non
     
     if hasattr(dispersion, 'get_beta2'):
         # Dispersion object
-        wl = AngularFrequency(omega0_val).to_wl()
+        wl = AngularFrequency(omega0_val, "rad/s").to_wl()
         try:
             beta2 = dispersion.get_beta2(wl)
             # get_beta2 returns in ps²/m (solver convention) or SI

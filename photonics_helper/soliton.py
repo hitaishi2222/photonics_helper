@@ -403,25 +403,25 @@ def plot_fission_dynamics(solver: "GNLSESolver", N: float, L_D: float,
     else:
         fig = ax.figure
 
-    # Plot spectrum at several z positions
+    # Plot spectrum at several z positions (color encodes propagation distance)
     n_plot = min(10, spectra.shape[0])
-    z_plot = np.linspace(0, z_steps[-1], n_plot)
-    for z in z_plot:
-        idx = int(z / z_steps[-1] * (spectra.shape[0] - 1)) if z_steps[-1] > 0 else 0
+    z_plot = np.linspace(0, z_steps[-1], n_plot) if z_steps[-1] > 0 else np.array([0.0])
+    cmap = plt.cm.viridis(np.linspace(0, 1, n_plot))
+    for z_mm, color in zip(z_plot, cmap):
+        idx = int(z_mm / z_steps[-1] * (spectra.shape[0] - 1)) if z_steps[-1] > 0 else 0
         spec = spectra[idx]
         max_val = np.max(spec)
         if max_val > 0:
-            ax.plot(wavelength_nm, spec / max_val, alpha=0.5, linewidth=0.5)
+            ax.plot(wavelength_nm, spec / max_val, color=color, alpha=0.6, linewidth=0.5)
 
-    # Mark fission length
-    if fission_length_mm < z_steps[-1]:
-        ax.axvline(x=fission_length_mm, color="r", linestyle="--", alpha=0.5,
-                   label=f"Fission length (L_D/{N}·0.7)")
-
+    fission_note = (
+        f"L_fiss ≈ {fission_length_mm:.2f} mm"
+        if fission_length_mm < float("inf")
+        else "L_fiss undefined"
+    )
     ax.set_xlabel("Wavelength (nm)")
     ax.set_ylabel("Normalized spectrum")
-    ax.set_title(f"Soliton Fission Dynamics (N={N:.1f})")
-    ax.legend()
+    ax.set_title(f"Soliton Fission Dynamics (N={N:.1f}, {fission_note})")
     ax.grid(True, alpha=0.3)
     return fig
 

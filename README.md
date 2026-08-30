@@ -6,15 +6,17 @@ A comprehensive helper library for photonics and optics calculations, providing 
 
 # Installation
 
+The package is not yet on PyPI. Install from the repository:
+
 ```bash
-pip install photonics-helper
+pip install git+https://github.com/hitaishi2222/photonics_helper
 ```
 
 For the **FFTW3-accelerated GNLSE / Raman solver** (recommended for large grids
 and long propagation runs):
 
 ```bash
-pip install photonics-helper[fftw]
+pip install "photonics-helper[fftw] @ git+https://github.com/hitaishi2222/photonics_helper"
 ```
 
 When `pyfftw` is present, every FFT in `gnlse.py` and `raman.py` executes on
@@ -241,8 +243,8 @@ fig.savefig("trajectories.png", dpi=150)
 To install for development:
 
 ```sh
-git clone https://github.com/yourusername/photonics-helper
-cd photonics-helper
+git clone https://github.com/hitaishi2222/photonics_helper
+cd photonics_helper
 python -m venv .venv
 source .venv/bin/activate  # On Linux/Mac
 pip install -e .

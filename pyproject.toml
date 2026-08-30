@@ -29,10 +29,11 @@ dependencies = [
 plotting = ["plotly>=5.0"]
 webapp = ["dash>=2.18.0"]
 examples = ["tqdm>=4.66"]
+extras = ["imageio>=2.33"]
 # FFTW3 backend for the GNLSE / Raman FFTs (pyfftw ships cp311–cp313 wheels;
 # the solver falls back to numpy.fft automatically when this is absent)
 fftw = ["pyfftw>=0.15.1"]
-all = ["plotly>=5.0", "dash>=2.18.0", "tqdm>=4.66", "pyfftw>=0.15.1"]
+all = ["plotly>=5.0", "dash>=2.18.0", "tqdm>=4.66", "pyfftw>=0.15.1", "imageio>=2.33"]
 
 [build-system]
 requires = ["setuptools>=61.0.0", "wheel"]
@@ -40,11 +41,11 @@ build-backend = "setuptools.build_meta"
 
 
 [project.urls]
-Homepage = "https://github.com/hitaishi2222/photonics-helper"
-Documentation = "https://github.com/hitaishi2222/photonics-helper#readme"
+Homepage = "https://github.com/hitaishi2222/photonics_helper"
+Documentation = "https://github.com/hitaishi2222/photonics_helper#readme"
 
 [tool.setuptools.package-data]
-photonics_helper = ["*.pyi"]
+photonics_helper = ["*.pyi", "materials.db"]
 
 [tool.pyrefly]
 project-includes = [

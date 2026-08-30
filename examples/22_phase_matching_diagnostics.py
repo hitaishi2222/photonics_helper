@@ -11,6 +11,14 @@ Demonstrates:
 Run with: python examples/22_phase_matching_diagnostics.py
 """
 
+import sys
+from pathlib import Path
+
+# Prefer the repository package over any older site-packages install.
+_ROOT = Path(__file__).resolve().parents[1]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
@@ -154,15 +162,15 @@ def main():
     print("\n--- Dispersive Wave Root Finder ---")
     dw_result = dispersive_wave_roots(
         adaptor, omega0,
-        wl_range_nm=(1000, 2500),
+        wl_range=(Wavelength(1000, "nm"), Wavelength(2500, "nm")),
         n_brackets=200,
     )
 
-    if len(dw_result.wavelengths_nm) > 0:
-        print(f"Found {len(dw_result.wavelengths_nm)} DW root(s):")
-        for i, wl in enumerate(dw_result.wavelengths_nm):
-            delta_wl = abs(wl - central_wl_nm)
-            print(f"  DW{i+1}: {wl:.1f} nm (Δλ = {delta_wl:.1f} nm from pump)")
+    if len(dw_result.wavelengths) > 0:
+        print(f"Found {len(dw_result.wavelengths)} DW root(s):")
+        for i, wl in enumerate(dw_result.wavelengths):
+            delta_wl = abs(wl.as_nm - central_wl_nm)
+            print(f"  DW{i+1}: {wl.as_nm:.1f} nm (Δλ = {delta_wl:.1f} nm from pump)")
     else:
         print("No DW roots found in search range (DispersionAdaptor may not capture higher-order dispersion).")
 

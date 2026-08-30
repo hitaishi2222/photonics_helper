@@ -65,8 +65,16 @@ def test_tpa_step_attenuation(fiber, grid):
     """TPA step attenuates field when sigma_tpa > 0."""
     fiber.sigma_tpa = 1e-11
     A = np.ones(256) * 1e6  # high intensity
-    A_new, U_new = tpa_step(A, fiber, grid, dz=1e-3, include_tpa=True, U=0.0)
+    A_new, U_new = tpa_step(A, fiber, grid, dz=1e-3, include_tpa=True, U=0.0, omega0=2e15)
     # Field should be attenuated
     assert np.all(np.abs(A_new) <= np.abs(A))
     # Carrier density should increase
     assert U_new > 0
+
+
+def test_tpa_step_requires_omega0(fiber, grid):
+    """TPA step raises ValueError when omega0 not provided and TPA enabled."""
+    fiber.sigma_tpa = 1e-11
+    A = np.ones(256) * 1e6
+    with pytest.raises(ValueError, match="omega0.*required when include_tpa=True"):
+        tpa_step(A, fiber, grid, dz=1e-3, include_tpa=True, U=0.0)

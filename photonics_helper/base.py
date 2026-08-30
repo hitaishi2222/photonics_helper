@@ -1,16 +1,13 @@
 """Physical units and constants for photonics calculations."""
 
 from __future__ import annotations
-from typing import Literal, Self
+from typing import Iterator, Literal, Self
 from numpy.typing import NDArray
 from functools import cached_property
 
 import numpy as np
 import scipy.constants as const
-from rich.traceback import install
 from pydantic.dataclasses import dataclass
-
-install()
 
 # Constants
 PI: float = const.pi
@@ -433,7 +430,7 @@ class Time:
             return f"{self.as_ps:.3f} ps"
         if self.as_fs >= 1:
             return f"{self.as_fs:.2f} fs"
-        return f"{self.as_fs:.2f} fs"
+        return f"{self.as_s * 1e18:.2f} as"
 
     @cached_property
     def as_s(self) -> float:
@@ -758,6 +755,23 @@ class WavelengthArray:
     def as_nm(self) -> NDArray:
         return self.value * 1e9
 
+    def __len__(self) -> int:
+        return int(self.as_m.shape[0])
+
+    def __getitem__(self, index: int | slice) -> Wavelength | Self:
+        if isinstance(index, slice):
+            return self.__class__(self.as_m[index], "m")
+        return Wavelength(self.as_m[index], "m")
+
+    def __iter__(self) -> Iterator[Wavelength]:
+        for val in self.as_m:
+            yield Wavelength(val, "m")
+
+    @classmethod
+    def from_wavelengths(cls, wavelengths: list[Wavelength]) -> Self:
+        """Build from a list of ``Wavelength`` scalars (stored internally in m)."""
+        return cls(np.array([wl.as_m for wl in wavelengths], dtype=float), "m")
+
     def to_freq(self) -> FrequencyArray:
         """Convert to FrequencyArray (Hz)."""
         return FrequencyArray(C_MS / self.as_m, "Hz")
@@ -899,6 +913,18 @@ class AngularFrequencyArray:
     @cached_property
     def as_rad_ps(self) -> NDArray:
         return self.value * 1e-12
+
+    def __len__(self) -> int:
+        return int(self.as_rad_s.shape[0])
+
+    def __getitem__(self, index: int | slice) -> AngularFrequency | Self:
+        if isinstance(index, slice):
+            return self.__class__(self.as_rad_s[index], "rad/s")
+        return AngularFrequency(self.as_rad_s[index], "rad/s")
+
+    def __iter__(self) -> Iterator[AngularFrequency]:
+        for val in self.as_rad_s:
+            yield AngularFrequency(val, "rad/s")
 
     def to_wl(self) -> WavelengthArray:
         """Convert to WavelengthArray (m)."""

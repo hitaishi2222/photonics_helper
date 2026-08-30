@@ -1,5 +1,6 @@
 """Distributed Bragg Reflector (DBR) design and transfer-matrix simulation."""
 
+from copy import deepcopy
 from typing import Dict, List, Literal, Optional, Tuple
 
 import matplotlib.pyplot as plt
@@ -102,10 +103,13 @@ class Pattren:
 
     def make_pattren(self) -> None:
         """Build the Block list from style and mapping."""
+        self._out = []
         start_pos: float = 0
         end_pos: float = 0
         for block in self.style:
-            current_block = self.mapping[block]
+            # Clone template blocks so repeated style letters get distinct instances.
+            current_block = deepcopy(self.mapping[block])
+            current_block._position = None
             end_pos += current_block.length.as_m
             current_block.position = (start_pos, end_pos)
             self._out.append(current_block)
@@ -235,6 +239,10 @@ def plot_2d(pattren: Pattren, height=100e-9, overlay_index: bool = False) -> Non
         ax1.vlines(x_max[:-1], n[:-1], n[1:], colors="k")
 
     plt.show()
+
+
+# Public alias for the historical typo in class name.
+Pattern = Pattren
 
 
 @dataclass(config={"arbitrary_types_allowed": True})
@@ -377,10 +385,8 @@ class TMM:
             # Propagate through the layer
             M11, M12 = M_layer[0, 0], M_layer[0, 1]
             M21, M22 = M_layer[1, 0], M_layer[1, 1]
-            E_cur = M11 * E_cur + M12 * H_cur
-            H_cur = M21 * E_cur + M22 * H_cur
-            # Re-derive E_cur from H_cur to stay consistent with the admittance
-            # convention (E = H / eta_local is not quite right for the internal
-            # field; instead we keep the (E,H) pair propagated by M).
-
+            E_new = M11 * E_cur + M12 * H_cur
+            H_new = M21 * E_cur + M22 * H_cur
+            E_cur = E_new
+            H_cur = H_new
         return np.array(field_vals, dtype=float)

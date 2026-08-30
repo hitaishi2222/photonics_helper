@@ -6,7 +6,7 @@ so the package works everywhere:
 
 1. **FFTW3** (``pyfftw``) — fastest; cached plans (one per grid size, reused
    across every split-step iteration) and optional multi-threading. Requires
-   ``pip install pyfftw`` (or ``pip install photonics-helper[fftw]``).
+   the optional ``pyfftw`` package (installable via the ``fftw`` extra).
 2. **scipy.fft** — pocketfft with multi-threading; ships with the package's
    core ``scipy`` dependency, so this is the default for installs without
    ``pyfftw``.
@@ -339,7 +339,7 @@ def _maybe_warn_on_use() -> None:
     _warn_once(
         "fallback-use",
         f"FFT backend is {_active_name} — install pyfftw for FFTW3 acceleration: "
-        "pip install pyfftw (or pip install photonics-helper[fftw])",
+        "pip install pyfftw (or add the fftw extra)",
     )
 
 

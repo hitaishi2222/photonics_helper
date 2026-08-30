@@ -436,6 +436,62 @@ class TestSimulationReadiness:
         N_expected = np.sqrt(gamma_actual * P_peak * (T0_ps * 1e-12)**2 / abs(beta2))
         assert np.abs(report.soliton_order - N_expected) / max(N_expected, 1e-10) < 0.1
 
+    def test_readiness_with_dispersion_object(self, omega0, beta2):
+        """assess_simulation_readiness works with a Dispersion table (not just Taylor betas)."""
+        from photonics_helper.phase_matching import assess_simulation_readiness
+        from photonics_helper.gnlse import FiberProfile
+        from photonics_helper.fiber import PropagationConstant
+        from photonics_helper.base import Length, Area, AngularFrequencyArray
+
+        pulse = self._make_pulse(omega0, T0_ps=1.0, power_W=100)
+        fiber = FiberProfile(
+            n2=2.6e-20,
+            alpha=0.0,
+            A_eff=Area(80, "um^2"),
+            length=Length(1, "m"),
+            confinement_factor=1.0,
+        )
+        omega = np.linspace(1e12, 5e15, 501)
+        beta = omega * 2.5e-7 / C_MS
+        pc = PropagationConstant(
+            values=beta,
+            x_values=AngularFrequencyArray(omega, "rad/s"),
+        )
+        betas = np.array([beta2 * 1e24, 0.1e27])
+
+        report = assess_simulation_readiness(pulse, fiber, pc, betas=betas)
+
+        assert report.dispersion_covers_grid
+        assert report.dispersion_min_omega.as_rad_s < report.grid_omega_min.as_rad_s
+        assert report.dispersion_max_omega.as_rad_s > report.grid_omega_max.as_rad_s
+
+    def test_coverage_fails_when_grid_exceeds_table(self, omega0):
+        """Coverage check fails when pulse grid exceeds narrow dispersion table."""
+        from photonics_helper.phase_matching import assess_simulation_readiness
+        from photonics_helper.gnlse import FiberProfile
+        from photonics_helper.fiber import Dispersion
+        from photonics_helper.base import Length, Area
+
+        pulse = self._make_pulse(omega0, T0_ps=0.05, power_W=100)
+        fiber = FiberProfile(
+            n2=2.6e-20,
+            alpha=0.0,
+            A_eff=Area(80, "um^2"),
+            length=Length(1, "m"),
+        )
+        wl = np.linspace(1540, 1560, 21)
+        disc = Dispersion(
+            wavelengths=WavelengthArray(wl, "nm"),
+            values=np.full(21, -100.0 * 1e-6),
+            unit="s/m^2",
+            central_wavelength=Wavelength(1550, "nm"),
+        )
+
+        report = assess_simulation_readiness(pulse, fiber, disc, betas=None)
+
+        assert not report.dispersion_covers_grid
+        assert any("does not cover" in w for w in report.warnings)
+
 
 # ============================================================================
 # 6. GNLSE solver integration tests (task 6.6)
@@ -497,6 +553,54 @@ class TestSolverIntegration:
         report = solver.preflight_report
         assert report is not None
         assert report.soliton_order > 0
+
+    def test_propagate_emits_preflight_warnings(self, omega0):
+        """propagate() emits UserWarning when check_phase_matching=True and coverage fails."""
+        import warnings
+        from photonics_helper.gnlse import GNLSESolver, FiberProfile
+        from photonics_helper.pulse import Envelope, Wave, TemporalGrid
+        from photonics_helper.fiber import Dispersion
+        from photonics_helper.base import Wavelength, Area, Length, Time
+
+        t0 = 0.05e-12
+        N = 1024
+        dt = 4 * t0 / N
+        t = np.arange(-N // 2, N // 2) * dt
+        envelope_field = np.exp(-t**2 / (2 * t0**2))
+
+        Tmax = N * dt
+        grid = TemporalGrid(N=N, Tmax=Time(Tmax, "s"))
+        central_wl = Wavelength(1550, "nm")
+        pulse = Wave(
+            grid=grid,
+            envelope=Envelope(shape="gaussian", peak_amplitude=np.sqrt(1000), pulse_width=Time(0.05, "ps")),
+            central_wavelength=central_wl,
+        )
+        pulse._pulse_train_field = envelope_field
+
+        fiber = FiberProfile(n2=2.6e-20, alpha=0.0, A_eff=Area(80, "um^2"), length=Length(0.01, "m"))
+        betas = np.array([-20e-24 * 1e24, 0.1e27 * 1e24])
+
+        wl = np.linspace(1540, 1560, 21)
+        disc = Dispersion(
+            wavelengths=WavelengthArray(wl, "nm"),
+            values=np.full(21, -100.0 * 1e-6),
+            unit="s/m^2",
+            central_wavelength=Wavelength(1550, "nm"),
+        )
+
+        solver = GNLSESolver(pulse, fiber, betas, check_phase_matching=True, include_raman=False)
+        solver._preflight_report = None
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            assess = __import__(
+                "photonics_helper.phase_matching",
+                fromlist=["assess_simulation_readiness"],
+            ).assess_simulation_readiness(pulse, fiber, disc, betas=betas)
+            solver._preflight_report = assess
+            solver.propagate(num_steps=2, nsaves=2)
+            user_warnings = [w for w in caught if issubclass(w.category, UserWarning)]
+        assert any("does not cover" in str(w.message) for w in user_warnings)
 
     def test_warning_emitted_on_clip(self, omega0):
         """UserWarning emitted when grid frequencies are clipped."""

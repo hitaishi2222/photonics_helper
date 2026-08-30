@@ -118,13 +118,13 @@ class Dispersion:
 
         if len(neff) != len(wavelengths.value):  # type: ignore[arg-type]
             raise ValueError("Length of both neff and wavelengths should be same")
-        wl = wavelengths.to_equally_spaced()
-        interp = make_splrep(wavelengths.as_m, neff)(wl)
+        wl_eq = wavelengths.to_equally_spaced()
+        interp = make_splrep(wavelengths.as_m, neff)(wl_eq)
 
-        spline = make_splrep(wl, interp)
+        spline = make_splrep(wl_eq, interp)
         diff_2 = spline.derivative(2)
 
-        dispersion: NDArray = -wavelengths.as_m / C_MS * diff_2(wavelengths.as_m)
+        dispersion: NDArray = -wl_eq / C_MS * diff_2(wl_eq)
 
         smooth_fit = np.all(np.diff(dispersion * 1e6) < 50)
         if not smooth_fit:
@@ -132,11 +132,11 @@ class Dispersion:
                 "Bad fitting of neff values. Consider building Disperison in other ways..."
             )
             if not ignore_fit_error:
-                raise ChildProcessError(
+                raise ValueError(
                     "Can't perform numerical differentiation with small error..."
                 )
         return cls(
-            wavelengths=wavelengths,
+            wavelengths=WavelengthArray(wl_eq, "m"),
             values=dispersion,
             unit="s/m^2",
             central_wavelength=central_wavelength,
@@ -181,7 +181,7 @@ class Dispersion:
                 "Bad fitting of neff values. Consider building Disperison in other ways..."
             )
             if not ignore_fit_error:
-                raise ChildProcessError(
+                raise ValueError(
                     "Can't perform numerical differentiation with small error..."
                 )
         return cls(
@@ -287,8 +287,8 @@ class PropagationConstant:
     @classmethod
     def beta_from_neff(
         cls, neff: NDArray, x_values: WavelengthArray | AngularFrequencyArray
-    ):
-        """Compute β = neff × ω / c from effective index."""
+    ) -> Self:
+        """Compute β = neff × ω / c and return a ``PropagationConstant``."""
         if not isinstance(x_values, (WavelengthArray, AngularFrequencyArray)):
             raise TypeError(
                 "x_values should be a type of either `WavelengthArray` or `AngularFrequencyArray`"
@@ -298,11 +298,11 @@ class PropagationConstant:
 
         if isinstance(x_values, WavelengthArray):
             omegas = x_values.to_omega()
-        elif isinstance(x_values, AngularFrequencyArray):
+        else:
             omegas = x_values
 
-        beta2 = neff * omegas.as_rad_s / C_MS
-        return beta2
+        betas = neff * omegas.as_rad_s / C_MS
+        return cls(values=betas, x_values=x_values)
 
     @classmethod
     def from_neff_omega(cls, neff: NDArray, omega: AngularFrequencyArray) -> Self:

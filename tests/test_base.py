@@ -154,6 +154,19 @@ def test_scalar_units_consistency():
 # ─── to_equally_spaced ───────────────────────────────────────────────
 
 
+def test_wavelength_array_sequence_protocol():
+    wl = WavelengthArray(np.array([1500.0, 1600.0, 1700.0]), "nm")
+    assert len(wl) == 3
+    assert wl[0].as_nm == pytest.approx(1500.0)
+    assert wl[1].as_nm == pytest.approx(1600.0)
+    indexed = wl[1:3]
+    assert len(indexed) == 2
+    assert indexed[0].as_nm == pytest.approx(1600.0)
+    from_wls = WavelengthArray.from_wavelengths([Wavelength(1300, "nm"), Wavelength(1400, "nm")])
+    assert len(from_wls) == 2
+    assert from_wls[1].as_nm == pytest.approx(1400.0)
+
+
 def test_wavelength_array_equally_spaced():
     wl = WavelengthArray(np.array([1500.0, 1600.0]), "nm")
     eq = wl.to_equally_spaced(points=51)

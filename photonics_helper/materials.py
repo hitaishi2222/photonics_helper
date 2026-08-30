@@ -13,9 +13,6 @@ from pydantic import model_validator
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.interpolate import make_splrep
-from rich.traceback import install
-
-install()
 
 
 @dataclass(config={"arbitrary_types_allowed": True})

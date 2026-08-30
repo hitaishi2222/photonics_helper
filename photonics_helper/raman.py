@@ -1202,6 +1202,23 @@ class RamanDatabase:
 
         conn.commit()
         conn.close()
+        self._seed_if_empty()
+
+    def _seed_if_empty(self) -> None:
+        """Populate an empty user-home DB from RAMAN_MATERIALS (not test/temp paths)."""
+        if self.list_materials():
+            return
+        db_path = Path(self.db_path).resolve()
+        bundled = Path(__file__).parent / "materials.db"
+        if bundled.exists() and db_path == bundled.resolve():
+            return
+        home_db = Path.home() / ".photonics_helper" / "materials.db"
+        if db_path != home_db.resolve():
+            return
+        for data in RAMAN_MATERIALS.values():
+            self.add_material(data)
+        for data in THORLABS_SUBSTRATE_MATERIALS.values():
+            self.add_material(data)
 
     def add_material(self, spec: dict) -> None:
         """INSERT or REPLACE a material entry.

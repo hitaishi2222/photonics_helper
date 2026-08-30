@@ -115,3 +115,21 @@ def test_field_profile_length(simple_pattern: Pattren):
     # Pattern "AB" has two layers.
     assert field.shape[0] == 2
     assert np.all(field >= 0)
+
+
+def test_repeated_style_clones_blocks(simple_pattern: Pattren):
+    """Repeated style letters must not alias the same Block instance."""
+    mat_a = _simple_material("mat_a", 2.0)
+    mat_b = _simple_material("mat_b", 1.0)
+    block_a = Block(length=Length(100e-9, "m"), material=mat_a, colour="red")
+    block_b = Block(length=Length(200e-9, "m"), material=mat_b, colour="blue")
+    pattern = Pattren(
+        style="ABAB",
+        mapping={"A": block_a, "B": block_b},
+        central_wavelength=Wavelength(1550, "nm"),
+    )
+    assert len(pattern.out) == 4
+    assert pattern.out[0] is not pattern.out[2]
+    assert pattern.out[1] is not pattern.out[3]
+    positions = [block.position for block in pattern.out]
+    assert positions == [(0.0, 1e-7), (1e-7, 3e-7), (3e-7, 4e-7), (4e-7, 6e-7)]

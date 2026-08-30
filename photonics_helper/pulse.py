@@ -2,7 +2,7 @@ from __future__ import annotations
 from pydantic.dataclasses import dataclass
 from math import sqrt, log, acosh, pi
 from typing import Any, Callable, Dict, Literal, Self
-from functools import cached_property
+from functools import cached_property, lru_cache
 import logging
 from matplotlib import gridspec
 from numpy.typing import NDArray
@@ -23,6 +23,7 @@ SHAPE_FACTORS: Dict[str, float] = {
 }
 
 
+@lru_cache(maxsize=1)
 def _airy_fwhm_roots() -> tuple[float, float]:
     """Half-maximum crossings of the Airy-pulse main lobe |Ai(−x)|².
 
@@ -249,7 +250,7 @@ class Envelope:
 
         Returns
         -------
-        width : Time — pulse width in picoseconds.
+        width : Time — pulse width in seconds (use ``.as_ps`` etc. for display units).
         """
         grid = self._make_grid()
         return Time(_crossing_width(grid.t, self.intensity(grid.t), level), "s")
@@ -332,7 +333,10 @@ class Envelope:
             # dispersion ratios may require passing a larger N explicitly.
             half_span = 8.0 * sqrt(dt_rms**2 + delay_s**2) + 5.0 * T0
             n_needed = int(np.ceil((2.0 * half_span) / (T0 / 8.0)))
-            n_fft = max(N, 1 << max(n_needed - 1, 0).bit_length())
+            if n_needed > 1:
+                n_fft = max(N, 1 << (n_needed - 1).bit_length())
+            else:
+                n_fft = N
             n_fft = min(n_fft, 2**22)
             grid = TemporalGrid(N=n_fft, Tmax=Time(2.0 * half_span, "s"))
             t = grid.t
@@ -1108,7 +1112,7 @@ class Wave:
 
         Returns
         -------
-        width : Time — pulse width in picoseconds.
+        width : Time — pulse width in seconds (use ``.as_ps`` etc. for display units).
         """
         return Time(_crossing_width(self.grid.t, self.envelope_intensity, level), "s")
 

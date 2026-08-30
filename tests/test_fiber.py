@@ -143,8 +143,8 @@ def test_propagation_constant_beta_from_neff():
 
     expected_beta = neff * omega_arr.as_rad_s / C_MS
 
-    beta = PropagationConstant.beta_from_neff(neff=neff, x_values=wl_arr)
-    np.testing.assert_allclose(beta, expected_beta, rtol=1e-12)
+    beta_pc = PropagationConstant.beta_from_neff(neff=neff, x_values=wl_arr)
+    np.testing.assert_allclose(beta_pc.values, expected_beta, rtol=1e-12)
 
 
 def test_propagation_constant_from_neff_omega_error_handling():

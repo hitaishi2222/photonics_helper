@@ -162,6 +162,37 @@ def kerr_step(
     return A * phase
 
 
+def _raman_polarization(
+    intensity: NDArray,
+    fR: float,
+    grid: "TemporalGrid",
+    h_R_fft: NDArray | None,
+) -> NDArray:
+    """Compute Raman nonlinear polarization P_NL = (1-fR)|A|² + fR·(h_R ⊗ |A|²).
+
+    Shared helper used by both `raman_step` (standalone) and
+    `SplitStepEngine._nl_intensity` (cached engine path).
+
+    Parameters
+    ----------
+    intensity : |A(t)|² on the simulation grid.
+    fR : float — Raman fraction.
+    grid : TemporalGrid — time grid for FFT.
+    h_R_fft : FFT of h_R(t) on ``grid.t``, or None when Raman is off.
+
+    Returns
+    -------
+    P_NL : Nonlinear driving intensity for Kerr+Raman phase.
+    """
+    P_inst = (1.0 - fR) * intensity
+    if h_R_fft is not None:
+        I_fft = grid.fft(intensity)
+        P_delayed = fR * np.real(grid.ifft(h_R_fft * I_fft))
+    else:
+        P_delayed = np.zeros_like(intensity)
+    return P_inst + P_delayed
+
+
 def raman_step(
     A: NDArray,
     fiber: "FiberProfile",
@@ -182,6 +213,7 @@ def raman_step(
     grid : TemporalGrid — time grid.
     dz : float — step size (m).
     include_raman : bool — whether to include Raman.
+    omega0 : float — carrier angular frequency (rad/s).
 
     Returns
     -------
@@ -201,26 +233,19 @@ def raman_step(
         )
 
     intensity = np.abs(A) ** 2
+    if not hasattr(fiber.raman_response, "fR"):
+        raise ValueError(
+            "fiber.raman_response must define fR when include_raman=True"
+        )
+    fR = fiber.raman_response.fR
 
-    fR = fiber.raman_response.fR if hasattr(fiber.raman_response, 'fR') else 0.18
-
-    P_inst = (1.0 - fR) * intensity
-
+    # Compute h_R_fft on the fly (no cache available for standalone function)
+    h_R_fft = None
     if hasattr(fiber.raman_response, '_h_R'):
-        # h_R must be evaluated on the SAME centered time grid as the field.
-        # Using np.arange(N)*dt (uncentered) while intensity is on grid.t
-        # (centered) corrupts the circular convolution.
         h_R = fiber.raman_response._h_R(grid.t)  # causal: h_R[t<0] = 0
-
-        # Circular convolution via the same grid.fft/ifft convention as the
-        # linear and shock steps (dt scaling cancels in fft → ifft).
         h_R_fft = grid.fft(h_R)
-        I_fft = grid.fft(intensity)
-        P_delayed = fR * np.real(grid.ifft(h_R_fft * I_fft))
-    else:
-        P_delayed = np.zeros_like(intensity)
 
-    P_Raman = P_inst + P_delayed
+    P_Raman = _raman_polarization(intensity, fR, grid, h_R_fft)
 
     gamma = _gamma(fiber.n2, omega0, fiber.A_eff, fiber.confinement_factor)
     raman_phase = np.exp(1j * gamma * P_Raman * dz)
@@ -249,14 +274,24 @@ def tpa_step(
     dz : float — step size (m).
     include_tpa : bool — whether to include TPA.
     U : float — current carrier density (W⁻¹·m⁻³). Default 0.
+    omega0 : float — carrier angular frequency (rad/s). Required when include_tpa=True.
 
     Returns
     -------
     A : updated complex array.
     U_new : updated carrier density.
+
+    Raises
+    ------
+    ValueError : if include_tpa=True and omega0 <= 0.
     """
     if not include_tpa:
         return A, U
+
+    if omega0 <= 0:
+        raise ValueError(
+            "tpa_step: omega0 (carrier angular frequency in rad/s) is required when include_tpa=True"
+        )
 
     sigma = fiber.sigma_tpa
     tau_c = fiber.carrier_lifetime.as_s if fiber.carrier_lifetime is not None else 1e-9
@@ -264,13 +299,8 @@ def tpa_step(
     if sigma <= 0:
         return A, U
 
-    # Use actual carrier frequency if provided, else default 1064 nm
     hbar = 1.0545718e-34  # J·s
-    if omega0 > 0:
-        hbar_omega = hbar * omega0
-    else:
-        omega0_placeholder = 2 * np.pi * C_MS / (1064e-9)  # ~1064 nm default
-        hbar_omega = hbar * omega0_placeholder
+    hbar_omega = hbar * omega0
 
     # Intensity |A|^2 (W/m² for proper TPA)
     intensity = np.abs(A) ** 2
@@ -479,10 +509,7 @@ class SplitStepEngine:
         """
         if h_R_fft is not None:
             fR = self.fiber.raman_response.fR  # type: ignore[union-attr]
-            P_inst = (1.0 - fR) * intensity
-            I_fft = self.grid.fft(intensity)
-            P_delayed = fR * np.real(self.grid.ifft(h_R_fft * I_fft))
-            return P_inst + P_delayed
+            return _raman_polarization(intensity, fR, self.grid, h_R_fft)
         return intensity
 
     def _get_h_R_fft(self) -> NDArray:
@@ -762,9 +789,10 @@ class SplitStepEngine:
             Wave(grid=self.grid, envelope=self.pulse.envelope, central_wavelength=self.pulse.central_wavelength)
         )
 
-        # Termination tolerance: must be >> 1 ulp of `length` so that
-        # `z + (length - z)` cannot round back to `z` (float limit-cycle hang).
-        z_tol = 1e-9 * max(length, 1.0)
+        # Termination tolerance: relative to fiber length with absolute floor.
+        # Prevents infinite loop when shrink × remaining < ½ ulp(z).
+        # For short fibers (<1 m), uses relative tolerance instead of fixed 1 nm.
+        z_tol = max(1e-15, length * 1e-9)
 
         while z < length:
             remaining = length - z
@@ -930,6 +958,13 @@ class GNLSESolver:
         self, num_steps: int = 100, *, nsaves: int | None = None, show_progress: bool = False
     ) -> None:
         """Run split-step simulation for num_steps steps."""
+        if self.check_phase_matching:
+            from .phase_matching import emit_readiness_warnings
+
+            report = self.preflight_report
+            if report is not None:
+                emit_readiness_warnings(report)
+
         engine = SplitStepEngine(
             pulse=self.pulse,
             fiber=self.fiber,
@@ -1175,6 +1210,13 @@ class TaperedGNLSESolver:
                         f"Bounds: [{omega_min:.2e}, {omega_max:.2e}] rad/s. "
                         f"Reduce bandwidth or use broader dispersion table."
                     )
+
+        if self.check_phase_matching:
+            from .phase_matching import emit_readiness_warnings
+
+            report = self.preflight_report
+            if report is not None:
+                emit_readiness_warnings(report)
 
         # Use a dummy betas array — the z-dependent path ignores it.
         dummy_betas = np.array([0.0])
