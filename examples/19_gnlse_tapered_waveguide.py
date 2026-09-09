@@ -270,7 +270,7 @@ def main():
 
     # ── Pulse ────────────────────────────────────────────────────────
     pulse = make_pulse(central_wl_nm=1550, T0_fs=500, peak_power_W=2000)
-    print(f"\nPulse: 1550 nm, 500 fs, 2 kW peak power")
+    print("\nPulse: 1550 nm, 500 fs, 2 kW peak power")
     print(f"  Temporal window: {pulse.grid.Tmax.as_s * 1e12:.2f} ps")
     print(f"  Samples: N = {pulse.grid.N}")
 
@@ -430,7 +430,7 @@ def main():
     os.makedirs("examples/images", exist_ok=True)
     plt.savefig("examples/images/19_gnlse_tapered_waveguide.png",
                 dpi=150, bbox_inches="tight")
-    print(f"\nSaved: examples/images/19_gnlse_tapered_waveguide.png")
+    print("\nSaved: examples/images/19_gnlse_tapered_waveguide.png")
     plt.close()
 
     # ── Summary ──────────────────────────────────────────────────────
@@ -443,7 +443,7 @@ def main():
     if len(valid_zdw) >= 2:
         print(f"  ZDW migration: {valid_zdw[0]:.0f} → {valid_zdw[-1]:.0f} nm (1100→1750 nm taper)")
     print(f"  Energy drift: {drift:.4f}%")
-    print(f"  All checks passed ✓")
+    print("  All checks passed ✓")
 
 
 if __name__ == "__main__":

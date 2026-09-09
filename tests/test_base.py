@@ -205,14 +205,12 @@ def test_wavenumber_array_equally_spaced():
 
 
 def test_permittivity_from_relative():
-    from photonics_helper.base import Permittivity
 
     p = Permittivity.from_relative(1.0)
     assert pytest.approx(p) == EPS_0
 
 
 def test_permiability_from_relative():
-    from photonics_helper.base import Permiability
 
     p = Permiability.from_relative(1.0)
     assert pytest.approx(p) == MU_0

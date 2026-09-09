@@ -182,7 +182,6 @@ def main():
         # Only show frequencies within ±10 THz
         mask = np.abs(freq_THz) < 10
         freq_plot = freq_THz[mask]
-        spectra_plot = spectra_sorted[:, mask]
 
         axes[idx].pcolormesh(
             freq_plot,
@@ -232,7 +231,7 @@ def main():
         I = np.abs(wave.envelope_field) ** 2
         return np.sqrt(np.sum(t**2 * I) / np.sum(I))
 
-    print(f"\n— Pulse width evolution —")
+    print("\n— Pulse width evolution —")
     w0 = pulse_width(pulse)
     print(f"Input:  {w0*1e12:.2f} ps")
     print(

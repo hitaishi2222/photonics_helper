@@ -3,7 +3,6 @@ from typing import Literal, Self
 from functools import cached_property
 from numpy.typing import NDArray, ArrayLike
 
-import numpy as np
 from pydantic.dataclasses import dataclass
 
 PI: float

@@ -18,13 +18,12 @@ import matplotlib
 matplotlib.use("Agg")  # Non-interactive backend for CI compatibility
 import matplotlib.pyplot as plt
 
-from photonics_helper.base import Time, Wavelength, Frequency
+from photonics_helper.base import Time, Wavelength
 from photonics_helper.pulse import (
     SHAPE_FACTORS,
     Envelope,
     TemporalGrid,
     Wave,
-    FROGTrace,
     generate_trace,
     retrieve,
     fidelity,
@@ -117,7 +116,7 @@ def example_gaussian_chirp_sweep():
     ax.legend()
     ax.grid(True, alpha=0.3)
     fig.savefig("examples/images/16_chirp_sweep.png", dpi=150, bbox_inches="tight")
-    print(f"Saved: examples/images/16_chirp_sweep.png")
+    print("Saved: examples/images/16_chirp_sweep.png")
 
 
 # ─── Example 2: TBP Comparison Table ───────────────────────────────
@@ -238,8 +237,8 @@ def example_frog_retrieval():
     # so FWHM errors of ~30-50% are expected even with fidelity ≈ 1.0.
     # See Reid et al., Opt. Commun. 181, 73 (2000) for discussion.
     # Fidelity > 0.99 is the correct quality metric, not FWHM match.
-    print(f"\nNote: FWHM errors of ~30-50% are typical for PCGPA (algorithm bias toward E²).")
-    print(f"Fidelity > 0.99 is the correct quality metric (Reid et al., Opt. Commun. 181, 73 (2000)).")
+    print("\nNote: FWHM errors of ~30-50% are typical for PCGPA (algorithm bias toward E²).")
+    print("Fidelity > 0.99 is the correct quality metric (Reid et al., Opt. Commun. 181, 73 (2000)).")
     all_pass = all(f > 0.99 for f in results)
     print(f"All retrievals passed (>0.99 fidelity): {'✓' if all_pass else '✗'}")
 
@@ -278,11 +277,11 @@ def example_parabolic_pulse():
             pulse_width=T0,
             chirp=alpha_theory,
         )
-        wave = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(800, "nm"))
+        Wave(grid=grid, envelope=env, central_wavelength=Wavelength(800, "nm"))
 
         print(f"{g0z:8.3f}  {alpha_theory:10.4f}  {alpha_theory:10.4f}")
 
-    print(f"\n✓ Code uses α = 0.2726 · g₀ · z (Gordon 2004)")
+    print("\n✓ Code uses α = 0.2726 · g₀ · z (Gordon 2004)")
 
 
 # ─── Example 5: Airy Pulse Acceleration ────────────────────────────

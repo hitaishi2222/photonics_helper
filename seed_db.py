@@ -3,7 +3,13 @@
 
 Run from the project root:
     python seed_db.py          # seeds raman_specs (existing)
-    python seed_db.py --nk     # also seeds nk_data + sellmeier tables
+    python seed_db.py --nk     # seeds sellmeier + tabulated nk_data
+
+With ``--nk`` the seeder also loads ``nk_datasets/manifest.json`` (produced by
+``nk_datasets/collect.py`` from refractiveindex.info) and populates the
+tabulated ``nk_data`` table (n, k vs wavelength) with per-source provenance and
+citations. This second step is idempotent: previously seeded tabulated rows are
+cleared and re-inserted from the manifest on each run.
 """
 
 import argparse
@@ -347,6 +353,60 @@ def seed_nk_data(db: RamanDatabase) -> None:
     print(f"\nDone. {count} Sellmeier coefficients seeded.")
 
 
+MANIFEST_PATH = Path(__file__).parent / "nk_datasets" / "manifest.json"
+
+
+def seed_tabulated_nk(db: RamanDatabase, manifest_path: Path = MANIFEST_PATH) -> None:
+    """Seed tabulated nk_data from the refractiveindex.info manifest.
+
+    The run is idempotent: all previously seeded (attributed) tabulated rows
+    are cleared first, then re-inserted from the manifest. Sellmeier data is a
+    separate table and is left untouched. Datasets that fail validation are
+    logged and skipped rather than partially seeded.
+    """
+    from photonics_helper.materials import validate_nk_dataset
+
+    if not manifest_path.exists():
+        print(f"Warning: manifest not found at {manifest_path}")
+        return
+
+    import json
+
+    data = json.loads(manifest_path.read_text())
+    entries = data.get("datasets", [])
+
+    print("\nSeeding tabulated nk_data from manifest...")
+    removed = db.clear_all_tabulated_nk()
+    if removed:
+        print(f"  Cleared {removed} stale tabulated row(s).")
+
+    seeded = 0
+    skipped = 0
+    for entry in entries:
+        errors = validate_nk_dataset(entry)
+        if errors:
+            print(f"  Skip {entry.get('source', '?')}: {'; '.join(errors)}")
+            skipped += 1
+            continue
+        for wl, n, k in zip(
+            entry["wavelengths"], entry["n"], entry["k"]
+        ):
+            db.add_nk_data(
+                material=entry["material"],
+                wl_um=wl,
+                n=n,
+                k=k,
+                source=entry["source"],
+                citation=entry.get("citation") or "",
+            )
+        seeded += 1
+    total_rows = 0
+    for entry in entries:
+        if validate_nk_dataset(entry) == []:
+            total_rows += len(entry["wavelengths"])
+    print(f"Done. {seeded} datasets, {total_rows} tabulated rows seeded; {skipped} skipped.")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Seed materials.db")
     parser.add_argument("--nk", action="store_true", help="Also seed nk_data + sellmeier tables")
@@ -376,6 +436,7 @@ def main():
             return
 
         seed_nk_data(db)
+        seed_tabulated_nk(db)
 
 
 if __name__ == "__main__":

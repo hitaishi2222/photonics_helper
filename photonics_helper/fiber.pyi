@@ -3,7 +3,7 @@ from photonics_helper.base import AngularFrequencyArray, Wavelength, WavelengthA
 from functools import cached_property
 from numpy.typing import NDArray
 from typing import Literal, Self, Tuple
-from scipy.interpolate import BSpline, RegularGridInterpolator
+from scipy.interpolate import BSpline
 from pydantic import model_validator
 from pydantic.dataclasses import dataclass
 

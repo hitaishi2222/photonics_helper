@@ -1,7 +1,6 @@
 """Tests for SolitonAnalyzer class."""
 
 import numpy as np
-import pytest
 import matplotlib
 matplotlib.use("Agg")  # Non-interactive backend for tests
 import matplotlib.pyplot as plt
@@ -130,10 +129,7 @@ def test_nonlinear_length_formula():
 
 def test_fission_length_formula():
     """Task 3.6: L_fiss = L_D / (N * eta)."""
-    L_D = 3.33e-3
-    N = 2.0
     eta = 0.7
-    L_fiss_expected = L_D / (N * eta)
 
     analyzer = _make_analyzer_manual(T0_s=100e-15, P_peak_w=1.0, gamma_val=0.07,
                                      beta2_si=-3e-24)
@@ -221,7 +217,6 @@ def test_waveguide_confinement_factor():
 def _make_solver(T0_s=100e-15, P_peak=1.0, gamma_val=0.07, beta2_si=-2e-27,
                  beta3_si=0.0, n_steps=5):
     """Helper to create a minimal GNLSESolver-like object for visualization tests."""
-    from photonics_helper.gnlse import GNLSESolver
     grid = TemporalGrid(N=256, Tmax=Time(20e-12, "s"))
     env = Envelope(shape="sech", peak_amplitude=1.0, pulse_width=Time(T0_s, "s"))
     pulse = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(1550, "nm"))

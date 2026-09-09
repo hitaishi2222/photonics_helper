@@ -81,7 +81,6 @@ def main():
     # ── Parameters ──────────────────────────────────────────────────────────
     central_wl = Wavelength(1064, "nm")
     T0 = Time(200, "fs")
-    grid = TemporalGrid(N=2**11, Tmax=Time(10 * T0.as_s, "s"))
 
     # Fiber: anomalous dispersion, silica-like gamma
     n2 = 2.6e-20
@@ -252,7 +251,7 @@ def main():
 
     # ── Summary ─────────────────────────────────────────────────────────────
 
-    print(f"\n— Soliton parameters —")
+    print("\n— Soliton parameters —")
     print(f"Dispersion length L_D = T₀²/|β₂| = {L_D.as_m*1e3:.1f} mm")
     print(f"Nonlinear length L_NL = 1/(γ·P₀) = {1/(gamma*P0_N1)*1e3:.1f} mm")
     N1 = compute_soliton_order(beta2_si, gamma, T0.as_s, P0_N1)

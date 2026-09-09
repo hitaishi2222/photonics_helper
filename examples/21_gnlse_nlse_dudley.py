@@ -240,7 +240,7 @@ def main() -> None:
         print(f"  Adaptive dz limit    : {dz_adaptive:.3e} m")
     print(f"  Mean step dz         : {dz_base:.3e} m")
     print(f"  Est. snapshot RAM    : ~{mem_gb * 1000:.0f} MB")
-    print(f"  Self-steepening      : ON (matches laserfun shock=True)")
+    print("  Self-steepening      : ON (matches laserfun shock=True)")
     print()
 
     # include_self_steepening=True: matches laserfun's default shock=True so

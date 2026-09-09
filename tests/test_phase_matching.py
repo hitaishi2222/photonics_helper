@@ -209,7 +209,7 @@ class TestFWM:
 
     def test_scan_fwm_returns_phase_match_result(self, omega0, beta2, gamma, P_pump):
         """scan_fwm_detuning returns PhaseMatchResult with correct shape."""
-        from photonics_helper.phase_matching import scan_fwm_detuning, DispersionAdaptor
+        from photonics_helper.phase_matching import scan_fwm_detuning
 
         beta_fn = make_beta2_only(beta2, omega0)
         omega_signal_grid = np.linspace(omega0 - 2e13, omega0 + 2e13, 51)
@@ -380,7 +380,7 @@ class TestSimulationReadiness:
         N = 2048
         Tmax = 4 * t0  # total window
         grid = TemporalGrid(N=N, Tmax=Time(Tmax, "s"))
-        envelope = np.exp(-grid.t**2 / (2 * t0**2)) * np.sqrt(power_W)
+        np.exp(-grid.t**2 / (2 * t0**2)) * np.sqrt(power_W)
 
         central_wl = Wavelength(2 * PI * C_MS / omega0 * 1e9, "nm")
 
@@ -638,7 +638,7 @@ class TestSolverIntegration:
             central_wavelength=1550e-9,
         )
 
-        with warnings.catch_warnings(record=True) as w:
+        with warnings.catch_warnings(record=True):
             warnings.simplefilter("always")
             solver = TaperedGNLSESolver(
                 pulse, fiber, zd,
@@ -647,7 +647,6 @@ class TestSolverIntegration:
             )
             solver.propagate(num_steps=5)
             # Check if any warning was emitted
-            user_warnings = [x for x in w if issubclass(x.category, UserWarning)]
             # There should be at least one warning about clipping
             # (the pulse is very short so spectrum is very wide)
             # We just check it doesn't crash
@@ -815,7 +814,7 @@ class TestVisualization:
         matplotlib.use("Agg")
 
         from photonics_helper.phase_matching import (
-            scan_fwm_detuning, plot_fwm_efficiency, PhaseMatchResult,
+            scan_fwm_detuning, plot_fwm_efficiency,
         )
 
         beta_fn = make_beta2_only(beta2, omega0)
@@ -928,6 +927,5 @@ class TestVisualization:
 
 
 # ============================================================================
-# Import Time for tests
+# NOTE: `Time` is imported locally inside each test method that needs it.
 # ============================================================================
-from photonics_helper.base import Time

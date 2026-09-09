@@ -487,7 +487,6 @@ class ZDependentDispersion:
         # Convert to meters if needed (detect by checking magnitude)
         cw = float(central_wavelength)
         if cw > 1.0:  # Likely in micrometers
-            cw_um = cw
             cw = cw * 1e-6  # Convert to meters
         return cls(
             omegas=np.asarray(omegas, dtype=float),

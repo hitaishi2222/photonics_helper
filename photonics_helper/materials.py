@@ -4,7 +4,7 @@ from scipy.interpolate import BSpline
 import warnings
 from .base import PI, WavelengthArray
 
-from typing import List, Self, Tuple
+from typing import TYPE_CHECKING, Any, cast, List, Literal, Self, Tuple
 from numpy.typing import ArrayLike, NDArray
 from functools import cached_property
 from pydantic.dataclasses import dataclass
@@ -13,6 +13,111 @@ from pydantic import model_validator
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.interpolate import make_splrep
+
+# ``RamanDatabase`` is imported lazily inside methods to avoid a circular
+# import (``raman`` imports ``materials`` at runtime). It is only referenced
+# in type annotations here, so a ``TYPE_CHECKING`` guard is sufficient and adds
+# no runtime import.
+if TYPE_CHECKING:
+    from .raman import RamanDatabase
+
+# ─── Known materials ─────────────────────────────────────────────────────────
+# Canonical material names stored in ``materials.db`` (the ``raman_specs`` table).
+# Exposed as a constant plus a ``Literal`` alias so callers get IDE
+# autocompletion and can catch typos at type-check time.
+NK_MATERIALS: tuple[str, ...] = (
+    "AgGaS2", "AgGaSe2", "Al2O3", "AlGaAs", "AlN", "As2S3", "As2Se3", "BaF2",
+    "BaTiO3", "CaF2", "CdS", "CdTe", "Diamond", "F2", "Ga2O3", "GaAs", "GaN",
+    "Ge", "GeAsSe", "GeO2", "InGaAs", "InP", "KBr", "KTP", "LBO", "LiNbO3",
+    "LiTaO3", "MgF2", "N-BK7", "N-F2", "N-SF11", "PMMA", "Si", "Si3N4",
+    "SiC_4H", "Silica", "YAG", "YLF", "YVO4", "ZBLAN", "Zerodur", "ZnO",
+    "ZnSe",
+)
+
+# A material name known to the database. Use this instead of ``str`` for the
+# base-material parameters so unknown/misspelled names are caught by type checkers.
+NKMaterial = Literal[
+    "AgGaS2", "AgGaSe2", "Al2O3", "AlGaAs", "AlN", "As2S3", "As2Se3", "BaF2",
+    "BaTiO3", "CaF2", "CdS", "CdTe", "Diamond", "F2", "Ga2O3", "GaAs", "GaN",
+    "Ge", "GeAsSe", "GeO2", "InGaAs", "InP", "KBr", "KTP", "LBO", "LiNbO3",
+    "LiTaO3", "MgF2", "N-BK7", "N-F2", "N-SF11", "PMMA", "Si", "Si3N4",
+    "SiC_4H", "Silica", "YAG", "YLF", "YVO4", "ZBLAN", "Zerodur", "ZnO",
+    "ZnSe",
+]
+
+# Minimum number of points required for a cubic spline to be meaningful.
+_MIN_POINTS = 4
+
+
+def validate_nk_dataset(entry: Any) -> list[str]:
+    """Validate a tabulated n/k dataset record.
+
+    This is the single shared gate used both by the collector
+    (``nk_datasets/collect.py``) and by the database seeder (``seed_db.py``) so
+    that invalid datasets are rejected in exactly one place.
+
+    The validator inspects a manifest-style dataset record::
+
+        {
+            "material": "Si",
+            "source": "si-aspnes",
+            "citation": "...",
+            "wavelengths": [...],   # um, strictly increasing
+            "n": [...],
+            "k": [...],
+        }
+
+    and returns a list of human-readable error strings. An empty list means the
+    dataset is valid and may be seeded.
+    """
+    errors: list[str] = []
+
+    wl = np.asarray(entry.get("wavelengths", []), dtype=float)
+    n = np.asarray(entry.get("n", []), dtype=float)
+    k = np.asarray(entry.get("k", []), dtype=float)
+    source = entry.get("source")
+    citation = entry.get("citation")
+    material = entry.get("material")
+
+    # Lengths.
+    if not (len(wl) == len(n) == len(k)):
+        errors.append(
+            f"wavelength/n/k length mismatch: {len(wl)}/{len(n)}/{len(k)}"
+        )
+        return errors
+
+    # Presence / attribution (the user's requirement: keep the references).
+    if not material:
+        errors.append("missing material")
+    if not source:
+        errors.append("missing source (material–author provenance)")
+    if not citation:
+        errors.append("missing citation (reference for the n, k values)")
+
+    # Point count.
+    if len(wl) < _MIN_POINTS:
+        errors.append(f"fewer than {_MIN_POINTS} points ({len(wl)})")
+        return errors
+
+    # Finiteness.
+    if not (np.all(np.isfinite(wl)) and np.all(np.isfinite(n)) and np.all(np.isfinite(k))):
+        errors.append("contains non-finite (NaN/inf) values")
+
+    # Monotonic, strictly increasing, positive wavelength grid.
+    if np.any(np.diff(wl) <= 0):
+        errors.append("wavelengths are not strictly increasing")
+    if wl.min() <= 0:
+        errors.append("wavelength grid contains non-positive values")
+
+    # Physical sanity: extinction must be non-negative and the real part must
+    # exceed vacuum (n > 1) somewhere — a solid that never refracts more than
+    # vacuum is not physical.
+    if np.any(k < 0):
+        errors.append("extinction coefficient k is negative somewhere")
+    if np.all(n <= 1.0):
+        errors.append("real refractive index n <= 1 across the whole range")
+
+    return errors
 
 
 @dataclass(config={"arbitrary_types_allowed": True})
@@ -229,12 +334,69 @@ class RefractiveIndex:
         return cls(n=np.array(n), k=k, wl=wls)
 
     @classmethod
+    def _resolve_canonical_name(cls, prefix: str, db: "RamanDatabase") -> str | None:
+        """Resolve a (possibly lower-cased) material prefix to its canonical
+        ``raman_specs`` name, matching case-insensitively. Returns None if no
+        material matches."""
+        for name in db.list_materials():
+            if name.lower() == prefix.lower():
+                return name
+        return None
+
+    @classmethod
+    def _from_tabulated(cls, wl_um, n, k) -> Self:
+        """Build a RefractiveIndex from tabulated (λ, n, k) arrays in μm."""
+        wls = WavelengthArray(np.asarray(wl_um, dtype=float), "um")
+        nk = np.asarray(n, dtype=float) + 1j * np.asarray(k, dtype=float)
+        return cls.from_complex(nk, wls)
+
+    @classmethod
     def from_material_database(cls, material: str, n_points: int = 200) -> Self:
-        """Build a tabulated RefractiveIndex from Sellmeier data in materials.db."""
+        """Build a RefractiveIndex from materials.db.
+
+        Resolution order:
+
+        1. If ``material`` is given as a ``material–author`` key (contains ``-``),
+           load the matching **tabulated** n/k spectrum from ``nk_data``. A
+           missing key raises ``ValueError`` (no silent Sellmeier fallback),
+           so callers are steered to the dataset browser.
+        2. Otherwise (no author requested) fall back to Sellmeier dispersion,
+           preserving the original behavior.
+        """
         from .raman import RamanDatabase
 
         db = RamanDatabase()
-        sellmeier = db.get_sellmeier(material)
+
+        # A full string that is itself a known material (e.g. "N-BK7", whose
+        # name contains a hyphen) is treated as a canonical name, not a
+        # material–author key.
+        canonical_full = cls._resolve_canonical_name(material, db)
+        if canonical_full is not None:
+            # A plain canonical material name (e.g. "N-BK7", "Silica").
+            pass
+        elif "-" in material:
+            prefix, _author = material.rsplit("-", 1)
+            canonical = cls._resolve_canonical_name(prefix, db)
+            if canonical is None:
+                raise ValueError(
+                    f"Unknown material '{prefix}' in '{material}'. "
+                    "Known materials: "
+                    f"{', '.join(db.list_materials())}"
+                )
+            wl, n_tab, k_tab = db.get_nk_by_source(
+                cast(NKMaterial, canonical), material
+            )
+            if len(wl) > 0:
+                return cls._from_tabulated(wl, n_tab, k_tab)
+            raise ValueError(
+                f"No tabulated n/k data for '{material}' in materials.db. "
+                f"Available sources for '{canonical}': "
+                f"{', '.join(db.list_nk_sources(cast(NKMaterial, canonical))) or 'none'}"
+            )
+
+        # No author requested (or unknown name): preserve legacy Sellmeier
+        # fallback so existing callers keep working.
+        sellmeier = db.get_sellmeier(cast(NKMaterial, material))
         if sellmeier is None:
             raise ValueError(f"No Sellmeier data for {material} in materials.db")
 

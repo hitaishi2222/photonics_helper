@@ -67,7 +67,6 @@ def main():
     silica = interactions["Silica"]
     t_ps = silica.grid.t * 1e12
     I_t = silica.pulse.envelope_intensity
-    R_t = silica.response.combined_response(silica.grid.t)
     P_NL = silica.nonlinear_polarization
 
     fig = silica.plot_interaction(backend="matplotlib", figsize=(12, 12))

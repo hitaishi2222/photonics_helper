@@ -17,7 +17,7 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy.signal import find_peaks
 
-from .base import C_MS, PI, AngularFrequency, Wavelength, AngularFrequencyArray
+from .base import C_MS, AngularFrequency, Wavelength, AngularFrequencyArray
 
 if TYPE_CHECKING:
     from photonics_helper.gnlse import FiberProfile, GNLSESolver
@@ -240,7 +240,6 @@ class SolitonAnalyzer:
 
         # Sort by wavelength
         sort_idx = np.argsort(wavelength)
-        wavelength_sorted = wavelength[sort_idx]
         spectrum_sorted = spectrum[sort_idx]
 
         # Normalize
@@ -450,7 +449,6 @@ def plot_raman_shift(solver: "GNLSESolver", ax=None) -> "plt.Figure":
         spectra_vs_z=solver.spectra_vs_z,
     )
     trajectories = analyzer.soliton_trajectories()
-    rate = analyzer.raman_shift_rate()
 
     if ax is None:
         fig, ax = plt.subplots(figsize=(10, 6))

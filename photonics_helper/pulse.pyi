@@ -18,7 +18,6 @@ from __future__ import annotations
 from functools import cached_property
 from typing import Callable, Literal, Self
 
-import numpy as np
 from numpy.typing import NDArray
 from matplotlib.figure import Figure
 

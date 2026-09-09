@@ -278,7 +278,6 @@ class TMM:
         n: complex = n_real + 1j * n_imag
         d: float = self.pattern.mapping[letter_asigned].length.as_m
         # Phase thickness with complex n
-        cos_theta = np.cos(self.angle_of_incidence)
         # Snell's law for complex n: sin_theta_layer = sin_incident / n
         sin_theta_layer = np.sin(self.angle_of_incidence) / n
         if np.isrealobj(sin_theta_layer):

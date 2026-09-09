@@ -1374,11 +1374,9 @@ def plot_fwm_efficiency(fwm_result: PhaseMatchResult, ax=None) -> "plt.Figure":
 
     # Convert omega to wavelength using base classes
     wl_signal = AngularFrequencyArray(fwm_result.omega_signal, "rad/s").to_wl()
-    wl_idler = AngularFrequencyArray(fwm_result.idler_omega, "rad/s").to_wl()
     wl_pump = AngularFrequency(fwm_result.pump_omega, "rad/s").to_wl()
 
     wl_signal_nm = wl_signal.as_nm
-    wl_idler_nm = wl_idler.as_nm
     wl_pump_nm = wl_pump.as_nm
 
     # Δβ plot

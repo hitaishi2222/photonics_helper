@@ -263,7 +263,7 @@ class TestRamanDatabase:
         """Test that initialization creates tables."""
         with TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "test.db"
-            db = RamanDatabase(db_path=db_path)
+            RamanDatabase(db_path=db_path)
 
             import sqlite3
             conn = sqlite3.connect(db_path)
@@ -882,7 +882,6 @@ class TestRamanResponse:
     def test_h_R_damped_oscillation(self):
         """Test that h_R(t) shows damped oscillation pattern."""
         resp = self._make_response()
-        spec = resp.spec
         t = np.linspace(0, 5e-12, 10000)
         h = resp.delayed_response(t)
 
@@ -894,7 +893,6 @@ class TestRamanResponse:
         # Check that the envelope of the last peak is smaller than the first peak
         positive_mask = h > 0
         if positive_mask.any():
-            positive_t = t[positive_mask]
             positive_h = h[positive_mask]
             # Find local maxima by checking sign changes of derivative
             dh = np.diff(positive_h)
@@ -1160,7 +1158,6 @@ class TestRamanPulseInteraction:
         """Test that P_NL has no delayed component when fR=0 (pure Kerr)."""
         interaction = self._make_interaction(fR=0.0)
         P_NL = interaction.nonlinear_polarization
-        I = interaction.pulse.envelope_intensity
 
         # With fR=0, only instantaneous response exists (delta function)
         # The convolution of delta with I gives I itself (scaled)
@@ -1595,10 +1592,9 @@ class TestPumpWavelengthExplorer:
         pump = Wavelength(800, "nm")
 
         fig = explorer.plot_frequency_axis(pump, backend="matplotlib")
-        ax = fig.axes[0]  # type: ignore[attr-defined]
+        fig.axes[0]  # type: ignore[attr-defined]
 
         # Check that vertical lines exist for all three
-        lines = ax.get_lines()
         # The function should have plotted at least 3 vertical markers
         # (pump + stokes + anti-stokes markers)
         # We verify by checking the plot was created without error
@@ -1811,7 +1807,7 @@ class TestMaterialComparison:
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
-        from photonics_helper.raman import RamanSpec, RamanResponse
+        from photonics_helper.raman import RamanSpec
         from photonics_helper.pulse import TemporalGrid
 
         spec = RamanSpec.from_database("Silica")
@@ -1830,7 +1826,7 @@ class TestMaterialComparison:
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
-        from photonics_helper.raman import RamanSpec, RamanResponse
+        from photonics_helper.raman import RamanSpec
         from photonics_helper.pulse import TemporalGrid
 
         comp = self._make_comparison(
@@ -1863,7 +1859,7 @@ class TestMaterialComparison:
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
-        from photonics_helper.raman import RamanSpec, RamanResponse, RamanFrequencyResponse
+        from photonics_helper.raman import RamanSpec
         from photonics_helper.pulse import TemporalGrid
 
         spec = RamanSpec.from_database("Silica")
@@ -1882,7 +1878,7 @@ class TestMaterialComparison:
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
-        from photonics_helper.raman import RamanSpec, RamanResponse, RamanFrequencyResponse
+        from photonics_helper.raman import RamanSpec
         from photonics_helper.pulse import TemporalGrid
 
         comp = self._make_comparison(
@@ -1908,7 +1904,7 @@ class TestMaterialComparison:
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
-        from photonics_helper.raman import RamanSpec, RamanResponse, RamanFrequencyResponse
+        from photonics_helper.raman import RamanSpec
         from photonics_helper.pulse import TemporalGrid
 
         comp = self._make_comparison(
@@ -1917,9 +1913,9 @@ class TestMaterialComparison:
         grid = TemporalGrid(N=2**14, Tmax=Time(10e-12, "s"))
         fig = comp.plot_frequency_overlay(backend="matplotlib", grid=grid)
 
-        ax = fig.axes[0]  # type: ignore[attr-defined]
+        fig.axes[0]  # type: ignore[attr-defined]
         # Check for vertical lines (resonance markers)
-        vlines = [p for p in ax.patches]  # patches include vlines in mpl
+        # patches include vlines in mpl
         # We verify the plot was created with annotations
         assert fig is not None
         plt.close(fig)  # type: ignore[arg-type]
@@ -1969,7 +1965,7 @@ class TestMaterialComparison:
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
-        from photonics_helper.raman import RamanSpec, RamanResponse
+        from photonics_helper.raman import RamanSpec
         from photonics_helper.pulse import TemporalGrid
 
         spec = RamanSpec.from_database("Silica")
@@ -1987,7 +1983,7 @@ class TestMaterialComparison:
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
-        from photonics_helper.raman import RamanSpec, RamanResponse
+        from photonics_helper.raman import RamanSpec
         from photonics_helper.pulse import TemporalGrid
 
         comp = self._make_comparison(
@@ -2153,7 +2149,7 @@ class TestMaterialComparison:
         except ImportError:
             pytest.skip("plotly not installed")
 
-        from photonics_helper.raman import RamanSpec, RamanResponse
+        from photonics_helper.raman import RamanSpec
         from photonics_helper.pulse import TemporalGrid
 
         comp = self._make_comparison(
@@ -2170,7 +2166,7 @@ class TestMaterialComparison:
         except ImportError:
             pytest.skip("plotly not installed")
 
-        from photonics_helper.raman import RamanSpec, RamanResponse, RamanFrequencyResponse
+        from photonics_helper.raman import RamanSpec
         from photonics_helper.pulse import TemporalGrid
 
         comp = self._make_comparison(
@@ -2187,7 +2183,7 @@ class TestMaterialComparison:
         except ImportError:
             pytest.skip("plotly not installed")
 
-        from photonics_helper.raman import RamanSpec, RamanResponse
+        from photonics_helper.raman import RamanSpec
         from photonics_helper.pulse import TemporalGrid
 
         comp = self._make_comparison(

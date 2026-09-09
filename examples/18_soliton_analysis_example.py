@@ -23,7 +23,6 @@ from photonics_helper.base import Wavelength, Time, Area, Length, C_MS, PI
 def main():
     # ── Pulse parameters ──────────────────────────────────────────────
     T0 = 100e-15  # 100 fs pulse width
-    P_peak = 5.0  # 5 W peak power
     central_wl = 1550e-9  # 1550 nm pump
 
     grid = TemporalGrid(N=2**14, Tmax=Time(50e-12, "s"))
@@ -85,7 +84,7 @@ def main():
     L_fiss = analyzer.fission_length()
     gamma = analyzer.gamma
 
-    print(f"\nSoliton diagnostics:")
+    print("\nSoliton diagnostics:")
     print(f"  Soliton order N = {N:.2f}")
     print(f"  Dispersion length L_D = {L_D*1e3:.2f} mm")
     print(f"  Nonlinear length L_NL = {L_NL*1e3:.2f} mm")
@@ -97,7 +96,7 @@ def main():
         lambda_dw = analyzer.dispersive_wave_wavelength()
         print(f"  Dispersive wave wavelength = {lambda_dw*1e9:.2f} nm")
     except ValueError:
-        print(f"  Dispersive wave wavelength: not available (beta3 needed)")
+        print("  Dispersive wave wavelength: not available (beta3 needed)")
 
     # ── Count solitons in output spectrum ─────────────────────────────
     n_solitons = analyzer.count_solitons()
@@ -165,7 +164,7 @@ def main():
 
     plt.tight_layout()
     plt.savefig("/tmp/soliton_analysis.png", dpi=100)
-    print(f"\nPlot saved to /tmp/soliton_analysis.png")
+    print("\nPlot saved to /tmp/soliton_analysis.png")
 
 
 if __name__ == "__main__":

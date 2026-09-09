@@ -2,7 +2,6 @@
 Tests for the ``photonics_helper.looks`` module (console helpers).
 """
 
-import pytest
 from unittest.mock import patch
 from photonics_helper.looks import c_info, c_error
 

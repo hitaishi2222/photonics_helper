@@ -27,21 +27,17 @@ import matplotlib.pyplot as plt
 from photonics_helper.base import C_MS, PI, Wavelength, WavelengthArray, Area, Length, Time
 from photonics_helper.pulse import Envelope, Wave, TemporalGrid
 from photonics_helper.gnlse import GNLSESolver, FiberProfile
-from photonics_helper.fiber import Dispersion, PropagationConstant
+from photonics_helper.fiber import Dispersion
 from photonics_helper.phase_matching import (
     DispersionAdaptor,
-    fwm_delta_beta_degenerate,
     scan_fwm_detuning,
     mi_gain_spectrum,
     mi_sideband_frequencies,
     dispersive_wave_roots,
     assess_simulation_readiness,
     plot_fwm_efficiency,
-    plot_mi_gain,
     plot_readiness_report,
     plot_spectrum_with_pm_overlay,
-    PhaseMatchResult,
-    SimulationReadinessReport,
 )
 
 
@@ -75,7 +71,6 @@ def main():
 
     # Fiber with anomalous dispersion (SCG regime)
     beta2_ps2_per_m = -100.0  # ps²/m at 1550 nm
-    beta3_ps3_per_m = 0.1     # ps³/m
     gamma = 10.0              # 1/(W·m)
 
     # Create a Dispersion object from known D(λ) values

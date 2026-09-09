@@ -209,7 +209,7 @@ class TestTaperedGNLSESolver:
         disp = _make_uniform_beta_table(pulse, fiber_length=1e-3)
 
         # Use fixed step size for both solvers to ensure fair comparison
-        step = Length(1e-5, "m")  # 10 μm steps
+        Length(1e-5, "m")  # 10 μm steps
 
         # Tapered solver with uniform profile
         tapered_solver = TaperedGNLSESolver(

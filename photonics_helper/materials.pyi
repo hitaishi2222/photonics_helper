@@ -1,12 +1,24 @@
 from __future__ import annotations
 
 from numpy.typing import NDArray
-from typing import List, Optional, Self, Tuple
+from typing import Any, List, Literal, Self, Tuple
 from functools import cached_property
 from scipy.interpolate import BSpline
 from pydantic.dataclasses import dataclass
 
 from .base import WavelengthArray
+
+# Canonical material names stored in materials.db (see materials.py).
+NK_MATERIALS: tuple[str, ...]
+# A material name known to the database.
+NKMaterial = Literal[...]
+
+
+def validate_nk_dataset(entry: Any) -> list[str]:
+    """Validate a tabulated n/k dataset record; returns a list of error strings
+    (empty when the dataset is valid)."""
+    ...
+
 
 @dataclass(config={"arbitrary_types_allowed": True})
 class RefractiveIndex:

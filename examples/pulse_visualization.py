@@ -12,10 +12,8 @@ Usage:
 from __future__ import annotations
 import asyncio
 import webbrowser
-from typing import Optional
 from pathlib import Path
 
-import numpy as np
 import plotly.graph_objects as go
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse

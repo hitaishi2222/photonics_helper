@@ -5,7 +5,6 @@ Example: Light vs Dark Theme Comparison
 Demonstrates the theme parameter for visualize_2d() and visualize_3d().
 """
 
-import numpy as np
 from photonics_helper.base import Time
 from photonics_helper.pulse import Envelope
 import matplotlib

@@ -5,7 +5,6 @@ Note: ``imageio`` may not be installed in all environments.
 """
 
 import os
-import pytest
 
 
 def test_create_mode_animation_filepath_construction():

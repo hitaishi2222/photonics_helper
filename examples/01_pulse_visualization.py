@@ -6,7 +6,6 @@ Demonstrates the visualization capabilities of the Envelope class.
 Shows different pulse shapes, chirp effects, and 3D views.
 """
 
-import numpy as np
 from photonics_helper.base import Time
 from photonics_helper.pulse import Envelope
 import matplotlib

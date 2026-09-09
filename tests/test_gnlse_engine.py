@@ -5,7 +5,7 @@ import pytest
 
 from photonics_helper.gnlse import FiberProfile, SplitStepEngine
 from photonics_helper.pulse import Wave, Envelope, TemporalGrid
-from photonics_helper.base import Wavelength, Frequency, Time, Area, Length
+from photonics_helper.base import Wavelength, Time, Area, Length
 
 
 @pytest.fixture

@@ -1,6 +1,5 @@
 """Tests for photonics_helper.gnlse.fiber."""
 
-import pytest
 from photonics_helper.gnlse import FiberProfile
 from photonics_helper.base import Area, Length, Time
 

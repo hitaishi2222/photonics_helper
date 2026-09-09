@@ -45,6 +45,8 @@ except ImportError:
 if TYPE_CHECKING:
     import dash
 
+    from .materials import NKMaterial
+
 
 # ─── Reference Materials ─────────────────────────────────────────────────────
 
@@ -812,7 +814,9 @@ class RamanSpec:
             lines.append(f"Multi-mode: {len(self.phonon_modes)} phonon modes")
         return "\n".join(lines)
 
-    def nk(self, wavelength_um: float) -> complex:
+    def nk(
+        self, wavelength_um: float, source: str | None = None
+    ) -> complex:
         """Interpolated complex refractive index at wavelength (μm).
 
         Returns n + i·k from the nk_data table, or falls back to Sellmeier
@@ -821,6 +825,9 @@ class RamanSpec:
         Parameters
         ----------
         wavelength_um : Wavelength in μm
+        source : Optional ``material–author`` provenance key. When the material
+            has several tabulated datasets, one MUST be selected; when omitted
+            and a single dataset exists it is used automatically.
 
         Returns
         -------
@@ -834,7 +841,17 @@ class RamanSpec:
 
         # Query tabulated data first
         db = RamanDatabase()
-        wl, n_tab, k_tab = db.get_nk_data(self.name)
+        if source is not None:
+            wl, n_tab, k_tab = db.get_nk_by_source(self.name, source)  # type: ignore[arg-type]
+        else:
+            sources = db.list_nk_sources(self.name)  # type: ignore[arg-type]
+            if len(sources) > 1:
+                raise ValueError(
+                    f"Multiple tabulated n/k datasets available for "
+                    f"'{self.name}': {sources}. Select one via "
+                    f"nk(wavelength, source='{sources[0]}')."
+                )
+            wl, n_tab, k_tab = db.get_nk_data(self.name)  # type: ignore[arg-type]
 
         if len(wl) > 0:
             # Interpolate from tabulated data
@@ -854,7 +871,7 @@ class RamanSpec:
             return complex(n_val, k_val)
 
         # Fallback to Sellmeier
-        sellmeier_data = db.get_sellmeier(self.name)
+        sellmeier_data = db.get_sellmeier(self.name)  # type: ignore[arg-type]
         if sellmeier_data:
             return self.nk_from_sellmeier(wavelength_um, sellmeier_data)
 
@@ -885,7 +902,7 @@ class RamanSpec:
 
         if sellmeier_data is None:
             db = RamanDatabase()
-            sellmeier_data = db.get_sellmeier(self.name)
+            sellmeier_data = db.get_sellmeier(self.name)  # type: ignore[arg-type]
 
         if sellmeier_data is None:
             raise ValueError(f"No Sellmeier data available for {self.name}")
@@ -1122,7 +1139,9 @@ class RamanDatabase:
         material       TEXT REFERENCES raman_specs(name),
         wavelength_um  REAL,
         n              REAL,
-        k              REAL
+        k              REAL,
+        source         TEXT,  -- material–author provenance key (e.g. "si-green")
+        citation       TEXT  -- full reference the (n, k) values were taken from
     );
     """
 
@@ -1169,7 +1188,9 @@ class RamanDatabase:
                 material       TEXT REFERENCES raman_specs(name),
                 wavelength_um  REAL,
                 n              REAL,
-                k              REAL
+                k              REAL,
+                source         TEXT,
+                citation       TEXT
             )
         """)
 
@@ -1199,6 +1220,16 @@ class RamanDatabase:
                 PRIMARY KEY (material, shift_cm, symmetry)
             )
         """)
+
+        # Migration: add provenance columns to nk_data. Older/already-shipped
+        # DBs lack these columns, so add them in place and backfill existing
+        # rows with NULL.
+        cursor.execute("PRAGMA table_info(nk_data)")
+        cols = [r[1] for r in cursor.fetchall()]
+        if "source" not in cols:
+            cursor.execute("ALTER TABLE nk_data ADD COLUMN source TEXT")
+        if "citation" not in cols:
+            cursor.execute("ALTER TABLE nk_data ADD COLUMN citation TEXT")
 
         conn.commit()
         conn.close()
@@ -1452,46 +1483,66 @@ class RamanDatabase:
         conn.commit()
         conn.close()
 
-    def add_nk_data(self, material: str, wl_um: float, n: float, k: float) -> None:
+    def add_nk_data(
+        self,
+        material: NKMaterial,
+        wl_um: float,
+        n: float,
+        k: float,
+        source: str | None = None,
+        citation: str | None = None,
+    ) -> None:
         """INSERT nk data point.
 
         Parameters
         ----------
-        material : Material name
+        material : Canonical material name (must exist in raman_specs)
         wl_um : Wavelength in μm
         n : Real refractive index
         k : Extinction coefficient
+        source : Optional ``material–author`` provenance key
+            (e.g. ``"si-green"``). When omitted the row is unattributed.
+        citation : Optional full reference the (n, k) values were taken from.
+            Stored for traceability; when omitted the row has no citation.
         """
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
         cursor.execute(
             """
-            INSERT INTO nk_data (material, wavelength_um, n, k)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO nk_data (material, wavelength_um, n, k, source, citation)
+            VALUES (?, ?, ?, ?, ?, ?)
         """,
-            (material, wl_um, n, k),
+            (material, wl_um, n, k, source, citation),
         )
 
         conn.commit()
         conn.close()
 
-    def get_nk_data(self, material: str) -> tuple[NDArray, NDArray, NDArray]:
+    def get_nk_data(
+        self, material: NKMaterial, with_source: bool = False
+    ) -> tuple[NDArray, NDArray, NDArray] | tuple[NDArray, NDArray, NDArray, NDArray]:
         """SELECT nk data for a material.
 
         Parameters
         ----------
         material : Material name
+        with_source : If True, also return a source array alongside
+            (wavelength_um, n, k, source); otherwise return the legacy
+            3-tuple (wavelength_um, n, k).
 
         Returns
         -------
-        (wavelength_um, n, k) as numpy arrays
+        (wavelength_um, n, k) or (wavelength_um, n, k, source) as numpy arrays
         """
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
+        cols = "wavelength_um, n, k"
+        if with_source:
+            cols += ", source"
         cursor.execute(
-            "SELECT wavelength_um, n, k FROM nk_data WHERE material = ? ORDER BY wavelength_um",
+            f"SELECT {cols} FROM nk_data WHERE material = ? ORDER BY wavelength_um",
             (material,),
         )
         rows = cursor.fetchall()
@@ -1499,17 +1550,177 @@ class RamanDatabase:
         conn.close()
 
         if not rows:
-            return np.array([]), np.array([]), np.array([])
+            empty3 = (np.array([]), np.array([]), np.array([]))
+            if not with_source:
+                return empty3
+            return empty3 + (np.array([]),)
 
         wl = np.array([r[0] for r in rows])
         n = np.array([r[1] for r in rows])
         k = np.array([r[2] for r in rows])
+        if not with_source:
+            return wl, n, k
 
+        source = np.array([r[3] if r[3] is not None else "" for r in rows])
+        return wl, n, k, source
+
+    def list_nk_sources(self, material: NKMaterial) -> list[str]:
+        """Return the distinct ``source`` keys stored for a material.
+
+        Parameters
+        ----------
+        material : Canonical material name
+
+        Returns
+        -------
+        sorted list of distinct source keys (may include None values)
+        """
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute(
+            "SELECT DISTINCT source FROM nk_data WHERE material = ? ORDER BY source",
+            (material,),
+        )
+        rows = cursor.fetchall()
+        conn.close()
+
+        sources = [r[0] for r in rows if r[0] is not None]
+        return sorted(set(sources))
+
+    def list_nk_citations(self, material: NKMaterial) -> dict[str, str]:
+        """Return the citation for every stored source of a material.
+
+        Parameters
+        ----------
+        material : Canonical material name
+
+        Returns
+        -------
+        dict mapping each ``source`` key to its full citation text
+        """
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute(
+            "SELECT DISTINCT source, citation FROM nk_data WHERE material = ? "
+            "ORDER BY source",
+            (material,),
+        )
+        rows = cursor.fetchall()
+        conn.close()
+
+        return {
+            r[0]: (r[1] if r[1] is not None else "") for r in rows if r[0] is not None
+        }
+
+    def clear_all_tabulated_nk(self) -> int:
+        """Delete every tabulated nk_data row (attributed by a ``source``).
+
+        Used by the manifest seeder to make re-seeding idempotent: the
+        tabulated ``nk_data`` table is owned entirely by the manifest, so all
+        attributed rows are cleared and re-inserted on each ``seed_db.py --nk``
+        run. Sellmeier data (a separate table) is untouched.
+
+        Returns
+        -------
+        Number of rows removed.
+        """
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM nk_data WHERE source IS NOT NULL")
+        removed = cursor.rowcount
+        conn.commit()
+        conn.close()
+        return removed
+
+    def get_nk_by_source(
+        self, material: NKMaterial, source: str
+    ) -> tuple[NDArray, NDArray, NDArray]:
+        """SELECT tabulated nk data for a material attributed to a source.
+
+        Parameters
+        ----------
+        material : Canonical material name
+        source : ``material–author`` provenance key (e.g. ``"si-green"``)
+
+        Returns
+        -------
+        (wavelength_um, n, k) as numpy arrays (empty if none match)
+        """
+        # Case-insensitive source match, done in Python to avoid SQLite's
+        # unreliable case-folding. Per-material source counts are small, so
+        # fetching the material's rows is cheap.
+        wl_all, n_all, k_all, source_all = self.get_nk_data(material, with_source=True)
+        if len(wl_all) == 0:
+            return np.array([]), np.array([]), np.array([])
+
+        mask = np.array(
+            [str(s).lower() == source.lower() for s in source_all], dtype=bool
+        )
+        wl, n, k = wl_all[mask], n_all[mask], k_all[mask]
+        if len(wl) == 0:
+            return np.array([]), np.array([]), np.array([])
         return wl, n, k
+
+    def list_nk_dataset_summaries(self) -> list[dict]:
+        """Return a per-dataset summary of every tabulated ``nk_data`` entry.
+
+        One row per distinct ``(material, source)`` pair. Used by the n/k
+        dataset browser to list what is available. Returns dicts with keys:
+        ``material``, ``source``, ``wl_min_um``, ``wl_max_um``, ``n_points``,
+        ``n_central``, ``k_central`` and ``central_wl_um``. Central-wavelength
+        n/k is obtained by linear interpolation onto a fine grid.
+        """
+        conn = sqlite3.connect(self.db_path)
+        rows = conn.execute(
+            """
+            SELECT material, source,
+                   MIN(wavelength_um) AS wl_min, MAX(wavelength_um) AS wl_max,
+                   COUNT(*)           AS n_points
+            FROM nk_data
+            WHERE source IS NOT NULL
+            GROUP BY material, source
+            ORDER BY material, source
+            """
+        ).fetchall()
+        conn.close()
+
+        summaries: list[dict] = []
+        for material, source, wl_min, wl_max, n_points in rows:
+            central = 0.5 * (wl_min + wl_max)
+            n_central, k_central = None, None
+            if n_points > 1 and wl_min > 0:
+                try:
+                    gw, gn, gk, _gs = self.get_nk_data(material, with_source=True)
+                    grid = np.linspace(wl_min, wl_max, 4096)
+                    sel = np.clip(np.searchsorted(gw, grid), 1, len(gw) - 1)
+                    lo = sel - 1
+                    w = (grid - gw[lo]) / (gw[sel] - gw[lo])
+                    n_at = gn[lo] + w * (gn[sel] - gn[lo])
+                    k_at = gk[lo] + w * (gk[sel] - gk[lo])
+                    idx = int(np.argmin(np.abs(gw - central)))
+                    n_central = float(n_at[idx])
+                    k_central = float(k_at[idx])
+                except Exception:
+                    pass
+            summaries.append(
+                {
+                    "material": material,
+                    "source": source,
+                    "wl_min_um": float(wl_min),
+                    "wl_max_um": float(wl_max),
+                    "n_points": int(n_points),
+                    "central_wl_um": float(central),
+                    "n_central": n_central,
+                    "k_central": k_central,
+                }
+            )
+        return summaries
 
     def add_sellmeier(
         self,
-        material: str,
+        material: NKMaterial,
         form: str,
         a0: float,
         coefficients: list[float],
@@ -1556,7 +1767,7 @@ class RamanDatabase:
         conn.commit()
         conn.close()
 
-    def get_sellmeier(self, material: str) -> dict | None:
+    def get_sellmeier(self, material: NKMaterial) -> dict | None:
         """SELECT Sellmeier coefficients for a material.
 
         Parameters
@@ -4251,6 +4462,11 @@ class MaterialComparison:
 # ─── Dash App (Layer 7) ──────────────────────────────────────────────────────
 
 
+def _nk_browser_style(layer: str) -> dict:
+    """Show the n/k browser only on the 7th tab; hide it elsewhere."""
+    return {"display": "block" if layer == "layer-7-nk" else "none"}
+
+
 def app() -> "dash.Dash":  # type: ignore[valid-type]
     """Interactive Dash app tying all 6 Raman layers together.
 
@@ -4402,6 +4618,7 @@ def app() -> "dash.Dash":  # type: ignore[valid-type]
                     dcc.Tab(label="4 — Pulse", value="layer-4-pulse"),
                     dcc.Tab(label="5 — Pump λ", value="layer-5-pump"),
                     dcc.Tab(label="6 — Compare", value="layer-6-compare"),
+                    dcc.Tab(label="7 — n/k Database", value="layer-7-nk"),
                 ],
             ),
             html.Br(),
@@ -4418,6 +4635,52 @@ def app() -> "dash.Dash":  # type: ignore[valid-type]
                     "fontFamily": "monospace",
                     "whiteSpace": "pre-wrap",
                 },
+            ),
+            # n/k dataset browser (only visible on the 7th tab)
+            html.Div(
+                id="nk-browser-container",
+                style={"display": "none"},
+                children=[
+                    html.H3(
+                        "Tabulated n/k Dataset Browser",
+                        style={"marginBottom": "4px"},
+                    ),
+                    html.P(
+                        "Every stored (λ, n, k) dataset with source/author provenance. "
+                        "Filter below, then select a dataset to plot its n(λ) and k(λ).",
+                        style={"color": "#666", "marginBottom": "12px", "fontSize": "13px"},
+                    ),
+                    html.Label("Filter:", style={"fontWeight": "bold"}),
+                    dcc.Input(
+                        id="nk-filter",
+                        type="text",
+                        placeholder="type to filter material or source…",
+                        style={"width": "100%", "padding": "6px", "boxSizing": "border-box"},
+                    ),
+                    html.Br(),
+                    html.Label(
+                        "Dataset:", style={"fontWeight": "bold", "marginTop": "8px"},
+                    ),
+                    dcc.Dropdown(
+                        id="nk-dataset-dropdown",
+                        options=[],
+                        placeholder="select a dataset to plot…",
+                        clearable=False,
+                    ),
+                    html.Div(
+                        id="nk-dataset-info",
+                        style={
+                            "marginTop": "8px",
+                            "fontSize": "12px",
+                            "color": "#444",
+                            "maxHeight": "120px",
+                            "overflowY": "auto",
+                        },
+                    ),
+                    html.Br(),
+                    html.Div(id="nk-plot-output"),
+                    html.Div(id="nk-table-output"),
+                ],
             ),
         ],
         style={"flex": "1", "padding": "10px", "overflowY": "auto"},
@@ -4476,6 +4739,7 @@ def app() -> "dash.Dash":  # type: ignore[valid-type]
     @dash_app.callback(
         Output("output-container", "children"),
         Output("summary-container", "children"),
+        Output("nk-browser-container", "style"),
         Input("layer-tabs", "value"),
         Input("material-selector", "value"),
         Input("fr-slider", "value"),
@@ -4597,6 +4861,21 @@ def app() -> "dash.Dash":  # type: ignore[valid-type]
             fig = comp.plot_all(backend="matplotlib", grid=grid, figsize=(12, 11))
             summary_lines.append(comp.comparison_table())
 
+        elif layer == "layer-7-nk":
+            fig, ax = plt.subplots()
+            ax.text(
+                0.5,
+                0.5,
+                "Use the n/k Database browser below.\n"
+                "Filter datasets, then select one to plot n(λ) and k(λ).",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
+                textAlign="center",
+            )
+            ax.axis("off")
+            summary_lines.append("n/k dataset browser — see the table and dropdown below.")
+
         else:
             fig, ax = plt.subplots()
             ax.text(
@@ -4620,7 +4899,96 @@ def app() -> "dash.Dash":  # type: ignore[valid-type]
             src=f"data:image/png;base64,{img_base64}", style={"width": "100%"}
         )
 
-        return img_html, "\n".join(summary_lines)
+        return img_html, "\n".join(summary_lines), _nk_browser_style(layer)
+
+    @dash_app.callback(
+        Output("nk-dataset-dropdown", "options"),
+        Output("nk-dataset-dropdown", "value"),
+        Input("nk-filter", "value"),
+        prevent_initial_call=True,
+    )
+    def _update_nk_datasets(filter_text):
+        """Populate the dataset dropdown, filtered by free-text search."""
+        summaries = RamanDatabase().list_nk_dataset_summaries()
+        q = (filter_text or "").strip().lower()
+        if q:
+            summaries = [
+                s
+                for s in summaries
+                if q in str(s["material"]).lower()
+                or q in str(s["source"]).lower()
+            ]
+        options = [
+            {
+                "label": f"{s['material']}  •  {s['source']}  "
+                f"[{s['wl_min_um']:.2f}–{s['wl_max_um']:.2f} μm, {s['n_points']} pts]",
+                "value": s["source"],
+            }
+            for s in summaries
+        ]
+        # Sort case-insensitively by material then source for a stable listing.
+        order = {s["source"]: i for i, s in enumerate(summaries)}
+        options.sort(key=lambda o: order.get(o["value"], 0))
+        default = options[0]["value"] if options else None
+        return options, default
+
+    @dash_app.callback(
+        Output("nk-plot-output", "children"),
+        Output("nk-dataset-info", "children"),
+        Input("nk-dataset-dropdown", "value"),
+        prevent_initial_call=True,
+    )
+    def _update_nk_plot(source):
+        """Load a selected dataset via from_material_database and plot it."""
+        if not source:
+            return html.P("Select a dataset to plot."), ""
+        db = RamanDatabase()
+        summaries = {s["source"]: s for s in db.list_nk_dataset_summaries()}
+        info = summaries.get(source, {})
+        info_lines = [
+            f"Material:        {info.get('material', '?')}",
+            f"Source:          {info.get('source', source)}",
+            f"Valid range:     [{info.get('wl_min_um', 0):.3f}, {info.get('wl_max_um', 0):.3f}] μm",
+            f"Points:          {info.get('n_points', 0)}",
+        ]
+        citation = db.list_nk_citations(info.get("material", "")).get(source, "")
+        if citation:
+            info_lines.append(f"Citation:        {citation}")
+        try:
+            from photonics_helper.materials import RefractiveIndex
+
+            ri = RefractiveIndex.from_material_database(source)
+        except ValueError as exc:
+            return html.P(str(exc)), "\n".join(info_lines)
+
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        from io import BytesIO
+        import base64
+
+        wl = ri.wl.as_um
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+        ax1.plot(wl, ri.n)
+        ax1.set_xlabel("Wavelength [μm]")
+        ax1.set_ylabel("n(λ)")
+        ax1.title = f"{info.get('material', '?')} — {source}"
+        ax1.grid(True, alpha=0.3)
+        ax2.plot(wl, ri.k)
+        ax2.set_xlabel("Wavelength [μm]")
+        ax2.set_ylabel("k(λ)")
+        ax2.grid(True, alpha=0.3)
+        plt.tight_layout()
+        buf = BytesIO()
+        fig.savefig(buf, format="png", dpi=110, bbox_inches="tight")
+        plt.close(fig)
+        buf.seek(0)
+        img_base64 = base64.b64encode(buf.read()).decode()
+        return (
+            html.Img(src=f"data:image/png;base64,{img_base64}", style={"width": "100%"}),
+            "\n".join(info_lines),
+        )
 
     return dash_app
 

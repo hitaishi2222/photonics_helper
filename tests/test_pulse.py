@@ -281,7 +281,6 @@ def test_exponential_field_peak():
 def test_exponential_decay():
     """Exponential envelope: I(t) = exp(-2|t|/T0)."""
     env = Envelope(shape="exponential", peak_amplitude=1.0, pulse_width=Time(1, "ps"))
-    t_half = 1e-12  # |t| = T0 → I = exp(-2) ≈ 0.1353
     I = env.intensity(np.array([1e-12]))[0]
     expected = np.exp(-2.0)
     assert pytest.approx(I, rel=1e-10) == expected

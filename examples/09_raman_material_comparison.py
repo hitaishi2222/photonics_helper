@@ -10,14 +10,12 @@ This layer answers: "Which material is best for my Raman application?"
 by letting you visually compare materials side by side.
 """
 
-import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from photonics_helper.raman import (
-    MaterialComparison, RamanSpec, RamanResponse,
-    COMMON_COMPARISONS,
+    MaterialComparison, RamanSpec, COMMON_COMPARISONS,
 )
 from photonics_helper.pulse import TemporalGrid
 from photonics_helper.base import Time
@@ -35,7 +33,7 @@ def main():
     print()
 
     # Spectra overlay
-    fig = comp.plot_spectra_overlay(backend="matplotlib", shift_range_cm=600)
+    comp.plot_spectra_overlay(backend="matplotlib", shift_range_cm=600)
     plt.savefig("examples/images/09_raman_spectra_overlay.png", dpi=150, bbox_inches="tight")
     print("Saved: examples/09_raman_spectra_overlay.png")
     plt.close()
@@ -51,7 +49,7 @@ def main():
 
     # Frequency overlay — shows gain spectra
     grid = TemporalGrid(N=2**14, Tmax=Time(10e-12, "s"))
-    fig = comp2.plot_frequency_overlay(backend="matplotlib", grid=grid)
+    comp2.plot_frequency_overlay(backend="matplotlib", grid=grid)
     plt.savefig("examples/images/09_raman_frequency_overlay.png", dpi=150, bbox_inches="tight")
     print("Saved: examples/09_raman_frequency_overlay.png")
     plt.close()
@@ -64,14 +62,14 @@ def main():
         comp3.add(RamanSpec.from_database(name))
 
     # Time-domain response overlay
-    fig = comp3.plot_response_overlay(backend="matplotlib", grid=grid)
+    comp3.plot_response_overlay(backend="matplotlib", grid=grid)
     plt.savefig("examples/images/09_raman_response_overlay.png", dpi=150, bbox_inches="tight")
     print("Saved: examples/09_raman_response_overlay.png")
     plt.close()
 
     # ── 4. All-in-one: 3-panel comparison ───────────────────────────────────
 
-    fig = comp3.plot_all(backend="matplotlib", grid=grid, figsize=(12, 12))
+    comp3.plot_all(backend="matplotlib", grid=grid, figsize=(12, 12))
     plt.savefig("examples/images/09_raman_material_comparison.png", dpi=150, bbox_inches="tight")
     print("Saved: examples/09_raman_material_comparison.png")
     plt.close()

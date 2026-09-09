@@ -4,6 +4,7 @@ __pycache__/
 build/
 dist/
 wheels/
+nk_datasets/
 *.egg-info
 
 # Virtual environments
@@ -27,3 +28,5 @@ openspec
 graphify-out/
 ./examples/images/
 ./examples/*.html
+
+nk_datasets/yaml/

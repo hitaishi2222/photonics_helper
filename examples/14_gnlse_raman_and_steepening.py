@@ -26,7 +26,7 @@ import matplotlib.pyplot as plt
 from photonics_helper.gnlse import FiberProfile, GNLSESolver
 from photonics_helper.pulse import Envelope, Wave, TemporalGrid
 from photonics_helper.raman import RamanResponse, RamanSpec
-from photonics_helper.base import Wavelength, Time, Length, Area, Power
+from photonics_helper.base import Wavelength, Time, Length, Area
 
 
 def make_pulse(wavelength_nm=1064, T0_fs=50):
@@ -234,7 +234,6 @@ def main():
     # Panel 2: Raman-induced redshift (zero-padded FFT for sub-bin resolution)
     N_pad = 2**17
     freq_offset_THz_fine = np.fft.fftshift(np.fft.fftfreq(N_pad, d=pulse.grid.dt)) / 1e12
-    center_idx = N_pad // 2
 
     z_A = solver_A.z_array
     z_D = solver_D.z_array

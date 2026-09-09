@@ -22,7 +22,6 @@ import matplotlib.pyplot as plt
 from photonics_helper.gnlse import (
     FiberProfile,
     GNLSESolver,
-    SplitStepEngine,
     plot_waterfall,
     plot_spectrum_vs_distance,
     plot_intensity_metrics,
@@ -62,9 +61,9 @@ def main():
 
     gamma = n2 * omega0 / (299792458.0 * A_eff.as_m2)
 
-    print(f"Fiber with TPA:")
+    print("Fiber with TPA:")
     print(f"  γ = {gamma*1e3:.3f} 1/(W·km)")
-    print(f"  β₂ = -2.0 ps²/km")
+    print("  β₂ = -2.0 ps²/km")
     print(f"  σ_TPA = {sigma_tpa:.1e} m²/W (enhanced for visualization)")
     print(f"  τ_c = {tau_c.as_s*1e9:.0f} ns")
 
@@ -194,7 +193,7 @@ def main():
     E_final_no_tpa = E_no_tpa[-1]
     E_final_tpa = E_tpa[-1]
 
-    print(f"\n— Energy summary —")
+    print("\n— Energy summary —")
     print(f"Input energy:        {E0:.4e} W·s")
     print(f"Final (no TPA):      {E_final_no_tpa:.4e}  ({E_final_no_tpa/E0*100:.2f}%)")
     print(f"Final (with TPA):    {E_final_tpa:.4e}  ({E_final_tpa/E0*100:.2f}%)")
