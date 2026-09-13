@@ -30,6 +30,7 @@ NK_MATERIALS: tuple[str, ...] = (
     "BaTiO3", "CaF2", "CdS", "CdTe", "Diamond", "F2", "Ga2O3", "GaAs", "GaN",
     "Ge", "GeAsSe", "GeO2", "InGaAs", "InP", "KBr", "KTP", "LBO", "LiNbO3",
     "LiTaO3", "MgF2", "N-BK7", "N-F2", "N-SF11", "PMMA", "Si", "Si3N4",
+    "Si3N4-Ligentec",
     "SiC_4H", "Silica", "YAG", "YLF", "YVO4", "ZBLAN", "Zerodur", "ZnO",
     "ZnSe",
 )
@@ -41,6 +42,7 @@ NKMaterial = Literal[
     "BaTiO3", "CaF2", "CdS", "CdTe", "Diamond", "F2", "Ga2O3", "GaAs", "GaN",
     "Ge", "GeAsSe", "GeO2", "InGaAs", "InP", "KBr", "KTP", "LBO", "LiNbO3",
     "LiTaO3", "MgF2", "N-BK7", "N-F2", "N-SF11", "PMMA", "Si", "Si3N4",
+    "Si3N4-Ligentec",
     "SiC_4H", "Silica", "YAG", "YLF", "YVO4", "ZBLAN", "Zerodur", "ZnO",
     "ZnSe",
 ]
@@ -194,12 +196,12 @@ class RefractiveIndex:
     def n_func(self, wavelength: float) -> float:
         """Interpolated real refractive index n at wavelength (μm)."""
         self._validate_range(wavelength)
-        return self._n_spline(wavelength).item()
+        return float(self._n_spline(wavelength).item())
 
     def k_func(self, wavelength: float) -> float:
         """Interpolated extinction coefficient k at wavelength (μm)."""
         self._validate_range(wavelength)
-        return self._k_spline(wavelength).item()
+        return float(self._k_spline(wavelength).item())
 
     def nk_func(self, wavelength: float) -> complex:
         """Interpolated complex refractive index n+ik at wavelength (μm)."""
@@ -211,7 +213,7 @@ class RefractiveIndex:
     def dn_dlambda(self, wavelength: float) -> float:
         """Derivative dn/dλ at a scalar wavelength (μm). Returns value in μm⁻¹."""
         self._validate_range(wavelength)
-        return self._dn_spline(wavelength).item()
+        return float(self._dn_spline(wavelength).item())
 
     def group_index(self, wavelength: float) -> float:
         """Group index n_g = n - λ·(dn/dλ) at a scalar wavelength (μm). Dimensionless."""
@@ -222,9 +224,9 @@ class RefractiveIndex:
     def group_index_array(self) -> NDArray:
         """Group index n_g across the full wavelength grid. Dimensionless."""
         wl_um = self.wl.as_um
-        n_arr = self._n_spline(wl_um)
-        dn_dl_arr = self._dn_spline(wl_um)
-        return n_arr - wl_um * dn_dl_arr
+        n_arr = np.asarray(self._n_spline(wl_um), dtype=float)
+        dn_dl_arr = np.asarray(self._dn_spline(wl_um), dtype=float)
+        return np.asarray(n_arr - wl_um * dn_dl_arr, dtype=float)
 
     def group_velocity(self, wavelength: float) -> float:
         """Group velocity v_g = c / n_g at a scalar wavelength (μm). Returns m/s.
@@ -437,4 +439,4 @@ class RefractiveIndex:
                 stacklevel=2,
             )
         alpha = 4 * PI * self.k / self.wl.as_m  # 1/m (intensity attenuation)
-        return 10 * np.log10(np.e) * alpha  # dB/m
+        return np.asarray(10 * np.log10(np.e) * alpha, dtype=float)  # dB/m

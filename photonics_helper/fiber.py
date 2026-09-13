@@ -20,9 +20,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from math import factorial
 from scipy.interpolate import make_splrep
-from rich.traceback import install
-
-install()
 
 
 @dataclass(config={"arbitrary_types_allowed": True})
@@ -97,7 +94,7 @@ class Dispersion:
     def fn(self, wavelength: Wavelength) -> float:
         """Interpolated dispersion at wavelength (m)"""
         self._check_wl(wavelength)
-        return self._disp_fn(wavelength.as_m).item()
+        return float(self._disp_fn(wavelength.as_m).item())
 
     @classmethod
     def from_neff(
@@ -202,6 +199,15 @@ class Dispersion:
         beta2 = -self.wavelengths.as_m**2 / (2 * PI * C_MS) * self.as_s_m_m
         spline = make_splrep(self.wavelengths.as_nm, beta2)
         return float(spline(wavelength_nm))
+
+    def get_beta2_at(self, wavelength: Wavelength) -> float:
+        """Return β₂ (s²/m) at a :class:`Wavelength` (unit-safe wrapper).
+
+        This is the preferred entry point for callers that work with unit
+        objects; it forwards the wavelength in nm to :meth:`get_beta2` so the
+        unit convention cannot be mixed up.
+        """
+        return float(self.get_beta2(wavelength.as_nm))
 
     def get_betas(
         self,
@@ -344,6 +350,9 @@ class ZDependentDispersion:
     z_positions: NDArray
     beta: NDArray
     central_wavelength: float
+    betas_taylor: NDArray | None = None
+    beta_orders: NDArray | None = None
+    omega0_fit: float | None = None
 
     def __post_init__(self) -> None:
         """Validate shapes and build the interpolant."""
@@ -399,7 +408,7 @@ class ZDependentDispersion:
         result = self._interpolator(np.column_stack([omega_arr, np.full_like(omega_arr, z)]))
         if np.isscalar(omega):
             return float(result[0])
-        return result
+        return np.asarray(result)
 
     @property
     def n_omega(self) -> int:
@@ -435,7 +444,7 @@ class ZDependentDispersion:
 
         mask = (self.omegas >= omega_low) & (self.omegas <= omega_high)
         omega_fit = self.omegas[mask]
-        beta_at_z = self.fn(omega_fit, z)
+        beta_at_z = np.asarray(self.fn(omega_fit, z), dtype=float)
         valid = ~np.isnan(beta_at_z)
         
         if valid.sum() < order + 1:

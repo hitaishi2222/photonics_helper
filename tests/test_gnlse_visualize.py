@@ -46,7 +46,10 @@ def test_waterfall_plot_has_axis_labels(solver):
     fig = plot_waterfall(solver)
     ax = fig.axes[0]
     assert ax.get_xlabel() == "Time (ps)"
-    assert ax.get_ylabel() == "Propagation distance (mm)"
+    assert ax.get_ylabel() == "Trace offset"
+    # Propagation distance is encoded by the colorbar, not the y-axis.
+    cb_labels = [a.get_ylabel() for a in fig.axes[1:]]
+    assert any("Propagation distance" in lbl for lbl in cb_labels)
     plt.close(fig)
 
 

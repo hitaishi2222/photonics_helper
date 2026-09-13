@@ -1,7 +1,7 @@
 """
 Unit tests for the DBR helper classes.
 
-The tests exercise the fundamental data‑model utilities (`Block`, `Pattren`)
+The tests exercise the fundamental data‑model utilities (`Block`, `Pattern`)
 and validate that the :class:`~photonics_helper.dbr.TMM` methods operate on
 these structures without raising errors.  The focus is on correctness of
 indices, pattern construction, simple block manipulation, and TMM physics
@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 
 from photonics_helper.base import Wavelength, WavelengthArray, Length
-from photonics_helper.dbr import TMM, Block, Material, Pattren
+from photonics_helper.dbr import TMM, Block, Material, Pattern
 
 
 @pytest.fixture
@@ -79,7 +79,7 @@ def test_pattren_construction_and_get_index(constant_material):
     block_a = Block(length=Length(100e-9, "m"), material=constant_material, colour="red")
     block_b = Block(length=Length(150e-9, "m"), material=constant_material, colour="blue")
     mapping = {"A": block_a, "B": block_b}
-    pat = Pattren(
+    pat = Pattern(
         style="AB", mapping=mapping, central_wavelength=Wavelength(1.55, "um")
     )
 
@@ -100,7 +100,7 @@ def test_pattren_construction_and_get_index(constant_material):
 
 def test_pattren_add_and_remove_block(constant_material):
     block_a = Block(length=Length(100e-9, "m"), material=constant_material, colour="red")
-    pat = Pattren(
+    pat = Pattern(
         style="A", mapping={"A": block_a}, central_wavelength=Wavelength(1.55, "um")
     )
 
@@ -127,7 +127,7 @@ def test_tmm_slab_reflects_at_normal_incidence(constant_material):
     """
     block_a = Block(length=Length(100e-9, "m"), material=constant_material, colour="red")
     block_b = Block(length=Length(100e-9, "m"), material=constant_material, colour="blue")
-    pat = Pattren(
+    pat = Pattern(
         style="AB",
         mapping={"A": block_a, "B": block_b},
         central_wavelength=Wavelength(1.55, "um"),
@@ -170,7 +170,7 @@ def test_tmm_energy_conservation_lossless(high_index_material, low_index_materia
         mapping["H"] = h_block
         mapping["L"] = l_block
 
-    pat = Pattren(
+    pat = Pattern(
         style="".join(style_chars),
         mapping=mapping,
         central_wavelength=Wavelength(1.55, "um"),
@@ -205,7 +205,7 @@ def test_tmm_oblique_incidence_blue_shift(high_index_material, low_index_materia
         mapping["L"] = l_block
 
     def make_tmm(angle_deg: float):
-        pat = Pattren(
+        pat = Pattern(
             style="".join(style_chars),
             mapping=mapping,
             central_wavelength=Wavelength(1.55, "um"),
@@ -250,12 +250,12 @@ def test_tmm_te_tm_difference(high_index_material, low_index_material):
         mapping["H"] = h_block
         mapping["L"] = l_block
 
-    pat_te = Pattren(
+    pat_te = Pattern(
         style="".join(style_chars),
         mapping=mapping,
         central_wavelength=Wavelength(1.55, "um"),
     )
-    pat_tm = Pattren(
+    pat_tm = Pattern(
         style="".join(style_chars),
         mapping=mapping,
         central_wavelength=Wavelength(1.55, "um"),
@@ -280,7 +280,7 @@ def test_tmm_field_profile_shape(constant_material):
     block_a = Block(length=Length(100e-9, "m"), material=constant_material, colour="red")
     block_b = Block(length=Length(150e-9, "m"), material=constant_material, colour="blue")
     block_c = Block(length=Length(120e-9, "m"), material=constant_material, colour="green")
-    pat = Pattren(
+    pat = Pattern(
         style="ABC",
         mapping={"A": block_a, "B": block_b, "C": block_c},
         central_wavelength=Wavelength(1.55, "um"),
@@ -297,7 +297,7 @@ def test_tmm_field_profile_shape(constant_material):
 def test_tmm_absorbing_layer_energy_deficit(absorbing_material):
     """With k > 0, R + T < 1 (energy is absorbed by the layer)."""
     block_a = Block(length=Length(200e-9, "m"), material=absorbing_material, colour="red")
-    pat = Pattren(
+    pat = Pattern(
         style="A",
         mapping={"A": block_a},
         central_wavelength=Wavelength(1.55, "um"),

@@ -1,0 +1,15 @@
+{
+  "paper": "J. P. Gordon, Theory of the soliton self-frequency shift, Opt. Lett. 11, 662 (1986); experiment: F. M. Mitschke and L. F. Mollenauer, Opt. Lett. 11, 659 (1986)",
+  "doi": "10.1364/OL.11.000662",
+  "description": "Raman-induced soliton self-frequency shift (SSFS) of a fundamental soliton: measured rate vs the analytic Gordon formula and the paper's 'one spectral width in ~100 m' statement.",
+  "central_wavelength_nm": 1500.0,
+  "dispersion_ps_nm_km": 15.0,
+  "pulse_fwhm_fs": 250.0,
+  "gamma_per_Wm": 1.3e-3,
+  "length_m": 20.0,
+  "grid_N": 4096,
+  "grid_Tmax_ps": 20.0,
+  "raman": {"raman_shift_cm": 440.0, "raman_linewidth_cm": 45.0, "fR": 0.18, "tau1_fs": 12.2, "tau2_fs": 32.0},
+  "rate_tolerance_low": 0.5,
+  "rate_tolerance_high": 2.0
+}

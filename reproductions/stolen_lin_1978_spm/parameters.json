@@ -1,0 +1,14 @@
+{
+  "paper": "R. H. Stolen and C. Lin, Self-phase-modulation in silica optical fibers, Phys. Rev. A 17, 1448 (1978)",
+  "doi": "10.1103/PhysRevA.17.1448",
+  "description": "SPM spectral broadening of a Gaussian pulse; analytic Fourier integral + peak-count rule.",
+  "central_wavelength_nm": 1064.0,
+  "pulse_width_T0_fs": 1000.0,
+  "peak_power_W": 10.0,
+  "gamma_per_Wm": 10.0,
+  "phi_max_over_pi": [1, 2, 4, 8],
+  "grid_N": 8192,
+  "grid_Tmax_ps": 20.0,
+  "peak_count_rule": "N_peaks = floor(phi_max/pi) + 1",
+  "spectrum_tolerance": 1e-6
+}

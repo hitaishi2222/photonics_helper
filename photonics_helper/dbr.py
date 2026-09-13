@@ -68,7 +68,7 @@ class Block:
 
 
 @dataclass(config={"arbitrary_types_allowed": True})
-class Pattren:
+class Pattern:
     """A repeating DBR layer pattern.
 
     Attributes
@@ -84,10 +84,10 @@ class Pattren:
     mapping: Dict[str, Block]  # Ex {"A": SiO2, "B": Si}
     central_wavelength: Wavelength  # central wavelength for DBR
     _length: float = 0  # length of DBR
-    _out: List[Block] = field(default_factory=list)  # Pattren Out
+    _out: List[Block] = field(default_factory=list)  # Pattern out
 
     def __post_init__(self) -> None:
-        self.make_pattren()
+        self.make_pattern()
 
     @property
     def out(self) -> List[Block]:
@@ -101,7 +101,7 @@ class Pattren:
     def length(self) -> float:
         return self._length
 
-    def make_pattren(self) -> None:
+    def make_pattern(self) -> None:
         """Build the Block list from style and mapping."""
         self._out = []
         start_pos: float = 0
@@ -119,17 +119,16 @@ class Pattren:
     def add_block(self, block: Block, mapping: str, index: int) -> None:
         """Insert a block at *index* in the pattern style."""
         self.style = self.style[:index] + mapping + self.style[index:]
-        print(self.style)
         if mapping not in self.mapping:
             self.mapping[mapping] = block
         self._out = []
-        self.make_pattren()
+        self.make_pattern()
 
     def remove_block(self, index: int) -> None:
         """Remove the block at *index* from the pattern style."""
         self.style = self.style[:index] + self.style[index + 1 :]
         self._out = []
-        self.make_pattren()
+        self.make_pattern()
 
     def get_index(self, wl_micron: float) -> Tuple[List[float], List[float]]:
         """Return [n, k] arrays for all blocks at the given wavelength (μm)."""
@@ -179,7 +178,7 @@ class Pattren:
         plot_2d(self, height=height, overlay_index=overlay_index)
 
 
-def plot_index(pattren: Pattren, wl: Wavelength) -> None:
+def plot_index(pattren: Pattern, wl: Wavelength) -> None:
     """Plot refractive index n across the DBR pattern at wavelength *wl*."""
     n, _ = pattren.get_index(wl.as_um)
     x_min = [pos[0] for pos in pattren._get_positions() if pos]
@@ -195,12 +194,12 @@ def plot_index(pattren: Pattren, wl: Wavelength) -> None:
     plt.show()
 
 
-def plot_2d(pattren: Pattren, height=100e-9, overlay_index: bool = False) -> None:
+def plot_2d(pattren: Pattern, height=100e-9, overlay_index: bool = False) -> None:
     """Plot a 2-D bar chart of the DBR pattern.
 
     Parameters
     ----------
-    pattren : Pattren — the DBR pattern.
+    pattren : Pattern — the DBR pattern.
     height : bar height in metres (default 100 nm).
     overlay_index : if True, overlay refractive index on the bar chart.
     """
@@ -241,10 +240,6 @@ def plot_2d(pattren: Pattren, height=100e-9, overlay_index: bool = False) -> Non
     plt.show()
 
 
-# Public alias for the historical typo in class name.
-Pattern = Pattren
-
-
 @dataclass(config={"arbitrary_types_allowed": True})
 class TMM:
     """Transfer-matrix method for a DBR stack.
@@ -254,12 +249,12 @@ class TMM:
 
     Attributes
     ----------
-    pattern : Pattren — the layer stack.
+    pattern : Pattern — the layer stack.
     angle_of_incidence : angle of incidence in radians.
     polarisation : "TE" or "TM".
     """
 
-    pattern: Pattren
+    pattern: Pattern
     angle_of_incidence: float
     polarisation: Literal["TE", "TM"]
 
@@ -303,14 +298,20 @@ class TMM:
 
         Uses the optical admittance formalism so that absorbing layers
         (complex n) are handled correctly.  The returned matrix M relates
-        the tangential E and H fields at the front and back of the stack:
+        the tangential E and H fields at the back and front of the stack::
+
             [E_front]   [M11  M12] [E_back]
             [H_front] = [M21  M22] [H_back]
+
+        Each layer's characteristic matrix maps the fields at its *back*
+        interface to its *front* interface, so the stack matrix is the
+        ordered product ``M_1 @ M_2 @ ... @ M_n`` with layer 1 at the
+        incident side (Macleod, *Thin-Film Optical Filters*, Eq. 2.55).
         """
         M_total = np.identity(2, dtype=complex)
         for letter in self.pattern.style:
             M_layer = self._characteristic_matrix(letter, wavelength)
-            M_total = M_layer @ M_total
+            M_total = M_total @ M_layer
         return M_total
 
     def spectrum(self, wavelengths: WavelengthArray) -> tuple[NDArray, NDArray]:
@@ -340,13 +341,13 @@ class TMM:
         """Optical admittance η = n·cos(θ) for TE, n/cos(θ) for TM."""
         if self.polarisation == "TE":
             cos_t = np.cos(angle)
-            return n * cos_t
+            return complex(n * cos_t)
         else:
             sin_t = np.sin(angle) / n
             if np.isrealobj(sin_t):
                 sin_t = np.clip(sin_t, -1.0, 1.0)
             cos_t = np.sqrt(1.0 - sin_t**2)
-            return n / cos_t
+            return complex(n / cos_t)
 
     def _reflection_coefficient(self, wavelength: Wavelength) -> complex:
         """Overall reflection coefficient via characteristic matrix formalism."""
@@ -355,13 +356,36 @@ class TMM:
         eta_exit = self._admittance(1.0 + 0j, 0.0)
         M11, M12, M21, M22 = M[0, 0], M[0, 1], M[1, 0], M[1, 1]
         denom = eta0 * M11 + eta0 * eta_exit * M12 + M21 + eta_exit * M22
-        return (eta0 * M11 + eta0 * eta_exit * M12 - M21 - eta_exit * M22) / denom
+        return complex(
+            (eta0 * M11 + eta0 * eta_exit * M12 - M21 - eta_exit * M22) / denom
+        )
 
-    def field_profile(self, wavelength: Wavelength) -> NDArray:
+    def field_profile(
+        self, wavelength: Wavelength, return_positions: bool = False
+    ) -> NDArray | tuple[list[Length], NDArray]:
         """Compute |E(z)| inside the stack at a single wavelength.
 
         Returns one value per layer: the magnitude of the total electric
         field at the *front* of each layer (just after the interface).
+
+        Because the characteristic matrix maps fields at the back of a layer
+        to its front, forward propagation through a layer uses the inverse
+        relation ``solve(M_layer, [E, H])`` — multiplying by ``M_layer`` would
+        propagate the wrong way.
+
+        Parameters
+        ----------
+        wavelength : Wavelength
+            Vacuum wavelength (m).
+        return_positions : bool
+            When True, also return the front-interface positions in metres.
+
+        Returns
+        -------
+        |E| : NDArray
+            Field magnitude at the front of each layer.
+        positions : list[Length], optional
+            Interface positions, only when ``return_positions=True``.
         """
         r_total = self._reflection_coefficient(wavelength)
         eta0 = self._admittance(1.0 + 0j, self.angle_of_incidence)
@@ -370,22 +394,52 @@ class TMM:
         # H_forward = eta0 * E_forward,  H_backward = -eta0 * E_backward
         # At the front face: E_total = E_f + E_b,  H_total = eta0*(E_f - E_b)
         # With E_f = 1, E_b = r_total:
-        E_front = 1.0 + r_total
-        H_front = eta0 * (1.0 - r_total)
+        E_cur: complex = 1.0 + r_total
+        H_cur: complex = eta0 * (1.0 - r_total)
 
         field_vals: List[float] = []
-        E_cur = E_front
-        H_cur = H_front
+        positions: List[Length] = []
+        layer_positions = self.pattern._get_positions()
 
-        for letter in self.pattern.style:
+        for idx, letter in enumerate(self.pattern.style):
             M_layer = self._characteristic_matrix(letter, wavelength)
             # Record |E| at the front of this layer
             field_vals.append(np.abs(E_cur))
-            # Propagate through the layer
-            M11, M12 = M_layer[0, 0], M_layer[0, 1]
-            M21, M22 = M_layer[1, 0], M_layer[1, 1]
-            E_new = M11 * E_cur + M12 * H_cur
-            H_new = M21 * E_cur + M22 * H_cur
-            E_cur = E_new
-            H_cur = H_new
+            pos = layer_positions[idx]
+            positions.append(Length(float(pos[0]) if pos is not None else 0.0, "m"))
+            # Propagate forward through the layer: [E,H]_back = M^{-1}[E,H]_front
+            E_cur, H_cur = np.linalg.solve(M_layer, np.array([E_cur, H_cur]))
+
+        if return_positions:
+            return positions, np.array(field_vals, dtype=float)
         return np.array(field_vals, dtype=float)
+
+    def plot_spectrum(self, wavelengths: WavelengthArray, ax=None):
+        """Plot reflectance R(λ), transmittance T(λ) and absorption A(λ).
+
+        Parameters
+        ----------
+        wavelengths : WavelengthArray — wavelength grid.
+        ax : matplotlib Axes, optional — axis to draw on.
+
+        Returns
+        -------
+        fig : matplotlib Figure
+        """
+        import matplotlib.pyplot as plt
+
+        R, T = self.spectrum(wavelengths)
+        wl_nm = wavelengths.as_nm
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(8, 5))
+        else:
+            fig = ax.figure
+        ax.plot(wl_nm, R, label="R", color="C0")
+        ax.plot(wl_nm, T, label="T", color="C1")
+        ax.plot(wl_nm, 1.0 - R - T, label="A", color="C2", alpha=0.6)
+        ax.set_xlabel("Wavelength (nm)")
+        ax.set_ylabel("Fraction")
+        ax.set_title(f"DBR spectrum ({self.polarisation}, {np.rad2deg(self.angle_of_incidence):.1f}°)")
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        return fig

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
-from typing import Literal, TYPE_CHECKING
+from typing import Literal, TYPE_CHECKING, overload, cast
 from functools import cached_property
 import warnings
 
@@ -52,7 +52,7 @@ if TYPE_CHECKING:
 
 # Hardcoded reference materials for v1 (before DB is populated)
 # These will be replaced by DB lookup when materials.db is available
-RAMAN_MATERIALS = {
+RAMAN_MATERIALS: dict[str, dict] = {
     "Silica": {
         "name": "Silica",
         "crystal": "Amorphous SiO2",
@@ -182,6 +182,19 @@ RAMAN_MATERIALS = {
         "lo_phonon_cm": None,
         "to_phonon_cm": None,
         "references": "Zymla et al., J. Raman Spectrosc. (2025); Lacava et al., Sci. Rep. 7, 41598 (2017)",
+    },
+    "Si3N4-Ligentec": {
+        "name": "Si3N4-Ligentec",
+        "crystal": "Amorphous (LPCVD stoichiometric, Ligentec platform)",
+        "bandgap_eV": 4.9,
+        "n2": 2.4e-19,
+        "raman_shift_cm": 206,
+        "raman_linewidth_cm": 50,
+        "fR": None,
+        "gain_coeff": None,
+        "lo_phonon_cm": None,
+        "to_phonon_cm": None,
+        "references": "Rehan et al., ACS Photonics (2025), arXiv:2501.10575 (n≈2.0 @1550nm); base Sellmeier fit Luke et al., Opt. Express 23, 22808 (2015)",
     },
     "SiC_4H": {
         "name": "SiC_4H",
@@ -460,7 +473,7 @@ RAMAN_MATERIALS = {
 
 # Thorlabs optical substrates (refractive index / Sellmeier; no Raman response)
 # https://www.thorlabs.com/optical-substrates
-THORLABS_SUBSTRATE_MATERIALS = {
+THORLABS_SUBSTRATE_MATERIALS: dict[str, dict] = {
     "N-BK7": {
         "name": "N-BK7",
         "crystal": "Borosilicate crown glass",
@@ -679,7 +692,7 @@ class RamanSpec:
                 v = values.get(key)
                 if v is not None and not isinstance(v, target_type):
                     values[key] = target_type(v, unit)
-        return values
+        return dict(values)
 
     @model_validator(mode="after")
     def _validate(self) -> "RamanSpec":
@@ -788,7 +801,7 @@ class RamanSpec:
         wavelengths = []
         for mode in self.phonon_modes:
             nu_pump = C_MS / pump_wl.as_m
-            nu_stokes = nu_pump - C_MS * mode.shift_cm * 100.0
+            nu_stokes = nu_pump - C_MS * mode.shift_cm.as_1_cm * 100.0
             if nu_stokes > 0:
                 wavelengths.append(Wavelength(C_MS / nu_stokes, "m"))
         return wavelengths
@@ -851,7 +864,7 @@ class RamanSpec:
                     f"'{self.name}': {sources}. Select one via "
                     f"nk(wavelength, source='{sources[0]}')."
                 )
-            wl, n_tab, k_tab = db.get_nk_data(self.name)  # type: ignore[arg-type]
+            wl, n_tab, k_tab = db.get_nk_data(cast("NKMaterial", self.name))
 
         if len(wl) > 0:
             # Interpolate from tabulated data
@@ -1160,9 +1173,15 @@ class RamanDatabase:
                 object.__setattr__(self, "db_path", home_db)
         self._init_db()
 
+    @property
+    def _path(self) -> Path:
+        """Resolved database path (always set by ``__post_init__``)."""
+        assert self.db_path is not None
+        return self.db_path
+
     def _init_db(self):
         """Create tables if they don't exist."""
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self._path)
         cursor = conn.cursor()
 
         cursor.execute("""
@@ -1239,7 +1258,7 @@ class RamanDatabase:
         """Populate an empty user-home DB from RAMAN_MATERIALS (not test/temp paths)."""
         if self.list_materials():
             return
-        db_path = Path(self.db_path).resolve()
+        db_path = Path(self._path).resolve()
         bundled = Path(__file__).parent / "materials.db"
         if bundled.exists() and db_path == bundled.resolve():
             return
@@ -1258,7 +1277,7 @@ class RamanDatabase:
         ----------
         spec : dict with material properties
         """
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self._path)
         cursor = conn.cursor()
 
         cursor.execute(
@@ -1299,7 +1318,7 @@ class RamanDatabase:
         -------
         dict with material properties, or None if not found
         """
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self._path)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
@@ -1319,7 +1338,7 @@ class RamanDatabase:
         -------
         list of material names
         """
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self._path)
         cursor = conn.cursor()
 
         cursor.execute("SELECT name FROM raman_specs ORDER BY name")
@@ -1343,7 +1362,7 @@ class RamanDatabase:
         if not isinstance(mode, PhononMode):
             raise TypeError("mode must be a PhononMode instance")
 
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self._path)
         cursor = conn.cursor()
 
         cursor.execute(
@@ -1355,12 +1374,12 @@ class RamanDatabase:
         """,
             (
                 material,
-                mode.shift_cm,
-                mode.linewidth_cm,
+                mode.shift_cm.as_1_cm,
+                mode.linewidth_cm.as_1_cm,
                 mode.symmetry,
                 mode.relative_strength,
-                mode.lo_phonon_cm,
-                mode.to_phonon_cm,
+                mode.lo_phonon_cm.as_1_cm if mode.lo_phonon_cm is not None else None,
+                mode.to_phonon_cm.as_1_cm if mode.to_phonon_cm is not None else None,
                 mode.note,
             ),
         )
@@ -1383,7 +1402,7 @@ class RamanDatabase:
         """
         from .phonon import PhononMode
 
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self._path)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
@@ -1418,7 +1437,7 @@ class RamanDatabase:
         list[str]
             Material names that have phonon_modes entries.
         """
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self._path)
         cursor = conn.cursor()
 
         cursor.execute("SELECT DISTINCT material FROM phonon_modes ORDER BY material")
@@ -1455,7 +1474,7 @@ class RamanDatabase:
         if not kwargs:
             return
 
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self._path)
         cursor = conn.cursor()
 
         # Build UPDATE query dynamically
@@ -1474,7 +1493,7 @@ class RamanDatabase:
         ----------
         name : Material name
         """
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self._path)
         cursor = conn.cursor()
 
         cursor.execute("DELETE FROM raman_specs WHERE name = ?", (name,))
@@ -1505,7 +1524,7 @@ class RamanDatabase:
         citation : Optional full reference the (n, k) values were taken from.
             Stored for traceability; when omitted the row has no citation.
         """
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self._path)
         cursor = conn.cursor()
 
         cursor.execute(
@@ -1518,6 +1537,16 @@ class RamanDatabase:
 
         conn.commit()
         conn.close()
+
+    @overload
+    def get_nk_data(
+        self, material: NKMaterial, with_source: Literal[False] = ...
+    ) -> tuple[NDArray, NDArray, NDArray]: ...
+
+    @overload
+    def get_nk_data(
+        self, material: NKMaterial, with_source: Literal[True]
+    ) -> tuple[NDArray, NDArray, NDArray, NDArray]: ...
 
     def get_nk_data(
         self, material: NKMaterial, with_source: bool = False
@@ -1535,7 +1564,7 @@ class RamanDatabase:
         -------
         (wavelength_um, n, k) or (wavelength_um, n, k, source) as numpy arrays
         """
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self._path)
         cursor = conn.cursor()
 
         cols = "wavelength_um, n, k"
@@ -1575,7 +1604,7 @@ class RamanDatabase:
         -------
         sorted list of distinct source keys (may include None values)
         """
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self._path)
         cursor = conn.cursor()
 
         cursor.execute(
@@ -1599,7 +1628,7 @@ class RamanDatabase:
         -------
         dict mapping each ``source`` key to its full citation text
         """
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self._path)
         cursor = conn.cursor()
 
         cursor.execute(
@@ -1626,7 +1655,7 @@ class RamanDatabase:
         -------
         Number of rows removed.
         """
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self._path)
         cursor = conn.cursor()
         cursor.execute("DELETE FROM nk_data WHERE source IS NOT NULL")
         removed = cursor.rowcount
@@ -1672,7 +1701,7 @@ class RamanDatabase:
         ``n_central``, ``k_central`` and ``central_wl_um``. Central-wavelength
         n/k is obtained by linear interpolation onto a fine grid.
         """
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self._path)
         rows = conn.execute(
             """
             SELECT material, source,
@@ -1744,7 +1773,7 @@ class RamanDatabase:
         """
         import json
 
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self._path)
         cursor = conn.cursor()
 
         cursor.execute(
@@ -1781,7 +1810,7 @@ class RamanDatabase:
         """
         import json
 
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self._path)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
@@ -1810,7 +1839,7 @@ class RamanDatabase:
         -------
         list of matching materials
         """
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self._path)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
@@ -1835,7 +1864,7 @@ class RamanDatabase:
         -------
         dict mapping material names to property dicts
         """
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self._path)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
@@ -1852,7 +1881,7 @@ class RamanDatabase:
         ----------
         data : dict mapping material names to property dicts
         """
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self._path)
         cursor = conn.cursor()
 
         for name, spec in data.items():
@@ -2244,7 +2273,7 @@ class RamanFrequencyResponse:
     @property
     def H_magnitude(self) -> NDArray:
         """Magnitude |H(Ω)|."""
-        return np.abs(self.H)
+        return np.asarray(np.abs(self.H))
 
     @property
     def H_phase(self) -> NDArray:
@@ -2259,7 +2288,7 @@ class RamanFrequencyResponse:
         w_pos = self.grid.w[positive_mask]  # type: ignore
         imag_pos = self.H_imag[positive_mask]
         peak_idx = np.argmax(np.abs(imag_pos))
-        return w_pos[peak_idx] / (2 * np.pi * 1e12)  # rad/s → THz
+        return float(w_pos[peak_idx] / (2 * np.pi * 1e12))  # rad/s → THz
 
     @property
     def resonance_FWHM_THz(self) -> float:
@@ -2279,7 +2308,7 @@ class RamanFrequencyResponse:
         if len(left_idx) > 0 and len(right_idx) > 0:
             w_left = w[left_idx[-1]]
             w_right = w[peak_idx + right_idx[0]]
-            return w_right - w_left
+            return float(w_right - w_left)
 
         # Fallback: use grid resolution
         return float(self.grid.dw / (2 * np.pi * 1e12))  # type: ignore
@@ -2628,7 +2657,7 @@ class RamanPulseInteraction:
             # For custom time range, recompute intensity on the fly
             from photonics_helper.pulse import TemporalGrid
 
-            custom_grid = TemporalGrid(N=len(t), Tmax=t_max * 1e-12)
+            custom_grid = TemporalGrid(N=len(t), Tmax=Time(t_max * 1e-12, "s"))
             custom_grid.t = t  # type: ignore[reportAttributeAccessIssue]  # override cached_property via instance dict
             I_t = np.abs(self.pulse.envelope_field) ** 2
             # Use grid-based computation for consistency
@@ -3944,7 +3973,7 @@ class MaterialComparison:
                 (1.0 / (np.pi * s.linewidth_Hz) if s.linewidth_Hz > 0 else 1e-12)
                 for s in self.materials
             )
-            grid = TemporalGrid(N=2**14, Tmax=max(10e-12, 20 * max_tau2))
+            grid = TemporalGrid(N=2**14, Tmax=Time(max(10e-12, 20 * max_tau2), "s"))
 
         if backend == "plotly":
             if not HAS_PLOTLY:
@@ -4112,7 +4141,7 @@ class MaterialComparison:
                 (1.0 / (np.pi * s.linewidth_Hz) if s.linewidth_Hz > 0 else 1e-12)
                 for s in self.materials
             )
-            grid = TemporalGrid(N=2**14, Tmax=max(10e-12, 20 * max_tau2))
+            grid = TemporalGrid(N=2**14, Tmax=Time(max(10e-12, 20 * max_tau2), "s"))
 
         if backend == "plotly":
             if not HAS_PLOTLY:
@@ -4292,7 +4321,7 @@ class MaterialComparison:
                 (1.0 / (np.pi * s.linewidth_Hz) if s.linewidth_Hz > 0 else 1e-12)
                 for s in self.materials
             )
-            grid = TemporalGrid(N=2**14, Tmax=max(10e-12, 20 * max_tau2))
+            grid = TemporalGrid(N=2**14, Tmax=Time(max(10e-12, 20 * max_tau2), "s"))
 
         if backend == "plotly":
             if not HAS_PLOTLY:
@@ -4826,7 +4855,7 @@ def app() -> "dash.Dash":  # type: ignore[valid-type]
             from photonics_helper.pulse import Wave, Envelope
             from photonics_helper.base import Time
 
-            grid = TemporalGrid(N=2**14, Tmax=20e-12)
+            grid = TemporalGrid(N=2**14, Tmax=Time(20e-12, "s"))
             envelope = Envelope(
                 shape="gaussian", peak_amplitude=1.0, pulse_width=Time(100, "fs")
             )
@@ -4857,7 +4886,7 @@ def app() -> "dash.Dash":  # type: ignore[valid-type]
             comp = MaterialComparison(
                 materials=[spec, RamanSpec.from_database("Silica")]
             )
-            grid = TemporalGrid(N=2**14, Tmax=10e-12)
+            grid = TemporalGrid(N=2**14, Tmax=Time(10e-12, "s"))
             fig = comp.plot_all(backend="matplotlib", grid=grid, figsize=(12, 11))
             summary_lines.append(comp.comparison_table())
 

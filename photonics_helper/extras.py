@@ -28,9 +28,9 @@ def create_mode_animation(
             raise ValueError(f"Image path {img} escapes export directory")
         filepath.append(p)
 
-    img = [io.imread(file) for file in filepath]
+    frames = [io.imread(file) for file in filepath]
     if ".gif" not in export_name:
         export_name += ".gif"
 
-    io.mimsave(str(export_dir / export_name), img, format="gif", duration=0.2)  # type: ignore[call-overload]
+    io.mimsave(str(export_dir / export_name), frames, format="gif", duration=0.2)  # type: ignore[call-overload]
 

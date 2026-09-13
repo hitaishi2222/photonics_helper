@@ -13,7 +13,11 @@ cleared and re-inserted from the manifest on each run.
 """
 
 import argparse
+import sqlite3
 from pathlib import Path
+
+import numpy as np
+
 from photonics_helper.raman import (
     RAMAN_MATERIALS,
     THORLABS_SUBSTRATE_MATERIALS,
@@ -189,12 +193,27 @@ SELLMEIER_MATERIALS = {
     },
     "Si3N4": {
         "form": "standard",
-        "a0": 2.965400,
-        "coefficients": [0.062620, 0.001300, 0.0],
-        "wavelengths": [0.019000, 0.000000, 0.0],
-        "valid_from_um": 0.3,
-        "valid_to_um": 5.5,
-        "source": "Prokes et al.",
+        "a0": 1.0,
+        "coefficients": [2.8939],
+        "wavelengths": [0.139670 ** 2],  # B = lambda_res^2 (um^2)
+        "valid_from_um": 0.21,
+        "valid_to_um": 1.24,
+        "source": (
+            "Philipp, J. Electrochem. Soc. 120, 295 (1973); "
+            "Baak, Appl. Opt. 21, 1069 (1982)"
+        ),
+    },
+    "Si3N4-Ligentec": {
+        "form": "standard",
+        "a0": 1.0,
+        "coefficients": [3.0249, 40314.0],
+        "wavelengths": [0.1353406 ** 2, 1239.842 ** 2],  # B = lambda_res^2 (um^2)
+        "valid_from_um": 0.31,
+        "valid_to_um": 5.504,
+        "source": (
+            "Luke et al., Opt. Lett. 40, 4823 (2015) (refractiveindex.info); "
+            "LPCVD SiN used for Ligentec platform in Rehan et al., ACS Photonics (2025)"
+        ),
     },
     "YLF": {
         "form": "standard",
@@ -353,6 +372,70 @@ def seed_nk_data(db: RamanDatabase) -> None:
     print(f"\nDone. {count} Sellmeier coefficients seeded.")
 
 
+def _sellmeier_n(a0: float, A, B, wl_um: float) -> float:
+    """Evaluate standard Sellmeier n(λ) at one wavelength, NaN on a pole."""
+    l2 = wl_um**2
+    with np.errstate(divide="ignore", invalid="ignore"):
+        terms = sum(a * l2 / (l2 - b) for a, b in zip(A, B))
+        n2 = a0 + terms
+    if not np.isfinite(n2) or n2 <= 0:
+        return float("nan")
+    return float(np.sqrt(n2))
+
+
+def validate_sellmeier_vs_tabulated(db: RamanDatabase, tol: float = 0.02) -> list[str]:
+    """Flag Sellmeier entries whose n(lambda) disagrees with tabulated nk_data.
+
+    For every Sellmeier material that has tabulated data under the same base
+    name (optionally with a ``-variant`` suffix), sample the overlap of the two
+    wavelength ranges and compare the median relative difference. Differences
+    beyond ``tol`` (default 2%) are reported so mislabelled or mistyped
+    coefficients can be caught at seed time.  Using the median (rather than a
+    single point) tolerates the real few-percent spread between thin-film
+    datasets from different sources.
+
+    Returns the list of warning strings.
+    """
+    warnings: list[str] = []
+    summaries = db.list_nk_dataset_summaries()
+    for name in db.list_materials():
+        sell = db.get_sellmeier(name)
+        if sell is None:
+            continue
+        base = name.split("-")[0]
+        for s in summaries:
+            if s["material"] not in (name, base):
+                continue
+            try:
+                wl_tab, n_tab, _k_tab = db.get_nk_by_source(s["material"], s["source"])
+            except (ValueError, TypeError, sqlite3.Error):
+                continue
+            wl_tab = np.asarray(wl_tab, dtype=float)
+            n_tab = np.asarray(n_tab, dtype=float)
+            if wl_tab.size < 2:
+                continue
+            lo = max(sell["valid_from_um"], float(wl_tab.min()))
+            hi = min(sell["valid_to_um"], float(wl_tab.max()))
+            if hi <= lo:
+                continue
+            sample = np.linspace(lo, hi, 9)
+            n_sell = np.array(
+                [_sellmeier_n(sell["a0"], sell["coefficients"], sell["wavelengths"], w) for w in sample]
+            )
+            n_ref = np.interp(sample, wl_tab, n_tab)
+            mask = np.isfinite(n_sell)
+            if not mask.any():
+                continue
+            rel = np.abs(n_sell[mask] - n_ref[mask]) / np.abs(n_ref[mask])
+            median_rel = float(np.median(rel))
+            if median_rel > tol:
+                warnings.append(
+                    f"{name} vs {s['source']}: median n(lambda) differs by "
+                    f"{median_rel * 100:.1f}% over {lo:.3f}-{hi:.3f} um"
+                )
+    return warnings
+
+
 MANIFEST_PATH = Path(__file__).parent / "nk_datasets" / "manifest.json"
 
 
@@ -437,6 +520,14 @@ def main():
 
         seed_nk_data(db)
         seed_tabulated_nk(db)
+
+        mismatches = validate_sellmeier_vs_tabulated(db)
+        if mismatches:
+            print("\nSellmeier/tabulated consistency warnings:")
+            for msg in mismatches:
+                print(f"  WARNING: {msg}")
+        else:
+            print("\nSellmeier/tabulated consistency check passed.")
 
 
 if __name__ == "__main__":

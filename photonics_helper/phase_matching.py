@@ -47,13 +47,17 @@ from dataclasses import dataclass, field
 from math import factorial
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
+import warnings
+
 import numpy as np
 from numpy.typing import NDArray
 from scipy.optimize import root_scalar
 from scipy.signal import find_peaks
 from scipy.integrate import cumulative_trapezoid
 
-from .base import C_MS, PI, Wavelength, WavelengthArray, AngularFrequency, AngularFrequencyArray
+import matplotlib.pyplot as plt
+
+from .base import C_MS, PI, Length, Wavelength, WavelengthArray, AngularFrequency, AngularFrequencyArray
 
 if TYPE_CHECKING:
     from .fiber import Dispersion, PropagationConstant, ZDependentDispersion
@@ -150,7 +154,7 @@ class DispersionAdaptor:
         result = self._beta_spline(omega_arr)
         if scalar:
             return float(result[0])
-        return result
+        return np.asarray(result)
 
     def beta1(self, omega: NDArray | float) -> NDArray | float:
         """Return β₁(ω) = dβ/dω via spline interpolation of pre-integrated values."""
@@ -159,7 +163,7 @@ class DispersionAdaptor:
         result = self._beta1_spline(omega_arr)
         if scalar:
             return float(result[0])
-        return result
+        return np.asarray(result)
 
 
 class PropagationConstantAdaptor:
@@ -175,17 +179,18 @@ class PropagationConstantAdaptor:
         from scipy.interpolate import InterpolatedUnivariateSpline
 
         if isinstance(pc.x_values, WavelengthArray):
-            omega_arr = pc.x_values.to_omega().as_rad_s
+            omega_arr = np.asarray(pc.x_values.to_omega().as_rad_s, dtype=float)
         else:
-            omega_arr = pc.x_values.as_rad_s
+            omega_arr = np.asarray(pc.x_values.as_rad_s, dtype=float)
 
-        self._beta_interp = InterpolatedUnivariateSpline(
-            omega_arr, pc.values, k=3
-        )
-        self._beta1_interp = InterpolatedUnivariateSpline(
-            omega_arr, pc.values, k=3
-        )
-        self._beta1_interp.derivative()  # prepare derivative
+        # Wavelengths are usually ascending, which makes ω descending.  The
+        # spline requires strictly increasing ω, so sort and reorder β.
+        beta_vals = np.asarray(pc.values, dtype=float)
+        order = np.argsort(omega_arr)
+        omega_arr = omega_arr[order]
+        beta_vals = beta_vals[order]
+
+        self._beta_interp = InterpolatedUnivariateSpline(omega_arr, beta_vals, k=3)
 
     def __call__(self, omega: NDArray | float) -> NDArray | float:
         """Return β(ω)."""
@@ -195,7 +200,7 @@ class PropagationConstantAdaptor:
         result = self._beta_interp(np.atleast_1d(np.asarray(omega, dtype=float)))
         if np.isscalar(omega):
             return float(result[0])
-        return result
+        return np.asarray(result)
 
     def beta1(self, omega: NDArray | float) -> NDArray | float:
         omega_arr = np.atleast_1d(np.asarray(omega, dtype=float))
@@ -203,7 +208,7 @@ class PropagationConstantAdaptor:
         dbeta_domega = self._beta_interp.derivative()(omega_arr)
         if np.isscalar(omega):
             return float(dbeta_domega[0])
-        return dbeta_domega
+        return np.asarray(dbeta_domega)
 
 
 class ZDependentDispersionAdaptor:
@@ -236,7 +241,7 @@ class ZDependentDispersionAdaptor:
         domega = 1e6
         beta_plus = self._zd.fn(omega_arr + domega, self._z)
         beta_minus = self._zd.fn(omega_arr - domega, self._z)
-        beta1_vals = (beta_plus - beta_minus) / (2 * domega)
+        beta1_vals = np.asarray((beta_plus - beta_minus) / (2 * domega))
         if scalar:
             return float(beta1_vals[0])
         return beta1_vals
@@ -377,7 +382,7 @@ def fwm_delta_beta_degenerate(
     beta_s = beta_fn(omega_s)
     omega_i = 2 * omega_p - omega_s
     beta_i = beta_fn(omega_i)
-    return 2 * beta_p - beta_s - beta_i
+    return float(2 * beta_p - beta_s - beta_i)
 
 
 def fwm_delta_beta_general(
@@ -401,7 +406,7 @@ def fwm_delta_beta_general(
     -------
     delta_beta : float — phase mismatch (1/m).
     """
-    return beta_fn(omega_1) + beta_fn(omega_2) - beta_fn(omega_3) - beta_fn(omega_4)
+    return float(beta_fn(omega_1) + beta_fn(omega_2) - beta_fn(omega_3) - beta_fn(omega_4))
 
 
 def fwm_efficiency(delta_beta: float | NDArray, length_m: float, alpha: float = 0.0) -> float | NDArray:
@@ -554,7 +559,7 @@ def mi_gain_spectrum(
     gamma: float,
     P: float,
     omega_m: NDArray | float | None = None,
-) -> NDArray | float:
+) -> NDArray | float | dict:
     """Compute classical MI gain g(Ω).
 
     g(Ω) = 2|β₂|Ω√(Ω²_c − Ω²) for β₂ < 0 (anomalous), Ω < Ω_c
@@ -777,14 +782,14 @@ def dispersive_wave_roots(
         else:
             # Finite difference fallback
             domega = 1e6
-            beta_plus = beta_fn(omega_sol + domega)
-            beta_minus = beta_fn(omega_sol - domega)
+            beta_plus = beta_fn(omega_sol_val + domega)
+            beta_minus = beta_fn(omega_sol_val - domega)
             beta1_sol = (beta_plus - beta_minus) / (2 * domega)
-    except Exception:
+    except (ValueError, TypeError, RuntimeError, ZeroDivisionError):
         # Last resort: finite difference with larger offset
         domega = 1e12
-        beta_plus = beta_fn(omega_sol + domega)
-        beta_minus = beta_fn(omega_sol - domega)
+        beta_plus = beta_fn(omega_sol_val + domega)
+        beta_minus = beta_fn(omega_sol_val - domega)
         beta1_sol = (beta_plus - beta_minus) / (2 * domega)
 
     # Define the RHS: β(ωₛ) + β₁(ωₛ)(ω − ωₛ) + q_sol
@@ -826,13 +831,13 @@ def dispersive_wave_roots(
                     wl_check = AngularFrequency(res.root, "rad/s").to_wl().as_nm
                     if wl_min.as_nm <= wl_check <= wl_max.as_nm:
                         roots_omega.append(float(res.root))
-            except Exception:
+            except (ValueError, RuntimeError, ZeroDivisionError, FloatingPointError):
                 continue
 
     # Deduplicate and sort
-    unique_roots = []
+    unique_roots: list[float] = []
     for r in roots_omega:
-        r_val = float(r) if hasattr(r, '__float__') else float(r[0])
+        r_val = float(r)
         if not any(np.isclose(r_val, u, atol=1e-6) for u in unique_roots):
             unique_roots.append(r_val)
     roots_omega = sorted(unique_roots)
@@ -922,9 +927,9 @@ def _taylor_phase_max_error(
 
     beta_carrier = adaptor.beta(omega0)
     if np.isscalar(beta_carrier):
-        beta_carrier = float(beta_carrier)
+        beta_carrier = float(np.real(beta_carrier))
     else:
-        beta_carrier = float(np.asarray(beta_carrier)[0])
+        beta_carrier = float(np.real(np.asarray(beta_carrier)[0]))
 
     phi_full = np.asarray(adaptor.beta(omega_abs), dtype=float) - beta_carrier
 
@@ -951,7 +956,7 @@ def assess_simulation_readiness(
     fiber: "FiberProfile",
     dispersion,
     betas: NDArray | None = None,
-    length: float | None = None,
+    length: Length | None = None,
 ) -> SimulationReadinessReport:
     """Assess whether a proposed GNLSE simulation is adequately set up.
 
@@ -964,7 +969,7 @@ def assess_simulation_readiness(
     fiber : FiberProfile — fiber parameters.
     dispersion : Dispersion or ZDependentDispersion or PropagationConstant — dispersion source.
     betas : NDArray — Taylor coefficients [β₂, β₃, ...] in ps^k/m. Optional.
-    length : float — propagation length (m). If None, uses fiber.length.
+    length : Length — propagation length. If None, uses fiber.length.
 
     Returns
     -------
@@ -973,7 +978,11 @@ def assess_simulation_readiness(
     from .gnlse import _gamma
 
     if length is None:
-        length = fiber.length.as_m
+        length_m = fiber.length.as_m
+    elif isinstance(length, Length):
+        length_m = length.as_m
+    else:  # tolerate a bare float in metres for backwards compatibility
+        length_m = float(length)
 
     omega0 = pulse.central_frequency
     T0 = pulse.envelope.pulse_width.as_s
@@ -1021,6 +1030,13 @@ def assess_simulation_readiness(
         # Try to extract from dispersion
         beta2_si = _estimate_beta2(dispersion, omega0)
         if beta2_si is None:
+            if dispersion is not None:
+                warnings.warn(
+                    "Could not estimate beta2 from the supplied dispersion "
+                    "source; soliton order and dispersion length are undefined.",
+                    UserWarning,
+                    stacklevel=2,
+                )
             beta2_si = 0.0
 
     L_D = T0 ** 2 / abs(beta2_si) if beta2_si != 0 else float("inf")
@@ -1034,8 +1050,8 @@ def assess_simulation_readiness(
     L_fiss = L_D / (N_sol * 0.7) if N_sol > 0 else float("inf")
 
     # Recommended num_steps
-    dz_base = min(L_D, L_NL) * 0.01 if L_D < float("inf") and L_NL < float("inf") else length / 100
-    recommended_steps = max(int(length / max(dz_base, 1e-30)), 100)
+    dz_base = min(L_D, L_NL) * 0.01 if L_D < float("inf") and L_NL < float("inf") else length_m / 100
+    recommended_steps = max(int(length_m / max(dz_base, 1e-30)), 100)
 
     # Predict processes
     predicted = []
@@ -1044,7 +1060,7 @@ def assess_simulation_readiness(
         predicted.append("dispersive_wave")
     if beta2_si < 0 and gamma * P_peak > 0:
         predicted.append("modulation_instability")
-    if length > L_NL:
+    if length_m > L_NL:
         predicted.append("four_wave_mixing")
 
     # Build warnings and recommendations
@@ -1062,7 +1078,7 @@ def assess_simulation_readiness(
             "with higher order coefficients."
         )
 
-    if L_D < length and N_sol > 3:
+    if L_D < length_m and N_sol > 3:
         warnings_list.append(
             f"High soliton order N={N_sol:.1f} with L_D << L — expect strong fission."
         )
@@ -1073,7 +1089,7 @@ def assess_simulation_readiness(
     if betas is not None and len(betas) > 0 and adaptor is not None and covers:
         try:
             max_phi_err = _taylor_phase_max_error(pulse, np.asarray(betas), adaptor, omega0_val)
-            if max_phi_err > PI / 4:
+            if max_phi_err is not None and max_phi_err > PI / 4:
                 warnings_list.append(
                     f"Taylor dispersion phase error up to {max_phi_err:.3f} rad/m "
                     f"(> π/4) across the pulse grid — Taylor betas may be inadequate."
@@ -1081,13 +1097,18 @@ def assess_simulation_readiness(
                 recommendations_list.append(
                     "Use full β(ω) dispersion (e.g. TaperedGNLSESolver) for this bandwidth."
                 )
-        except Exception:
-            pass
+        except (ValueError, TypeError, RuntimeError) as exc:
+            warnings.warn(
+                f"Taylor phase-error check failed: {exc}",
+                UserWarning,
+                stacklevel=2,
+            )
 
     # MI predictions
-    mi_info = {}
+    mi_info: dict = {}
     if beta2_si < 0 and gamma * P_peak > 0:
-        mi_info = mi_gain_spectrum(beta2_si, gamma, P_peak)
+        mi_result = mi_gain_spectrum(beta2_si, gamma, P_peak)
+        mi_info = mi_result if isinstance(mi_result, dict) else {}
         if isinstance(mi_info, dict):
             omega_peak = AngularFrequency(mi_info["Omega_peak"], "rad/s")
             omega_cutoff = AngularFrequency(mi_info["Omega_cutoff"], "rad/s")
@@ -1115,8 +1136,12 @@ def assess_simulation_readiness(
                 AngularFrequency(omega0_val, "rad/s"),
             )
             dw_preds = dw_result.wavelengths
-        except Exception:
-            pass
+        except (ValueError, TypeError, RuntimeError) as exc:
+            warnings.warn(
+                f"Dispersive-wave root finder failed: {exc}",
+                UserWarning,
+                stacklevel=2,
+            )
     elif betas is not None and len(betas) >= 2 and beta2_si != 0:
         try:
             beta3_si = betas[1] * 1e-27 if len(betas) > 1 else 0.0
@@ -1126,11 +1151,15 @@ def assess_simulation_readiness(
                 if omega_dw > 0:
                     dw_wavelength = AngularFrequency(omega_dw, "rad/s").to_wl()
                     dw_preds = WavelengthArray(np.array([dw_wavelength.as_m]), "m")
-        except Exception:
-            pass
+        except (ValueError, TypeError, ZeroDivisionError) as exc:
+            warnings.warn(
+                f"beta2/beta3 dispersive-wave estimate failed: {exc}",
+                UserWarning,
+                stacklevel=2,
+            )
 
     # FWM predictions (degenerate, signal at DW wavelength if available)
-    fwm_preds = []
+    fwm_preds: list[dict] = []
     if dw_preds.as_m.shape[0] > 0 and len(fwm_preds) == 0:
         # Predict FWM idler for signal near DW
         for dw_wavelength in dw_preds:
@@ -1162,29 +1191,66 @@ def assess_simulation_readiness(
 
 
 def _estimate_beta2(dispersion, omega0: float | AngularFrequency) -> float | None:
-    """Estimate β₂ from a dispersion source object."""
+    """Estimate β₂ (s²/m) from a dispersion source object.
+
+    Supports :class:`Dispersion` (via ``get_beta2_at``),
+    :class:`ZDependentDispersion` (finite difference on ``fn``) and
+    :class:`PropagationConstant` (second difference of the tabulated β).
+    """
     omega0_val = omega0.as_rad_s if isinstance(omega0, AngularFrequency) else omega0
-    
-    if hasattr(dispersion, 'get_beta2'):
-        # Dispersion object
+    if dispersion is None:
+        return None
+
+    if hasattr(dispersion, "get_beta2_at"):
+        # Dispersion object — get_beta2_at takes a Wavelength and returns s²/m.
         wl = AngularFrequency(omega0_val, "rad/s").to_wl()
         try:
-            beta2 = dispersion.get_beta2(wl)
-            # get_beta2 returns in ps²/m (solver convention) or SI
-            # Check magnitude to determine units
-            if abs(beta2) > 1e-20:
-                return beta2 * 1e-24  # ps²/m → s²/m
-            return beta2  # already SI
-        except Exception:
+            return float(dispersion.get_beta2_at(wl))
+        except (ValueError, TypeError) as exc:
+            warnings.warn(
+                f"Could not estimate beta2 from Dispersion: {exc}",
+                UserWarning,
+                stacklevel=3,
+            )
             return None
-    elif hasattr(dispersion, 'omegas') and hasattr(dispersion, 'fn'):
-        # ZDependentDispersion or PropagationConstant
+
+    if hasattr(dispersion, "omegas") and hasattr(dispersion, "fn"):
+        # ZDependentDispersion — finite-difference second derivative of β(ω, z=0).
         domega = 1e12
-        beta_plus = dispersion.fn(omega0_val + domega, 0.0) if hasattr(dispersion, 'fn') else dispersion.fn(omega0_val + domega)
-        beta_center = dispersion.fn(omega0_val, 0.0) if hasattr(dispersion, 'fn') else dispersion.fn(omega0_val)
-        beta_minus = dispersion.fn(omega0_val - domega, 0.0) if hasattr(dispersion, 'fn') else dispersion.fn(omega0_val - domega)
-        beta2 = (beta_plus - 2 * beta_center + beta_minus) / domega ** 2
-        return float(beta2)
+        try:
+            beta_plus = dispersion.fn(omega0_val + domega, 0.0)
+            beta_center = dispersion.fn(omega0_val, 0.0)
+            beta_minus = dispersion.fn(omega0_val - domega, 0.0)
+            return float((beta_plus - 2 * beta_center + beta_minus) / domega**2)
+        except (ValueError, TypeError) as exc:
+            warnings.warn(
+                f"Could not estimate beta2 from ZDependentDispersion: {exc}",
+                UserWarning,
+                stacklevel=3,
+            )
+            return None
+
+    if hasattr(dispersion, "omegas") and hasattr(dispersion, "values"):
+        # PropagationConstant — second difference of the stored β(ω) table.
+        try:
+            om_raw = dispersion.omegas
+            om = np.asarray(
+                om_raw.as_rad_s if hasattr(om_raw, "as_rad_s") else om_raw,
+                dtype=float,
+            )
+            beta = np.asarray(dispersion.values, dtype=float)
+            order = np.argsort(om)
+            om, beta = om[order], beta[order]
+            beta2_arr = np.gradient(np.gradient(beta, om), om)
+            return float(np.interp(omega0_val, om, beta2_arr))
+        except (ValueError, TypeError) as exc:
+            warnings.warn(
+                f"Could not estimate beta2 from PropagationConstant: {exc}",
+                UserWarning,
+                stacklevel=3,
+            )
+            return None
+
     return None
 
 

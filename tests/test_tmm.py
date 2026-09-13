@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 from photonics_helper.base import Wavelength, WavelengthArray, Length
-from photonics_helper.dbr import TMM, Block, Material, Pattren
+from photonics_helper.dbr import TMM, Block, Material, Pattern
 
 
 def _simple_material(name: str, n_val: float, wl_nm: float = 1550.0) -> Material:
@@ -32,7 +32,7 @@ def _simple_material(name: str, n_val: float, wl_nm: float = 1550.0) -> Material
 
 
 @pytest.fixture
-def simple_pattern() -> Pattren:
+def simple_pattern() -> Pattern:
     """A two‑layer DBR pattern ``AB``.
 
     * Layer ``A`` – refractive index 2.0, thickness 200 nm.
@@ -46,10 +46,10 @@ def simple_pattern() -> Pattren:
 
     mapping = {"A": block_a, "B": block_b}
     central = Wavelength(1550, "nm")
-    return Pattren(style="AB", mapping=mapping, central_wavelength=central)
+    return Pattern(style="AB", mapping=mapping, central_wavelength=central)
 
 
-def test_fresnel_reflection_normal_incidence(simple_pattern: Pattren):
+def test_fresnel_reflection_normal_incidence(simple_pattern: Pattern):
     """Validate Fresnel reflection at a single interface at normal incidence.
 
     A quarter-wave layer of n=2 between air (n=1) on both sides has a
@@ -63,7 +63,7 @@ def test_fresnel_reflection_normal_incidence(simple_pattern: Pattren):
     d = wl.as_m / (4 * n_layer)  # quarter-wave optical thickness (meters)
     mat = _simple_material("layer", n_layer, 1550.0)
     block = Block(length=Length(d, "m"), material=mat, colour="gray")
-    pat = Pattren(
+    pat = Pattern(
         style="Q",
         mapping={"Q": block},
         central_wavelength=Wavelength(1.55, "um"),
@@ -77,7 +77,7 @@ def test_fresnel_reflection_normal_incidence(simple_pattern: Pattren):
     )
 
 
-def test_transfer_matrix_consistency(simple_pattern: Pattren):
+def test_transfer_matrix_consistency(simple_pattern: Pattern):
     """Check that the transfer matrix is a 2×2 complex matrix.
 
     The exact numeric value is not critical for this test; we ensure that the
@@ -91,7 +91,7 @@ def test_transfer_matrix_consistency(simple_pattern: Pattren):
     assert np.iscomplexobj(M)
 
 
-def test_spectrum_returns_valid_reflectance_and_transmittance(simple_pattern: Pattren):
+def test_spectrum_returns_valid_reflectance_and_transmittance(simple_pattern: Pattern):
     """The spectrum method should return reflectance and transmittance arrays.
 
     For a loss‑less DBR the sum of reflectance and transmittance should be close
@@ -108,7 +108,7 @@ def test_spectrum_returns_valid_reflectance_and_transmittance(simple_pattern: Pa
     np.testing.assert_allclose(R + T, np.ones_like(R), rtol=1e-6, atol=1e-6)
 
 
-def test_field_profile_length(simple_pattern: Pattren):
+def test_field_profile_length(simple_pattern: Pattern):
     """The field profile should contain one value per layer in the pattern."""
     tmm = TMM(pattern=simple_pattern, angle_of_incidence=0.0, polarisation="TE")
     field = tmm.field_profile(wavelength=Wavelength(1550, "nm"))
@@ -117,13 +117,13 @@ def test_field_profile_length(simple_pattern: Pattren):
     assert np.all(field >= 0)
 
 
-def test_repeated_style_clones_blocks(simple_pattern: Pattren):
+def test_repeated_style_clones_blocks(simple_pattern: Pattern):
     """Repeated style letters must not alias the same Block instance."""
     mat_a = _simple_material("mat_a", 2.0)
     mat_b = _simple_material("mat_b", 1.0)
     block_a = Block(length=Length(100e-9, "m"), material=mat_a, colour="red")
     block_b = Block(length=Length(200e-9, "m"), material=mat_b, colour="blue")
-    pattern = Pattren(
+    pattern = Pattern(
         style="ABAB",
         mapping={"A": block_a, "B": block_b},
         central_wavelength=Wavelength(1550, "nm"),

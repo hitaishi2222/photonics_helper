@@ -29,4 +29,7 @@ graphify-out/
 ./examples/images/
 ./examples/*.html
 
+# Generated reproduction figures (regenerate with `python reproductions/<name>/reproduce.py`)
+reproductions/**/*.png
+
 nk_datasets/yaml/

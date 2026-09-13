@@ -1,0 +1,18 @@
+{
+  "paper": "H. A. Macleod, Thin-Film Optical Filters (quarter-wave DBR stopband); see also M. Born and E. Wolf, Principles of Optics",
+  "doi": "10.1201/9781420064935",
+  "description": "Quarter-wave dielectric mirror: stopband reflectance spectrum validated against the exact characteristic-matrix closed form and the first-order stopband width.",
+  "n_high": 2.5,
+  "n_low": 1.5,
+  "n_incident": 1.0,
+  "n_substrate": 1.0,
+  "central_wavelength_nm": 1550.0,
+  "n_periods": 20,
+  "small_n_periods": [2, 3, 4],
+  "angle_of_incidence_deg": 0.0,
+  "polarisation": "TE",
+  "wavelength_range_nm": [1000.0, 2100.0],
+  "n_points": 4000,
+  "reflectance_tolerance": 1e-6,
+  "stopband_width_tolerance": 0.15
+}

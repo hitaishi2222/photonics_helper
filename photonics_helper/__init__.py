@@ -49,6 +49,14 @@ from .raman import (
 )
 from .phonon import PhononMode, PhononResponse, PHONON_MATERIALS
 from .soliton import SolitonAnalyzer
+from .dbr import (
+    Pattern,
+    TMM,
+    Block,
+    Material,
+    plot_index,
+    plot_2d,
+)
 from .gnlse import FiberProfile, GNLSESolver, SplitStepEngine, TaperedGNLSESolver
 from .phase_matching import (
     DispersionModel,
@@ -123,6 +131,12 @@ __all__ = [
     "PhononResponse",
     "PHONON_MATERIALS",
     "SolitonAnalyzer",
+    "Pattern",
+    "TMM",
+    "Block",
+    "Material",
+    "plot_index",
+    "plot_2d",
     "FiberProfile",
     "GNLSESolver",
     "SplitStepEngine",

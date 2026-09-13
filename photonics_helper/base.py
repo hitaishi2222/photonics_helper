@@ -157,15 +157,15 @@ class Frequency:
     def from_meep(cls, value: float, base_length: Wavelength | None = None) -> Self:
         """Create from MEEP frequency units.
 
-        In MEEP, c = 1, so f_Meep = ν·a.
+        In MEEP, c = 1, so f_Meep = ν·a/c.  Therefore ν = f_Meep·c/a.
         """
         if base_length is None:
             base_length = Wavelength(1.0, "um")
-        return cls(value / base_length.as_m, "Hz")
+        return cls(value * C_MS / base_length.as_m, "Hz")
 
     @cached_property
     def as_meep(self) -> float:
-        """Convert to MEEP units (λ₀ = 1 μm)."""
+        """Convert to MEEP units (λ₀ = 1 μm): f_Meep = ν·a/c = a/λ."""
         return self.as_Hz * 1e-6 / C_MS
 
 
@@ -224,11 +224,11 @@ class AngularFrequency:
     def from_meep(cls, value: float, base_length: Wavelength | None = None) -> Self:
         """Create from MEEP frequency units.
 
-        In MEEP, c = 1, so f_Meep = ω·a/(2π).
+        In MEEP, c = 1, so f_Meep = ω·a/(2πc).  Therefore ω = 2π·f_Meep·c/a.
         """
         if base_length is None:
             base_length = Wavelength(1.0, "um")
-        return cls(2 * PI * value / base_length.as_m, "rad/s")
+        return cls(2 * PI * value * C_MS / base_length.as_m, "rad/s")
 
     @cached_property
     def as_meep(self) -> float:
@@ -544,11 +544,11 @@ class Energy:
 
     @cached_property
     def as_eV(self) -> float:
-        return self.value / const.eV
+        return float(self.value / const.eV)
 
     @cached_property
     def as_meV(self) -> float:
-        return self.value / const.eV * 1e3
+        return float(self.value / const.eV * 1e3)
 
     def to_freq(self) -> Frequency:
         return Frequency(self.value / H_PLANCK, "Hz")
@@ -646,13 +646,20 @@ class Power:
 
     @classmethod
     def from_meep(cls, value: float, base_length: Wavelength | None = None) -> Self:
+        """Create from MEEP power units.
+
+        Energy unit ``ħc/a`` joined with ``Energy.as_meep`` (which uses the
+        Planck constant ``h``, not ``ħ``) gives ``P_meep = P·a²/(h·c²)``,
+        the exact inverse of :attr:`as_meep`.
+        """
         if base_length is None:
             base_length = Wavelength(1.0, "um")
-        return cls(value * C_MS ** 3 * MU_0 / base_length.as_m ** 2, "W")
+        return cls(value * H_PLANCK * C_MS ** 2 / base_length.as_m ** 2, "W")
 
     @cached_property
     def as_meep(self) -> float:
-        return self.as_W * 1e-6 / (C_MS ** 3 * MU_0)
+        """Convert to MEEP units: P_meep = P·a²/(h·c²) for a = 1 μm."""
+        return self.as_W * 1e-12 / (H_PLANCK * C_MS ** 2)
 
 
 @dataclass(config={"arbitrary_types_allowed": True})
@@ -800,7 +807,7 @@ class WavelengthArray:
         """
         if base_length is None:
             base_length = Wavelength(1.0, "um")
-        return cls(base_length.as_m / value, "m")
+        return cls(np.asarray(base_length.as_m / value, dtype=float), "m")
 
     @cached_property
     def as_meep(self) -> NDArray:
@@ -874,15 +881,15 @@ class FrequencyArray:
     ) -> Self:
         """Create from MEEP frequency units.
 
-        In MEEP, c = 1, so f_Meep = ν·a.
+        In MEEP, c = 1, so f_Meep = ν·a/c.  Therefore ν = f_Meep·c/a.
         """
         if base_length is None:
             base_length = Wavelength(1.0, "um")
-        return cls(value / base_length.as_m, "Hz")
+        return cls(np.asarray(value * C_MS / base_length.as_m, dtype=float), "Hz")
 
     @cached_property
     def as_meep(self) -> NDArray:
-        """Convert to MEEP units (λ₀ = 1 μm)."""
+        """Convert to MEEP units (λ₀ = 1 μm): f_Meep = ν·a/c."""
         return self.as_Hz * 1e-6 / C_MS
 
 
@@ -950,11 +957,13 @@ class AngularFrequencyArray:
     ) -> Self:
         """Create from MEEP frequency units.
 
-        In MEEP, c = 1, so f_Meep = ω·a/(2π).
+        In MEEP, c = 1, so f_Meep = ω·a/(2πc).  Therefore ω = 2π·f_Meep·c/a.
         """
         if base_length is None:
             base_length = Wavelength(1.0, "um")
-        return cls(2 * PI * value / base_length.as_m, "rad/s")
+        return cls(
+            np.asarray(2 * PI * value * C_MS / base_length.as_m, dtype=float), "rad/s"
+        )
 
     @cached_property
     def as_meep(self) -> NDArray:
@@ -1022,7 +1031,7 @@ class WavenumberArray:
         """
         if base_length is None:
             base_length = Wavelength(1.0, "um")
-        return cls(2 * PI * value / base_length.as_m, "1/m")
+        return cls(np.asarray(2 * PI * value / base_length.as_m, dtype=float), "1/m")
 
     @cached_property
     def as_meep(self) -> NDArray:

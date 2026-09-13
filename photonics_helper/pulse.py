@@ -231,11 +231,11 @@ class Envelope:
         else:
             phase = 0.5 * self.chirp * (t / T0) ** 2
 
-        return amp * np.exp(1j * phase)
+        return np.asarray(amp * np.exp(1j * phase))
 
     def intensity(self, t: NDArray) -> NDArray:
         A = self.field(t)
-        return np.abs(A) ** 2
+        return np.asarray(np.abs(A) ** 2)
 
     def calc_width(self, level: float = 0.5) -> Time:
         """Calculate the pulse width using linear interpolation at crossing points.
@@ -770,6 +770,34 @@ class Envelope:
         plt.tight_layout()
         return fig
 
+    def _visualize_2d_xy(
+        self,
+        t,
+        A,
+        intensity_t,
+        intensity_w,
+        phase,
+        grid,
+        show_phase,
+        show_fwhm,
+        title,
+        theme,
+    ):
+        """Interactive ``xy`` backend (a real method, not a monkey-patch)."""
+        return _visualize_2d_xy_impl(
+            self,
+            t,
+            A,
+            intensity_t,
+            intensity_w,
+            phase,
+            grid,
+            show_phase,
+            show_fwhm,
+            title,
+            theme,
+        )
+
     def visualize_3d(
         self,
         N: int = 2**12,
@@ -801,7 +829,7 @@ class Envelope:
         win_size = win_size if win_size % 2 == 0 else win_size + 1
 
         f_sg, t_sg, Sxx = scipy_spectrogram(
-            np.abs(A),
+            A,
             fs=1.0 / grid.dt,
             window="hann",
             nperseg=win_size,
@@ -885,7 +913,7 @@ class _XyHtmlView:
         return self._html
 
 
-def _visualize_2d_xy(
+def _visualize_2d_xy_impl(
     self,
     t,
     A,
@@ -901,7 +929,13 @@ def _visualize_2d_xy(
     """XY backend implementation of 2D visualization."""
     import re
 
-    import xy
+    try:
+        import xy
+    except ImportError as exc:  # pragma: no cover - exercised when extra absent
+        raise ImportError(
+            "The 'xy' visualization backend requires the optional 'xy' package. "
+            "Install it with: pip install 'photonics-helper[xy]'"
+        ) from exc
 
     # Convert to fs and THz for readable axes
     t_fs = t * 1e15
@@ -984,9 +1018,6 @@ def _visualize_2d_xy(
         + "\n</div>"
     )
     return _XyHtmlView(grid_html)
-
-
-Envelope._visualize_2d_xy = _visualize_2d_xy
 
 
 @dataclass
@@ -1081,7 +1112,7 @@ class Wave:
     def wavelength_nm(self) -> NDArray:
         """Absolute wavelength grid (nm) for each frequency sample on ``grid.w``."""
         omega_abs = self.central_frequency + self.grid.w
-        return 2 * np.pi * C_MS / omega_abs * 1e9
+        return np.asarray(2 * np.pi * C_MS / omega_abs * 1e9)
 
     @property
     def electric_field(self):
@@ -1127,7 +1158,7 @@ class Wave:
         ----------
         repetition_rate : Hz
         """
-        return self.pulse_energy() * repetition_rate.as_Hz
+        return float(self.pulse_energy() * repetition_rate.as_Hz)
 
     @classmethod
     def from_pulse_train(
@@ -1177,9 +1208,15 @@ class Wave:
             refractive_index=refractive_index,
             repetition_rate=repetition_rate,
         )
-        # Override the envelope_field property via a wrapper
-        wave._pulse_train_field = full_field
-        return wave
+        return wave.with_field(full_field)
+
+    def with_field(self, field: NDArray) -> Self:
+        """Return this ``Wave`` with an explicit envelope-field override.
+
+        Used by :meth:`from_pulse_train` for precomputed multi-pulse fields.
+        """
+        self._pulse_train_field = np.asarray(field)
+        return self
 
     @property
     def envelope_field(self):
@@ -1189,7 +1226,7 @@ class Wave:
 
     @cached_property
     def spectrum(self) -> NDArray:
-        return self.grid.fft(self.envelope_field)
+        return np.asarray(self.grid.fft(self.envelope_field))
 
     def time_bandwidth_product(self) -> float:
         """RMS time-bandwidth product. ≈0.707 for transform-limited Gaussian."""

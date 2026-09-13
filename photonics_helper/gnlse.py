@@ -159,7 +159,7 @@ def kerr_step(
     """
     gamma = _gamma(fiber.n2, omega0, fiber.A_eff, fiber.confinement_factor)
     phase = np.exp(1j * gamma * np.abs(A) ** 2 * dz)
-    return A * phase
+    return np.asarray(A * phase)
 
 
 def _raman_polarization(
@@ -187,10 +187,15 @@ def _raman_polarization(
     P_inst = (1.0 - fR) * intensity
     if h_R_fft is not None:
         I_fft = grid.fft(intensity)
-        P_delayed = fR * np.real(grid.ifft(h_R_fft * I_fft))
+        # The physical Raman response is causal and must amplify the Stokes
+        # (red) sideband.  On this FFT grid the required direction is the
+        # correlation with h_R, i.e. conj(fft(h_R)) = fft(h_R(-t)); using the
+        # plain convolution instead amplifies the anti-Stokes band and makes
+        # solitons blue-shift.  The DC component is unchanged (H(0) = 1).
+        P_delayed = fR * np.real(grid.ifft(np.conj(h_R_fft) * I_fft))
     else:
         P_delayed = np.zeros_like(intensity)
-    return P_inst + P_delayed
+    return np.asarray(P_inst + P_delayed)
 
 
 def raman_step(
@@ -249,7 +254,7 @@ def raman_step(
 
     gamma = _gamma(fiber.n2, omega0, fiber.A_eff, fiber.confinement_factor)
     raman_phase = np.exp(1j * gamma * P_Raman * dz)
-    return A * raman_phase
+    return np.asarray(A * raman_phase)
 
 
 def tpa_step(
@@ -361,7 +366,7 @@ class SplitStepEngine:
         include_self_steepening: bool = False,
         include_tpa: bool = False,
         step_size: Length | None = None,
-        dispersion_profile: "ZDependentDispersion | Callable[[float, float], NDArray] | None" = None,
+        dispersion_profile: "ZDependentDispersion | Callable[[NDArray, float], NDArray] | None" = None,
         a_eff_fn: Callable[[float], float] | None = None,
         alpha_fn: Callable[[float], float] | None = None,
         gamma_fn: Callable[[float], float] | None = None,
@@ -406,9 +411,11 @@ class SplitStepEngine:
         Dispersion Taylor expansion starts at k=2 (β₂, β₃, ...).
         β₁ (group velocity) is not included — pulse stays in group-velocity frame.
 
-        The minus sign pairs with :meth:`~photonics_helper.pulse.TemporalGrid.fft`
+        The plus sign pairs with :meth:`~photonics_helper.pulse.TemporalGrid.fft`
         (numpy ``exp(−iωt)`` convention) for the standard GNLSE
-        ``i∂A/∂z + Σ (β_k/k!) ∂^k A/∂t^k + … = 0`` form.
+        ``i∂A/∂z = (β_k/k!) ∂^k A/∂t^k − γ|A|²A`` form, i.e. a bright soliton
+        forms for anomalous dispersion (β₂ < 0), matching ``Dispersion.get_betas``
+        and ``mi_gain_spectrum``.
         """
         A_w = self.grid.fft(A)
         omega_ps = self.grid.w * 1e-12  # rad/s → rad/ps
@@ -419,7 +426,10 @@ class SplitStepEngine:
             # grid.w is the offset Ω (centered at 0), so absolute frequency is ω₀ + grid.w.
             omega_abs = self.omega0 + self.grid.w  # absolute angular frequency (rad/s)
             # Clip to dispersion profile's valid omega range to avoid NaN from extrapolation
-            if hasattr(self._dispersion_profile, 'omegas'):
+            if (
+                self._dispersion_profile is not None
+                and hasattr(self._dispersion_profile, "omegas")
+            ):
                 omega_min, omega_max = float(min(self._dispersion_profile.omegas)), float(max(self._dispersion_profile.omegas))
                 clipped_mask = (omega_abs < omega_min) | (omega_abs > omega_max)
                 fraction_clipped = clipped_mask.sum() / len(omega_abs)
@@ -459,8 +469,8 @@ class SplitStepEngine:
                 loss_factor = np.exp(-alpha * dz / 2)
                 A_w = A_w * loss_factor
 
-        A_w = A_w * np.exp(-1j * phi)
-        return self.grid.ifft(A_w)
+        A_w = A_w * np.exp(1j * phi)
+        return np.asarray(self.grid.ifft(A_w))
 
     def _eval_dispersion(self, omega: NDArray, z: float) -> NDArray:
         """Evaluate β(ω, z) from the dispersion profile.
@@ -475,10 +485,11 @@ class SplitStepEngine:
         β values at (omega, z).
         """
         if callable(self._dispersion_profile):
-            return self._dispersion_profile(omega, z)
+            return np.asarray(self._dispersion_profile(omega, z))
         else:
             # ZDependentDispersion case
-            return self._dispersion_profile.fn(omega, z)
+            assert self._dispersion_profile is not None
+            return np.asarray(self._dispersion_profile.fn(omega, z))
 
     def _get_gamma(self, z: float) -> float:
         """Compute γ(z) from a_eff_fn(z) or fallback to fiber.A_eff."""
@@ -508,7 +519,7 @@ class SplitStepEngine:
         h_R_fft : FFT of h_R(t) on ``self.grid.t``, or None when Raman is off.
         """
         if h_R_fft is not None:
-            fR = self.fiber.raman_response.fR  # type: ignore[union-attr]
+            fR = self.fiber.raman_response.fR  # type: ignore[union-attr,attr-defined]
             return _raman_polarization(intensity, fR, self.grid, h_R_fft)
         return intensity
 
@@ -520,7 +531,7 @@ class SplitStepEngine:
         nonlinear step wasted an FFT per step.
         """
         if self._h_R_fft_cache is None:
-            h_R = self.fiber.raman_response._h_R(self.grid.t)  # causal: h_R[t<0] = 0
+            h_R = self.fiber.raman_response._h_R(self.grid.t)  # type: ignore[union-attr,attr-defined]
             self._h_R_fft_cache = self.grid.fft(h_R)
         return self._h_R_fft_cache
 
@@ -568,7 +579,7 @@ class SplitStepEngine:
                 nl_src = p_nl * a
                 nl_w = self.grid.fft(nl_src)
                 nl_w *= shock_factor
-                return 1j * gamma * nl_w
+                return np.asarray(1j * gamma * nl_w)
 
             k1 = shock_rhs_freq(A_w)
             k2 = shock_rhs_freq(A_w + 0.5 * dz * k1)
@@ -655,7 +666,7 @@ class SplitStepEngine:
         else:
             dz_nl = float("inf")
 
-        return min(dz_loss, dz_disp, dz_nl)
+        return float(min(dz_loss, dz_disp, dz_nl))
 
     def _gradient_shrink_factor(self, z: float, dz_base: float) -> float:
         """Estimate dispersion gradient at z and return a shrink factor.
@@ -780,6 +791,7 @@ class SplitStepEngine:
             if save_z is None:
                 _append_snapshot()
                 return
+            assert next_save_idx is not None
             while next_save_idx < len(save_z) and current_z >= save_z[next_save_idx] - 1e-15:
                 _append_snapshot()
                 next_save_idx += 1
@@ -859,7 +871,7 @@ class SplitStepEngine:
                     refresh=False,
                 )
 
-        if save_z is not None and next_save_idx < len(save_z):
+        if save_z is not None and next_save_idx is not None and next_save_idx < len(save_z):
             _append_snapshot()
 
         if pbar is not None:
@@ -952,7 +964,7 @@ class GNLSESolver:
         self._evolution: list["Wave"] = []
         self._z_positions: NDArray | None = None
         self._spectra_vs_z: Tuple[NDArray, NDArray] | None = None
-        self._preflight_report = None
+        self._preflight_report: "SimulationReadinessReport | None" = None
 
     def propagate(
         self, num_steps: int = 100, *, nsaves: int | None = None, show_progress: bool = False
@@ -1150,7 +1162,7 @@ class TaperedGNLSESolver:
         self,
         pulse: "Wave",
         fiber: "FiberProfile",
-        dispersion_profile: "ZDependentDispersion | Callable[[float, float], NDArray]",
+        dispersion_profile: "ZDependentDispersion | Callable[[NDArray, float], NDArray]",
         a_eff_fn: Callable[[float], float] | None = None,
         alpha_fn: Callable[[float], float] | None = None,
         gamma_fn: Callable[[float], float] | None = None,
@@ -1175,7 +1187,7 @@ class TaperedGNLSESolver:
         self._evolution: list["Wave"] = []
         self._z_positions: NDArray | None = None
         self._spectra_vs_z: Tuple[NDArray, NDArray] | None = None
-        self._preflight_report = None
+        self._preflight_report: "SimulationReadinessReport | None" = None
         self._strict_mode = False
 
     def propagate(
@@ -1396,6 +1408,7 @@ def plot_waterfall(solver: "GNLSESolver", ax=None, dB: bool = True) -> "plt.Figu
     fig : matplotlib Figure
     """
     import matplotlib.pyplot as plt
+    from matplotlib import cm
 
     if ax is None:
         fig, ax = plt.subplots(figsize=(10, 6))
@@ -1405,20 +1418,32 @@ def plot_waterfall(solver: "GNLSESolver", ax=None, dB: bool = True) -> "plt.Figu
     z_steps = solver.z_array
     t = solver.pulse.grid.t * 1e12  # ps
 
+    # Offset each trace by a uniform amount and colour it by propagation
+    # distance, instead of adding the absolute z value to the intensity
+    # (which made the y-axis physically meaningless and overlapping).
+    z_mm = z_steps * 1e3
+    norm = plt.Normalize(float(z_mm.min()), float(z_mm.max())) if len(z_mm) else None
+    cmap = plt.get_cmap("viridis")
+
     for i, wave in enumerate(solver.evolution):
         envelope = wave.envelope_field
         if dB:
             intensity_dB = 10 * np.log10(np.abs(envelope) ** 2 + 1e-30)
-            offset = intensity_dB.max()
-            envelope = intensity_dB - offset + i * 0.5
+            y = intensity_dB - intensity_dB.max()  # 0 down to ~-90 dB
+            y = y / 90.0  # scale into roughly [-1, 0]
         else:
-            envelope = np.abs(envelope)
-            envelope = envelope / envelope.max() + i * 0.5
+            y = np.abs(envelope)
+            y = y / max(y.max(), 1e-30)  # 0..1
+        color = cmap(norm(z_mm[i])) if norm is not None else "b"
+        ax.plot(t, y + i, color=color, linewidth=0.5)
 
-        ax.plot(t, envelope + z_steps[i] * 1e3, "b-", linewidth=0.5)
+    if norm is not None:
+        sm = cm.ScalarMappable(norm=norm, cmap=cmap)
+        sm.set_array([])
+        fig.colorbar(sm, ax=ax, label="Propagation distance (mm)")
 
     ax.set_xlabel("Time (ps)")
-    ax.set_ylabel("Propagation distance (mm)")
+    ax.set_ylabel("Trace offset")
     ax.set_title("Pulse Evolution Waterfall Plot")
     return fig
 
@@ -1487,6 +1512,7 @@ def plot_spectral_evolution(
 
     use_frequency = f_min_THz is not None and f_max_THz is not None
     if use_frequency:
+        assert f_min_THz is not None and f_max_THz is not None
         z_m, x_axis, spectra_dB = spectral_evolution_on_frequency_grid(
             solver, f_min_THz, f_max_THz, n_points
         )

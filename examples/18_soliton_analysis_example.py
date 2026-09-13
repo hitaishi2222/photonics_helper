@@ -86,9 +86,9 @@ def main():
 
     print("\nSoliton diagnostics:")
     print(f"  Soliton order N = {N:.2f}")
-    print(f"  Dispersion length L_D = {L_D*1e3:.2f} mm")
-    print(f"  Nonlinear length L_NL = {L_NL*1e3:.2f} mm")
-    print(f"  Fission length L_fiss = {L_fiss*1e3:.2f} mm")
+    print(f"  Dispersion length L_D = {L_D.as_mm:.2f} mm")
+    print(f"  Nonlinear length L_NL = {L_NL.as_mm:.2f} mm")
+    print(f"  Fission length L_fiss = {L_fiss.as_mm:.2f} mm")
     print(f"  Nonlinear coeff gamma = {gamma:.4f} 1/(W*m)")
     print(f"  Confinement factor Gamma = {fiber.confinement_factor}")
 

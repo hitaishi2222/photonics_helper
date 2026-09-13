@@ -104,7 +104,7 @@ def test_dispersion_length_formula():
     analyzer = _make_analyzer_manual(T0_s=T0, P_peak_w=1.0, gamma_val=0.07,
                                      beta2_si=beta2_si)
     L_D = analyzer.dispersion_length()
-    assert abs(L_D - L_D_expected) / L_D_expected < 1e-10
+    assert abs(L_D.as_m - L_D_expected) / L_D_expected < 1e-10
 
 
 def test_dispersion_length_value():
@@ -124,7 +124,7 @@ def test_nonlinear_length_formula():
     analyzer = _make_analyzer_manual(T0_s=100e-15, P_peak_w=P, gamma_val=gamma,
                                      beta2_si=-2e-27)
     L_NL = analyzer.nonlinear_length()
-    assert abs(L_NL - L_NL_expected) / L_NL_expected < 1e-10
+    assert abs(L_NL.as_m - L_NL_expected) / L_NL_expected < 1e-10
 
 
 def test_fission_length_formula():
@@ -137,8 +137,8 @@ def test_fission_length_formula():
     # Verify the formula: L_fiss = L_D / (N * eta)
     L_D_actual = analyzer.dispersion_length()
     N_actual = analyzer.soliton_order()
-    L_fiss_expected_actual = L_D_actual / (N_actual * eta)
-    assert abs(L_fiss - L_fiss_expected_actual) / L_fiss_expected_actual < 1e-10
+    L_fiss_expected_actual = L_D_actual.as_m / (N_actual * eta)
+    assert abs(L_fiss.as_m - L_fiss_expected_actual) / L_fiss_expected_actual < 1e-10
 
 
 def test_dispersive_wave_wavelength():

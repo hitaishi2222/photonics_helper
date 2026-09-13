@@ -1,0 +1,15 @@
+{
+  "paper": "J. M. Dudley, G. Genty, S. Coen, Supercontinuum generation in photonic crystal fiber, Rev. Mod. Phys. 78, 1135 (2006);  see also N. Akhmediev and M. Karlsson, Cherenkov radiation emitted by solitons in optical fibers, Phys. Rev. A 51, 2602 (1995)",
+  "doi": "10.1103/RevModPhys.78.1135",
+  "description": "Cherenkov dispersive-wave (DW) emission from a femtosecond soliton in a PCF: the simulated blue DW peak is validated against the analytic phase-matching condition Omega_DW = -3*beta2/beta3.",
+  "central_wavelength_nm": 835.0,
+  "beta2_ps2_per_m": -11.830e-3,
+  "beta3_ps3_per_m": 8.1038e-5,
+  "gamma_per_Wm": 0.11,
+  "pulse_fwhm_fs": 49.98,
+  "peak_power_W": 10000.0,
+  "length_m": 0.15,
+  "grid_N": 8192,
+  "grid_Tmax_ps": 12.5,
+  "dw_tolerance": 0.05
+}

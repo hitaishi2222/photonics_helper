@@ -11,13 +11,16 @@ Provides diagnostics for soliton propagation simulations:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, cast
+
+import warnings
 
 import numpy as np
+import matplotlib.pyplot as plt
 from numpy.typing import NDArray
 from scipy.signal import find_peaks
 
-from .base import C_MS, AngularFrequency, Wavelength, AngularFrequencyArray
+from .base import C_MS, AngularFrequency, Length, Wavelength, AngularFrequencyArray
 
 if TYPE_CHECKING:
     from photonics_helper.gnlse import FiberProfile, GNLSESolver
@@ -93,33 +96,33 @@ class SolitonAnalyzer:
         """
         if self.beta2_si == 0:
             raise ValueError("beta2 is zero; soliton order undefined.")
-        return np.sqrt(self.gamma * self.P_peak * self.T0**2 / abs(self.beta2_si))
+        return float(np.sqrt(self.gamma * self.P_peak * self.T0**2 / abs(self.beta2_si)))
 
-    def dispersion_length(self) -> float:
+    def dispersion_length(self) -> Length:
         """Compute dispersion length L_D = T0^2 / |beta2|.
 
         Returns
         -------
-        float
-            Dispersion length (m).
+        Length
+            Dispersion length.
         """
         if self.beta2_si == 0:
             raise ValueError("beta2 is zero; dispersion length undefined.")
-        return self.T0**2 / abs(self.beta2_si)
+        return Length(self.T0**2 / abs(self.beta2_si), "m")
 
-    def nonlinear_length(self) -> float:
+    def nonlinear_length(self) -> Length:
         """Compute nonlinear length L_NL = 1 / (gamma * P_peak).
 
         Returns
         -------
-        float
-            Nonlinear length (m).
+        Length
+            Nonlinear length.
         """
         if self.gamma * self.P_peak == 0:
             raise ValueError("gamma * P_peak is zero; nonlinear length undefined.")
-        return 1.0 / (self.gamma * self.P_peak)
+        return Length(1.0 / (self.gamma * self.P_peak), "m")
 
-    def fission_length(self, eta: float = 0.7) -> float:
+    def fission_length(self, eta: float = 0.7) -> Length:
         """Compute fission length L_fiss = L_D / (N * eta).
 
         Parameters
@@ -129,14 +132,14 @@ class SolitonAnalyzer:
 
         Returns
         -------
-        float
-            Fission length (m).
+        Length
+            Fission length.
         """
         L_D = self.dispersion_length()
         N = self.soliton_order()
         if N == 0:
             raise ValueError("Soliton order is zero; fission length undefined.")
-        return L_D / (N * eta)
+        return Length(L_D.as_m / (N * eta), "m")
 
     def dispersive_wave_wavelength(
         self,
@@ -189,6 +192,11 @@ class SolitonAnalyzer:
                     dispersive_wave_roots,
                 )
                 # Build an appropriate adaptor
+                adaptor: (
+                    DispersionAdaptor
+                    | ZDependentDispersionAdaptor
+                    | PropagationConstantAdaptor
+                )
                 if hasattr(dispersion, 'get_betas'):
                     adaptor = DispersionAdaptor(dispersion, self.pulse.central_frequency)
                 elif hasattr(dispersion, 'omegas') and hasattr(dispersion, 'fn'):
@@ -205,9 +213,14 @@ class SolitonAnalyzer:
                     n_brackets=n_brackets,
                 )
                 if result.wavelengths.as_m.shape[0] > 0:
-                    return result.wavelengths[0]
-            except Exception:
-                pass  # Fall through to β₂/β₃
+                    return cast(Wavelength, result.wavelengths[0])
+            except (ValueError, TypeError, RuntimeError) as exc:
+                warnings.warn(
+                    f"Full-beta dispersive-wave root finder failed ({exc}); "
+                    "falling back to the beta2/beta3 estimate.",
+                    UserWarning,
+                    stacklevel=2,
+                )
 
         # β₂/β₃ fast fallback
         if self.beta3_si == 0:
@@ -249,7 +262,10 @@ class SolitonAnalyzer:
         spectrum_norm = spectrum_sorted / max_val
 
         # Find peaks: require height > 5% of max, minimum distance of 10 points
-        peaks, _ = find_peaks(spectrum_norm, height=0.05, distance=10)
+        # Find peaks: require height > 5% and prominence > 2% of max.
+        peaks, _ = find_peaks(
+            spectrum_norm, height=0.05, prominence=0.02, distance=10
+        )
 
         return len(peaks)
 
@@ -279,8 +295,10 @@ class SolitonAnalyzer:
                 continue
             spectrum_norm = spectrum_sorted / max_val
 
-            # Find peaks
-            peaks, _ = find_peaks(spectrum_norm, height=0.05, distance=10)
+            # Find peaks (height + prominence thresholds reject noise ripples)
+            peaks, _ = find_peaks(
+                spectrum_norm, height=0.05, prominence=0.02, distance=10
+            )
 
             for peak_idx in peaks:
                 z = self.z_array[i]
@@ -311,6 +329,19 @@ class SolitonAnalyzer:
         sort_idx = np.argsort(z_vals)
         z_vals = z_vals[sort_idx]
         lam_vals = lam_vals[sort_idx]
+
+        # Before fission there is a single dominant soliton, so the trajectory
+        # is meaningful. After fission, many peaks appear and a global fit
+        # gives a spurious slope — restrict the fit to z <= L_fiss.
+        try:
+            L_fiss = self.fission_length()
+        except ValueError:
+            L_fiss = None
+        if L_fiss is not None and np.isfinite(L_fiss.as_m):
+            mask = z_vals <= L_fiss.as_m
+            if mask.sum() >= 2:
+                z_vals = z_vals[mask]
+                lam_vals = lam_vals[mask]
 
         # Fit linear trend (nm vs mm)
         z_mm = z_vals * 1e3  # m to mm
@@ -366,7 +397,7 @@ def plot_soliton_trajectories(solver: "GNLSESolver", ax=None) -> "plt.Figure":
     return fig
 
 
-def plot_fission_dynamics(solver: "GNLSESolver", N: float, L_D: float,
+def plot_fission_dynamics(solver: "GNLSESolver", N: float, L_D: Length,
                           ax=None) -> "plt.Figure":
     """Plot soliton fission process: spectrum evolution with fission length marker.
 
@@ -376,8 +407,8 @@ def plot_fission_dynamics(solver: "GNLSESolver", N: float, L_D: float,
         Solver with propagated results.
     N : float
         Soliton order.
-    L_D : float
-        Dispersion length (m).
+    L_D : Length
+        Dispersion length.
     ax : matplotlib Axes, optional
         Axis to plot on.
 
@@ -395,7 +426,7 @@ def plot_fission_dynamics(solver: "GNLSESolver", N: float, L_D: float,
     spectra = spectra[:, sort_idx]
 
     z_steps = solver.z_array * 1e3  # mm
-    fission_length_mm = L_D / N * 0.7 * 1e3 if N > 0 else float("inf")  # mm
+    fission_length_mm = L_D.as_m / N * 0.7 * 1e3 if N > 0 else float("inf")  # mm
 
     if ax is None:
         fig, ax = plt.subplots(figsize=(10, 6))
@@ -405,7 +436,7 @@ def plot_fission_dynamics(solver: "GNLSESolver", N: float, L_D: float,
     # Plot spectrum at several z positions (color encodes propagation distance)
     n_plot = min(10, spectra.shape[0])
     z_plot = np.linspace(0, z_steps[-1], n_plot) if z_steps[-1] > 0 else np.array([0.0])
-    cmap = plt.cm.viridis(np.linspace(0, 1, n_plot))
+    cmap = plt.get_cmap("viridis")(np.linspace(0, 1, n_plot))
     for z_mm, color in zip(z_plot, cmap):
         idx = int(z_mm / z_steps[-1] * (spectra.shape[0] - 1)) if z_steps[-1] > 0 else 0
         spec = spectra[idx]

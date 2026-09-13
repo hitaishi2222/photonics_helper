@@ -47,6 +47,7 @@ from __future__ import annotations
 import os
 import threading
 import warnings
+from typing import Any
 
 import numpy as np
 
@@ -138,7 +139,7 @@ class _ScipyBackend:
 
     @staticmethod
     def convolve_full(a, b) -> np.ndarray:
-        return _sp_signal.fftconvolve(a, b, mode="full")
+        return np.asarray(_sp_signal.fftconvolve(a, b, mode="full"))
 
 
 class _FftwBackend:
@@ -147,11 +148,11 @@ class _FftwBackend:
     name = "fftw"
 
     def __init__(self) -> None:
-        self._plans: dict[tuple, object] = {}
+        self._plans: dict[tuple, Any] = {}
         self._plans_lock = threading.Lock()
         self._exec_lock = threading.Lock()  # shared buffers: serialize execute()
 
-    def _get_plan(self, shape: tuple[int, ...], dtype: np.dtype, direction: str) -> object:
+    def _get_plan(self, shape: tuple[int, ...], dtype: np.dtype, direction: str) -> Any:
         key = (shape, np.dtype(dtype).str, direction)
         plan = self._plans.get(key)
         if plan is None:
@@ -201,7 +202,7 @@ class _FftwBackend:
             plan.execute()
             res = np.empty(shape, dtype=dtype)
             self._roll_into(res, out, left=False)  # FFT order → centered
-        return res
+        return np.asarray(res)
 
     def ifft(self, A_w) -> np.ndarray:
         A_w = np.asarray(A_w)
@@ -218,7 +219,7 @@ class _FftwBackend:
             self._roll_into(res, out, left=False)
         # FFTW's backward transform is unnormalized — apply the 1/N that
         # np.fft.ifft / scipy.fft.ifft include by default.
-        return res / n
+        return np.asarray(res / n)
 
     def convolve_full(self, a, b) -> np.ndarray:
         a = np.asarray(a)
@@ -248,7 +249,7 @@ class _FftwBackend:
             out = plan.output_array
             inp[...] = a
             plan.execute()
-            return np.array(out, copy=True)
+            return np.asarray(np.array(out, copy=True))
 
     def _ifft_raw(self, a: np.ndarray) -> np.ndarray:
         a = np.asarray(a)
@@ -261,7 +262,7 @@ class _FftwBackend:
             out = plan.output_array
             inp[...] = a
             plan.execute()
-            return np.array(out, copy=True) / n
+            return np.asarray(np.array(out, copy=True) / n)
 
 
 # ---------------------------------------------------------------------------
@@ -274,7 +275,7 @@ _BACKEND_CLASSES = {
     "numpy": _NumpyBackend,
 }
 
-_active_backend = None
+_active_backend: Any = None
 _active_name: str | None = None
 
 
@@ -317,7 +318,7 @@ def set_backend(name: str | None = None) -> str:
 
     for cand in candidates:
         try:
-            backend = _BACKEND_CLASSES[cand]()
+            backend: Any = _BACKEND_CLASSES[cand]()
         except Exception as exc:  # pragma: no cover - import-time guard
             _warn_once(
                 f"backend:{cand}",
@@ -327,7 +328,7 @@ def set_backend(name: str | None = None) -> str:
         _active_backend = backend
         _active_name = backend.name
         break
-    return _active_name
+    return _active_name or "none"
 
 
 def _maybe_warn_on_use() -> None:
@@ -370,7 +371,7 @@ def fft(A) -> np.ndarray:
     convention and scaling as ``np.fft.fft`` (unnormalized forward transform).
     """
     _maybe_warn_on_use()
-    return _active_backend.fft(A)
+    return np.asarray(_active_backend.fft(A))
 
 
 def ifft(A_w) -> np.ndarray:
@@ -387,7 +388,7 @@ def ifft(A_w) -> np.ndarray:
     Time-domain array(s), index 0 at ``t=0``.
     """
     _maybe_warn_on_use()
-    return _active_backend.ifft(A_w)
+    return np.asarray(_active_backend.ifft(A_w))
 
 
 def convolve_full(a, b) -> np.ndarray:
@@ -406,7 +407,7 @@ def convolve_full(a, b) -> np.ndarray:
     NDArray — full convolution, real dtype when both inputs are real.
     """
     _maybe_warn_on_use()
-    return _active_backend.convolve_full(a, b)
+    return np.asarray(_active_backend.convolve_full(a, b))
 
 
 # Select the backend once at import time (respects PHOTONICS_FFT_BACKEND).

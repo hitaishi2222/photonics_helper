@@ -15,8 +15,8 @@ class TestPhononMode:
 
     def test_creation(self):
         mode = PhononMode(shift_cm=254, linewidth_cm=14, symmetry="A₁g")
-        assert mode.shift_cm == 254
-        assert mode.linewidth_cm == 14
+        assert mode.shift_cm.as_1_cm == 254
+        assert mode.linewidth_cm.as_1_cm == 14
         assert mode.symmetry == "A₁g"
 
     def test_defaults(self):
@@ -33,8 +33,8 @@ class TestPhononMode:
             note="Test mode"
         )
         assert mode.relative_strength == 0.8
-        assert mode.lo_phonon_cm == 260
-        assert mode.to_phonon_cm == 250
+        assert mode.lo_phonon_cm.as_1_cm == 260
+        assert mode.to_phonon_cm.as_1_cm == 250
         assert mode.note == "Test mode"
 
 
@@ -79,18 +79,36 @@ class TestPhononResponse:
         result = response.frequency_domain(w)
         assert abs(np.max(result) - 1.0) < 0.01
 
-    def test_fR_default(self):
+    def test_fR_default_is_none_not_strength_sum(self):
         modes = [
             PhononMode(shift_cm=200, linewidth_cm=10, relative_strength=0.6),
             PhononMode(shift_cm=400, linewidth_cm=20, relative_strength=0.4),
         ]
         response = PhononResponse(modes)
-        assert response.fR == pytest.approx(1.0)
+        # fR is a Raman fraction, not the sum of relative strengths.
+        assert response.fR is None
 
     def test_fR_custom(self):
         modes = [PhononMode(shift_cm=200, linewidth_cm=10)]
         response = PhononResponse(modes, fR=0.5)
         assert response.fR == 0.5
+
+    def test_fR_out_of_range_raises(self):
+        modes = [PhononMode(shift_cm=200, linewidth_cm=10)]
+        with pytest.raises(ValueError):
+            PhononResponse(modes, fR=1.5)
+        with pytest.raises(ValueError):
+            PhononResponse(modes, fR=-0.1)
+
+    def test_lineshape_independent_of_fR(self):
+        modes = [
+            PhononMode(shift_cm=200, linewidth_cm=10, relative_strength=1.0),
+            PhononMode(shift_cm=400, linewidth_cm=20, relative_strength=0.5),
+        ]
+        w = np.linspace(150, 450, 1000)
+        a = PhononResponse(modes, fR=0.1).frequency_domain(w)
+        b = PhononResponse(modes, fR=0.9).frequency_domain(w)
+        np.testing.assert_allclose(a, b, rtol=1e-12)
 
     def test_time_domain(self):
         mode = PhononMode(shift_cm=254, linewidth_cm=14)
@@ -124,8 +142,8 @@ class TestPHONON_MATERIALS:
     def test_modes_have_valid_params(self):
         for mat, modes in PHONON_MATERIALS.items():
             for mode in modes:
-                assert mode.shift_cm > 0, f"{mat}: shift_cm must be positive"
-                assert mode.linewidth_cm > 0, f"{mat}: linewidth_cm must be positive"
+                assert mode.shift_cm.as_1_cm > 0, f"{mat}: shift_cm must be positive"
+                assert mode.linewidth_cm.as_1_cm > 0, f"{mat}: linewidth_cm must be positive"
 
     def test_li_nbo3_has_7_modes(self):
         assert len(PHONON_MATERIALS["LiNbO3"]) == 7
@@ -211,7 +229,7 @@ class TestRamanDatabasePhonon:
 
         modes = self.db.get_phonon_modes("LiNbO3")
         assert len(modes) == 1
-        assert modes[0].shift_cm == 254
+        assert modes[0].shift_cm.as_1_cm == 254
         assert modes[0].symmetry == "A₁g"
 
     def test_get_phonon_modes_multiple(self):

@@ -449,8 +449,8 @@ class TestRAMAN_MATERIALS:
             assert spec.name == name
 
     def test_material_count(self):
-        """Test that RAMAN_MATERIALS has the expected number of entries (30 + GeAsSe)."""
-        assert len(RAMAN_MATERIALS) == 31
+        """Test that RAMAN_MATERIALS has the expected number of entries (31 + Si3N4-Ligentec)."""
+        assert len(RAMAN_MATERIALS) == 32
 
     def test_all_original_materials_present(self):
         """Test original 8 materials are still present."""

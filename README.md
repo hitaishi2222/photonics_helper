@@ -26,7 +26,7 @@ falls back to `numpy.fft`. See `photonics_helper._fftw` (env vars
 
 # Key Features
 
-- **Type Safety**: Full type hints support with stub files
+- **Type Safety**: Full inline type hints (PEP 561 `py.typed`)
 - **Unit Conversions**:
   - Wavelength (nm, μm, m)
   - Frequency (THz, GHz, MHz, Hz)
@@ -43,15 +43,65 @@ falls back to `numpy.fft`. See `photonics_helper._fftw` (env vars
   - Generate FROG traces from electric fields
   - Retrieve pulse shape, chirp, and phase from measured traces
   - Fidelity metric for retrieval quality assessment
-- **Raman Modeling**: Full Raman response physics for 30+ materials
+- **Raman Modeling**: Full Raman response physics for 40+ materials
   - Time-domain response (electronic Kerr + delayed lattice oscillation)
   - Frequency-domain gain spectrum
   - Stokes / anti-Stokes wavelength calculation
   - Pump-wavelength explorer and material comparison overlays
-  - SQLite material database (`materials.db`) with 31 materials
+  - SQLite material database (`materials.db`) with 44 materials
   - Interactive Dash dashboard for comparing Raman properties
 - **Comprehensive Documentation**: Clear documentation with examples
 - **Easy to Use**: Intuitive API design
+
+# Units are classes — an intentional, opinionated choice
+
+> **TL;DR:** Passing units as bare `float`s is how silent factor-of-1000 bugs are
+> born. This library deliberately routes every physical quantity through typed
+> unit classes in `photonics_helper/base.py`.
+
+This is a **design decision, not a bug**. The maintainer's stance is simple: you
+should not have to keep unit conversions in your head (or in your comments)
+while doing photonics. Construct a quantity once in whatever unit is natural,
+and the library converts, stores, and returns it in the units you ask for.
+
+Every module — dispersion (`fiber.py`), pulses (`pulse.py`), the GNLSE solver
+(`gnlse.py`), materials (`materials.py`), phase matching (`phase_matching.py`),
+and the DBR/TMM stack (`dbr.py`) — accepts and returns these classes at its
+public boundaries instead of raw numbers.
+
+| Quantity | Class (scalar / array) | Example |
+|----------|-----------------------|---------|
+| Wavelength | `Wavelength` / `WavelengthArray` | `Wavelength(1550, "nm")` |
+| Frequency | `Frequency` / `FrequencyArray` | `Frequency(193.4, "THz")` |
+| Angular frequency | `AngularFrequency` / `AngularFrequencyArray` | `AngularFrequency(1.2, "rad/ps")` |
+| Wavenumber | `Wavenumber` / `WavenumberArray` | `Wavenumber(6450, "1/cm")` |
+| Length | `Length` | `Length(5, "mm")` |
+| Time | `Time` | `Time(50, "fs")` |
+| Energy | `Energy` | `Energy(1.24, "eV")` |
+| Power | `Power` | `Power(100, "mW")` |
+| Area | `Area` | `Area(0.2, "um^2")` |
+
+The pattern is always the same — construct in any unit, read out in any unit:
+
+```python
+from photonics_helper.base import Wavelength
+
+wl = Wavelength(1550, "nm")   # constructed in nm
+wl.as_um                       # 1.55      -> view in μm
+wl.as_m                        # 1.55e-06  -> internally stored in SI (m)
+wl.to_freq().as_THz            # 193.41    -> convert and read out in THz
+```
+
+Internally everything is normalised to SI on construction, so downstream
+arithmetic and comparisons stay consistent; the `.as_*` properties are simply
+views on the same value. `*Array` variants mirror the scalars for vectorised
+work (dispersion tables, spectral grids, …), and MEEP-style conversions are
+available through `from_meep` / `as_meep`.
+
+**The trade-off, stated honestly:** you write `Length(5, "mm")` instead of
+`5e-3`, and functions return `Time` objects rather than floats. In exchange,
+unit mismatches surface as explicit conversions instead of propagating silently
+through a simulation — which, for photonics, is almost always the better deal.
 
 # Quick Start
 
@@ -154,7 +204,7 @@ fig.savefig("frog.png", dpi=150, bbox_inches="tight")
 
 # Raman Material Database
 
-Load Raman material parameters from the built-in SQLite database (30 materials):
+Load Raman material parameters from the built-in SQLite database (44 materials):
 
 ```python
 from photonics_helper.raman import RamanSpec
@@ -169,17 +219,18 @@ print(silica.summary())
 # n₂: 3.2e-20 m²/W
 ```
 
-All 31 available materials:
+All 44 available materials:
 
 | Category | Materials |
 |----------|-----------|
 | Glasses | Silica, GeO₂, As₂S₃, As₂Se₃, ZBLAN |
-| Semiconductors | Si, Ge, GaAs, GaN, AlN, InP, InGaAs, AlGaAs, SiC, Si₃N₄ |
-| II-VI | CdS, CdTe, ZnO |
-| Oxides | Ga₂O₃, Al₂O₃ (sapphire), BaTiO₃, LiNbO₃, LiTaO₃, KTP |
+| Semiconductors | Si, Ge, GaAs, GaN, AlN, InP, InGaAs, AlGaAs, SiC, Si₃N₄, Si₃N₄-Ligentec |
+| II-VI | CdS, CdTe, ZnO, ZnSe |
+| Oxides | Ga₂O₃, Al₂O₃ (sapphire), BaTiO₃, LiNbO₃, LiTaO₃, KTP, YVO₄ |
 | Chalcogenides | GeAsSe |
-| Crystals & Hosts | Diamond, YAG, YLF |
+| Crystals & Hosts | Diamond, YAG, YLF, Zerodur |
 | NLO Crystals | LBO, AgGaS₂, AgGaSe₂ |
+| Optical substrates | BaF₂, CaF₂, MgF₂, KBr, F₂, N-BK7, N-F2, N-SF11, PMMA |
 
 ```python
 # Stokes / anti-Stokes for a given pump
@@ -256,11 +307,12 @@ pip install -e .
 - ~~Add functionality for dispersion calculations~~
 - ~~Modeling Envelopes~~
 - ~~Modeling Pulse~~
-- **Transfer Matrix Method (TMM)** — *in development* (see `dbr.py`)
+- **Transfer Matrix Method (TMM)** — available (see `dbr.py`)
   - DBR multilayer stack simulation
-  - Fresnel interface & propagation matrices
-  - Spectral response (R, T)
-  - Electric field profiling
+  - Characteristic-matrix (Macleod) formalism with correct layer ordering
+  - Spectral response (R, T) including absorbing and oblique stacks, plus `TMM.plot_spectrum`
+  - Electric-field profiling via `TMM.field_profile`
+  - `Pattern` layer stack
 - **FROG** ✅
   - SHG-FROG trace generation
   - PCGPA pulse retrieval
@@ -271,7 +323,7 @@ pip install -e .
   - Raman pulse interaction (R(t) ⊗ |E|²)
   - Material comparison overlays with 6 panel types
   - Pump wavelength explorer (Stokes/anti-Stokes)
-  - SQLite material database (30 entries)
+  - SQLite material database (44 entries)
   - Interactive Dash dashboard
   - Catalog explorer example (`examples/11_raman_material_catalog.py`)
 - **GNLSE** ✅
@@ -292,7 +344,7 @@ pip install -e .
   - Confinement factor Γ in γ formula: `γ = n₂·ω₀·Γ/(c·A_eff)`
   - Backward compatible (Γ=1.0 recovers fiber behavior)
 - **Chalcogenide Materials** ✅
-  - GeAsSe added (n₂=6e-18 m²/W, 31 materials total)
+  - GeAsSe added (n₂=6e-18 m²/W, 44 materials total)
   - Suitable for soliton fission in chalcogenide waveguides
 - Structured Light
 - Add methods for bandwidth calculations

@@ -439,22 +439,22 @@ def test_wavelength_from_meep_custom_base():
 
 def test_frequency_from_meep_default_base():
     f = Frequency.from_meep(1.0)
-    assert pytest.approx(f.as_Hz) == 1.0 / 1e-6
+    assert pytest.approx(f.as_Hz) == 1.0 * C_MS / 1e-6
 
 
 def test_frequency_from_meep_custom_base():
     f = Frequency.from_meep(1.0, base_length=Wavelength(2.0, "um"))
-    assert pytest.approx(f.as_Hz) == 1.0 / 2e-6
+    assert pytest.approx(f.as_Hz) == 1.0 * C_MS / 2e-6
 
 
 def test_angular_frequency_from_meep_default_base():
     om = AngularFrequency.from_meep(1.0)
-    assert pytest.approx(om.as_rad_s) == 2 * PI / 1e-6
+    assert pytest.approx(om.as_rad_s) == 2 * PI * C_MS / 1e-6
 
 
 def test_angular_frequency_from_meep_custom_base():
     om = AngularFrequency.from_meep(1.0, base_length=Wavelength(0.5, "um"))
-    assert pytest.approx(om.as_rad_s) == 2 * PI / 0.5e-6
+    assert pytest.approx(om.as_rad_s) == 2 * PI * C_MS / 0.5e-6
 
 
 def test_wavenumber_from_meep_default_base():
@@ -481,20 +481,24 @@ def test_wavelength_array_from_meep_custom_base():
 
 def test_frequency_array_from_meep_default_base():
     fa = FrequencyArray.from_meep(np.array([1.0, 2.0]))
-    np.testing.assert_allclose(fa.as_Hz, np.array([1.0, 2.0]) / 1e-6, rtol=1e-10)
+    np.testing.assert_allclose(
+        fa.as_Hz, np.array([1.0, 2.0]) * C_MS / 1e-6, rtol=1e-10
+    )
 
 
 def test_frequency_array_from_meep_custom_base():
     fa = FrequencyArray.from_meep(
         np.array([1.0, 2.0]), base_length=Wavelength(0.5, "um")
     )
-    np.testing.assert_allclose(fa.as_Hz, np.array([1.0, 2.0]) / 0.5e-6, rtol=1e-10)
+    np.testing.assert_allclose(
+        fa.as_Hz, np.array([1.0, 2.0]) * C_MS / 0.5e-6, rtol=1e-10
+    )
 
 
 def test_angular_frequency_array_from_meep_default_base():
     oma = AngularFrequencyArray.from_meep(np.array([1.0, 2.0]))
     np.testing.assert_allclose(
-        oma.as_rad_s, 2 * PI * np.array([1.0, 2.0]) / 1e-6, rtol=1e-10
+        oma.as_rad_s, 2 * PI * np.array([1.0, 2.0]) * C_MS / 1e-6, rtol=1e-10
     )
 
 
@@ -503,7 +507,7 @@ def test_angular_frequency_array_from_meep_custom_base():
         np.array([1.0, 2.0]), base_length=Wavelength(0.5, "um")
     )
     np.testing.assert_allclose(
-        oma.as_rad_s, 2 * PI * np.array([1.0, 2.0]) / 0.5e-6, rtol=1e-10
+        oma.as_rad_s, 2 * PI * np.array([1.0, 2.0]) * C_MS / 0.5e-6, rtol=1e-10
     )
 
 
