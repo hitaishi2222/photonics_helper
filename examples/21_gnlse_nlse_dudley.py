@@ -6,8 +6,9 @@ Replicates the laserfun ``NLSE_dudley`` supercontinuum demo (Dudley et al.,
 RMP 78, 1135, 2006, Fig. 3) using only photonics_helper.
 
 835 nm, 15 cm PCF, high-order dispersion, Kerr nonlinearity, Dudley Raman
-response, and self-steepening. Produces spectral and temporal evolution
-contour plots side by side.
+response, and self-steepening. Produces a four-panel summary figure: output
+intensity (dB) vs wavelength and vs time on top, and taller spectral/temporal
+evolution density plots below.
 
 Self-steepening (shock term) is enabled to match laserfun's ``NLSE`` default
 (``shock=True``). When comparing against laserfun, both libraries must use the
@@ -43,8 +44,7 @@ from photonics_helper.gnlse import (
     FiberProfile,
     GNLSESolver,
     SplitStepEngine,
-    plot_spectral_evolution,
-    plot_temporal_evolution,
+    plot_spectral_temporal_summary,
 )
 from photonics_helper.pulse import Envelope, Wave, TemporalGrid
 from photonics_helper.raman import RamanResponse, RamanSpec
@@ -264,39 +264,23 @@ def main() -> None:
     print(f"\nPropagation finished in {elapsed:.1f} s ({elapsed / 60:.1f} min)")
     print(f"Stored {len(solver.evolution)} field snapshots for plotting")
 
-    # ── Dudley-style dual contour figure ────────────────────────────────────
+    # ── Summary figure: output line profiles above, contours below ─────────
 
-    print("Rendering contour plots …")
-    fig, axes = plt.subplots(1, 2, figsize=(11, 5))
+    print("Rendering summary figure …")
+    fig = plot_spectral_temporal_summary(
+        solver,
+        wl_bounds=(400.0, 1350.0),
+        t_bounds=(-0.5, 5.0),
+        dynamic_range_db=40.0,
+        cmap="jet",
+        z_scale="m",
+        height_ratios=(1.0, 1.7),
+        figsize=(11.0, 9.0),
+    )
     fig.suptitle(
         "NLSE_dudley — supercontinuum (photonics_helper)",
         fontweight="bold",
     )
-
-    plot_spectral_evolution(
-        solver,
-        ax=axes[0],
-        wl_min=400,
-        wl_max=1350,
-        n_points=400,
-        dynamic_range_db=40,
-        cmap="jet",
-        z_scale="m",
-    )
-    axes[0].set_title("Spectral evolution")
-
-    plot_temporal_evolution(
-        solver,
-        ax=axes[1],
-        t_min=-0.5,
-        t_max=5.0,
-        dynamic_range_db=40,
-        cmap="jet",
-        z_scale="m",
-    )
-    axes[1].set_title("Temporal evolution")
-
-    fig.tight_layout()
     fig.savefig(args.output, dpi=150, bbox_inches="tight")
     plt.close(fig)
     print(f"Saved: {args.output}")

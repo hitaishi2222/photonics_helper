@@ -283,3 +283,117 @@ def test_plot_dispersion_wave():
     fig = plot_dispersion_wave(solver)
     assert fig is not None
     plt.close(fig)
+
+
+# ─── Diagnostics hardening (openspec: harden-soliton-diagnostics) ────────────
+
+
+def test_detect_soliton_peaks_accepts_prominent_peaks():
+    """Shared detector finds two clear peaks."""
+    from photonics_helper.soliton import _detect_soliton_peaks
+
+    x = np.zeros(200)
+    x[40] = 1.0
+    x[120] = 0.8
+    peaks = _detect_soliton_peaks(x)
+    assert len(peaks) == 2
+
+
+def test_detect_soliton_peaks_rejects_ripple():
+    """A ripple below the shared prominence threshold is not a soliton."""
+    from photonics_helper.soliton import _detect_soliton_peaks
+
+    x = np.zeros(200)
+    x[100] = 1.0
+    x[110] = 0.02  # tiny neighbour ripple
+    peaks = _detect_soliton_peaks(x)
+    assert len(peaks) == 1
+
+
+def test_count_solitons_matches_trajectory_peak_set():
+    """count_solitons and soliton_trajectories use the same detector."""
+    analyzer = _make_analyzer_manual(
+        T0_s=100e-15, P_peak_w=1.0, gamma_val=0.07, beta2_si=-2e-27, n_steps=1
+    )
+    # Synthetic single-soliton spectrum on the analyzer's omega grid.
+    x = np.zeros_like(analyzer.omega)
+    x[len(x) // 2] = 1.0
+    analyzer.spectra = np.array([x])
+    analyzer.z_array = np.array([0.0])
+
+    count = analyzer.count_solitons()
+    traj = analyzer.soliton_trajectories()
+    assert count == len(traj)
+
+
+def test_raman_shift_rate_excludes_post_fission_points():
+    """Post-fission spikes must not bias the fitted RSFS slope."""
+    import pytest
+    from photonics_helper.base import Length
+
+    analyzer = _make_analyzer_manual(
+        T0_s=100e-15, P_peak_w=1.0, gamma_val=0.07, beta2_si=-2e-27
+    )
+    z = np.linspace(0, 10e-3, 11)
+    lam = 1550.0 + 5.0 * (z * 1e3)  # clean 5 nm/mm before fission
+    lam_bad = lam.copy()
+    lam_bad[z > 5e-3] += 1000.0  # spurious post-fission peaks
+
+    analyzer.soliton_trajectories = lambda: list(zip(z, lam_bad))
+    analyzer.fission_length = lambda eta=0.7: Length(5e-3, "m")
+
+    z_mm, lam_masked = analyzer._rsfs_fit_data()
+    assert z_mm.max() <= 5.0 + 1e-9
+    assert analyzer.raman_shift_rate() == pytest.approx(5.0, rel=1e-6)
+
+
+def test_raman_shift_rate_falls_back_when_fission_length_missing():
+    """When L_fiss is unavailable the global fit is used without raising."""
+    import pytest
+
+    analyzer = _make_analyzer_manual(
+        T0_s=100e-15, P_peak_w=1.0, gamma_val=0.07, beta2_si=-2e-27
+    )
+    z = np.linspace(0, 5e-3, 6)
+    lam = 1550.0 + 4.0 * (z * 1e3)
+
+    def _raise(eta=0.7):
+        raise ValueError("no fission length")
+
+    analyzer.soliton_trajectories = lambda: list(zip(z, lam))
+    analyzer.fission_length = _raise
+    assert analyzer.raman_shift_rate() == pytest.approx(4.0, rel=1e-6)
+
+
+def test_plot_raman_shift_rate_matches_api():
+    """The annotated/drawn slope equals SolitonAnalyzer.raman_shift_rate()."""
+    import pytest
+    from photonics_helper.soliton import SolitonAnalyzer
+
+    solver = _make_solver()
+    fig = plot_raman_shift(solver)
+    ax = fig.axes[0]
+    dashed = [ln for ln in ax.lines if ln.get_linestyle() == "--"]
+
+    analyzer = SolitonAnalyzer(
+        solver.pulse, solver.fiber, solver.betas, solver.z_array, solver.spectra_vs_z
+    )
+    fit_z, _ = analyzer._rsfs_fit_data()
+    if len(fit_z) > 1:
+        assert dashed, "expected a fitted trend line"
+        slope = np.polyfit(*dashed[0].get_data(), 1)[0]
+        assert slope == pytest.approx(analyzer.raman_shift_rate(), rel=1e-9)
+        label_rate = float(dashed[0].get_label().split(":")[1].split()[0])
+        assert label_rate == pytest.approx(analyzer.raman_shift_rate(), abs=1e-3)
+    plt.close(fig)
+
+
+def test_plot_dispersion_wave_warns_on_failure():
+    """A DW lookup failure warns and still returns the spectrum figure."""
+    import pytest
+
+    solver = _make_solver()  # beta3 = 0 -> DW wavelength undefined
+    with pytest.warns(UserWarning, match="dispersive-wave"):
+        fig = plot_dispersion_wave(solver)
+    assert fig is not None
+    plt.close(fig)

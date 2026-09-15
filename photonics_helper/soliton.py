@@ -30,6 +30,32 @@ __all__ = ["SolitonAnalyzer", "plot_soliton_trajectories", "plot_fission_dynamic
            "plot_raman_shift", "plot_dispersion_wave"]
 
 
+#: Shared soliton peak-detection thresholds. Single source of truth for
+#: ``count_solitons``, ``soliton_trajectories`` and the plotting helpers so the
+#: thresholds cannot drift between them.
+_SOLITON_PEAK_KWARGS: dict[str, float] = {
+    "height": 0.05,
+    "prominence": 0.02,
+    "distance": 10,
+}
+
+
+def _detect_soliton_peaks(spectrum_norm: NDArray) -> NDArray:
+    """Return indices of soliton peaks using the shared threshold set.
+
+    Peak detection uses :func:`scipy.signal.find_peaks` with a prominence
+    threshold so that low-level spectral ripple is not counted as a soliton
+    (Virtanen et al., *Nature Methods* **17**, 261 (2020)).
+
+    Parameters
+    ----------
+    spectrum_norm : NDArray
+        Normalized spectrum (peak ~1.0, sorted by wavelength if applicable).
+    """
+    peaks, _ = find_peaks(spectrum_norm, **_SOLITON_PEAK_KWARGS)
+    return np.asarray(peaks)
+
+
 class SolitonAnalyzer:
     """Extract soliton dynamics metrics from GNLSE simulation results.
 
@@ -261,11 +287,8 @@ class SolitonAnalyzer:
             return 0
         spectrum_norm = spectrum_sorted / max_val
 
-        # Find peaks: require height > 5% of max, minimum distance of 10 points
-        # Find peaks: require height > 5% and prominence > 2% of max.
-        peaks, _ = find_peaks(
-            spectrum_norm, height=0.05, prominence=0.02, distance=10
-        )
+        # Find peaks (shared thresholds: height + prominence + distance)
+        peaks = _detect_soliton_peaks(spectrum_norm)
 
         return len(peaks)
 
@@ -295,10 +318,8 @@ class SolitonAnalyzer:
                 continue
             spectrum_norm = spectrum_sorted / max_val
 
-            # Find peaks (height + prominence thresholds reject noise ripples)
-            peaks, _ = find_peaks(
-                spectrum_norm, height=0.05, prominence=0.02, distance=10
-            )
+            # Find peaks (shared height/prominence/distance thresholds)
+            peaks = _detect_soliton_peaks(spectrum_norm)
 
             for peak_idx in peaks:
                 z = self.z_array[i]
@@ -307,25 +328,39 @@ class SolitonAnalyzer:
 
         return trajectories
 
-    def raman_shift_rate(self) -> float:
-        """Compute Raman self-frequency shift rate (nm/mm).
+    def _fission_length_m(self) -> float | None:
+        """Return L_fiss in metres, or None when it cannot be computed."""
+        try:
+            L_fiss = self.fission_length()
+        except ValueError:
+            return None
+        if L_fiss is not None and np.isfinite(L_fiss.as_m):
+            return float(L_fiss.as_m)
+        return None
 
-        Fits a line to the soliton trajectory in the linear regime
-        and returns the slope.
+    def _rsfs_fit_data(self) -> tuple[NDArray, NDArray]:
+        """Raman-shift fit data, restricted to ``z <= L_fiss`` where possible.
+
+        The Raman self-frequency shift is only linear while a single soliton
+        dominates. After soliton fission (``z > L_fiss``) the spectrum splits
+        into multiple peaks whose global fit has no physical meaning, so the
+        fit is restricted to the pre-fission region (Dudley, Genty & Coen,
+        *Rev. Mod. Phys.* **78**, 1135 (2006); Gordon, *Opt. Lett.* **11**,
+        662 (1986) for the linear RSFS rate).
 
         Returns
         -------
-        float
-            RSFS rate in nm/mm.
+        (z_mm, lambda_nm)
+            Trajectory points on the pre-fission window (or all points when
+            ``L_fiss`` is unavailable), z converted to millimetres.
         """
         trajectories = self.soliton_trajectories()
         if len(trajectories) < 2:
-            return 0.0
+            return np.array([]), np.array([])
 
         z_vals = np.array([t[0] for t in trajectories])
         lam_vals = np.array([t[1] for t in trajectories])
 
-        # Sort by z
         sort_idx = np.argsort(z_vals)
         z_vals = z_vals[sort_idx]
         lam_vals = lam_vals[sort_idx]
@@ -333,18 +368,27 @@ class SolitonAnalyzer:
         # Before fission there is a single dominant soliton, so the trajectory
         # is meaningful. After fission, many peaks appear and a global fit
         # gives a spurious slope — restrict the fit to z <= L_fiss.
-        try:
-            L_fiss = self.fission_length()
-        except ValueError:
-            L_fiss = None
-        if L_fiss is not None and np.isfinite(L_fiss.as_m):
-            mask = z_vals <= L_fiss.as_m
+        L_fiss = self._fission_length_m()
+        if L_fiss is not None:
+            mask = z_vals <= L_fiss
             if mask.sum() >= 2:
                 z_vals = z_vals[mask]
                 lam_vals = lam_vals[mask]
 
-        # Fit linear trend (nm vs mm)
-        z_mm = z_vals * 1e3  # m to mm
+        return z_vals * 1e3, lam_vals  # m -> mm
+
+    def raman_shift_rate(self) -> float:
+        """Compute Raman self-frequency shift rate (nm/mm).
+
+        Fits a line to the soliton trajectory in the linear (pre-fission)
+        regime and returns the slope.
+
+        Returns
+        -------
+        float
+            RSFS rate in nm/mm.
+        """
+        z_mm, lam_vals = self._rsfs_fit_data()
         if len(z_mm) > 1:
             coeffs = np.polyfit(z_mm, lam_vals, 1)
             return float(coeffs[0])  # nm/mm
@@ -489,14 +533,24 @@ def plot_raman_shift(solver: "GNLSESolver", ax=None) -> "plt.Figure":
     if trajectories:
         z_vals = np.array([t[0] for t in trajectories]) * 1e3  # mm
         lam_vals = np.array([t[1] for t in trajectories])  # nm
-        ax.plot(z_vals, lam_vals, "o-", markersize=3, alpha=0.7)
+        # Scatter points: after fission there is a cloud of peaks, so a single
+        # connected line would imply a trajectory that does not exist.
+        ax.plot(z_vals, lam_vals, "o", markersize=3, alpha=0.6, label="Peak positions")
 
-        # Fit and plot trend line
-        if len(z_vals) > 1:
-            coeffs = np.polyfit(z_vals, lam_vals, 1)
-            z_fit = np.array([z_vals.min(), z_vals.max()])
-            ax.plot(z_fit, coeffs[0] * z_fit + coeffs[1], "r--", alpha=0.5,
-                    label=f"Rate: {coeffs[0]:.3f} nm/mm")
+        # Trend line from the SAME pre-fission window used by
+        # SolitonAnalyzer.raman_shift_rate(), so the annotation and the numeric
+        # API cannot disagree.
+        fit_z_mm, fit_lam = analyzer._rsfs_fit_data()
+        if len(fit_z_mm) > 1:
+            coeffs = np.polyfit(fit_z_mm, fit_lam, 1)
+            z_fit = np.linspace(fit_z_mm.min(), fit_z_mm.max(), 50)
+            ax.plot(
+                z_fit,
+                coeffs[0] * z_fit + coeffs[1],
+                "r--",
+                alpha=0.7,
+                label=f"Rate: {analyzer.raman_shift_rate():.3f} nm/mm",
+            )
 
     ax.set_xlabel("Propagation distance (mm)")
     ax.set_ylabel("Peak wavelength (nm)")
@@ -557,8 +611,13 @@ def plot_dispersion_wave(solver: "GNLSESolver", ax=None) -> "plt.Figure":
         )
         dw_wl = analyzer.dispersive_wave_wavelength()
         ax.axvline(x=dw_wl.as_nm, color="r", linestyle="--", alpha=0.5, label=f"DW ({dw_wl.as_nm:.1f} nm)")
-    except (ValueError, IndexError):
-        pass
+    except (ValueError, IndexError) as exc:
+        warnings.warn(
+            f"Could not compute the dispersive-wave wavelength for the marker: {exc}. "
+            "Returning the spectrum without a DW marker.",
+            UserWarning,
+            stacklevel=2,
+        )
 
     ax.set_xlabel("Wavelength (nm)")
     ax.set_ylabel("Normalized spectrum")

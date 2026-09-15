@@ -289,6 +289,31 @@ fig = plot_soliton_trajectories(solver)
 fig.savefig("trajectories.png", dpi=150)
 ```
 
+# Reproductions
+
+The `reproductions/` directory validates the library against published results,
+not against other software. Each folder has a `parameters.json`, a script that
+asserts its result against an analytic/closed-form reference, a figure, and a
+README with the DOI, findings and open issues.
+
+| Reproduction | Reference (DOI) |
+|---|---|
+| `stolen_lin_1978_spm` | Stolen & Lin, *Phys. Rev. A* **17**, 1448 (1978) · [10.1103/PhysRevA.17.1448](https://doi.org/10.1103/PhysRevA.17.1448) |
+| `macleod_quarter_wave_dbr` | Macleod, *Thin-Film Optical Filters* (textbook) |
+| `gordon_1986_ssfs` | Gordon, *Opt. Lett.* **11**, 662 (1986) · [10.1364/OL.11.000662](https://doi.org/10.1364/OL.11.000662) |
+| `dudley_2006_cherenkov_dw` | Akhmediev & Karlsson, *Phys. Rev. A* **51**, 2602 (1995) · [10.1103/PhysRevA.51.2602](https://doi.org/10.1103/PhysRevA.51.2602) |
+| `dudley_2006_scg` | Dudley, Genty & Coen, *Rev. Mod. Phys.* **78**, 1135 (2006) · [10.1103/RevModPhys.78.1135](https://doi.org/10.1103/RevModPhys.78.1135) |
+
+See [`reproductions/README.md`](reproductions/README.md) for the full status,
+cross-cutting findings and issues, and
+[`reproductions/dudley_2006_scg/PAPER_ANALYSIS.md`](reproductions/dudley_2006_scg/PAPER_ANALYSIS.md)
+for the figure-by-figure reproducibility map of the Dudley review.
+
+```sh
+python -m pytest tests/test_reproductions.py   # all reproduction regressions
+python reproductions/dudley_2006_scg/fig05_ideal_soliton_period.py   # one figure
+```
+
 # Development
 
 To install for development:

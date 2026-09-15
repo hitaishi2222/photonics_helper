@@ -252,29 +252,43 @@ class TMM:
     pattern : Pattern — the layer stack.
     angle_of_incidence : angle of incidence in radians.
     polarisation : "TE" or "TM".
+    n_incident : complex — refractive index of the semi-infinite incident
+        medium (default air, ``1.0 + 0j``).
+    n_substrate : complex — refractive index of the semi-infinite exit
+        (substrate) medium (default air, ``1.0 + 0j``).
     """
 
     pattern: Pattern
     angle_of_incidence: float
     polarisation: Literal["TE", "TM"]
+    n_incident: complex = 1.0 + 0j
+    n_substrate: complex = 1.0 + 0j
 
-    def _characteristic_matrix(
-        self, letter_asigned: str, wavelength: Wavelength
+    def _layer_matrix(
+        self, letter_asigned: str, wavelength: Wavelength, thickness: float
     ) -> NDArray:
-        """2×2 characteristic matrix for a single layer.
+        """2×2 characteristic matrix for a slab of ``thickness`` metres.
 
         Uses the standard optical admittance formalism which correctly
         handles absorbing (complex n) layers. For lossless media this
-        reduces to the usual cos/sin form.
+        reduces to the usual cos/sin form. Snell's law uses the configured
+        incident medium index.
+
+        References
+        ----------
+        - Macleod, *Thin-Film Optical Filters*, 4th ed., §2.4–2.5 (optical
+          admittance and the characteristic matrix).
+        - Born & Wolf, *Principles of Optics*, 7th ed., §1.6 (Snell's law and
+          Fresnel admittances for absorbing media).
         """
         mat = self.pattern.mapping[letter_asigned].material
         n_real: float = mat.n_func(wavelength.as_um)
         n_imag: float = mat.k_func(wavelength.as_um)
         n: complex = n_real + 1j * n_imag
-        d: float = self.pattern.mapping[letter_asigned].length.as_m
+        d: float = thickness
         # Phase thickness with complex n
-        # Snell's law for complex n: sin_theta_layer = sin_incident / n
-        sin_theta_layer = np.sin(self.angle_of_incidence) / n
+        # Snell's law: n_{layer} sin(θ_layer) = n_incident sin(θ_incident)
+        sin_theta_layer = self.n_incident * np.sin(self.angle_of_incidence) / n
         if np.isrealobj(sin_theta_layer):
             sin_theta_layer = np.clip(sin_theta_layer, -1.0, 1.0)
         cos_theta_layer = np.sqrt(1.0 - sin_theta_layer**2)
@@ -291,6 +305,16 @@ class TMM:
         return np.array(
             [[cos_d, -1j * sin_d / eta], [-1j * eta * sin_d, cos_d]],
             dtype=complex,
+        )
+
+    def _characteristic_matrix(
+        self, letter_asigned: str, wavelength: Wavelength
+    ) -> NDArray:
+        """2×2 characteristic matrix for one full layer of the pattern."""
+        return self._layer_matrix(
+            letter_asigned,
+            wavelength,
+            self.pattern.mapping[letter_asigned].length.as_m,
         )
 
     def transfer_matrix(self, wavelength: Wavelength) -> NDArray:
@@ -319,9 +343,9 @@ class TMM:
         R = np.empty_like(wavelengths.as_m, dtype=float)
         T = np.empty_like(wavelengths.as_m, dtype=float)
 
-        # Optical admittances of incident (air) and exit (air) media
-        eta0 = self._admittance(1.0 + 0j, self.angle_of_incidence)
-        eta_exit = self._admittance(1.0 + 0j, 0.0)
+        # Optical admittances of the configured incident and exit media
+        eta0 = self._admittance(self.n_incident, self.angle_of_incidence)
+        eta_exit = self._admittance(self.n_substrate, self.angle_of_incidence)
 
         for i, wl_m in enumerate(wavelengths.as_m):
             wl = Wavelength(wl_m, "m")
@@ -337,23 +361,29 @@ class TMM:
 
         return R, T
 
-    def _admittance(self, n: complex, angle: float) -> complex:
-        """Optical admittance η = n·cos(θ) for TE, n/cos(θ) for TM."""
+    def _admittance(self, n: complex, theta_incident: float) -> complex:
+        """Optical admittance η = n·cos(θ) for TE, n/cos(θ) for TM.
+
+        ``theta_incident`` is the angle in the incident medium; Snell's law is
+        applied with the configured ``n_incident`` for both polarisations, so
+        the result is consistent for any incident/exit medium index
+        (Macleod, *Thin-Film Optical Filters*, §2.4; Born & Wolf,
+        *Principles of Optics*, §1.6).
+        """
+        sin_t = self.n_incident * np.sin(theta_incident) / n
+        if np.isrealobj(sin_t):
+            sin_t = np.clip(sin_t, -1.0, 1.0)
+        cos_t = np.sqrt(1.0 - sin_t**2)
         if self.polarisation == "TE":
-            cos_t = np.cos(angle)
             return complex(n * cos_t)
         else:
-            sin_t = np.sin(angle) / n
-            if np.isrealobj(sin_t):
-                sin_t = np.clip(sin_t, -1.0, 1.0)
-            cos_t = np.sqrt(1.0 - sin_t**2)
             return complex(n / cos_t)
 
     def _reflection_coefficient(self, wavelength: Wavelength) -> complex:
         """Overall reflection coefficient via characteristic matrix formalism."""
         M = self.transfer_matrix(wavelength)
-        eta0 = self._admittance(1.0 + 0j, self.angle_of_incidence)
-        eta_exit = self._admittance(1.0 + 0j, 0.0)
+        eta0 = self._admittance(self.n_incident, self.angle_of_incidence)
+        eta_exit = self._admittance(self.n_substrate, self.angle_of_incidence)
         M11, M12, M21, M22 = M[0, 0], M[0, 1], M[1, 0], M[1, 1]
         denom = eta0 * M11 + eta0 * eta_exit * M12 + M21 + eta_exit * M22
         return complex(
@@ -388,7 +418,7 @@ class TMM:
             Interface positions, only when ``return_positions=True``.
         """
         r_total = self._reflection_coefficient(wavelength)
-        eta0 = self._admittance(1.0 + 0j, self.angle_of_incidence)
+        eta0 = self._admittance(self.n_incident, self.angle_of_incidence)
 
         # Normalize so that the incident forward wave has E = 1.
         # H_forward = eta0 * E_forward,  H_backward = -eta0 * E_backward
@@ -413,6 +443,70 @@ class TMM:
         if return_positions:
             return positions, np.array(field_vals, dtype=float)
         return np.array(field_vals, dtype=float)
+
+    def field_profile_z(
+        self, wavelength: Wavelength, n_points_per_layer: int = 20
+    ) -> tuple[NDArray, NDArray]:
+        """Continuous ``|E(z)|`` profile sampled across the whole stack.
+
+        Parameters
+        ----------
+        wavelength : Wavelength
+            Vacuum wavelength (m).
+        n_points_per_layer : int
+            Number of samples per layer (including both interfaces). Must be
+            at least 2. Default 20.
+
+        Returns
+        -------
+        z : NDArray
+            Positions in metres, strictly increasing from ``0`` to the total
+            stack length.
+        E : NDArray
+            ``|E(z)|`` at those positions.
+
+        Notes
+        -----
+        Within layer ``i`` the fields are obtained from the back interface via
+        the characteristic matrix of the remaining thickness: at depth ``x``,
+        ``[E, H] = M(d_i − x) · [E_back, H_back]``. At ``x = 0`` this
+        reproduces the front field, so the sampled interface values match
+        :meth:`field_profile`. The same characteristic-matrix/admittance
+        formalism is used throughout (Macleod, *Thin-Film Optical Filters*,
+        §2.4).
+        """
+        if n_points_per_layer < 2:
+            raise ValueError("n_points_per_layer must be >= 2")
+
+        r_total = self._reflection_coefficient(wavelength)
+        eta0 = self._admittance(self.n_incident, self.angle_of_incidence)
+        E_cur: complex = 1.0 + r_total
+        H_cur: complex = eta0 * (1.0 - r_total)
+
+        layer_positions = self.pattern._get_positions()
+        z_vals: list[float] = []
+        e_vals: list[float] = []
+
+        for idx, letter in enumerate(self.pattern.style):
+            d = float(self.pattern.mapping[letter].length.as_m)
+            M_layer = self._layer_matrix(letter, wavelength, d)
+            E_back, H_back = np.linalg.solve(M_layer, np.array([E_cur, H_cur]))
+
+            pos = layer_positions[idx]
+            z0 = float(pos[0]) if pos is not None else 0.0
+
+            for x in np.linspace(0.0, d, n_points_per_layer):
+                M_sub = self._layer_matrix(letter, wavelength, d - x)
+                E_x, _ = M_sub @ np.array([E_back, H_back])
+                z = z0 + float(x)
+                if z_vals and np.isclose(z, z_vals[-1], rtol=0.0, atol=1e-15):
+                    continue
+                z_vals.append(z)
+                e_vals.append(float(np.abs(E_x)))
+
+            E_cur, H_cur = E_back, H_back
+
+        return np.asarray(z_vals, dtype=float), np.asarray(e_vals, dtype=float)
 
     def plot_spectrum(self, wavelengths: WavelengthArray, ax=None):
         """Plot reflectance R(λ), transmittance T(λ) and absorption A(λ).

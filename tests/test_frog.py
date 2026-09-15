@@ -104,15 +104,13 @@ class TestRetrieve:
         f = fidelity(trace, result)
         assert f > 0.99, f"Fidelity {f} below threshold"
 
-    def test_chirped_retrieval_fidelity(self):
-        """PCGPA retrieves chirped pulse with high fidelity."""
+    @pytest.mark.parametrize("window", [8.0, 10.0])
+    def test_chirped_retrieval_fidelity(self, window):
+        """PCGPA retrieves chirped pulses with high fidelity across windows."""
         T0 = 50e-15
         chirp = 2.0
-        N = 512
-        # Window = 8·T0 so the pulse fills ~30% of the FROG window. PCGPA is
-        # documented to stall on spurious fixed points when the pulse underfills
-        # the window (e.g. 15·T0 → ~16% fill); ¼–½ window fill is the sweet spot.
-        dt = 8 * T0 / N
+        N = 256
+        dt = window * T0 / N
         t = np.arange(N) * dt - N * dt / 2
         E = (
             np.exp(-t**2 / (2 * T0**2))
@@ -124,6 +122,54 @@ class TestRetrieve:
 
         f = fidelity(trace, result)
         assert f > 0.99, f"Fidelity {f} below threshold"
+
+    @pytest.mark.parametrize("window", [8.0, 10.0])
+    def test_strongly_chirped_retrieval_fidelity(self, window):
+        """A more extreme chirp is also recovered."""
+        T0 = 50e-15
+        chirp = 3.0
+        N = 256
+        dt = window * T0 / N
+        t = np.arange(N) * dt - N * dt / 2
+        E = (
+            np.exp(-t**2 / (2 * T0**2))
+            * np.exp(1j * 0.5 * chirp * (t / T0) ** 2)
+        )
+
+        trace = generate_trace(E, dt=dt)
+        result = retrieve(trace, max_iter=150, verbose=False, n_restarts=6)
+
+        f = fidelity(trace, result)
+        assert f > 0.99, f"Fidelity {f} below threshold"
+
+    def test_double_pulse_retrieval_fidelity(self):
+        """Double-pulse retrieval remains high fidelity."""
+        T0 = 50e-15
+        N = 256
+        dt = 8 * T0 / N
+        t = np.arange(N) * dt - N * dt / 2
+        E = np.exp(-((t - 4 * T0) ** 2) / (2 * T0**2)) + np.exp(
+            -((t + 4 * T0) ** 2) / (2 * T0**2)
+        )
+
+        trace = generate_trace(E, dt=dt)
+        result = retrieve(trace, max_iter=100, verbose=False, n_restarts=3)
+
+        f = fidelity(trace, result)
+        assert f > 0.997, f"Fidelity {f} below threshold"
+
+    def test_retrieval_is_deterministic(self):
+        """The fixed default seed makes retrieval reproducible."""
+        T0 = 50e-15
+        N = 128
+        dt = 8 * T0 / N
+        t = np.arange(N) * dt - N * dt / 2
+        E = np.exp(-t**2 / (2 * T0**2)) * np.exp(1j * 2.0 * (t / T0) ** 2)
+
+        trace = generate_trace(E, dt=dt)
+        r1 = retrieve(trace, max_iter=30, verbose=False)
+        r2 = retrieve(trace, max_iter=30, verbose=False)
+        assert np.array_equal(r1.field, r2.field)
 
     def test_retrieval_preserves_fwhm(self):
         """Retrieved pulse has correct FWHM."""
@@ -148,11 +194,7 @@ class TestRetrieve:
         idx_rec = np.where(int_rec >= half_max_rec)[0]
         fwhm_rec = t[idx_rec[-1]] - t[idx_rec[0]]
 
-        # ponytail: PCGPA fidelity function change introduced FWHM error
-        # ~28% for N=512. See: fidelity() was changed to normalized
-        # cross-correlation, altering convergence behavior.
-        # Fix: increase fidelity tolerance or switch to 2x-iteration.
-        assert abs(fwhm_orig - fwhm_rec) / fwhm_orig < 0.30, (
+        assert abs(fwhm_orig - fwhm_rec) / fwhm_orig < 0.05, (
             f"FWHM mismatch: {fwhm_orig*1e15:.2f} fs vs {fwhm_rec*1e15:.2f} fs"
         )
 
@@ -346,3 +388,42 @@ class TestFROGTrace:
         import matplotlib.pyplot as plt
 
         plt.close(fig)
+
+
+def test_pcgpa_projection_sums_all_delays():
+    """The GP extraction step sums contributions from every delay row.
+
+    Guards the historical regression where the new field was taken from a
+    single fixed-time slice of the gated signal instead of the
+    generalized-projections least-squares update.
+    """
+    from photonics_helper.pulse import _pcgpa_update
+
+    N = 16
+    shifts = [0, 4, -7]
+    E = (np.arange(N) + 1j * np.arange(N)[::-1]).astype(complex)
+    E = E / np.linalg.norm(E)
+
+    G_time = np.zeros((len(shifts), N), dtype=complex)
+    G_time[0] = 1.0
+    G_time[2] = 2.0
+
+    out = _pcgpa_update(G_time, E, shifts)
+
+    # Least-squares GP update: E_new(t) = Σ_τ G'(t,τ)E*(t+τ) / Σ_τ|E(t+τ)|².
+    num = np.zeros(N, dtype=complex)
+    den = np.zeros(N, dtype=float)
+    for i, s in enumerate(shifts):
+        E_shift = np.roll(E, -s)
+        num += G_time[i] * np.conj(E_shift)
+        den += np.abs(E_shift) ** 2
+    expected = np.zeros(N, dtype=complex)
+    mask = den > 0
+    expected[mask] = num[mask] / den[mask]
+    expected = expected / np.linalg.norm(expected)
+
+    assert np.allclose(out, expected)
+    # A single-slice implementation would ignore one of the two rows.
+    only_row0 = G_time[0] * np.conj(np.roll(E, -shifts[0]))
+    only_row0 = only_row0 / np.linalg.norm(only_row0)
+    assert not np.allclose(out, only_row0)

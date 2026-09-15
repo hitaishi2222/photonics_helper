@@ -9,12 +9,63 @@ from __future__ import annotations
 import warnings
 from dataclasses import dataclass
 from math import factorial
-from typing import TYPE_CHECKING, Optional, Tuple, Callable
+from typing import TYPE_CHECKING, Literal, Optional, Tuple, Callable
 
 import numpy as np
 from numpy.typing import NDArray
 
 from photonics_helper.base import C_MS, Area, Length, Time
+
+# Accepted unit strings for dispersion coefficients passed to the solvers.
+BetasUnit = Literal["ps^k/m", "s^k/m", "SI"]
+_BETAS_UNITS: tuple[str, ...] = ("ps^k/m", "s^k/m", "SI")
+
+
+def _validate_betas_unit(betas_unit: str) -> str:
+    """Return *betas_unit* if it is an accepted unit string, else raise."""
+    if betas_unit not in _BETAS_UNITS:
+        raise ValueError(
+            f"Unknown betas_unit {betas_unit!r}; accepted values are "
+            f"{', '.join(repr(u) for u in _BETAS_UNITS)}."
+        )
+    return betas_unit
+
+
+def _normalize_betas(betas, betas_unit: BetasUnit = "ps^k/m") -> NDArray:
+    """Validate and normalise Taylor dispersion coefficients to ``ps^k/m``.
+
+    The GNLSE dispersion operator uses the Taylor expansion
+    ``β(ω) = Σ_k β_k (ω−ω₀)^k / k!`` with ``β_k = d^kβ/dω^k`` (units
+    ``s^k/m``; Agrawal, *Nonlinear Fiber Optics*, 5th ed., §2.3.1). The solver
+    evaluates this with ``Ω`` in ``rad/ps``, so coefficients are stored in
+    ``ps^k/m``. Element ``i`` of *betas* is order ``k = i + 2``
+    (beta2, beta3, ...). Because ``Ω_ps = 10^{−12} Ω_SI``, matching the two
+    forms of ``β_k Ω^k/k!`` gives the per-order conversion
+
+        β_k[ps^k/m] = β_k[s^k/m] · 10^{12k}
+
+    (for ``k = 2`` this is the familiar ``1 ps²/m = 10^{−24} s²/m`` used by
+    :meth:`~photonics_helper.fiber.Dispersion.get_betas`).
+    """
+    _validate_betas_unit(betas_unit)
+    try:
+        arr = np.asarray(betas, dtype=float)
+    except (TypeError, ValueError) as exc:
+        raise TypeError(
+            f"betas must be a real numeric array; got {type(betas).__name__} ({exc})."
+        ) from exc
+    if arr.ndim != 1:
+        raise ValueError(f"betas must be 1-D, got shape {arr.shape}.")
+    if not np.all(np.isfinite(arr)):
+        bad = np.where(~np.isfinite(arr))[0].tolist()
+        raise ValueError(f"betas contains non-finite values at index/indices {bad}.")
+    if betas_unit == "ps^k/m":
+        return arr
+    out = arr.copy()
+    for i in range(out.shape[0]):
+        k = i + 2
+        out[i] = out[i] * 10.0 ** (12 * k)
+    return out
 
 if TYPE_CHECKING:
     from photonics_helper.pulse import Wave, TemporalGrid
@@ -34,7 +85,12 @@ __all__ = [
     "plot_spectrum_vs_distance",
     "plot_spectral_evolution",
     "plot_temporal_evolution",
+    "plot_spectral_temporal_summary",
+    "plot_scg_dashboard",
+    "save_summary_html",
     "plot_intensity_metrics",
+    "gnlse_spectrogram",
+    "plot_spectrogram",
 ]
 
 
@@ -338,7 +394,12 @@ class SplitStepEngine:
     fiber : FiberProfile
         Fiber parameters.
     betas : array_like
-        Dispersion coefficients [beta2, beta3, ...].
+        Dispersion coefficients [beta2, beta3, ...] in ``ps^k/m`` (with ``Ω``
+        in ``rad/ps``), as returned by ``Dispersion.get_betas()``. Pass
+        ``betas_unit="s^k/m"`` (or ``"SI"``) to supply SI coefficients
+        instead; they are converted to ``ps^k/m`` internally.
+    betas_unit : {"ps^k/m", "s^k/m", "SI"}
+        Unit of *betas*. Default ``"ps^k/m"`` (native internal form).
     include_raman : bool
         Include Raman. Default False.
     include_self_steepening : bool
@@ -371,12 +432,13 @@ class SplitStepEngine:
         alpha_fn: Callable[[float], float] | None = None,
         gamma_fn: Callable[[float], float] | None = None,
         min_shrink_factor: float = 0.1,
+        betas_unit: BetasUnit = "ps^k/m",
     ):
         self.pulse = pulse
         self.fiber = fiber
         # get_betas() returns betas in ps^(k)/m with omega in rad/ps.
         # We keep them in native units and convert omega to rad/ps in _linear_step.
-        self.betas = np.asarray(betas, dtype=float)
+        self.betas = _normalize_betas(betas, betas_unit)
         self.include_raman = include_raman
         self.include_self_steepening = include_self_steepening
         self.include_tpa = include_tpa
@@ -928,7 +990,12 @@ class GNLSESolver:
     fiber : FiberProfile
         Fiber parameters.
     betas : array_like
-        Dispersion coefficients [beta2, beta3, ...] from Dispersion.get_betas().
+        Dispersion coefficients [beta2, beta3, ...] in ``ps^k/m`` (with ``Ω``
+        in ``rad/ps``), as returned by ``Dispersion.get_betas()``. Pass
+        ``betas_unit="s^k/m"`` (or ``"SI"``) to supply SI coefficients
+        instead; they are converted to ``ps^k/m`` internally.
+    betas_unit : {"ps^k/m", "s^k/m", "SI"}
+        Unit of *betas*. Default ``"ps^k/m"``.
     include_raman : bool
         Include Raman scattering. Default True.
     include_self_steepening : bool
@@ -952,11 +1019,13 @@ class GNLSESolver:
         include_self_steepening: bool = False,
         include_tpa: bool = False,
         check_phase_matching: bool = False,
+        betas_unit: BetasUnit = "ps^k/m",
     ):
         self.pulse = pulse
         self.fiber = fiber
-        # Store betas in ps²/m — SplitStepEngine handles SI conversion.
-        self.betas = np.asarray(betas, dtype=float)
+        # Normalised to ps^k/m (Ω in rad/ps) at the boundary — see _normalize_betas.
+        self.betas = _normalize_betas(betas, betas_unit)
+        self.betas_unit = _validate_betas_unit(betas_unit)
         self.include_raman = include_raman
         self.include_self_steepening = include_self_steepening
         self.include_tpa = include_tpa
@@ -1156,6 +1225,11 @@ class TaperedGNLSESolver:
         Floor for the gradient-based step shrink factor in z-dependent mode.
         Must be in (0, 1]. Default 0.1. Raise it (e.g. 0.3) to trade a small
         amount of accuracy for speed on tapers with mild dispersion gradients.
+    betas_unit : {"ps^k/m", "s^k/m", "SI"}
+        Unit contract for dispersion coefficients. The tapered solver takes its
+        dispersion from *dispersion_profile* (β(ω, z), SI), so this flag is
+        validated for consistency with the other solvers but does not rescale a
+        coefficient array. Default ``"ps^k/m"``.
     """
 
     def __init__(
@@ -1171,9 +1245,11 @@ class TaperedGNLSESolver:
         include_tpa: bool = False,
         check_phase_matching: bool = False,
         min_shrink_factor: float = 0.1,
+        betas_unit: BetasUnit = "ps^k/m",
     ):
         self.pulse = pulse
         self.fiber = fiber
+        self.betas_unit = _validate_betas_unit(betas_unit)
         self.dispersion_profile = dispersion_profile
         self.a_eff_fn = a_eff_fn
         self.alpha_fn = alpha_fn
@@ -1569,6 +1645,7 @@ def plot_temporal_evolution(
     cmap: str = "viridis",
     z_scale: str = "m",
     use_imshow: bool = True,
+    time_reversal: bool = True,
 ) -> "plt.Figure":
     """Temporal evolution contour: time vs propagation distance.
 
@@ -1579,13 +1656,18 @@ def plot_temporal_evolution(
     ax : matplotlib Axes, optional
         Axis to plot on. Creates new figure if None.
     t_min, t_max : float, optional
-        Time window in ps. Default: full grid.
+        Time window in ps (in the plotted convention). Default: full grid.
     dynamic_range_db : float
         Color scale spans [global_max - dynamic_range_db, global_max] in dB.
     cmap : str
         Matplotlib colormap name.
     z_scale : str
         ``"m"`` or ``"mm"`` for the distance axis.
+    time_reversal : bool
+        If True (default) plot against the standard literature (Agrawal)
+        comoving time, where Raman-shifted solitons appear at positive delay.
+        The library's internal time grid has the opposite sign (chirp and
+        spectra are unaffected); set False for the raw internal time.
 
     Returns
     -------
@@ -1599,6 +1681,11 @@ def plot_temporal_evolution(
         fig = ax.figure
 
     z_m, t_ps, intensity = temporal_evolution_intensity(solver)
+    if time_reversal:
+        t_ps = -t_ps
+        order = np.argsort(t_ps)
+        t_ps = t_ps[order]
+        intensity = intensity[:, order]
     global_max = intensity.max()
     intensity_dB = 10 * np.log10(intensity / global_max + 1e-30)
 
@@ -1634,6 +1721,910 @@ def plot_temporal_evolution(
     ax.set_xlabel("Time (ps)")
     ax.set_ylabel(z_label)
     ax.set_title("Temporal evolution")
+    return fig
+
+
+def _default_wl_bounds(solver: "GNLSESolver", fraction: float = 0.5) -> Tuple[float, float]:
+    """Default wavelength window (nm) around the carrier: ``(1-f)·λ0, (1+f)·λ0``."""
+    pump_nm = float(solver.pulse.central_wavelength.as_nm)
+    return (pump_nm * (1.0 - fraction), pump_nm * (1.0 + fraction))
+
+
+def _classify_features(wavelength_nm: NDArray, pump_nm: float) -> NDArray:
+    """Label each wavelength bin as a SC feature (used for Plotly hover text).
+
+    The classification is intentionally simple and is based on the offset from
+    the pump: normal-GVD / blue components are labelled *dispersive wave*, the
+    region around the carrier is *SPM / pump*, and the anomalous-GVD side is a
+    *Raman soliton*.  It is a guide for interactive exploration, not a
+    substitute for checking the dispersion.
+    """
+    offset = np.asarray(wavelength_nm, dtype=float) - pump_nm
+    labels = np.full(wavelength_nm.shape, "SPM / pump", dtype=object)
+    labels[offset < -80.0] = "Dispersive wave (blue)"
+    labels[offset > 80.0] = "Raman soliton (red)"
+    return labels
+
+
+def _field_feature_labels(
+    fields,
+    omega: NDArray,
+    omega0: float,
+    pump_nm: float,
+    *,
+    time_reversal: bool = True,
+    n_bands: int = 24,
+    wl_range: Tuple[float, float] = (400.0, 1400.0),
+    floor_db: float = 40.0,
+) -> NDArray:
+    """Coarse filter-bank feature labels for each ``(z, time)`` cell.
+
+    A single delay can carry several spectrally distinct components (a far-red
+    Raman soliton and the blue dispersive wave can overlap), so each cell is
+    labelled by the spectral band with the most local energy rather than by
+    its time offset.  Cells more than ``floor_db`` below the global peak are
+    labelled ``"low-level background"``.
+
+    Parameters
+    ----------
+    fields : iterable of complex NDArray
+        Stored field snapshots, one per propagation step.
+    omega : NDArray
+        Angular-frequency offset grid (rad/s), as in ``pulse.grid.w``.
+    omega0 : float
+        Carrier angular frequency (rad/s).
+    pump_nm : float
+        Carrier wavelength (nm), used by :func:`_classify_features`.
+    time_reversal : bool
+        Mirror the returned time axis to the literature comoving convention.
+    n_bands : int
+        Number of logarithmically spaced wavelength bands.
+    wl_range : (float, float)
+        Wavelength span (nm) covered by the filter bank.
+    floor_db : float
+        Dynamic range (dB) below which a cell is called background.
+
+    Returns
+    -------
+    labels : NDArray of object, shape (n_z, n_time)
+    """
+    omega = np.asarray(omega, dtype=float)
+    lam = 2.0 * np.pi * C_MS / (omega0 + omega) * 1e9
+    edges = np.geomspace(float(wl_range[0]), float(wl_range[1]), n_bands + 1)
+    centers = np.sqrt(edges[:-1] * edges[1:])
+    band_of_bin = np.digitize(lam, edges) - 1
+    band_masks = [(band_of_bin == b) for b in range(int(n_bands))]
+
+    snapshots = list(fields)
+    n_z = len(snapshots)
+    n_t = np.asarray(snapshots[0], dtype=complex).shape[0]
+    labels = np.empty((n_z, n_t), dtype=object)
+    for iz, snapshot in enumerate(snapshots):
+        spectrum = np.fft.fftshift(
+            np.fft.fft(np.asarray(snapshot, dtype=complex))
+        )
+        best = np.full(n_t, -np.inf)
+        best_band = np.zeros(n_t, dtype=int)
+        for b, mask in enumerate(band_masks):
+            if not mask.any():
+                continue
+            profile = np.abs(
+                np.fft.ifft(np.fft.ifftshift(spectrum * mask))
+            ) ** 2
+            update = profile > best
+            best[update] = profile[update]
+            best_band[update] = b
+        row = np.asarray(
+            _classify_features(centers[best_band], pump_nm), dtype=object
+        )
+        peak = float(best.max()) if np.isfinite(best).any() else 0.0
+        if peak > 0.0:
+            row[best < peak * 10.0 ** (-abs(floor_db) / 10.0)] = "low-level background"
+        labels[iz] = row
+
+    if time_reversal:
+        labels = labels[:, ::-1]
+    return labels
+
+
+def plot_scg_dashboard(
+    *,
+    z_axis: NDArray,
+    wl_nm: NDArray,
+    spec_db: NDArray,
+    t_ps: NDArray,
+    int_db: NDArray,
+    out_wl_nm: NDArray,
+    out_spec_db: NDArray,
+    out_t_ps: NDArray,
+    out_int_db: NDArray,
+    spec_labels: NDArray,
+    t_labels: NDArray,
+    title: str = "",
+    z_label: str = "Distance (m)",
+    wl_bounds: Tuple[float, float] | None = None,
+    t_bounds: Tuple[float, float] | None = None,
+    dynamic_range_db: float = 40.0,
+    colorscale: str = "Jet",
+    annotate_features: bool = True,
+    height: int = 850,
+):
+    """Interactive four-panel Plotly SCG dashboard with feature hover labels.
+
+    Layout: output line profiles ``(a) intensity (dB) vs wavelength`` and
+    ``(b) intensity (dB) vs time`` on top, with the taller ``(c)`` spectral and
+    ``(d)`` temporal evolution heatmaps below.  Hovering a heatmap cell
+    reports wavelength/time, distance, power and the local feature class.
+
+    This is the low-level array consumer used by
+    :func:`plot_spectral_temporal_summary` with ``plotly=True`` and by the
+    Dudley Fig. 3 reproduction (which stores an ``Evolution`` rather than a
+    solver).  Requires the optional ``plotly`` dependency.
+
+    Parameters
+    ----------
+    z_axis : NDArray
+        Propagation-distance values for the heatmap y axis.
+    wl_nm : NDArray
+        Uniform wavelength grid (nm) for the spectral heatmap columns.
+    spec_db : NDArray, shape (n_z, n_wl)
+        Spectral density in dB (peak 0, clipped to the dynamic range).
+    t_ps : NDArray
+        Time grid (ps, plotted convention) for the temporal heatmap columns.
+    int_db : NDArray, shape (n_z, n_time)
+        Temporal intensity in dB (peak 0, clipped to the dynamic range).
+    out_wl_nm, out_spec_db : NDArray
+        Output spectrum line for panel (a).
+    out_t_ps, out_int_db : NDArray
+        Output intensity line for panel (b).
+    spec_labels : NDArray
+        Per-wavelength feature labels, shape ``(n_wl,)`` or ``(n_z, n_wl)``.
+    t_labels : NDArray
+        Per-time feature labels, shape ``(n_time,)`` or ``(n_z, n_time)``.
+    title : str
+        Figure title.
+    z_label : str
+        Label for the heatmap distance axis.
+    wl_bounds, t_bounds : (float, float), optional
+        Axis ranges; default to the extent of the supplied grids.
+    dynamic_range_db : float
+        Colour-axis floor (dB).
+    colorscale : str
+        Plotly colorscale name (e.g. ``"Jet"``, ``"Viridis"``).
+    annotate_features : bool
+        Mark the strongest cell of each feature class.
+    height : int
+        Figure height in pixels.
+
+    Returns
+    -------
+    plotly.graph_objects.Figure
+    """
+    try:
+        import plotly.graph_objects as go
+        from plotly.subplots import make_subplots
+    except ImportError as exc:  # pragma: no cover - optional dependency
+        raise ImportError(
+            "plotly is required for the interactive dashboard; install with "
+            "`pip install plotly` or `pip install photonics-helper[plotting]`"
+        ) from exc
+
+    z_axis = np.asarray(z_axis, dtype=float)
+    wl_nm = np.asarray(wl_nm, dtype=float)
+    t_ps = np.asarray(t_ps, dtype=float)
+    spec_db = np.asarray(spec_db, dtype=float)
+    int_db = np.asarray(int_db, dtype=float)
+    zones = -abs(dynamic_range_db)
+
+    def _custom(labels, n_rows: int) -> NDArray:
+        arr = np.asarray(labels, dtype=object)
+        return np.tile(arr, (n_rows, 1)) if arr.ndim == 1 else arr
+
+    spec_custom = _custom(spec_labels, spec_db.shape[0])
+    t_custom = _custom(t_labels, int_db.shape[0])
+
+    wl_lo, wl_hi = (
+        (float(wl_bounds[0]), float(wl_bounds[1]))
+        if wl_bounds is not None
+        else (float(wl_nm[0]), float(wl_nm[-1]))
+    )
+    t_lo, t_hi = (
+        (float(t_bounds[0]), float(t_bounds[1]))
+        if t_bounds is not None
+        else (float(t_ps[0]), float(t_ps[-1]))
+    )
+
+    fig = make_subplots(
+        rows=2,
+        cols=2,
+        row_heights=[0.38, 0.62],
+        subplot_titles=(
+            "(a) Intensity (dB) vs wavelength",
+            "(b) Intensity (dB) vs time",
+            "(c) Spectral evolution",
+            "(d) Temporal evolution",
+        ),
+        horizontal_spacing=0.09,
+        vertical_spacing=0.10,
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            x=np.asarray(out_wl_nm, dtype=float),
+            y=np.asarray(out_spec_db, dtype=float),
+            mode="lines",
+            line=dict(color="royalblue"),
+            name="output spectrum",
+            hovertemplate=(
+                "Wavelength: %{x:.0f} nm<br>Intensity: %{y:.1f} dB<extra></extra>"
+            ),
+        ),
+        row=1,
+        col=1,
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=np.asarray(out_t_ps, dtype=float),
+            y=np.asarray(out_int_db, dtype=float),
+            mode="lines",
+            line=dict(color="royalblue"),
+            name="output intensity",
+            hovertemplate=(
+                "Time: %{x:.2f} ps<br>Intensity: %{y:.1f} dB<extra></extra>"
+            ),
+        ),
+        row=1,
+        col=2,
+    )
+    fig.add_trace(
+        go.Heatmap(
+            x=wl_nm,
+            y=z_axis,
+            z=spec_db,
+            customdata=spec_custom,
+            colorscale=colorscale,
+            coloraxis="coloraxis",
+            hovertemplate=(
+                "Wavelength: %{x:.0f} nm<br>" + z_label + ": %{y:.3g}"
+                "<br>Power: %{z:.1f} dB<br>Feature: %{customdata}<extra></extra>"
+            ),
+        ),
+        row=2,
+        col=1,
+    )
+    fig.add_trace(
+        go.Heatmap(
+            x=t_ps,
+            y=z_axis,
+            z=int_db,
+            customdata=t_custom,
+            colorscale=colorscale,
+            coloraxis="coloraxis",
+            hovertemplate=(
+                "Time: %{x:.2f} ps<br>" + z_label + ": %{y:.3g}"
+                "<br>Power: %{z:.1f} dB<br>Feature: %{customdata}<extra></extra>"
+            ),
+        ),
+        row=2,
+        col=2,
+    )
+
+    if annotate_features:
+        for heat_z, xs, ys, custom, col in (
+            (spec_db, wl_nm, z_axis, spec_custom, 1),
+            (int_db, t_ps, z_axis, t_custom, 2),
+        ):
+            for name in np.unique(custom):
+                mask = custom == name
+                if not mask.any():
+                    continue
+                masked = np.where(mask, heat_z, -np.inf)
+                iy, ix = np.unravel_index(int(np.argmax(masked)), masked.shape)
+                fig.add_trace(
+                    go.Scatter(
+                        x=[xs[ix]],
+                        y=[ys[iy]],
+                        mode="markers+text",
+                        text=[str(name).split(" (")[0]],
+                        textposition="middle right",
+                        marker=dict(
+                            size=9, color="white", line=dict(color="black", width=1)
+                        ),
+                        showlegend=False,
+                        hoverinfo="skip",
+                    ),
+                    row=2,
+                    col=col,
+                )
+
+    fig.update_xaxes(range=[wl_lo, wl_hi], row=1, col=1)
+    fig.update_xaxes(range=[t_lo, t_hi], row=1, col=2)
+    fig.update_xaxes(range=[wl_lo, wl_hi], row=2, col=1)
+    fig.update_xaxes(range=[t_lo, t_hi], row=2, col=2)
+    fig.update_xaxes(title_text="Wavelength (nm)", row=1, col=1)
+    fig.update_xaxes(title_text="Time (ps)", row=1, col=2)
+    fig.update_xaxes(title_text="Wavelength (nm)", row=2, col=1)
+    fig.update_xaxes(title_text="Time (ps)", row=2, col=2)
+    fig.update_yaxes(title_text="Intensity (dB)", range=[zones, 2.0], row=1, col=1)
+    fig.update_yaxes(title_text="Intensity (dB)", range=[zones, 2.0], row=1, col=2)
+    fig.update_yaxes(title_text=z_label, row=2, col=1)
+    fig.update_yaxes(title_text=z_label, row=2, col=2)
+
+    fig.update_layout(
+        coloraxis=dict(
+            colorscale=colorscale,
+            cmin=zones,
+            cmax=0.0,
+            colorbar=dict(title="dB", x=1.02, y=0.28, len=0.55),
+        ),
+        title=title,
+        template="plotly_white",
+        height=height,
+        showlegend=False,
+    )
+    return fig
+
+
+def plot_spectral_temporal_summary(
+    solver: "GNLSESolver",
+    *,
+    wl_bounds: Tuple[float, float] | None = None,
+    wl_min: float | None = None,
+    wl_max: float | None = None,
+    t_bounds: Tuple[float, float] | None = None,
+    t_min: float | None = None,
+    t_max: float | None = None,
+    dynamic_range_db: float = 40.0,
+    cmap: str = "jet",
+    z_scale: str = "m",
+    time_reversal: bool = True,
+    height_ratios: Tuple[float, float] = (1.0, 1.7),
+    figsize: Tuple[float, float] = (11.0, 9.0),
+    n_points: int = 500,
+    plotly: bool = False,
+) -> "plt.Figure":
+    """Four-panel GNLSE summary with line profiles on top and dense plots below.
+
+    Layout
+    ------
+    (a) output intensity (dB) vs wavelength   — line
+    (b) output intensity (dB) vs time         — line
+    (c) spectral evolution                    — density plot (taller)
+    (d) temporal evolution                    — density plot (taller)
+
+    The two contour panels occupy a larger fraction of the figure
+    (``height_ratios``) because their dynamic range carries the SC dynamics;
+    the line profiles give a quantitative, easily read complement.
+
+    Parameters
+    ----------
+    solver : GNLSESolver
+        Solver with stored fields (call :meth:`propagate` first).
+    wl_bounds : (float, float), optional
+        Wavelength window in nm.  Defaults to the carrier ± 50 %.
+    wl_min, wl_max : float, optional
+        Individual overrides used only when *wl_bounds* is None.
+    t_bounds : (float, float), optional
+        Time window in ps (plotted convention).  Defaults to the full grid.
+    t_min, t_max : float, optional
+        Individual overrides used only when *t_bounds* is None.
+    dynamic_range_db : float
+        Colour/floor range below the peak for the density plots and the line
+        profiles.
+    cmap : str
+        Matplotlib colormap for the density plots.
+    z_scale : {"m", "cm", "mm"}
+        Propagation-distance unit on the density-plot y axes.
+    time_reversal : bool
+        Use the standard literature (Agrawal/Dudley) comoving time (default).
+    height_ratios : (float, float)
+        Relative heights of the line row and the (taller) contour row.
+    figsize : (float, float)
+        Figure size in inches.
+    n_points : int
+        Spectral samples used by the Plotly path.
+    plotly : bool
+        If True, return an interactive ``plotly.graph_objects.Figure`` whose
+        heatmap hover labels each cell as DW / SPM / Raman soliton (see
+        :func:`plot_scg_dashboard`).  ``write_html`` it for a standalone page,
+        or use :func:`save_summary_html`.
+
+    Returns
+    -------
+    fig : matplotlib Figure or plotly Figure
+        The assembled figure (not closed), so the caller can adjust it.
+    """
+    if wl_bounds is not None:
+        wl_lo, wl_hi = float(wl_bounds[0]), float(wl_bounds[1])
+    else:
+        default_lo, default_hi = _default_wl_bounds(solver)
+        wl_lo = default_lo if wl_min is None else float(wl_min)
+        wl_hi = default_hi if wl_max is None else float(wl_max)
+    if wl_hi <= wl_lo:
+        raise ValueError(f"wl_bounds must be increasing, got ({wl_lo}, {wl_hi})")
+
+    # Output spectrum (a): PSD on the absolute wavelength grid, in dB.
+    grid = solver.pulse.grid
+    field = np.asarray(solver.evolution[-1].envelope_field, dtype=complex)
+    spectrum = np.abs(grid.fft(field)) ** 2
+    wavelength = 2.0 * np.pi * C_MS / (solver.omega0 + grid.w) * 1e9
+    order = np.argsort(wavelength)
+    wavelength, spectrum = wavelength[order], spectrum[order]
+    spectrum_db = 10.0 * np.log10(spectrum / spectrum.max() + 1e-30)
+
+    # Output temporal intensity (b), in the same time convention as panel (d).
+    t_ps = np.asarray(grid.t, dtype=float) * 1e12
+    intensity = np.abs(field) ** 2
+    if time_reversal:
+        t_ps = -t_ps
+        order_t = np.argsort(t_ps)
+        t_ps, intensity = t_ps[order_t], intensity[order_t]
+    intensity_db = 10.0 * np.log10(intensity / intensity.max() + 1e-30)
+
+    if t_bounds is not None:
+        t_lo, t_hi = float(t_bounds[0]), float(t_bounds[1])
+    else:
+        t_lo = float(t_ps[0]) if t_min is None else float(t_min)
+        t_hi = float(t_ps[-1]) if t_max is None else float(t_max)
+    if t_hi <= t_lo:
+        raise ValueError(f"t_bounds must be increasing, got ({t_lo}, {t_hi})")
+
+    if plotly:
+        z_evo, wl_grid, spectra_db = spectral_evolution_on_wavelength_grid(
+            solver, wl_lo, wl_hi, n_points
+        )
+        pump_nm = float(solver.pulse.central_wavelength.as_nm)
+        _, t_grid, intensity_evo = temporal_evolution_intensity(solver)
+        if time_reversal:
+            t_grid = -t_grid
+            order_evo = np.argsort(t_grid)
+            t_grid = t_grid[order_evo]
+            intensity_evo = intensity_evo[:, order_evo]
+        evo_peak = max(float(intensity_evo.max()), 1e-30)
+        int_db = np.clip(
+            10.0 * np.log10(intensity_evo / evo_peak + 1e-30),
+            -abs(dynamic_range_db),
+            0.0,
+        )
+        spec_db = np.clip(spectra_db, -abs(dynamic_range_db), 0.0)
+        t_labels = _field_feature_labels(
+            [wave.envelope_field for wave in solver.evolution],
+            solver.pulse.grid.w,
+            solver.omega0,
+            pump_nm,
+            time_reversal=time_reversal,
+        )
+        return plot_scg_dashboard(
+            z_axis=z_evo,
+            wl_nm=wl_grid,
+            spec_db=spec_db,
+            t_ps=t_grid,
+            int_db=int_db,
+            out_wl_nm=wavelength,
+            out_spec_db=spectrum_db,
+            out_t_ps=t_ps,
+            out_int_db=intensity_db,
+            spec_labels=_classify_features(wl_grid, pump_nm),
+            t_labels=t_labels,
+            title=(
+                f"GNLSE summary — {solver.pulse.central_wavelength.as_nm:.0f} nm, "
+                f"{solver.fiber.length.as_m * 100:.1f} cm"
+            ),
+            z_label="Distance (m)",
+            wl_bounds=(wl_lo, wl_hi),
+            t_bounds=(t_lo, t_hi),
+            dynamic_range_db=dynamic_range_db,
+        )
+
+    import matplotlib.pyplot as plt
+
+    fig = plt.figure(figsize=figsize, constrained_layout=True)
+    gs = fig.add_gridspec(2, 2, height_ratios=list(height_ratios))
+    ax_spec = fig.add_subplot(gs[0, 0])
+    ax_time = fig.add_subplot(gs[0, 1])
+    ax_evo_spec = fig.add_subplot(gs[1, 0])
+    ax_evo_time = fig.add_subplot(gs[1, 1])
+
+    ax_spec.plot(wavelength, spectrum_db, color="C0", lw=1.2)
+    ax_spec.set_xlim(wl_lo, wl_hi)
+    ax_spec.set_ylim(-dynamic_range_db, 2.0)
+    ax_spec.set_xlabel("Wavelength (nm)")
+    ax_spec.set_ylabel("Intensity (dB)")
+    ax_spec.set_title("(a) Intensity (dB) vs wavelength")
+    ax_spec.grid(True, which="both", alpha=0.3)
+
+    ax_time.plot(t_ps, intensity_db, color="C0", lw=1.2)
+    ax_time.set_xlim(t_lo, t_hi)
+    ax_time.set_ylim(-dynamic_range_db, 2.0)
+    ax_time.set_xlabel("Time (ps)")
+    ax_time.set_ylabel("Intensity (dB)")
+    ax_time.set_title("(b) Intensity (dB) vs time")
+    ax_time.grid(True, which="both", alpha=0.3)
+
+    plot_spectral_evolution(
+        solver,
+        ax=ax_evo_spec,
+        wl_min=wl_lo,
+        wl_max=wl_hi,
+        dynamic_range_db=dynamic_range_db,
+        cmap=cmap,
+        z_scale=z_scale,
+    )
+    ax_evo_spec.set_title("(c) Spectral evolution")
+
+    plot_temporal_evolution(
+        solver,
+        ax=ax_evo_time,
+        t_min=t_lo,
+        t_max=t_hi,
+        dynamic_range_db=dynamic_range_db,
+        cmap=cmap,
+        z_scale=z_scale,
+        time_reversal=time_reversal,
+    )
+    ax_evo_time.set_title("(d) Temporal evolution")
+
+    return fig
+
+
+def save_summary_html(
+    solver: "GNLSESolver",
+    path,
+    **kwargs,
+):
+    """Render the interactive summary and write a standalone HTML file.
+
+    Builds :func:`plot_spectral_temporal_summary` with ``plotly=True`` and
+    writes a self-contained ``.html`` document (Plotly.js loaded from the
+    CDN).  This is the automated path that turns a propagated solver into the
+    interactive Fig. 3-style dashboard described in the reproduction docs.
+
+    Parameters
+    ----------
+    solver : GNLSESolver
+        Solver with stored fields.
+    path : str or pathlib.Path
+        Output HTML path; parent directories are created.
+    **kwargs
+        Forwarded to :func:`plot_spectral_temporal_summary` (for example
+        ``wl_bounds``, ``t_bounds``, ``dynamic_range_db``).
+
+    Returns
+    -------
+    pathlib.Path
+        The written path.
+    """
+    from pathlib import Path
+
+    out = Path(path)
+    kwargs.pop("plotly", None)
+    fig = plot_spectral_temporal_summary(solver, plotly=True, **kwargs)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fig.write_html(out, include_plotlyjs="cdn", full_html=True)
+    return out
+
+
+def gnlse_spectrogram(
+    solver: "GNLSESolver",
+    *,
+    gate: NDArray | None = None,
+    n_delays: int = 161,
+    delay_span_ps: float | None = None,
+    snapshot: int = -1,
+    wl_bounds: Tuple[float, float] | None = None,
+    n_wavelength: int = 500,
+    time_reversal: bool = True,
+) -> Tuple[NDArray, NDArray, NDArray]:
+    """Cross-correlation spectrogram of a propagated field (GNLSE Eq. 4).
+
+    Computes
+
+    ``Σ(Ω, τ) = |∫ E(t) g(t − τ) e^{−iΩt} dt|²``
+
+    with the complex envelope ``E(t)`` taken from the last stored field (or
+    ``snapshot``) and a real gate ``g`` (by default the input pulse envelope,
+    as in Dudley et al., *Rev. Mod. Phys.* **78**, 1135 (2006), Fig. 10).  This
+    is the cross-correlation FROG trace, not a conventional STFT: the gate is
+    the actual pulse rather than a fixed window, and the trace preserves the
+    relative phase information of the pulse.
+
+    Parameters
+    ----------
+    solver : GNLSESolver
+        Solver with stored fields (call :meth:`propagate` first).
+    gate : NDArray, optional
+        Real gate sampled on ``solver.pulse.grid.t``.  Defaults to the input
+        pulse envelope ``real(E_in(t))``.
+    n_delays : int
+        Number of delay samples.
+    delay_span_ps : float, optional
+        Half-range of the delay axis in ps.  Defaults to 40 % of the full
+        temporal window.
+    snapshot : int
+        Index into ``solver.evolution`` of the field to analyse (default last).
+    wl_bounds : (float, float), optional
+        Wavelength window ``(wl_min, wl_max)`` in nm.  Defaults to the carrier
+        wavelength ± 50 %, i.e. ``(0.5·λ0, 1.5·λ0)``; pass an explicit tuple to
+        zoom or widen.
+    n_wavelength : int
+        Number of samples on the uniform wavelength grid.
+    time_reversal : bool
+        If True (default) the returned delay axis uses the standard
+        literature (Agrawal) comoving time ``T``.  The library's internal time
+        grid has the opposite sign (spectra and the Raman red-shift are
+        unaffected, only the temporal direction is mirrored); set False to get
+        the raw internal time.
+
+    Returns
+    -------
+    delay_ps : NDArray, shape (n_delays,)
+    wavelength_nm : NDArray, shape (n_wavelength,)
+    spectrogram : NDArray, shape (n_delays, n_wavelength)
+        Power spectrogram (arb. units; normalise with its maximum).
+    """
+    grid = solver.pulse.grid
+    t = np.asarray(grid.t, dtype=float)
+    omega = np.asarray(grid.w, dtype=float)
+
+    if not solver.evolution:
+        raise ValueError("solver has no stored fields; call propagate() first")
+    field = np.asarray(solver.evolution[snapshot].envelope_field, dtype=complex)
+
+    if gate is None:
+        gate = np.real(solver.pulse.envelope.field(t))
+    gate = np.asarray(gate, dtype=float)
+    if gate.shape != t.shape:
+        raise ValueError(
+            f"gate shape {gate.shape} does not match the temporal grid {t.shape}"
+        )
+
+    if delay_span_ps is None:
+        delay_span_ps = 0.4 * (t.max() - t.min()) * 1e12
+    delays = np.linspace(-delay_span_ps, delay_span_ps, n_delays) * 1e-12
+
+    trace = np.empty((n_delays, t.size), dtype=float)
+    for i, tau in enumerate(delays):
+        gated = field * np.interp(t - tau, t, gate)
+        trace[i] = np.abs(np.fft.fftshift(np.fft.fft(gated))) ** 2
+
+    wl_native = 2 * np.pi * C_MS / (solver.omega0 + omega) * 1e9
+    order = np.argsort(wl_native)
+    wl_native = wl_native[order]
+    trace = trace[:, order]
+
+    if wl_bounds is None:
+        wl_bounds = _default_wl_bounds(solver)
+    wl_lo, wl_hi = float(wl_bounds[0]), float(wl_bounds[1])
+    if wl_hi <= wl_lo:
+        raise ValueError(f"wl_bounds must be increasing, got {wl_bounds!r}")
+    wl_grid = np.linspace(wl_lo, wl_hi, int(n_wavelength))
+
+    resampled = np.empty((n_delays, int(n_wavelength)), dtype=float)
+    for i in range(n_delays):
+        resampled[i] = np.interp(wl_grid, wl_native, trace[i], left=0.0, right=0.0)
+
+    delay_ps = delays * 1e12
+    if time_reversal:
+        delay_ps = -delay_ps[::-1]
+        resampled = resampled[::-1]
+
+    return delay_ps, wl_grid, resampled
+
+
+def _plotly_spectrogram(
+    solver: "GNLSESolver",
+    delay_ps: NDArray,
+    wavelength_nm: NDArray,
+    trace_dB: NDArray,
+    dynamic_range_db: float,
+    t_min: float | None,
+    t_max: float | None,
+    annotate: bool,
+):
+    """Interactive Plotly heatmap with feature-labelled hover text."""
+    import plotly.graph_objects as go
+
+    pump_nm = float(solver.pulse.central_wavelength.as_nm)
+    labels = _classify_features(wavelength_nm, pump_nm)
+    custom = np.tile(labels, (trace_dB.shape[0], 1)).T
+
+    fig = go.Figure(
+        go.Heatmap(
+            x=delay_ps,
+            y=wavelength_nm,
+            z=trace_dB.T,
+            customdata=custom,
+            colorscale="Jet",
+            zmin=-abs(dynamic_range_db),
+            zmax=0.0,
+            colorbar=dict(title="Power (dB)"),
+            hovertemplate=(
+                "Delay: %{x:.2f} ps"
+                "<br>Wavelength: %{y:.0f} nm"
+                "<br>Power: %{z:.1f} dB"
+                "<br>Feature: %{customdata}"
+                "<extra></extra>"
+            ),
+        )
+    )
+
+    if annotate:
+        # Label the strongest (delay, wavelength) cell of each class.
+        classes = ["Dispersive wave (blue)", "SPM / pump", "Raman soliton (red)"]
+        for name in classes:
+            mask = custom == name
+            if not mask.any():
+                continue
+            idx = np.unravel_index(np.argmax(np.where(mask, trace_dB, -np.inf)), trace_dB.shape)
+            fig.add_trace(
+                go.Scatter(
+                    x=[delay_ps[idx[1]]],
+                    y=[wavelength_nm[idx[0]]],
+                    mode="markers+text",
+                    text=[name.split(" (")[0]],
+                    textposition="middle right",
+                    marker=dict(size=9, color="white", line=dict(color="black", width=1)),
+                    showlegend=False,
+                    hoverinfo="skip",
+                )
+            )
+
+    fig.update_layout(
+        title="Supercontinuum spectrogram (cross-correlation FROG)",
+        xaxis_title="Delay (ps)",
+        yaxis_title="Wavelength (nm)",
+        template="plotly_white",
+    )
+    if t_min is not None or t_max is not None:
+        fig.update_xaxes(range=[t_min, t_max])
+    return fig
+
+
+def plot_spectrogram(
+    solver: "GNLSESolver",
+    ax=None,
+    *,
+    gate: NDArray | None = None,
+    n_delays: int = 161,
+    delay_span_ps: float | None = None,
+    snapshot: int = -1,
+    wl_bounds: Tuple[float, float] | None = None,
+    dynamic_range_db: float = 40.0,
+    cmap: str = "jet",
+    with_projections: bool = False,
+    t_min: float | None = None,
+    t_max: float | None = None,
+    time_reversal: bool = True,
+    plotly: bool = False,
+    annotate_features: bool = True,
+):
+    """Plot the supercontinuum spectrogram (Dudley et al. Fig. 10 style).
+
+    Parameters
+    ----------
+    solver : GNLSESolver
+        Solver with stored fields.
+    ax : matplotlib Axes, optional
+        Axis for the spectrogram when ``with_projections=False`` and
+        ``plotly=False``.
+    wl_bounds : (float, float), optional
+        Wavelength window ``(wl_min, wl_max)`` in nm.  Defaults to the carrier
+        ± 50 %.
+    with_projections : bool
+        If True, build a matplotlib figure with the spectrogram plus its
+        temporal (bottom) and spectral (right) projections (ignores ``ax``).
+    t_min, t_max : float, optional
+        Delay limits in ps (defaults to the full delay span).
+    time_reversal : bool
+        Use the standard literature (Agrawal) comoving time (default True).
+    plotly : bool
+        If True, return an interactive ``plotly.graph_objects.Figure`` instead
+        of a matplotlib figure.  The hover text labels each ``(delay, λ)`` cell
+        as a dispersive wave, SPM/pump, or Raman soliton, and (with
+        ``annotate_features=True``) the strongest cell of each class is marked.
+    annotate_features : bool
+        Add feature labels in the Plotly path.  Ignored for matplotlib.
+
+    Returns
+    -------
+    fig : matplotlib Figure or plotly Figure
+        The figure, so the caller can adjust axes/labels afterwards.
+    """
+    import matplotlib.pyplot as plt
+
+    delay_ps, wavelength_nm, trace = gnlse_spectrogram(
+        solver,
+        gate=gate,
+        n_delays=n_delays,
+        delay_span_ps=delay_span_ps,
+        snapshot=snapshot,
+        wl_bounds=wl_bounds,
+        time_reversal=time_reversal,
+    )
+    peak = max(float(trace.max()), 1e-30)
+    trace_dB = 10 * np.log10(trace / peak + 1e-30)
+
+    if plotly:
+        return _plotly_spectrogram(
+            solver,
+            delay_ps,
+            wavelength_nm,
+            trace_dB,
+            dynamic_range_db,
+            t_min,
+            t_max,
+            annotate_features,
+        )
+
+    wl_lo, wl_hi = float(wavelength_nm[0]), float(wavelength_nm[-1])
+
+    def _draw(ax_main):
+        return ax_main.imshow(
+            trace_dB.T,
+            origin="lower",
+            aspect="auto",
+            extent=(delay_ps[0], delay_ps[-1], wl_lo, wl_hi),
+            cmap=cmap,
+            vmin=-abs(dynamic_range_db),
+            vmax=0.0,
+        )
+
+    if not with_projections:
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(10, 6))
+        else:
+            fig = ax.figure
+        im = _draw(ax)
+        fig.colorbar(im, ax=ax, label="Power (dB)")
+        ax.set_xlabel("Delay (ps)")
+        ax.set_ylabel("Wavelength (nm)")
+        ax.set_title("Supercontinuum spectrogram")
+        if t_min is not None or t_max is not None:
+            ax.set_xlim(t_min, t_max)
+        return fig
+
+    fig = plt.figure(figsize=(11, 6))
+    gs = fig.add_gridspec(
+        2,
+        3,
+        width_ratios=[4, 1, 0.18],
+        height_ratios=[4, 1],
+        hspace=0.05,
+        wspace=0.05,
+    )
+    ax_main = fig.add_subplot(gs[0, 0])
+    ax_spec = fig.add_subplot(gs[0, 1], sharey=ax_main)
+    ax_cbar = fig.add_subplot(gs[0, 2])
+    ax_time = fig.add_subplot(gs[1, 0], sharex=ax_main)
+
+    im = _draw(ax_main)
+    fig.colorbar(im, cax=ax_cbar, label="Power (dB)")
+    ax_main.set_ylabel("Wavelength (nm)")
+    ax_main.tick_params(labelbottom=False)
+
+    spectral_marginal = trace.sum(axis=0)
+    marginal_peak = max(float(spectral_marginal.max()), 1e-30)
+    ax_spec.plot(spectral_marginal / marginal_peak, wavelength_nm, "k-", lw=0.8)
+    ax_spec.tick_params(labelleft=False)
+    ax_spec.set_xlabel("Spectrum")
+
+    grid = solver.pulse.grid
+    intensity = np.abs(solver.evolution[snapshot].envelope_field) ** 2
+    t_plot = grid.t * 1e12
+    if time_reversal:
+        t_plot = -t_plot
+    order = np.argsort(t_plot)
+    ax_time.plot(
+        delay_ps,
+        np.interp(delay_ps, t_plot[order], intensity[order]),
+        "k-",
+        lw=0.8,
+    )
+    ax_time.set_xlabel("Delay (ps)")
+    ax_time.set_ylabel("Intensity")
+    if t_min is not None or t_max is not None:
+        ax_main.set_xlim(t_min, t_max)
+    fig.suptitle("Supercontinuum spectrogram (cross-correlation FROG)")
     return fig
 
 

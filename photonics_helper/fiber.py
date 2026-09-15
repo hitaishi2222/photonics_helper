@@ -218,7 +218,11 @@ class Dispersion:
     ):
         """Fit dispersion data to a polynomial in ω and return beta coefficients.
 
-        Returns betas in array [beta2, beta3, ...].
+        Returns betas in array [beta2, beta3, ...] in ``ps^k/m`` (with ``Ω``
+        in ``rad/ps``) — the native form expected by
+        :class:`~photonics_helper.gnlse.GNLSESolver`. If you instead have SI
+        coefficients (``s^k/m``), pass them with
+        ``GNLSESolver(..., betas_unit="s^k/m")`` and they will be converted.
         If return_diagnostics is True, returns (betas, fit_x_axis, data, fit).
         """
 

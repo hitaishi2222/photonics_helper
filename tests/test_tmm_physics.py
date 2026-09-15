@@ -42,7 +42,9 @@ def _airy_reflection(
     """Recursive multiple-reflection (Airy) amplitude reflection coefficient."""
     y0 = _admittance(n0, theta0, pol)
     y_last = _admittance(layers[-1][0], theta0, pol)
-    ys = _admittance(ns, 0.0, pol)
+    # The exit medium is a semi-infinite medium at the Snell-refracted exit
+    # angle, so its admittance uses theta0 (n_incident = n0) not normal incidence.
+    ys = _admittance(ns, theta0, pol)
     r_down = (y_last - ys) / (y_last + ys)
     for idx in range(len(layers) - 1, -1, -1):
         n, d = layers[idx]
@@ -177,3 +179,109 @@ def test_absorbing_stack_energy_deficit():
     R, T = tmm.spectrum(WL1)
     assert R[0] + T[0] < 1.0
     assert 1.0 - R[0] - T[0] > 0.0
+
+
+# ---------------------------------------------------------------------------
+# Configurable media + continuous field profile
+# ---------------------------------------------------------------------------
+
+def test_default_media_match_explicit_air():
+    """Omitting n_incident/n_substrate equals explicitly setting air."""
+    pattern = _build_pattern(LOSSLESS, LENGTHS, style="ABC")
+    default = TMM(pattern=pattern, angle_of_incidence=0.0, polarisation="TE")
+    explicit = TMM(
+        pattern=pattern,
+        angle_of_incidence=0.0,
+        polarisation="TE",
+        n_incident=1.0 + 0j,
+        n_substrate=1.0 + 0j,
+    )
+    R_d, T_d = default.spectrum(WL1)
+    R_e, T_e = explicit.spectrum(WL1)
+    assert np.isclose(R_d[0], R_e[0], atol=1e-14)
+    assert np.isclose(T_d[0], T_e[0], atol=1e-14)
+
+
+def test_quarter_wave_stack_on_substrate_matches_reference():
+    """A quarter-wave stack on glass matches the recursive Airy reference."""
+    n_H, n_L, n_s = 2.0, 1.5, 1.5
+    d_H = LAM / (4 * n_H)
+    d_L = LAM / (4 * n_L)
+    mapping = {
+        "A": Block(length=Length(d_H, "m"), material=_make_material(n_H)),
+        "B": Block(length=Length(d_L, "m"), material=_make_material(n_L)),
+    }
+    pattern = Pattern(
+        style="ABAB", mapping=mapping, central_wavelength=Wavelength(1550, "nm")
+    )
+    tmm = TMM(
+        pattern=pattern,
+        angle_of_incidence=0.0,
+        polarisation="TE",
+        n_substrate=n_s,
+    )
+    R, T = tmm.spectrum(WL1)
+    layers = [(n_H, d_H), (n_L, d_L), (n_H, d_H), (n_L, d_L)]
+    ref = abs(_airy_reflection(layers, LAM, 0.0, "TE", ns=n_s)) ** 2
+    assert np.isclose(R[0], ref, atol=1e-9)
+    assert R[0] + T[0] == pytest.approx(1.0, abs=1e-9)
+
+
+def test_oblique_substrate_matches_reference():
+    """Oblique incidence on a substrate matches the reference for TE and TM."""
+    n_s = 1.5
+    theta = np.deg2rad(35.0)
+    pattern = _build_pattern(LOSSLESS, LENGTHS, style="ABC")
+    layers = [(LOSSLESS[c][0], LENGTHS[c]) for c in "ABC"]
+    for pol in ("TE", "TM"):
+        tmm = TMM(
+            pattern=pattern,
+            angle_of_incidence=theta,
+            polarisation=pol,
+            n_substrate=n_s,
+        )
+        R, T = tmm.spectrum(WL1)
+        ref = abs(_airy_reflection(layers, LAM, theta, pol, ns=n_s)) ** 2
+        assert np.isclose(R[0], ref, atol=1e-9)
+        assert R[0] + T[0] == pytest.approx(1.0, abs=1e-9)
+
+
+def test_field_profile_z_spans_stack_and_matches_interfaces():
+    """Continuous profile spans [0, L] and matches interface values."""
+    pattern = _build_pattern(LOSSLESS, LENGTHS, style="ABC")
+    tmm = TMM(pattern=pattern, angle_of_incidence=0.0, polarisation="TE")
+    wl = Wavelength(LAM, "m")
+    z, E = tmm.field_profile_z(wl, n_points_per_layer=15)
+
+    total = pattern.length
+    assert z[0] == 0.0
+    assert np.isclose(z[-1], total, rtol=1e-12)
+    assert np.all(np.diff(z) > 0)
+
+    interfaces = tmm.field_profile(wl)
+    for idx, pos in enumerate(pattern._get_positions()):
+        z0 = pos[0]
+        j = int(np.argmin(np.abs(z - z0)))
+        assert np.isclose(z[j], z0, atol=1e-15)
+        assert np.isclose(E[j], interfaces[idx], rtol=1e-9, atol=1e-12)
+
+
+def test_field_profile_z_decays_in_strong_absorber():
+    """A strongly absorbing layer attenuates |E(z)| from entrance to exit."""
+    d = 1.5e-6
+    mapping = {"A": Block(length=Length(d, "m"), material=_make_material(2.0, 0.5))}
+    pattern = Pattern(
+        style="A", mapping=mapping, central_wavelength=Wavelength(1550, "nm")
+    )
+    tmm = TMM(pattern=pattern, angle_of_incidence=0.0, polarisation="TE")
+    z, E = tmm.field_profile_z(Wavelength(LAM, "m"), n_points_per_layer=41)
+    assert np.isclose(z[-1], d, rtol=1e-12)
+    assert E[-1] < 0.2 * E[0]
+    assert E[-1] < 0.1
+
+
+def test_field_profile_z_rejects_too_few_points():
+    pattern = _build_pattern(LOSSLESS, LENGTHS, style="A")
+    tmm = TMM(pattern=pattern, angle_of_incidence=0.0, polarisation="TE")
+    with pytest.raises(ValueError):
+        tmm.field_profile_z(Wavelength(LAM, "m"), n_points_per_layer=1)

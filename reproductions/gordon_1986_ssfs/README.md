@@ -3,6 +3,8 @@
 **Reference:** J. P. Gordon, "Theory of the soliton self-frequency shift,"
 *Opt. Lett.* **11**, 662 (1986); experiment: F. M. Mitschke and
 L. F. Mollenauer, *Opt. Lett.* **11**, 659 (1986).
+**DOI:** [10.1364/OL.11.000662](https://doi.org/10.1364/OL.11.000662)
+(experiment: [10.1364/OL.11.000659](https://doi.org/10.1364/OL.11.000659))
 
 ## Result reproduced
 
@@ -33,11 +35,29 @@ the Raman term is exactly energy-conserving.
 
 Figure: `ssfs_spectrum.png`.
 
-## Note
+## Findings
 
-This reproduction exposed **two fundamental GNLSE bugs**, both fixed in the
-archived `fix-raman-ssfs` change:
-1. the engine's dispersion sign was inverted (bright soliton formed at β₂ > 0);
-2. the delayed Raman term amplified the anti-Stokes sideband.
+- The measured redshift is **1.19×** the Gordon analytic rate over 20 m. The
+  residual factor is consistent with the finite propagation distance and the
+  perturbative nature of the analytic formula, and the *sign* (red shift) and
+  the Stokes/anti-Stokes asymmetry are reproduced exactly.
+- The Raman term is **exactly energy-conserving** in the engine (E ratio =
+  1.00000 with steepening off), which is the key internal check that the
+  delayed convolution is implemented as a norm-preserving product in frequency
+  space.
+- This reproduction exposed **two fundamental GNLSE bugs**, both fixed in the
+  archived `fix-raman-ssfs` change:
+  1. the engine's dispersion sign was inverted (bright soliton formed at β₂ > 0,
+     and the group delay was inverted);
+  2. the delayed Raman term amplified the anti-Stokes sideband instead of the
+     Stokes sideband.
+  Without those fixes the soliton did not form and the shift was ≈ 0 and blue.
 
-Without those fixes the soliton did not form and the shift was ~0 and blue.
+## ISSUES
+
+- The ratio 1.19 is within the reproduction's tolerance (0.5–2.0) but is not a
+  sub-percent validation; the analytic Gordon rate is a perturbation result and
+  the library uses a single-Lorentzian `h_R`, whereas Gordon's `T_R` is an
+  integral over the full measured Raman cross section.
+- The report's still-open **self-steepening RK4 energy drift** does not affect
+  this run (steepening off), but it does affect high-order SCG runs.

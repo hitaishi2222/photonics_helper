@@ -253,24 +253,26 @@ class TestMI:
         assert np.any(gain[mask_near_zero] > 0)
 
     def test_peak_gain_frequency(self, beta2, gamma, P_pump):
-        """Peak gain at Ω² = −γP/β₂ (i.e. Ω = Ω_c/√2)."""
+        """Peak gain at Ω² = 2γP/|β₂| (i.e. Ω = Ω_c/√2)."""
         from photonics_helper.phase_matching import mi_gain_spectrum
 
-        omega_m = np.linspace(-5e13, 5e13, 501)
+        omega_m = np.linspace(-5e13, 5e13, 2001)
         gain = mi_gain_spectrum(beta2, gamma, P_pump, omega_m)
 
         Omega_peak_idx = np.argmax(np.abs(gain))
         Omega_peak = abs(omega_m[Omega_peak_idx])
-        # Peak at Ω_c/√2 = √(γP/|β₂|)
-        Omega_peak_expected = np.sqrt(gamma * P_pump / abs(beta2))
+        # Peak at Ω_c/√2 = √(2γP/|β₂|)
+        Omega_peak_expected = np.sqrt(2 * gamma * P_pump / abs(beta2))
 
-        assert np.abs(Omega_peak - Omega_peak_expected) / max(Omega_peak_expected, 1e-12) < 0.1
+        assert np.abs(Omega_peak - Omega_peak_expected) / max(Omega_peak_expected, 1e-12) < 0.01
+        # Peak gain is 2γP
+        assert gain[Omega_peak_idx] == pytest.approx(2 * gamma * P_pump, rel=1e-3)
 
     def test_gain_cutoff(self, beta2, gamma, P_pump):
-        """Gain cutoff at Ω² = −2γP/β₂."""
+        """Gain cutoff at Ω² = −4γP/β₂."""
         from photonics_helper.phase_matching import mi_gain_spectrum
 
-        Omega_cutoff_expected = np.sqrt(-2 * gamma * P_pump / beta2)
+        Omega_cutoff_expected = np.sqrt(-4 * gamma * P_pump / beta2)
         omega_m = np.linspace(0, 1.5 * Omega_cutoff_expected, 101)
         gain = mi_gain_spectrum(beta2, gamma, P_pump, omega_m)
 
@@ -283,14 +285,58 @@ class TestMI:
         assert np.any(gain[before_cutoff] > 0)
 
     def test_mi_sideband_frequencies(self, beta2, gamma, P_pump):
-        """MI sidebands at ±√(−2γP/β₂)."""
+        """MI sidebands at ±√(−4γP/β₂)."""
         from photonics_helper.phase_matching import mi_sideband_frequencies
 
         sidebands = mi_sideband_frequencies(beta2, gamma, P_pump)
-        Omega_expected = np.sqrt(-2 * gamma * P_pump / beta2)
+        Omega_expected = np.sqrt(-4 * gamma * P_pump / beta2)
 
         assert len(sidebands) == 2
         np.testing.assert_allclose(np.abs(sidebands), Omega_expected, rtol=0.01)
+
+    def test_gain_zero_just_above_cutoff(self, beta2, gamma, P_pump):
+        """The exact linear-stability cutoff is respected."""
+        from photonics_helper.phase_matching import mi_gain_spectrum
+
+        Omega_cutoff = np.sqrt(-4 * gamma * P_pump / beta2)
+        omega_m = np.array([
+            0.5 * Omega_cutoff,
+            0.999 * Omega_cutoff,
+            1.001 * Omega_cutoff,
+            2.0 * Omega_cutoff,
+        ])
+        gain = mi_gain_spectrum(beta2, gamma, P_pump, omega_m)
+        assert gain[0] > 0
+        assert gain[1] > 0
+        assert gain[2] == 0.0
+        assert gain[3] == 0.0
+
+    def test_extended_mi_reduces_to_classical(self, gamma, P_pump):
+        """Taylor β(ω) must make mi_gain_spectrum_extended match the classical gain."""
+        from photonics_helper.phase_matching import (
+            mi_gain_spectrum,
+            mi_gain_spectrum_extended,
+        )
+
+        beta2 = -20e-24  # s²/m
+        omega0 = 2 * PI * C_MS / 1550e-9
+
+        def beta_fn(omega):
+            return 1e7 + 0.5 * beta2 * (omega - omega0) ** 2
+
+        Omega_cutoff = np.sqrt(-4 * gamma * P_pump / beta2)
+        omega_m = np.linspace(0, 0.99 * Omega_cutoff, 400)
+
+        expected = mi_gain_spectrum(beta2, gamma, P_pump, omega_m)
+        extended = mi_gain_spectrum_extended(
+            beta_fn, omega0, gamma, P_pump, omega_m=omega_m
+        )
+
+        assert np.allclose(extended["gain"], expected, rtol=1e-6, atol=1e-12)
+        assert extended["Omega_cutoff"] == pytest.approx(Omega_cutoff, rel=0.02)
+        assert extended["Omega_peak"] == pytest.approx(
+            np.sqrt(2 * gamma * P_pump / abs(beta2)), rel=0.05
+        )
 
     def test_mi_summary_no_grid(self, beta2, gamma, P_pump):
         """mi_gain_spectrum with omega_m=None returns summary dict."""
@@ -464,6 +510,42 @@ class TestSimulationReadiness:
         assert report.dispersion_covers_grid
         assert report.dispersion_min_omega.as_rad_s < report.grid_omega_min.as_rad_s
         assert report.dispersion_max_omega.as_rad_s > report.grid_omega_max.as_rad_s
+
+    def test_dw_root_finder_failure_warns(self, omega0, monkeypatch):
+        """A forced DW root-finder failure surfaces a warning (regression guard)."""
+        import photonics_helper.phase_matching as pm
+        from photonics_helper.phase_matching import assess_simulation_readiness
+        from photonics_helper.gnlse import FiberProfile
+        from photonics_helper.fiber import PropagationConstant
+        from photonics_helper.base import Length, Area, AngularFrequencyArray
+
+        pulse = self._make_pulse(omega0, T0_ps=1.0, power_W=100)
+        fiber = FiberProfile(
+            n2=2.6e-20,
+            alpha=0.0,
+            A_eff=Area(80, "um^2"),
+            length=Length(1, "m"),
+            confinement_factor=1.0,
+        )
+        omega = np.linspace(1e12, 5e15, 501)
+        beta_vals = omega * 2.5e-7 / C_MS
+        pc = PropagationConstant(
+            values=beta_vals,
+            x_values=AngularFrequencyArray(omega, "rad/s"),
+        )
+        # Weak anomalous beta2 so the soliton order exceeds 1 and the DW path runs.
+        betas = np.array([-0.02, 1e-3])
+
+        def _boom(*args, **kwargs):
+            raise ValueError("forced root-finder failure")
+
+        monkeypatch.setattr(pm, "dispersive_wave_roots", _boom)
+        import warnings
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            assess_simulation_readiness(pulse, fiber, pc, betas=betas)
+        assert any("Dispersive-wave" in str(w.message) for w in caught)
 
     def test_coverage_fails_when_grid_exceeds_table(self, omega0):
         """Coverage check fails when pulse grid exceeds narrow dispersion table."""

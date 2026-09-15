@@ -562,13 +562,22 @@ def mi_gain_spectrum(
 ) -> NDArray | float | dict:
     """Compute classical MI gain g(Ω).
 
-    g(Ω) = 2|β₂|Ω√(Ω²_c − Ω²) for β₂ < 0 (anomalous), Ω < Ω_c
-    where Ω_c² = 2γP/|β₂|
-    g(Ω) = 0 for β₂ > 0 (normal dispersion)
+    Exact linear-stability result for the NLSE
+    ``i∂A/∂z = (β₂/2)∂²A/∂T² − γ|A|²A``::
 
-    Peak gain at Ω = Ω_c/√2: g_max = 2γP
+        g(Ω) = |β₂ Ω| √(Ω_c² − Ω²)   for β₂ < 0 (anomalous), Ω < Ω_c
+        Ω_c² = 4γP/|β₂|               (cutoff)
+        Ω_peak² = 2γP/|β₂| = Ω_c²/2   (peak gain location)
+        g_max = 2γP                    (peak gain)
 
-    Classical result from Agrawal, Nonlinear Fiber Optics.
+    g(Ω) = 0 for β₂ > 0 (normal dispersion).
+
+    References
+    ----------
+    - Agrawal, *Nonlinear Fiber Optics*, 5th ed., Eq. (5.1.9).
+    - Hasegawa & Tappert, *Appl. Phys. Lett.* **23**, 142 (1973).
+    - Tai, Hasegawa & Tomita, *Phys. Rev. Lett.* **56**, 135 (1986)
+      (experimental observation of MI in optical fibers).
 
     Parameters
     ----------
@@ -591,8 +600,8 @@ def mi_gain_spectrum(
     # Anomalous dispersion
     if omega_m is None:
         # Return peak gain and cutoff
-        Omega_cutoff_sq = -2 * gamma * P / beta2  # positive
-        Omega_peak_sq = -gamma * P / beta2  # Ω_peak = Ω_c/√2
+        Omega_cutoff_sq = -4 * gamma * P / beta2  # positive
+        Omega_peak_sq = -2 * gamma * P / beta2  # Ω_peak = Ω_c/√2
         Omega_cutoff = np.sqrt(max(Omega_cutoff_sq, 0))
         Omega_peak = np.sqrt(max(Omega_peak_sq, 0))
         g_max = 2.0 * gamma * P  # peak gain
@@ -600,12 +609,12 @@ def mi_gain_spectrum(
 
     omega_arr = np.atleast_1d(np.asarray(omega_m, dtype=float))
     Omega_sq = omega_arr ** 2
-    Omega_c_sq = -2 * gamma * P / beta2  # positive cutoff freq squared
+    Omega_c_sq = -4 * gamma * P / beta2  # positive cutoff freq squared
 
-    # g(Ω) = 2|β₂|·|Ω|·√(Ω_c² − Ω²) for Ω < Ω_c
+    # g(Ω) = |β₂|·|Ω|·√(Ω_c² − Ω²) for Ω < Ω_c
     mask = Omega_sq < Omega_c_sq
     gain = np.zeros_like(omega_arr)
-    gain[mask] = 2.0 * abs(beta2) * np.abs(omega_arr[mask]) * np.sqrt(
+    gain[mask] = abs(beta2) * np.abs(omega_arr[mask]) * np.sqrt(
         Omega_c_sq - Omega_sq[mask]
     )
 
@@ -621,7 +630,9 @@ def mi_sideband_frequencies(
 ) -> NDArray:
     """Compute MI sideband frequencies.
 
-    Solves β₂Ω² + 2γP = 0 → Ω² = −2γP/β₂
+    Solves β₂Ω² + 4γP = 0 → Ω² = −4γP/β₂ (the exact MI cutoff for the NLSE
+    ``i∂A/∂z = (β₂/2)∂²A/∂T² − γ|A|²A``; Agrawal, *Nonlinear Fiber Optics*,
+    §5.1).
 
     Parameters
     ----------
@@ -636,7 +647,7 @@ def mi_sideband_frequencies(
     if beta2 >= 0:
         return np.array([0.0])
 
-    Omega_sq = -2 * gamma * P / beta2
+    Omega_sq = -4 * gamma * P / beta2
     if Omega_sq < 0:
         return np.array([0.0])
 
@@ -657,15 +668,21 @@ def mi_gain_spectrum_extended(
 
     Computes the MI gain spectrum using the exact dispersion β(ω) instead of
     a Taylor expansion. Based on the linear stability analysis of the NLSE,
-    the gain is consistent with the classical formula in this module:
+    the gain is
 
-        g(Ω) = 2√[−D(Ω)·(D(Ω) + 4γP)/4]  for -4γP < D(Ω) < 0
+        g(Ω) = √[−Δ(Ω)·(Δ(Ω) + 4γP)]  for −4γP < Δ(Ω) < 0
         g(Ω) = 0  otherwise
 
-    where D(Ω) = 2[β(ω₀+Ω) + β(ω₀−Ω) − 2β(ω₀)] is twice the even part of
-    the linear dispersion. This scaling ensures the extended formula reduces
-    exactly to the classical result g(Ω) = 2|β₂|Ω√(Ω_c² − Ω²) with
-    Ω_c² = 2γP/|β₂| when β(ω) ≈ β₀ + β₁Ω + ½β₂Ω².
+    where Δ(Ω) = β(ω₀+Ω) + β(ω₀−Ω) − 2β(ω₀) is the even dispersion mismatch
+    (the β₁ term cancels). For a Taylor expansion
+    β(ω) ≈ β₀ + β₁Ω + ½β₂Ω² this reduces exactly to the classical result
+    g(Ω) = |β₂|Ω√(Ω_c² − Ω²) with Ω_c² = 4γP/|β₂|.
+
+    References
+    ----------
+    - Agrawal, *Nonlinear Fiber Optics*, 5th ed., §5.1 (linear stability
+      analysis with higher-order dispersion).
+    - Hasegawa & Tappert, *Appl. Phys. Lett.* **23**, 142 (1973).
 
     Parameters
     ----------
@@ -687,11 +704,11 @@ def mi_gain_spectrum_extended(
 
     if omega_m is None:
         # Auto-generate grid using classical estimate for scale
-        # Classical cutoff: Ω_c² = 2γP/|β₂|
+        # Classical cutoff: Ω_c² = 4γP/|β₂|
         domega = 1e12
         beta2_est = (beta_fn(omega0 + domega) - 2 * beta_fn(omega0) + beta_fn(omega0 - domega)) / domega**2
         if beta2_est < 0:
-            Omega_classical = np.sqrt(max(2 * gamma * P / abs(beta2_est), 1e12))
+            Omega_classical = np.sqrt(max(4 * gamma * P / abs(beta2_est), 1e12))
         else:
             Omega_classical = 1e12
         omega_m = np.linspace(-3 * Omega_classical, 3 * Omega_classical, 500)
@@ -699,13 +716,12 @@ def mi_gain_spectrum_extended(
     omega_arr = np.atleast_1d(np.asarray(omega_m, dtype=float))
     beta_pump = beta_fn(omega0)
 
-    # D(Ω) = 2[β(ω₀+Ω) + β(ω₀−Ω) − 2β(ω₀)]
-    # This scaling matches the classical formula in mi_gain_spectrum
+    # Δ(Ω) = β(ω₀+Ω) + β(ω₀−Ω) − 2β(ω₀)  (even dispersion mismatch)
     omega_plus = omega0 + omega_arr
     omega_minus = omega0 - omega_arr
     beta_plus = beta_fn(omega_plus)
     beta_minus = beta_fn(omega_minus)
-    D = 2.0 * (beta_plus + beta_minus - 2 * beta_pump)
+    D = beta_plus + beta_minus - 2 * beta_pump
 
     # Extended MI gain: g(Ω) = √[−D(Ω)·(D(Ω) + 4γP)]
     # Gain exists when -4γP < D < 0

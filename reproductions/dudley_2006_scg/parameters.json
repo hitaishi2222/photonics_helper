@@ -1,0 +1,85 @@
+{
+  "paper": "J. M. Dudley, G. Genty, S. Coen, Supercontinuum generation in photonic crystal fiber, Rev. Mod. Phys. 78, 1135 (2006)",
+  "doi": "10.1103/RevModPhys.78.1135",
+  "description": "Shared model for the femtosecond anomalous-GVD supercontinuum scenario of Dudley et al. (2006), Sec. V-VI. 15 cm of highly nonlinear PCF (d=1.4 um, Lambda=1.6 um, ZDW ~780 nm) pumped at 835 nm. Table I Taylor coefficients at 835 nm; sech input; fR=0.18; tau_shock=0.56 fs.",
+  "central_wavelength_nm": 835.0,
+  "zero_dispersion_wavelength_nm": 780.0,
+  "fiber_length_m": 0.15,
+  "hole_diameter_um": 1.4,
+  "pitch_um": 1.6,
+  "gamma_per_Wm": 0.11,
+  "n2_m2_per_W": 2.7e-20,
+  "alpha_per_m": 0.0,
+  "T0_fs": 28.4,
+  "fwhm_fs": 50.0,
+  "peak_power_W": 10000.0,
+  "shock_time_fs": 0.56,
+  "raman_fR": 0.18,
+  "raman_tau1_fs": 12.2,
+  "raman_tau2_fs": 32.0,
+  "taylor_betas_psN_per_m": [
+    -11.830e-3,
+    8.1038e-5,
+    -9.5205e-8,
+    2.0737e-10,
+    -5.3943e-13,
+    1.3486e-15,
+    -2.5495e-18,
+    3.0524e-21,
+    -1.7140e-24
+  ],
+  "beta2_ps2_per_m": -11.830e-3,
+  "beta3_ps3_per_m": 8.1038e-5,
+  "figures": {
+    "fig05_ideal_soliton": {
+      "note": "Ideal higher-order N=3 soliton, NLSE only: beta2 alone, fR=0, shock off. Fig. 5.",
+      "soliton_order": 3,
+      "peak_power_W": 1250.0,
+      "length_soliton_periods": 2.0,
+      "N_points": 4096,
+      "Tmax_ps": 5.0
+    },
+    "fig06_raman_fission": {
+      "note": "Raman-induced fission of an N=3 soliton: beta2 + Raman, shock off. Figs. 6-7.",
+      "soliton_order": 3,
+      "peak_power_W": 1250.0,
+      "length_m": 0.5,
+      "N_points": 8192,
+      "Tmax_ps": 12.5
+    },
+    "fig08_dispersive_wave": {
+      "note": "The j=1 ejected fundamental soliton of Figs. 6-7: P0=3.48 kW, T0=5.67 fs, full PCF dispersion. Fig. 8.",
+      "peak_power_W": 3480.0,
+      "T0_fs": 5.67,
+      "full": {"length_m": 0.5, "num_steps": 8000, "N_points": 8192, "Tmax_ps": 4.0},
+      "fast": {"length_m": 0.05, "num_steps": 1000, "N_points": 4096, "Tmax_ps": 2.0},
+      "dw_tolerance": 0.06
+    },
+    "fig09_dw_energy": {
+      "note": "Raman influence on the dispersive wave: mean soliton frequency and DW energy fraction vs z. Fig. 9.",
+      "peak_power_W": 3480.0,
+      "T0_fs": 5.67,
+      "length_m": 0.5,
+      "num_steps": 8000,
+      "N_points": 8192,
+      "Tmax_ps": 4.0,
+      "dw_band_nm": [600.0, 720.0]
+    },
+    "fig03_basic_scg": {
+      "note": "Full SCG: Table I betas, Raman, self-steepening. Fig. 3.",
+      "peak_power_W": 10000.0,
+      "length_m": 0.15,
+      "N_points": 8192,
+      "Tmax_ps": 12.5,
+      "num_steps_full": 6000,
+      "num_steps_quick": 1500,
+      "nsaves": 200
+    },
+    "fig23_mi_gain": {
+      "note": "CW parametric (MI) gain versus pump wavelength for the same PCF, CW power 500 W. Fig. 23.",
+      "cw_power_W": 500.0,
+      "pump_wavelengths_nm": [700, 750, 780, 800, 835, 900],
+      "grid_points": 4000
+    }
+  }
+}

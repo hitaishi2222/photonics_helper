@@ -1537,13 +1537,15 @@ class FROGTrace:
         # Create delay axis: tau = [-N/2*dt, ..., N/2*dt - dt]
         tau = np.arange(-N // 2, N // 2) * dt
 
-        # Build the gated signal G(t, tau) = E(t) * E(t - tau)
+        # Build the gated SHG signal. The (periodic) delay roll realizes
+        # G(t, tau) = E(t)·E(t + tau); the delay axis is symmetric, so this is
+        # the same trace as the usual E(t)·E(t - tau) definition.
         E_shifted = np.zeros((len(tau), N), dtype=complex)
         for i, t_val in enumerate(tau):
             shift = int(round(t_val / dt))
             E_shifted[i] = np.roll(E_field, -shift)
 
-        # G(t, tau) = E(t) * E(t - tau)
+        # G(t, tau) = E(t)·E(t + tau)
         G = E_field[np.newaxis, :] * E_shifted  # shape: (N_tau, N)
 
         # FFT along time axis
@@ -1727,26 +1729,89 @@ def fidelity(trace1: FROGTrace, trace2: FROGTrace) -> float:
     return float(1.0 - norm_diff / norm_ref)
 
 
+def _pcgpa_update(G_time: NDArray, E: NDArray, shifts: list[int]) -> NDArray:
+    """Generalized-projections (GP) extraction step for SHG-FROG.
+
+    The SHG signal model is ``E_sig(t, τ) = E(t)·E(t+τ)``. Given the
+    measured-trace-constrained signal ``G'(t, τ)``, the least-squares
+    projection back onto the set of signals of this form is obtained by
+    minimizing ``Σ_{t,τ} |G'(t,τ) − E(t)E_old(t+τ)|²`` w.r.t. ``E``, which gives
+
+        E_new(t) = Σ_τ G'(t, τ)·E_old*(t+τ) / Σ_τ |E_old(t+τ)|²
+
+    (the denominator is the delay-autocorrelation of the current estimate).
+    This is the material-constraint projection of the generalized-projections
+    algorithm for SHG-FROG, in the form used by PCGPA. The conjugate and the
+    pointwise denominator are essential: dropping them is not the least-squares
+    solution and stalls on chirped pulses.
+
+    References
+    ----------
+    - DeLong, Trebino, Hunter & White, *J. Opt. Soc. Am. B* **11**, 2206 (1994)
+      (generalized projections for SHG-FROG).
+    - Reid, Dantus & Zewail, *Opt. Commun.* **181**, 73 (2000)
+      (generalized phase retrieval for SHG-FROG).
+    - Kane, *IEEE J. Quantum Electron.* **35**, 421 (1999); Trebino,
+      *Frequency-Resolved Optical Gating* (Kluwer, 2000) (PCGPA).
+    """
+    num = np.zeros(len(E), dtype=complex)
+    den = np.zeros(len(E), dtype=float)
+    for i, shift in enumerate(shifts):
+        E_shift = np.roll(E, -shift)
+        num += G_time[i] * np.conj(E_shift)
+        den += np.abs(E_shift) ** 2
+    out = np.zeros_like(num)
+    mask = den > 0
+    out[mask] = num[mask] / den[mask]
+    norm_out = float(np.linalg.norm(out))
+    return out / norm_out if norm_out > 0 else E
+
+
 def retrieve(
     trace: FROGTrace,
     max_iter: int = 100,
     tol: float = 1e-4,
     verbose: bool = True,
+    *,
+    seed: int | None = 0,
+    n_restarts: int = 5,
 ) -> FROGTrace:
     """Retrieve the electric field E(t) from a FROG trace using PCGPA.
+
+    Implements the generalized-projections / PCGPA material-constraint step:
+    after replacing the trace magnitude with the measurement (keeping the
+    phase), the new field is the least-squares solution
+
+        E_new(t) = Σ_τ G'(t, τ)·E*(t+τ) / Σ_τ |E(t+τ)|²
+
+    for the bilinear SHG signal ``G(t, τ) = E(t)E(t+τ)``. Retrieval is
+    initialized from the dominant SVD component of the trace plus one or more
+    random complex fields (seeded for reproducibility); the lowest-error result
+    is returned.
 
     Parameters
     ----------
     trace : FROGTrace — the measured (or generated) trace.
-    max_iter : maximum iterations (default 100).
-    tol : convergence tolerance on fidelity change (default 1e-4).
+    max_iter : maximum iterations per restart (default 100).
+    tol : convergence tolerance on the change in the normalized FROG error
+        (default 1e-4).
     verbose : print iteration progress (default True).
+    seed : RNG seed for the random initialization (default 0). ``None`` uses
+        fresh entropy.
+    n_restarts : number of random restarts (default 5). Together with the
+        SVD initialization these are ranked by FROG error and the lowest-error
+        result is returned.
 
     Returns
     -------
-    FROGTrace with .field set to the retrieved E(t).
+    FROGTrace with ``.field`` set to the retrieved E(t).
+
+    Notes
+    -----
+    SHG-FROG cannot distinguish ``E(t)`` from ``E*(−t)`` or a global phase, so
+    compare retrieved and reference fields up to those symmetries (comparing
+    traces is ambiguity-free).
     """
-    N_tau, N_omega = trace.trace.shape
     dt = trace.dt
 
     # Use unnormalized trace if available (preserves amplitude info)
@@ -1755,86 +1820,97 @@ def retrieve(
         if trace.unnormalized_trace is not None
         else trace.trace
     )
+    measured_mag = np.sqrt(measured_trace)
+    measured_max = float(measured_trace.max())
+    if measured_max <= 0:
+        raise ValueError("Cannot retrieve from an all-zero FROG trace.")
+    # Scale-invariant error reference (a normalized FROG trace carries no
+    # absolute amplitude information, so retrieval cannot recover the scale).
+    measured_trace_norm = measured_trace / measured_max
+    measured_norm_unit = float(np.linalg.norm(measured_trace_norm)) or 1.0
 
-    # --- Step 1: SVD initialization ---
-    U, S, Vt = np.linalg.svd(measured_trace, full_matrices=False)
+    shifts = [int(round(tau_val / dt)) for tau_val in trace.tau]
+    N = measured_trace.shape[1]
 
-    # Take the singular vector with largest singular value
-    E_init = np.sqrt(S[0]) * Vt[0]
+    rng = np.random.default_rng(seed)
+    best_E: NDArray | None = None
+    best_err = np.inf
 
-    # Normalize
-    E_init = E_init / np.linalg.norm(E_init)
+    # Initial guesses: the dominant SVD component of the trace (reliable for
+    # symmetric pulses) plus `n_restarts` random complex fields (needed to
+    # escape the local minimum that traps chirped retrieval). The lowest-error
+    # result across all candidates is returned.
+    _, singular_values, Vt = np.linalg.svd(measured_trace, full_matrices=False)
+    svd_guess = np.sqrt(singular_values[0]) * Vt[0]
+    candidates = [svd_guess]
+    candidates += [
+        rng.standard_normal(N) + 1j * rng.standard_normal(N)
+        for _ in range(max(1, n_restarts))
+    ]
 
-    # --- Step 2: PCGPA iteration ---
-    E = E_init.copy()
+    for restart, init_E in enumerate(candidates):
+        E = init_E / np.linalg.norm(init_E)
+        prev_err: float | None = None
+        err = np.inf
 
-    prev_fidelity = 0.0
+        for iteration in range(max(1, max_iter)):
+            # a. Gated signal G(t, τ) = E(t)·E(t + τ)  (roll realizes E(t+τ))
+            G = np.empty((len(shifts), N), dtype=complex)
+            for i, shift in enumerate(shifts):
+                G[i] = E * np.roll(E, -shift)
 
-    for iteration in range(max_iter):
-        N = len(E)
-        G = np.zeros((N_tau, N), dtype=complex)
+            # b. FFT along the time axis
+            G_hat = np.fft.fftshift(
+                np.fft.fft(np.fft.ifftshift(G, axes=1), axis=1), axes=1
+            )
 
-        for i, tau_val in enumerate(trace.tau):
-            shift = int(round(tau_val / dt))
-            E_shifted = np.roll(E, -shift)
-            G[i] = E * E_shifted
+            # c. Replace magnitude with sqrt(I_meas), keep the phase
+            G_new = measured_mag * np.exp(1j * np.angle(G_hat))
 
-        # b. FFT along time axis
-        G_hat = np.fft.fftshift(np.fft.fft(np.fft.ifftshift(G, axes=1), axis=1), axes=1)
+            # d. Inverse FFT back to the time domain
+            G_time = np.fft.fftshift(
+                np.fft.ifft(np.fft.ifftshift(G_new, axes=1), axis=1), axes=1
+            )
 
-        # c. Replace magnitude with sqrt(I_meas), keep phase
-        measured_mag = np.sqrt(measured_trace)
-        G_new = measured_mag * np.exp(1j * np.angle(G_hat))
+            # e. Principal-component projection over ALL delays
+            E_new = _pcgpa_update(G_time, E, shifts)
 
-        # d. Inverse FFT along frequency axis
-        G_new_time = np.fft.fftshift(
-            np.fft.ifft(np.fft.ifftshift(G_new, axes=1), axis=1), axes=1
-        )
-
-        # e. Extract new E from G_new_time at tau = 0 (center column)
-        E_new = G_new_time[:, N_tau // 2].copy()
-
-        # Normalize
-        E_new = E_new / np.linalg.norm(E_new)
-
-        # f. Check convergence
-        G_check = np.zeros((N_tau, N), dtype=complex)
-        for i, tau_val in enumerate(trace.tau):
-            shift = int(round(tau_val / dt))
-            E_shifted = np.roll(E, -shift)
-            G_check[i] = E * E_shifted
-
-        G_check_hat = np.fft.fftshift(
-            np.fft.fft(np.fft.ifftshift(G_check, axes=1), axis=1), axes=1
-        )
-        trace_calc = np.abs(G_check_hat) ** 2
-        if trace_calc.max() > 0:
-            trace_calc /= trace_calc.max()
-
-        curr_fidelity = fidelity(
-            trace,
-            FROGTrace(
-                trace=trace_calc,
-                unnormalized_trace=trace_calc,
-                omega=trace.omega,
-                tau=trace.tau,
-                dt=trace.dt,
-                dw=trace.dw,
-            ),
-        )
-
-        if verbose and (iteration % 10 == 0 or iteration == max_iter - 1):
-            print(f"  Iter {iteration:3d}: fidelity = {curr_fidelity:.6f}")
-
-        if abs(curr_fidelity - prev_fidelity) < tol and iteration > 5:
-            if verbose:
-                print(
-                    f"  Converged at iteration {iteration}, fidelity = {curr_fidelity:.6f}"
+            # f. Scale-invariant normalized FROG error of the updated estimate
+            G_check = np.empty((len(shifts), N), dtype=complex)
+            for i, shift in enumerate(shifts):
+                G_check[i] = E_new * np.roll(E_new, -shift)
+            G_check_hat = np.fft.fftshift(
+                np.fft.fft(np.fft.ifftshift(G_check, axes=1), axis=1), axes=1
+            )
+            calc_trace = np.abs(G_check_hat) ** 2
+            calc_max = float(calc_trace.max())
+            if calc_max > 0:
+                err = float(
+                    np.linalg.norm(calc_trace / calc_max - measured_trace_norm)
+                    / measured_norm_unit
                 )
-            break
+            else:
+                err = np.inf
 
-        prev_fidelity = curr_fidelity
-        E = E_new
+            if verbose and (iteration % 10 == 0 or iteration == max(1, max_iter) - 1):
+                print(f"  Restart {restart} iter {iteration:3d}: FROG error = {err:.6e}")
+
+            E = E_new
+            if err < tol:
+                break
+            if (
+                prev_err is not None
+                and iteration > 5
+                and abs(prev_err - err) < tol
+            ):
+                break
+            prev_err = err
+
+        if err < best_err:
+            best_err = err
+            best_E = E
+
+    E = best_E if best_E is not None else E
 
     # Build result FROGTrace with retrieved field
     # Regenerate the trace from the retrieved field for accurate fidelity comparison

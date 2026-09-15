@@ -5,10 +5,24 @@ Each reproduction lives under ``reproductions/<name>/`` with a
 against an analytic/closed-form reference.
 """
 
+import numpy as np
+import pytest
+
 from reproductions.macleod_quarter_wave_dbr.reproduce import validate as validate_dbr
 from reproductions.stolen_lin_1978_spm.reproduce import validate as validate_spm
 from reproductions.gordon_1986_ssfs.reproduce import validate as validate_gordon
 from reproductions.dudley_2006_cherenkov_dw.reproduce import validate as validate_dw
+
+from reproductions.dudley_2006_scg.fig03_basic_scg import validate as validate_fig03
+from reproductions.dudley_2006_scg.fig04_output_features import validate as validate_fig04
+from reproductions.dudley_2006_scg.fig05_ideal_soliton_period import (
+    validate as validate_fig05,
+)
+from reproductions.dudley_2006_scg.fig06_raman_fission import validate as validate_fig06
+from reproductions.dudley_2006_scg.fig07_fission_detail import validate as validate_fig07
+from reproductions.dudley_2006_scg.fig08_dispersive_wave import validate as validate_fig08
+from reproductions.dudley_2006_scg.fig10_spectrogram import validate as validate_fig10
+from reproductions.dudley_2006_scg.fig23_mi_gain import validate as validate_fig23
 
 
 def test_stolen_lin_1978_spm():
@@ -39,3 +53,164 @@ def test_dudley_2006_cherenkov_dw():
     result = validate_dw(make_plot=False)
     assert abs(result["lambda_root_nm"] - result["lambda_analytic_nm"]) / result["lambda_analytic_nm"] < 0.02
     assert result["rel_err"] < 0.05
+
+
+# ---------------------------------------------------------------------------
+# Dudley, Genty & Coen, Rev. Mod. Phys. 78, 1135 (2006) — figure reproductions
+# ---------------------------------------------------------------------------
+
+
+def test_dudley_fig05_ideal_soliton_period():
+    """Ideal N=3 soliton is periodic with z_sol and breathes to >3x peak power."""
+    result = validate_fig05(fast=True, make_plot=False)
+    assert result["periodicity_overlap"] > 0.99
+    assert result["peak_compression"] > 3.0
+    assert abs(result["z_sol_cm"] - 10.7) < 0.5
+
+
+def test_dudley_fig06_raman_fission():
+    """Raman fission ejects a Kodama-Hasegawa j=1 soliton and red-shifts."""
+    result = validate_fig06(fast=True, make_plot=False)
+    assert result["n_ejected"] >= 2
+    assert result["power_rel_err"] < 0.15
+    assert result["fwhm_rel_err"] < 0.20
+    assert result["mean_wavelength_end_nm"] > 1000.0
+
+
+def test_dudley_fig07_fission_detail():
+    """Ejected soliton matches the Kodama-Hasegawa sech profile."""
+    result = validate_fig07(fast=True, make_plot=False)
+    assert result["sech_overlap"] > 0.97
+    assert result["power_rel_err"] < 0.15
+
+
+def test_dudley_fig08_dispersive_wave():
+    """Blue DW wavelength matches the full-beta phase-matching root."""
+    result = validate_fig08(fast=True, make_plot=False)
+    assert result["dw_relative_power"] > 0.05
+    assert result["dw_rel_err"] < 0.06
+
+
+def test_dudley_fig23_mi_gain():
+    """MI gain: ZDW 780 nm, g_max = 2 gamma P, anomalous peak frequency."""
+    result = validate_fig23(make_plot=False)
+    assert abs(result["zdw_nm"] - 780.0) < 5.0
+    assert abs(result["g_max_800_W_per_m"] - result["g_max_theory_W_per_m"]) < 1e-2
+    assert result["peak_rel_err"] < 0.15
+    assert result["omega_peak_750_THz"] > result["omega_peak_800_THz"]
+
+
+def test_dudley_fig03_basic_scg():
+    """Full SCG is octave-spanning at -20 dB with the paper's N and z_sol."""
+    result = validate_fig03(fast=True, make_plot=False)
+    assert abs(result["z_sol_cm"] - 10.7) < 0.5
+    assert result["span_ratio"] > 1.8
+    lo, hi = result["span_minus20dB_nm"]
+    assert lo < 650.0 and hi > 1000.0
+
+
+def test_dudley_fig04_output_features():
+    """Output has a blue DW, a red Raman soliton and multiple temporal peaks."""
+    result = validate_fig04(fast=True, make_plot=False)
+    assert result["dw_peak_nm"] < 650.0
+    assert result["soliton_peak_nm"] > 850.0
+    assert result["n_temporal_peaks"] >= 3
+
+
+def test_dudley_fig10_spectrogram():
+    """Spectrogram resolves the DW and Raman-soliton bands at different delays."""
+    result = validate_fig10(fast=True, make_plot=False)
+    assert result["delay_separation_ps"] > 0.1
+    assert result["dominant_beat_THz"] > 0.0
+
+
+# ---------------------------------------------------------------------------
+# Dudley Fig. 3 plotting helpers: time convention, wavelength bounds, backends
+# ---------------------------------------------------------------------------
+
+
+def test_dudley_default_wl_bounds_track_carrier():
+    """Default spectral window is centred on the carrier, not hard-coded."""
+    from reproductions.dudley_2006_scg import common
+
+    lo, hi = common.default_wl_bounds(835.0)
+    assert lo < 835.0 < hi
+    assert lo == pytest.approx(417.5)
+    assert hi == pytest.approx(1336.0)
+    # A tighter fraction still brackets the carrier.
+    lo2, hi2 = common.default_wl_bounds(835.0, (0.8, 1.2))
+    assert lo2 < 835.0 < hi2
+    with pytest.raises(ValueError):
+        common.default_wl_bounds(835.0, (1.5, 0.5))
+
+
+def test_dudley_temporal_reversal_lifts_soliton_right():
+    """Raman solitons sit at positive delay in the literature convention."""
+    from reproductions.dudley_2006_scg import common, fig03_basic_scg
+
+    evo = fig03_basic_scg.run(fast=True)
+    t_internal, i_internal = common.temporal_evolution_data(evo, time_reversal=False)
+    t_literature, i_literature = common.temporal_evolution_data(evo, time_reversal=True)
+
+    assert t_internal[np.argmax(i_internal[-1])] < 0.0
+    assert t_literature[np.argmax(i_literature[-1])] > 0.0
+    # Centre of mass mirrors about zero.
+    assert np.sum(t_internal * i_internal) == pytest.approx(
+        -np.sum(t_literature * i_literature)
+    )
+
+
+def test_dudley_evolution_plots_return_figures():
+    """Both evolution helpers return the figure instead of closing it."""
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    from reproductions.dudley_2006_scg import common, fig03_basic_scg
+
+    evo = fig03_basic_scg.run(fast=True)
+    fig_s = common.plot_spectral_evolution(evo, wl_bounds=(450.0, 1200.0))
+    fig_t = common.plot_temporal_evolution(evo, t_bounds=(-1.0, 5.0))
+    assert isinstance(fig_s, plt.Figure)
+    assert isinstance(fig_t, plt.Figure)
+    assert tuple(fig_s.axes[0].get_xlim()) == (450.0, 1200.0)
+    assert tuple(fig_t.axes[0].get_xlim()) == (-1.0, 5.0)
+    plt.close(fig_s)
+    plt.close(fig_t)
+
+
+def test_dudley_plotly_hover_labels_features():
+    """plotly=True yields hover customdata naming DW / SPM / soliton."""
+    go = pytest.importorskip("plotly.graph_objects")
+
+    from reproductions.dudley_2006_scg import common, fig03_basic_scg
+
+    evo = fig03_basic_scg.run(fast=True)
+    fig = common.plot_temporal_evolution(evo, plotly=True, t_bounds=(-1.0, 5.0))
+    assert isinstance(fig, go.Figure)
+    labels = set(np.asarray(fig.data[0].customdata).ravel().tolist())
+    assert "Raman soliton (red)" in labels
+    assert "SPM / pump" in labels
+    assert "Dispersive wave (blue)" in labels
+    assert "Feature: %{customdata}" in fig.data[0].hovertemplate
+
+
+def test_dudley_fig03_plot_returns_figure():
+    """The assembled Fig. 3 returns a figure for both backends."""
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    from reproductions.dudley_2006_scg import fig03_basic_scg
+
+    result = validate_fig03(fast=True, make_plot=False)
+    evo = fig03_basic_scg.run(fast=True)
+    mpl_fig = fig03_basic_scg._plot(evo, result, save=False)
+    assert isinstance(mpl_fig, plt.Figure)
+    plt.close(mpl_fig)
+
+    go = pytest.importorskip("plotly.graph_objects")
+    plotly_fig = fig03_basic_scg._plot(evo, result, plotly=True, save=False)
+    assert isinstance(plotly_fig, go.Figure)

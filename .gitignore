@@ -31,5 +31,13 @@ graphify-out/
 
 # Generated reproduction figures (regenerate with `python reproductions/<name>/reproduce.py`)
 reproductions/**/*.png
+# Reproduction caches and paper text extractions
+reproductions/**/*.npz
+reproductions/**/*.txt
+reproductions/**/*.pdf
+
+# Rendered paper/PDF page images (regenerate from the checked-in PDFs)
+**/pdf_images/
+**/paper_pages/
 
 nk_datasets/yaml/
