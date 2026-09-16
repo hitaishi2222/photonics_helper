@@ -113,8 +113,7 @@ def main() -> None:
     fig = plot_spectrogram(
         solver,
         n_delays=args.n_delays,
-        wl_min=450.0,
-        wl_max=1250.0,
+        wl_bounds=(450.0, 1250.0),
         dynamic_range_db=45.0,
         with_projections=True,
         t_min=-3.0,

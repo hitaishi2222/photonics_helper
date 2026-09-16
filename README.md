@@ -289,6 +289,74 @@ fig = plot_soliton_trajectories(solver)
 fig.savefig("trajectories.png", dpi=150)
 ```
 
+# Breathers, Noise and Wave Breaking
+
+Three modules cover physics that deterministic pulse solvers cannot express on
+their own: exact NLSE breather solutions, stochastic seeding, and the
+normal-dispersion wave-breaking regime.
+
+## Analytic breathers (`breathers.py`)
+
+Exact soliton-on-finite-background solutions of the focusing NLSE — the
+Akhmediev breather, the Peregrine soliton and the Kuznetsov–Ma soliton — plus a
+physical-parameter mapping that turns fibre parameters into an exact initial
+field:
+
+```python
+from photonics_helper.base import Time
+from photonics_helper.breathers import (
+    SolitonOnBackground,
+    peregrine_soliton,
+    akhmediev_breather,
+    general_sfb,
+)
+from photonics_helper.pulse import TemporalGrid
+
+# SMF-28 at 1550 nm, 0.7 W background (Kibler et al. 2012 parameters)
+sob = SolitonOnBackground(beta2=-21.8e-27, gamma=1.3e-3, P0=0.7)
+print(f"L_NL = {sob.L_NL:.1f} m, T0 = {sob.T0*1e12:.3f} ps")
+print(f"KM period = {sob.spatial_period_m(0.66)/1e3:.3f} km")
+print(f"KM peak   = {sob.peak_power(0.66):.3f} W")
+
+grid = TemporalGrid(N=4096, Tmax=Time(80e-12, "s"))
+wave = sob.initial_wave(grid, a=0.66)          # exact Kuznetsov-Ma field
+
+# Or use the dimensionless solutions directly:
+psi = peregrine_soliton(xi=0.0, tau=grid.t / sob.T0)   # peak |psi|^2 = 9
+psi_ab = akhmediev_breather(xi=0.0, tau=grid.t / sob.T0, a=0.25)
+psi_any = general_sfb(xi=0.0, tau=grid.t / sob.T0, a=0.66)
+```
+
+## Stochastic noise (`noise.py`)
+
+Reproducible (seedable) noise sources, needed for spontaneous MI and
+supercontinuum coherence studies:
+
+```python
+from photonics_helper.noise import add_noise, add_ase_noise, complex_gaussian_noise
+
+noisy = add_noise(cw_wave, rms_relative=0.01, seed=1)       # ~1 % amplitude noise
+seeded = add_ase_noise(cw_wave, level_dB=-50.0, seed=1)     # -50 dB ASE background
+n = complex_gaussian_noise(grid, rms=1e-3, seed=0)          # raw time-domain noise
+```
+
+`add_ase_noise` handles the `TemporalGrid.fft`/`ifft` `dt` scaling internally, so
+the requested dB level is exact.
+
+## Wave breaking (`wave_breaking.py`)
+
+Analytic wave-breaking distance and diagnostics for normal dispersion:
+
+```python
+from photonics_helper.wave_breaking import WaveBreaking, wave_breaking_distance
+
+wb = WaveBreaking(beta2=20e-27, gamma=1.5e-3, P0=10.0, T0=10e-12)
+print(f"z_WB = {wb.z_WB:.1f} m, sqrt(L_D L_NL) = {wb.sqrt_LD_LNL:.1f} m")
+# after propagating a Gaussian:
+# result = wb.analyze(solver.z_array, [w.envelope_field for w in solver.evolution], grid.t)
+# result["z_onset_m"], result["z_oscillation_m"], result["peak_steepness"]
+```
+
 # Reproductions
 
 The `reproductions/` directory validates the library against published results,
@@ -303,6 +371,9 @@ README with the DOI, findings and open issues.
 | `gordon_1986_ssfs` | Gordon, *Opt. Lett.* **11**, 662 (1986) · [10.1364/OL.11.000662](https://doi.org/10.1364/OL.11.000662) |
 | `dudley_2006_cherenkov_dw` | Akhmediev & Karlsson, *Phys. Rev. A* **51**, 2602 (1995) · [10.1103/PhysRevA.51.2602](https://doi.org/10.1103/PhysRevA.51.2602) |
 | `dudley_2006_scg` | Dudley, Genty & Coen, *Rev. Mod. Phys.* **78**, 1135 (2006) · [10.1103/RevModPhys.78.1135](https://doi.org/10.1103/RevModPhys.78.1135) |
+| `kuznetsov_ma_2012_breather` | Kibler et al., *Sci. Rep.* **2**, 463 (2012) · [10.1038/srep00463](https://doi.org/10.1038/srep00463) |
+| `narhi_2016_mi_breathers` | Närhi et al., *Nat. Commun.* **7**, 13675 (2016) · [10.1038/ncomms13675](https://doi.org/10.1038/ncomms13675) |
+| `tomlinson_1985_wave_breaking` | Tomlinson, Stolen & Johnson, *Opt. Lett.* **10**, 457 (1985) · [10.1364/OL.10.000457](https://doi.org/10.1364/OL.10.000457) |
 
 See [`reproductions/README.md`](reproductions/README.md) for the full status,
 cross-cutting findings and issues, and

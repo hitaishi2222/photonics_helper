@@ -533,7 +533,9 @@ class TMM:
         ax.plot(wl_nm, 1.0 - R - T, label="A", color="C2", alpha=0.6)
         ax.set_xlabel("Wavelength (nm)")
         ax.set_ylabel("Fraction")
-        ax.set_title(f"DBR spectrum ({self.polarisation}, {np.rad2deg(self.angle_of_incidence):.1f}°)")
+        ax.set_title(
+            f"DBR spectrum ({self.polarisation}, {np.rad2deg(self.angle_of_incidence):.1f}°)"
+        )
         ax.legend()
         ax.grid(True, alpha=0.3)
         return fig

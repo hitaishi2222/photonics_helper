@@ -94,7 +94,7 @@ def main():
 
     try:
         lambda_dw = analyzer.dispersive_wave_wavelength()
-        print(f"  Dispersive wave wavelength = {lambda_dw*1e9:.2f} nm")
+        print(f"  Dispersive wave wavelength = {lambda_dw.as_nm:.2f} nm")
     except ValueError:
         print("  Dispersive wave wavelength: not available (beta3 needed)")
 
@@ -152,7 +152,7 @@ def main():
         ax.plot(wavelength_nm, final_spec / max_val, "b-", linewidth=1)
     ax.axvline(x=1550, color="k", linestyle=":", alpha=0.5, label="Pump")
     try:
-        dw_nm = analyzer.dispersive_wave_wavelength() * 1e9
+        dw_nm = analyzer.dispersive_wave_wavelength().as_nm
         ax.axvline(x=dw_nm, color="r", linestyle="--", alpha=0.5, label="DW")
     except ValueError:
         pass

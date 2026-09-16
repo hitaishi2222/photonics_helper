@@ -9,7 +9,7 @@ from __future__ import annotations
 import warnings
 from dataclasses import dataclass
 from math import factorial
-from typing import TYPE_CHECKING, Literal, Optional, Tuple, Callable
+from typing import TYPE_CHECKING, Any, Literal, Optional, Tuple, TypeAlias, Callable
 
 import numpy as np
 from numpy.typing import NDArray
@@ -71,7 +71,14 @@ if TYPE_CHECKING:
     from photonics_helper.pulse import Wave, TemporalGrid
     from photonics_helper.fiber import ZDependentDispersion
     from matplotlib import pyplot as plt
+    from matplotlib.figure import Figure as MplFigure
+    from plotly.graph_objects import Figure as PlotlyFigure
+    from pathlib import Path
     from .phase_matching import SimulationReadinessReport
+
+    # Plotting helpers return a matplotlib figure by default and a plotly figure
+    # when ``plotly=True``; plotly is an optional dependency.
+    FigureLike: TypeAlias = MplFigure | PlotlyFigure
 
 __all__ = [
     "FiberProfile",
@@ -858,10 +865,9 @@ class SplitStepEngine:
                 _append_snapshot()
                 next_save_idx += 1
 
-        # Store initial pulse
-        self.evolution.append(
-            Wave(grid=self.grid, envelope=self.pulse.envelope, central_wavelength=self.pulse.central_wavelength)
-        )
+        # Store initial pulse (via _append_snapshot so a field supplied through
+        # Wave.with_field / an arbitrary array is preserved in evolution[0]).
+        _append_snapshot()
 
         # Termination tolerance: relative to fiber length with absolute floor.
         # Prevents infinite loop when shrink × remaining < ½ ulp(z).
@@ -1008,6 +1014,14 @@ class GNLSESolver:
         laserfun or reproducing Dudley-style supercontinuum demos.
     include_tpa : bool
         Include two-photon absorption. Default False.
+    check_phase_matching : bool
+        Run the phase-matching preflight and emit warnings before propagating.
+    step_size : Length | None
+        Fixed split-step size (m). If ``None`` (default), the engine uses its
+        adaptive step heuristic. Supply an explicit value for deterministic,
+        reproducible step counts, or when the adaptive heuristic is
+        inappropriate (e.g. CW/finite-background fields where the pulse-width
+        based dispersion limit is not meaningful).
     """
 
     def __init__(
@@ -1019,6 +1033,7 @@ class GNLSESolver:
         include_self_steepening: bool = False,
         include_tpa: bool = False,
         check_phase_matching: bool = False,
+        step_size: Length | None = None,
         betas_unit: BetasUnit = "ps^k/m",
     ):
         self.pulse = pulse
@@ -1030,6 +1045,7 @@ class GNLSESolver:
         self.include_self_steepening = include_self_steepening
         self.include_tpa = include_tpa
         self.check_phase_matching = check_phase_matching
+        self.step_size = step_size
         self._evolution: list["Wave"] = []
         self._z_positions: NDArray | None = None
         self._spectra_vs_z: Tuple[NDArray, NDArray] | None = None
@@ -1053,6 +1069,7 @@ class GNLSESolver:
             include_raman=self.include_raman,
             include_self_steepening=self.include_self_steepening,
             include_tpa=self.include_tpa,
+            step_size=self.step_size,
         )
         engine.propagate(num_steps, nsaves=nsaves, show_progress=show_progress)
         self._evolution = engine.evolution
@@ -1245,11 +1262,13 @@ class TaperedGNLSESolver:
         include_tpa: bool = False,
         check_phase_matching: bool = False,
         min_shrink_factor: float = 0.1,
+        step_size: Length | None = None,
         betas_unit: BetasUnit = "ps^k/m",
     ):
         self.pulse = pulse
         self.fiber = fiber
         self.betas_unit = _validate_betas_unit(betas_unit)
+        self.step_size = step_size
         self.dispersion_profile = dispersion_profile
         self.a_eff_fn = a_eff_fn
         self.alpha_fn = alpha_fn
@@ -1320,6 +1339,7 @@ class TaperedGNLSESolver:
             alpha_fn=self.alpha_fn,
             gamma_fn=self.gamma_fn,
             min_shrink_factor=self.min_shrink_factor,
+            step_size=self.step_size,
         )
         self._engine.propagate(num_steps, nsaves=nsaves, show_progress=show_progress)
         self._evolution = self._engine.evolution
@@ -1848,7 +1868,7 @@ def plot_scg_dashboard(
     colorscale: str = "Jet",
     annotate_features: bool = True,
     height: int = 850,
-):
+) -> "FigureLike":
     """Interactive four-panel Plotly SCG dashboard with feature hover labels.
 
     Layout: output line profiles ``(a) intensity (dB) vs wavelength`` and
@@ -2082,7 +2102,7 @@ def plot_spectral_temporal_summary(
     figsize: Tuple[float, float] = (11.0, 9.0),
     n_points: int = 500,
     plotly: bool = False,
-) -> "plt.Figure":
+) -> "FigureLike":
     """Four-panel GNLSE summary with line profiles on top and dense plots below.
 
     Layout
@@ -2271,7 +2291,7 @@ def save_summary_html(
     solver: "GNLSESolver",
     path,
     **kwargs,
-):
+) -> "Path":
     """Render the interactive summary and write a standalone HTML file.
 
     Builds :func:`plot_spectral_temporal_summary` with ``plotly=True`` and
@@ -2298,7 +2318,7 @@ def save_summary_html(
 
     out = Path(path)
     kwargs.pop("plotly", None)
-    fig = plot_spectral_temporal_summary(solver, plotly=True, **kwargs)
+    fig: Any = plot_spectral_temporal_summary(solver, plotly=True, **kwargs)
     out.parent.mkdir(parents=True, exist_ok=True)
     fig.write_html(out, include_plotlyjs="cdn", full_html=True)
     return out
@@ -2420,7 +2440,7 @@ def _plotly_spectrogram(
     t_min: float | None,
     t_max: float | None,
     annotate: bool,
-):
+) -> "PlotlyFigure":
     """Interactive Plotly heatmap with feature-labelled hover text."""
     import plotly.graph_objects as go
 
@@ -2497,7 +2517,7 @@ def plot_spectrogram(
     time_reversal: bool = True,
     plotly: bool = False,
     annotate_features: bool = True,
-):
+) -> "FigureLike":
     """Plot the supercontinuum spectrogram (Dudley et al. Fig. 10 style).
 
     Parameters

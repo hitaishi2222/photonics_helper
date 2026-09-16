@@ -12,6 +12,9 @@ from reproductions.macleod_quarter_wave_dbr.reproduce import validate as validat
 from reproductions.stolen_lin_1978_spm.reproduce import validate as validate_spm
 from reproductions.gordon_1986_ssfs.reproduce import validate as validate_gordon
 from reproductions.dudley_2006_cherenkov_dw.reproduce import validate as validate_dw
+from reproductions.kuznetsov_ma_2012_breather.reproduce import validate as validate_km
+from reproductions.narhi_2016_mi_breathers.reproduce import validate as validate_narhi
+from reproductions.tomlinson_1985_wave_breaking.reproduce import validate as validate_wb
 
 from reproductions.dudley_2006_scg.fig03_basic_scg import validate as validate_fig03
 from reproductions.dudley_2006_scg.fig04_output_features import validate as validate_fig04
@@ -53,6 +56,41 @@ def test_dudley_2006_cherenkov_dw():
     result = validate_dw(make_plot=False)
     assert abs(result["lambda_root_nm"] - result["lambda_analytic_nm"]) / result["lambda_analytic_nm"] < 0.02
     assert result["rel_err"] < 0.05
+
+
+def test_kuznetsov_ma_2012_breather():
+    """Exact Kuznetsov-Ma solution is reproduced by the GNLSE engine over one period."""
+    result = validate_km(num_steps=4000, make_plot=False)
+    assert abs(result["T0_ps"] - 4.894) < 0.02
+    assert abs(result["period_km"] - 5.312) / 5.312 < 0.01
+    assert result["peak_rel_err"] < 5e-3
+    assert result["center_max_abs_err_W"] < 0.05
+    assert result["intensity_rel_l2_max"] < 1e-2
+    assert result["spectrum_rel_l2"] < 1e-2
+    assert result["lossy_peak_W"] < result["peak_analytic_W"]
+
+
+def test_narhi_2016_mi_breathers():
+    """MI gain, exact Peregrine/Akhmediev breathers, and noise-seeded MI."""
+    result = validate_narhi(fast=True, make_plot=False)
+    assert abs(result["mi"]["omega_peak_GHz"] - 46.4) < 0.5
+    assert 0.75 < result["mi_growth"]["ratio"] < 1.25
+    assert result["peregrine"]["peak_rel_err"] < 0.01
+    assert result["peregrine"]["profile_l2"] < 0.02
+    assert result["akhmediev"]["peak_rel_err"] < 0.01
+    assert result["akhmediev"]["profile_l2"] < 5e-3
+    assert 30.0 <= result["spontaneous"]["sideband_peak_GHz"] <= 65.0
+    assert result["spontaneous"]["max_peak_ratio"] > 4.0
+
+
+def test_tomlinson_1985_wave_breaking():
+    """Optical wave breaking: onset near z_WB and z ~ sqrt(L_D L_NL) ~ P0^-1/2 scaling."""
+    result = validate_wb(fast=True, make_plot=False)
+    assert 0.3 < result["z_onset_over_zWB"] < 1.5
+    assert result["peak_steepness_over_gaussian"] > 1.5
+    assert result["z_oscillation_m"] / result["sqrt_LD_LNL_m"] < 4.5
+    assert -0.65 < result["scaling_slope"] < -0.35
+    assert result["scaling_constant_spread"] < 1.35
 
 
 # ---------------------------------------------------------------------------

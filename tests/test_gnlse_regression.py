@@ -409,10 +409,32 @@ class TestGNLSEPhysics:
         solver.propagate(num_steps=1000)
 
         def centroid(A):
-            I = np.abs(A) ** 2
-            return np.trapezoid(t * I, t) / np.trapezoid(I, t)
+            inten = np.abs(A) ** 2
+            return np.trapezoid(t * inten, t) / np.trapezoid(inten, t)
 
         assert centroid(solver.evolution[-1].envelope_field) - centroid(pulse.envelope_field) > 0.0
+
+    def test_initial_snapshot_preserves_with_field(self):
+        """evolution[0] must reflect a Wave.with_field override, not the raw envelope.
+
+        Regression guard: the engine used to construct the initial snapshot from
+        ``pulse.envelope`` only, silently dropping an explicit field override.
+        """
+        grid = TemporalGrid(N=2**10, Tmax=Time(20e-12, "s"))
+        env = Envelope(shape="sech", peak_amplitude=1.0, pulse_width=Time(1e-12, "s"))
+        pulse = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(1.5e-6, "m"))
+        custom = np.exp(-((grid.t / 2e-12) ** 2)).astype(complex)
+        pulse.with_field(custom)
+        fiber = FiberProfile.from_gamma(
+            gamma=1e-4,
+            n2=2.6e-20,
+            omega0=pulse.central_frequency,
+            length=Length(0.1, "m"),
+        )
+        engine = SplitStepEngine(pulse=pulse, fiber=fiber, betas=np.array([0.0]))
+        engine.propagate(10, nsaves=2)
+        np.testing.assert_allclose(engine.evolution[0].envelope_field, custom)
+        np.testing.assert_allclose(engine.evolution[-1].envelope_field, engine.A)
 
     def test_raman_supercontinuum_red_shifts_and_delays(self):
         """Raman + shock: spectral red shift and positive-time soliton structure."""
@@ -423,8 +445,8 @@ class TestGNLSEPhysics:
         I0 = np.abs(A0) ** 2
         I1 = np.abs(A1) ** 2
 
-        def centroid_time(I):
-            return np.trapezoid(t * I, t) / np.trapezoid(I, t)
+        def centroid_time(inten):
+            return np.trapezoid(t * inten, t) / np.trapezoid(inten, t)
 
         # Temporal walk: the sign is sensitive to dispersive-wave content in the
         # strong-SCG regime, so only assert that a walk occurs.

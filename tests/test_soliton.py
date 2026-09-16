@@ -1,6 +1,7 @@
 """Tests for SolitonAnalyzer class."""
 
 import numpy as np
+import pytest
 import matplotlib
 matplotlib.use("Agg")  # Non-interactive backend for tests
 import matplotlib.pyplot as plt
@@ -42,7 +43,8 @@ def _make_analyzer_manual(T0_s, P_peak_w, gamma_val, beta2_si, beta3_si=0.0,
     betas_ps2 = beta2_si * 1e24
     betas = np.array([betas_ps2])
     if beta3_si != 0:
-        betas_ps3 = beta3_si * 1e27
+        # ps^3/m -> s^3/m is 1e-36 (beta_k[ps^k/m] = beta_k[s^k/m]·1e12k, k=3)
+        betas_ps3 = beta3_si * 1e36
         betas = np.array([betas_ps2, betas_ps3])
 
     omega = grid.w
@@ -141,6 +143,29 @@ def test_fission_length_formula():
     assert abs(L_fiss.as_m - L_fiss_expected_actual) / L_fiss_expected_actual < 1e-10
 
 
+def test_beta3_si_uses_engine_convention():
+    """SolitonAnalyzer.beta3_si must match the engine's ps^3/m -> s^3/m conversion.
+
+    Regression guard for the 1e-27 -> 1e-36 fix: the analyzer previously used the
+    wrong factor, which made the beta2/beta3 dispersive-wave fallback wrong by 1e9.
+    """
+    from photonics_helper.gnlse import _normalize_betas
+
+    beta2_si, beta3_si = -2e-27, -5e-27
+    betas_ps_from_si = _normalize_betas(np.array([beta2_si, beta3_si]), "s^k/m")
+    analyzer = _make_analyzer_manual(
+        T0_s=100e-15,
+        P_peak_w=1.0,
+        gamma_val=0.07,
+        beta2_si=beta2_si,
+        beta3_si=beta3_si,
+    )
+    # The analyzer consumes ps^3/m, exactly as the engine produces them.
+    assert analyzer.betas[1] == pytest.approx(betas_ps_from_si[1])
+    # And recovers the original SI value (not 1e-9 x it).
+    assert analyzer.beta3_si == pytest.approx(beta3_si)
+
+
 def test_dispersive_wave_wavelength():
     """Task 3.7: DW wavelength from beta2 and beta3."""
     from photonics_helper.base import Wavelength
@@ -228,7 +253,7 @@ def _make_solver(T0_s=100e-15, P_peak=1.0, gamma_val=0.07, beta2_si=-2e-27,
     fiber = FiberProfile(n2=n2, alpha=0.0, A_eff=A_eff, length=Length(1e-3, "m"))
 
     betas_ps2 = beta2_si * 1e24
-    betas = np.array([betas_ps2]) if beta3_si == 0 else np.array([betas_ps2, beta3_si * 1e27])
+    betas = np.array([betas_ps2]) if beta3_si == 0 else np.array([betas_ps2, beta3_si * 1e36])
 
     omega = grid.w
     A0_w = grid.fft(pulse.envelope_field)

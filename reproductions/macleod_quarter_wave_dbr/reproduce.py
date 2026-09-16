@@ -41,7 +41,12 @@ PARAMETERS = HERE / "parameters.json"
 
 
 def _constant_material(name: str, n: float, wl_um: np.ndarray) -> Material:
-    return Material(name=name, n=np.full(len(wl_um), n), k=np.zeros(len(wl_um)), wl=WavelengthArray(wl_um, "um"))
+    return Material(
+        _name=name,
+        n=np.full(len(wl_um), n),
+        k=np.zeros(len(wl_um)),
+        wl=WavelengthArray(wl_um, "um"),
+    )
 
 
 def _pattern(nH, nL, n_periods, lam0_m) -> Pattern:
@@ -52,7 +57,11 @@ def _pattern(nH, nL, n_periods, lam0_m) -> Pattern:
         "H": Block(length=Length(dH, "m"), material=_constant_material("H", nH, wl_um)),
         "L": Block(length=Length(dL, "m"), material=_constant_material("L", nL, wl_um)),
     }
-    return Pattern(style="HL" * n_periods, mapping=mapping, central_wavelength=Wavelength(lam0_m, "m"))
+    return Pattern(
+        style="HL" * n_periods,
+        mapping=mapping,
+        central_wavelength=Wavelength(lam0_m, "m"),
+    )
 
 
 def _peak_reflectance_closed_form(n0, ns, nH, nL, n_periods) -> float:
@@ -74,7 +83,9 @@ def validate(params: dict | None = None, make_plot: bool = True) -> dict:
     for n_per in params["small_n_periods"]:
         pat = _pattern(nH, nL, n_per, lam0)
         tmm = TMM(pattern=pat, angle_of_incidence=0.0, polarisation="TE")
-        R, _ = tmm.spectrum(WavelengthArray(np.array([params["central_wavelength_nm"]]), "nm"))
+        R, _ = tmm.spectrum(
+            WavelengthArray(np.array([params["central_wavelength_nm"]]), "nm")
+        )
         r_expected = _peak_reflectance_closed_form(n0, ns, nH, nL, n_per)
         peak_checks.append((n_per, float(R[0]), r_expected))
     max_peak_err = max(abs(r - e) for _, r, e in peak_checks)
@@ -83,7 +94,9 @@ def validate(params: dict | None = None, make_plot: bool = True) -> dict:
     # 2) Stopband spectrum and first-order width.
     pat = _pattern(nH, nL, N, lam0)
     tmm = TMM(pattern=pat, angle_of_incidence=0.0, polarisation="TE")
-    wl = WavelengthArray(np.linspace(*params["wavelength_range_nm"], params["n_points"]), "nm")
+    wl = WavelengthArray(
+        np.linspace(*params["wavelength_range_nm"], params["n_points"]), "nm"
+    )
     R, T = tmm.spectrum(wl)
     R = np.asarray(R)
     lam = wl.as_nm
@@ -101,7 +114,10 @@ def validate(params: dict | None = None, make_plot: bool = True) -> dict:
     frac = (4 / np.pi) * np.arcsin((nH - nL) / (nH + nL))
     analytic_width = float(frac * params["central_wavelength_nm"])
     width_err = abs(measured_width - analytic_width) / analytic_width
-    assert width_err < params["stopband_width_tolerance"], (measured_width, analytic_width)
+    assert width_err < params["stopband_width_tolerance"], (
+        measured_width,
+        analytic_width,
+    )
 
     # 3) R(lambda0) saturates to unity for the large stack.
     peak = float(R[i0])
@@ -116,7 +132,13 @@ def validate(params: dict | None = None, make_plot: bool = True) -> dict:
         fig, ax = plt.subplots(figsize=(8, 5))
         ax.plot(lam, R, label="R (TMM)")
         ax.plot(lam, T, label="T (TMM)")
-        ax.axvline(params["central_wavelength_nm"], color="k", ls=":", lw=1, label=r"$\lambda_0$")
+        ax.axvline(
+            params["central_wavelength_nm"],
+            color="k",
+            ls=":",
+            lw=1,
+            label=r"$\lambda_0$",
+        )
         ax.axvspan(lam[lo], lam[hi], color="C0", alpha=0.1)
         ax.set_xlabel("Wavelength (nm)")
         ax.set_ylabel("Reflectance / Transmittance")

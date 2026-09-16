@@ -108,9 +108,11 @@ class SolitonAnalyzer:
         self.T0 = pulse.envelope.pulse_width.as_s  # s
         self.P_peak = pulse.peak_power()  # W
 
-        # beta2, beta3 in SI (convert from ps^2/m, ps^3/m)
+        # beta2, beta3 in SI (convert from ps^k/m).  Matching the engine
+        # convention (gnlse._normalize_betas), beta_k[ps^k/m] = beta_k[s^k/m]·1e12k,
+        # so 1 ps^2/m = 1e-24 s^2/m and 1 ps^3/m = 1e-36 s^3/m.
         self.beta2_si = self.betas[0] * 1e-24 if len(self.betas) > 0 else 0.0
-        self.beta3_si = self.betas[1] * 1e-27 if len(self.betas) > 1 else 0.0
+        self.beta3_si = self.betas[1] * 1e-36 if len(self.betas) > 1 else 0.0
 
     def soliton_order(self) -> float:
         """Compute soliton order N = sqrt(gamma * P_peak * T0^2 / |beta2|).
