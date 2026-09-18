@@ -26,11 +26,14 @@ graphify-out
 openspec
 
 graphify-out/
-./examples/images/
-./examples/*.html
+
+# Generated interactive/plotly HTML (regenerate with the example scripts)
+examples/*.html
+examples/images/*.html
 
 # Generated reproduction figures (regenerate with `python reproductions/<name>/reproduce.py`)
 reproductions/**/*.png
+reproductions/**/*.html
 # Reproduction caches and paper text extractions
 reproductions/**/*.npz
 reproductions/**/*.txt
