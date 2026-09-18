@@ -81,17 +81,22 @@ def validate(params: dict | None = None, make_plot: bool = True) -> dict:
     gamma = params["gamma_per_Wm"]
     P0 = abs(beta2) / (gamma * T0**2)
 
-    grid = TemporalGrid(N=params["grid_N"], Tmax=Time(params["grid_Tmax_ps"] * 1e-12, "s"))
+    grid = TemporalGrid(
+        N=params["grid_N"], Tmax=Time(params["grid_Tmax_ps"] * 1e-12, "s")
+    )
     raman = _raman_response(params, grid)
     TR = params["raman"]["fR"] * np.trapezoid(grid.t * raman._h_R(grid.t), grid.t)
     rate = -8 * abs(beta2) * TR / (15 * T0**4)  # rad/s/m
-    analytic_dlam = -wl0**2 / (2 * np.pi * C_MS) * rate * params["length_m"] * 1e9
+    analytic_dlam = -(wl0**2) / (2 * np.pi * C_MS) * rate * params["length_m"] * 1e9
 
     env = Envelope(shape="sech", peak_amplitude=np.sqrt(P0), pulse_width=Time(T0, "s"))
     pulse = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(wl0, "m"))
     fiber = FiberProfile.from_gamma(
-        gamma=gamma, n2=2.6e-20, omega0=pulse.central_frequency,
-        length=Length(params["length_m"], "m"), raman_response=raman,
+        gamma=gamma,
+        n2=2.6e-20,
+        omega0=pulse.central_frequency,
+        length=Length(params["length_m"], "m"),
+        raman_response=raman,
     )
     solver = GNLSESolver(
         pulse=pulse, fiber=fiber, betas=np.array([beta2 * 1e24]), include_raman=True
@@ -126,7 +131,9 @@ def validate(params: dict | None = None, make_plot: bool = True) -> dict:
         ax.set_xlim(lam0 - 12, lam0 + 12)
         ax.set_xlabel("Wavelength (nm)")
         ax.set_ylabel("Normalized spectrum")
-        ax.set_title(f"Raman SSFS: measured {measured:+.3f} nm, Gordon {analytic_dlam:+.3f} nm")
+        ax.set_title(
+            f"Raman SSFS: measured {measured:+.3f} nm, Gordon {analytic_dlam:+.3f} nm"
+        )
         ax.legend()
         ax.grid(True, alpha=0.3)
         fig.tight_layout()

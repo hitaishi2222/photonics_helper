@@ -26,8 +26,13 @@ if TYPE_CHECKING:
     from photonics_helper.gnlse import FiberProfile, GNLSESolver
     from photonics_helper.pulse import Wave
 
-__all__ = ["SolitonAnalyzer", "plot_soliton_trajectories", "plot_fission_dynamics",
-           "plot_raman_shift", "plot_dispersion_wave"]
+__all__ = [
+    "SolitonAnalyzer",
+    "plot_soliton_trajectories",
+    "plot_fission_dynamics",
+    "plot_raman_shift",
+    "plot_dispersion_wave",
+]
 
 
 #: Shared soliton peak-detection thresholds. Single source of truth for
@@ -124,7 +129,9 @@ class SolitonAnalyzer:
         """
         if self.beta2_si == 0:
             raise ValueError("beta2 is zero; soliton order undefined.")
-        return float(np.sqrt(self.gamma * self.P_peak * self.T0**2 / abs(self.beta2_si)))
+        return float(
+            np.sqrt(self.gamma * self.P_peak * self.T0**2 / abs(self.beta2_si))
+        )
 
     def dispersion_length(self) -> Length:
         """Compute dispersion length L_D = T0^2 / |beta2|.
@@ -202,7 +209,7 @@ class SolitonAnalyzer:
             If no valid root is found and β₂/β₃ data unavailable.
         """
         from photonics_helper.base import Wavelength
-        
+
         if wl_range is None:
             pump_wl = self.pulse.central_wavelength
             wl_range = (
@@ -219,15 +226,18 @@ class SolitonAnalyzer:
                     ZDependentDispersionAdaptor,
                     dispersive_wave_roots,
                 )
+
                 # Build an appropriate adaptor
                 adaptor: (
                     DispersionAdaptor
                     | ZDependentDispersionAdaptor
                     | PropagationConstantAdaptor
                 )
-                if hasattr(dispersion, 'get_betas'):
-                    adaptor = DispersionAdaptor(dispersion, self.pulse.central_frequency)
-                elif hasattr(dispersion, 'omegas') and hasattr(dispersion, 'fn'):
+                if hasattr(dispersion, "get_betas"):
+                    adaptor = DispersionAdaptor(
+                        dispersion, self.pulse.central_frequency
+                    )
+                elif hasattr(dispersion, "omegas") and hasattr(dispersion, "fn"):
                     # ZDependentDispersion — fix at z=0
                     adaptor = ZDependentDispersionAdaptor(dispersion, z=0.0)
                 else:
@@ -401,6 +411,7 @@ class SolitonAnalyzer:
 # Visualization utilities
 # ---------------------------------------------------------------------------
 
+
 def plot_soliton_trajectories(solver: "GNLSESolver", ax=None) -> "plt.Figure":
     """Plot individual soliton peak wavelengths vs propagation distance.
 
@@ -443,8 +454,9 @@ def plot_soliton_trajectories(solver: "GNLSESolver", ax=None) -> "plt.Figure":
     return fig
 
 
-def plot_fission_dynamics(solver: "GNLSESolver", N: float, L_D: Length,
-                          ax=None) -> "plt.Figure":
+def plot_fission_dynamics(
+    solver: "GNLSESolver", N: float, L_D: Length, ax=None
+) -> "plt.Figure":
     """Plot soliton fission process: spectrum evolution with fission length marker.
 
     Parameters
@@ -488,7 +500,9 @@ def plot_fission_dynamics(solver: "GNLSESolver", N: float, L_D: Length,
         spec = spectra[idx]
         max_val = np.max(spec)
         if max_val > 0:
-            ax.plot(wavelength_nm, spec / max_val, color=color, alpha=0.6, linewidth=0.5)
+            ax.plot(
+                wavelength_nm, spec / max_val, color=color, alpha=0.6, linewidth=0.5
+            )
 
     fission_note = (
         f"L_fiss ≈ {fission_length_mm:.2f} mm"
@@ -600,7 +614,13 @@ def plot_dispersion_wave(solver: "GNLSESolver", ax=None) -> "plt.Figure":
 
     # Mark pump wavelength
     pump_wl = solver.pulse.central_wavelength
-    ax.axvline(x=pump_wl.as_nm, color="k", linestyle=":", alpha=0.5, label=f"Pump ({pump_wl.as_nm:.1f} nm)")
+    ax.axvline(
+        x=pump_wl.as_nm,
+        color="k",
+        linestyle=":",
+        alpha=0.5,
+        label=f"Pump ({pump_wl.as_nm:.1f} nm)",
+    )
 
     # Mark DW wavelength if available
     try:
@@ -612,7 +632,13 @@ def plot_dispersion_wave(solver: "GNLSESolver", ax=None) -> "plt.Figure":
             spectra_vs_z=solver.spectra_vs_z,
         )
         dw_wl = analyzer.dispersive_wave_wavelength()
-        ax.axvline(x=dw_wl.as_nm, color="r", linestyle="--", alpha=0.5, label=f"DW ({dw_wl.as_nm:.1f} nm)")
+        ax.axvline(
+            x=dw_wl.as_nm,
+            color="r",
+            linestyle="--",
+            alpha=0.5,
+            label=f"DW ({dw_wl.as_nm:.1f} nm)",
+        )
     except (ValueError, IndexError) as exc:
         warnings.warn(
             f"Could not compute the dispersive-wave wavelength for the marker: {exc}. "

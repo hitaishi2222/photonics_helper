@@ -44,9 +44,7 @@ SCALARS = [
 def test_meep_round_trip_scalar(obj):
     meep = float(obj.as_meep)
     recovered = type(obj).from_meep(meep)
-    assert np.isclose(
-        float(recovered.value), float(obj.value), rtol=1e-10, atol=0.0
-    )
+    assert np.isclose(float(recovered.value), float(obj.value), rtol=1e-10, atol=0.0)
 
 
 def test_frequency_from_meep_uses_speed_of_light():
@@ -73,9 +71,7 @@ def test_energy_time_power_consistency():
 
 def test_power_from_meep_round_trip():
     p = Power(2.5, "mW")
-    assert np.isclose(
-        Power.from_meep(p.as_meep).as_W, p.as_W, rtol=1e-10
-    )
+    assert np.isclose(Power.from_meep(p.as_meep).as_W, p.as_W, rtol=1e-10)
 
 
 def test_array_round_trips():

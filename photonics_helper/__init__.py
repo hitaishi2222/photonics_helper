@@ -13,6 +13,7 @@ from .base import (
     Time,
     Energy,
     Power,
+    PeakPower,
     Area,
     Permittivity,
     Permiability,
@@ -25,7 +26,7 @@ from .base import (
 )
 
 from .materials import RefractiveIndex
-from .fiber import Dispersion, PropagationConstant, ZDependentDispersion
+from .fiber import Dispersion, PropagationConstant, WaveguideMode, ZDependentDispersion
 from .pulse import (
     FROGTrace,
     generate_trace,
@@ -47,6 +48,7 @@ from .raman import (
     COMMON_COMPARISONS,
     app,
 )
+from .dashboard import app as dashboard_app
 from .phonon import PhononMode, PhononResponse, PHONON_MATERIALS
 from .soliton import SolitonAnalyzer
 from .dbr import (
@@ -73,6 +75,16 @@ from .noise import (
     add_noise,
     ase_noise_field,
     add_ase_noise,
+)
+from .structured import (
+    LaguerreGaussianMode,
+    StructuredField,
+    overlap,
+    rayleigh_range,
+    beam_waist,
+    radius_of_curvature,
+    gouy_phase,
+    plot_transverse_profile,
 )
 from .wave_breaking import (
     dispersion_length,
@@ -109,6 +121,17 @@ from .phase_matching import (
     plot_readiness_report,
     plot_spectrum_with_pm_overlay,
 )
+from .chi2 import (
+    delta_k_shg,
+    Lambda_qpm,
+    qpm_grating,
+    shg_coupling,
+    Chi2Result,
+    solve_shg,
+    solve_three_wave,
+    solve_sfg,
+    solve_dfg,
+)
 
 __all__ = [
     "Wavelength",
@@ -123,6 +146,7 @@ __all__ = [
     "Time",
     "Energy",
     "Power",
+    "PeakPower",
     "Area",
     "Permittivity",
     "Permiability",
@@ -135,6 +159,7 @@ __all__ = [
     "RefractiveIndex",
     "Dispersion",
     "PropagationConstant",
+    "WaveguideMode",
     "ZDependentDispersion",
     "FROGTrace",
     "generate_trace",
@@ -153,6 +178,7 @@ __all__ = [
     "RAMAN_MATERIALS",
     "COMMON_COMPARISONS",
     "app",
+    "dashboard_app",
     "PhononMode",
     "PhononResponse",
     "PHONON_MATERIALS",
@@ -179,6 +205,14 @@ __all__ = [
     "add_noise",
     "ase_noise_field",
     "add_ase_noise",
+    "LaguerreGaussianMode",
+    "StructuredField",
+    "overlap",
+    "rayleigh_range",
+    "beam_waist",
+    "radius_of_curvature",
+    "gouy_phase",
+    "plot_transverse_profile",
     "dispersion_length",
     "nonlinear_length",
     "wave_breaking_distance",
@@ -210,4 +244,13 @@ __all__ = [
     "plot_mi_gain",
     "plot_readiness_report",
     "plot_spectrum_with_pm_overlay",
+    "delta_k_shg",
+    "Lambda_qpm",
+    "qpm_grating",
+    "shg_coupling",
+    "Chi2Result",
+    "solve_shg",
+    "solve_three_wave",
+    "solve_sfg",
+    "solve_dfg",
 ]

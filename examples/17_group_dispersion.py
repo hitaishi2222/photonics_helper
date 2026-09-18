@@ -52,7 +52,9 @@ def main():
 
     wl_um = np.linspace(0.5, 2.0, 500)
     n_const = np.full_like(wl_um, 2.0)
-    flat = RefractiveIndex(n=n_const, k=np.zeros_like(wl_um), wl=WavelengthArray(wl_um, "um"))
+    flat = RefractiveIndex(
+        n=n_const, k=np.zeros_like(wl_um), wl=WavelengthArray(wl_um, "um")
+    )
 
     print("=== Constant n=2.0 (no dispersion) ===")
     print(f"  n(1.0 μm)       = {flat.n_func(1.0):.6f}")

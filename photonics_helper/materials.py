@@ -26,24 +26,98 @@ if TYPE_CHECKING:
 # Exposed as a constant plus a ``Literal`` alias so callers get IDE
 # autocompletion and can catch typos at type-check time.
 NK_MATERIALS: tuple[str, ...] = (
-    "AgGaS2", "AgGaSe2", "Al2O3", "AlGaAs", "AlN", "As2S3", "As2Se3", "BaF2",
-    "BaTiO3", "CaF2", "CdS", "CdTe", "Diamond", "F2", "Ga2O3", "GaAs", "GaN",
-    "Ge", "GeAsSe", "GeO2", "InGaAs", "InP", "KBr", "KTP", "LBO", "LiNbO3",
-    "LiTaO3", "MgF2", "N-BK7", "N-F2", "N-SF11", "PMMA", "Si", "Si3N4",
+    "AgGaS2",
+    "AgGaSe2",
+    "Al2O3",
+    "AlGaAs",
+    "AlN",
+    "As2S3",
+    "As2Se3",
+    "BaF2",
+    "BaTiO3",
+    "CaF2",
+    "CdS",
+    "CdTe",
+    "Diamond",
+    "F2",
+    "Ga2O3",
+    "GaAs",
+    "GaN",
+    "Ge",
+    "GeAsSe",
+    "GeO2",
+    "InGaAs",
+    "InP",
+    "KBr",
+    "KTP",
+    "LBO",
+    "LiNbO3",
+    "LiTaO3",
+    "MgF2",
+    "N-BK7",
+    "N-F2",
+    "N-SF11",
+    "PMMA",
+    "Si",
+    "Si3N4",
     "Si3N4-Ligentec",
-    "SiC_4H", "Silica", "YAG", "YLF", "YVO4", "ZBLAN", "Zerodur", "ZnO",
+    "SiC_4H",
+    "Silica",
+    "YAG",
+    "YLF",
+    "YVO4",
+    "ZBLAN",
+    "Zerodur",
+    "ZnO",
     "ZnSe",
 )
 
 # A material name known to the database. Use this instead of ``str`` for the
 # base-material parameters so unknown/misspelled names are caught by type checkers.
 NKMaterial = Literal[
-    "AgGaS2", "AgGaSe2", "Al2O3", "AlGaAs", "AlN", "As2S3", "As2Se3", "BaF2",
-    "BaTiO3", "CaF2", "CdS", "CdTe", "Diamond", "F2", "Ga2O3", "GaAs", "GaN",
-    "Ge", "GeAsSe", "GeO2", "InGaAs", "InP", "KBr", "KTP", "LBO", "LiNbO3",
-    "LiTaO3", "MgF2", "N-BK7", "N-F2", "N-SF11", "PMMA", "Si", "Si3N4",
+    "AgGaS2",
+    "AgGaSe2",
+    "Al2O3",
+    "AlGaAs",
+    "AlN",
+    "As2S3",
+    "As2Se3",
+    "BaF2",
+    "BaTiO3",
+    "CaF2",
+    "CdS",
+    "CdTe",
+    "Diamond",
+    "F2",
+    "Ga2O3",
+    "GaAs",
+    "GaN",
+    "Ge",
+    "GeAsSe",
+    "GeO2",
+    "InGaAs",
+    "InP",
+    "KBr",
+    "KTP",
+    "LBO",
+    "LiNbO3",
+    "LiTaO3",
+    "MgF2",
+    "N-BK7",
+    "N-F2",
+    "N-SF11",
+    "PMMA",
+    "Si",
+    "Si3N4",
     "Si3N4-Ligentec",
-    "SiC_4H", "Silica", "YAG", "YLF", "YVO4", "ZBLAN", "Zerodur", "ZnO",
+    "SiC_4H",
+    "Silica",
+    "YAG",
+    "YLF",
+    "YVO4",
+    "ZBLAN",
+    "Zerodur",
+    "ZnO",
     "ZnSe",
 ]
 
@@ -83,9 +157,7 @@ def validate_nk_dataset(entry: Any) -> list[str]:
 
     # Lengths.
     if not (len(wl) == len(n) == len(k)):
-        errors.append(
-            f"wavelength/n/k length mismatch: {len(wl)}/{len(n)}/{len(k)}"
-        )
+        errors.append(f"wavelength/n/k length mismatch: {len(wl)}/{len(n)}/{len(k)}")
         return errors
 
     # Presence / attribution (the user's requirement: keep the references).
@@ -102,7 +174,9 @@ def validate_nk_dataset(entry: Any) -> list[str]:
         return errors
 
     # Finiteness.
-    if not (np.all(np.isfinite(wl)) and np.all(np.isfinite(n)) and np.all(np.isfinite(k))):
+    if not (
+        np.all(np.isfinite(wl)) and np.all(np.isfinite(n)) and np.all(np.isfinite(k))
+    ):
         errors.append("contains non-finite (NaN/inf) values")
 
     # Monotonic, strictly increasing, positive wavelength grid.

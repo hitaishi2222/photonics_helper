@@ -62,17 +62,19 @@ TIME_WINDOW_PS = 12.5
 N = 2**13
 
 # β₂ … β₁₀ in ps^n / m
-BETAS = np.array([
-    -11.830e-3,
-    8.1038e-5,
-    -9.5205e-8,
-    2.0737e-10,
-    -5.3943e-13,
-    1.3486e-15,
-    -2.5495e-18,
-    3.0524e-21,
-    -1.7140e-24,
-])
+BETAS = np.array(
+    [
+        -11.830e-3,
+        8.1038e-5,
+        -9.5205e-8,
+        2.0737e-10,
+        -5.3943e-13,
+        1.3486e-15,
+        -2.5495e-18,
+        3.0524e-21,
+        -1.7140e-24,
+    ]
+)
 
 # Dudley Raman: fR = 0.18, τ₁ = 12.2 fs, τ₂ = 32 fs
 RAMAN_FR = 0.18
@@ -211,7 +213,7 @@ def main() -> None:
         except ImportError:
             print(
                 "tqdm is not installed — progress bars disabled.\n"
-                "Install with: pip install tqdm   or   pip install -e \".[examples]\"",
+                'Install with: pip install tqdm   or   pip install -e ".[examples]"',
                 file=sys.stderr,
             )
             show_progress = False

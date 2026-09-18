@@ -70,10 +70,10 @@ def main():
     P0 = abs(beta2_si) / (gamma * T0.as_s**2)
     L_D = Length(T0.as_s**2 / abs(beta2_si), "m")
 
-    print(f"γ = {gamma*1e3:.3f} 1/(W·km)")
+    print(f"γ = {gamma * 1e3:.3f} 1/(W·km)")
     print(f"β₂ = -2.0 ps²/km = {beta2_ps2_m} ps²/m")
     print(f"Peak power P₀ = {P0:.1f} W (N=1 soliton)")
-    print(f"L_D = {L_D.as_m:.2f} m, fiber length = {3*L_D.as_m:.2f} m")
+    print(f"L_D = {L_D.as_m:.2f} m, fiber length = {3 * L_D.as_m:.2f} m")
 
     # Create a silica Raman response
     silica_spec = RamanSpec(
@@ -83,8 +83,12 @@ def main():
         fR=0.18,
     )
     raman_grid = TemporalGrid(N=2**13, Tmax=Time(500, "fs"))
-    raman_response = RamanResponse(spec=silica_spec, grid=raman_grid,
-                                   tau1=Time(12.2, "fs").as_s, tau2=Time(32, "fs").as_s)
+    raman_response = RamanResponse(
+        spec=silica_spec,
+        grid=raman_grid,
+        tau1=Time(12.2, "fs").as_s,
+        tau2=Time(32, "fs").as_s,
+    )
 
     fiber = FiberProfile(
         n2=n2,
@@ -174,11 +178,21 @@ def main():
         (solver_D, axes[1, 1], "+ Raman + Self-steepening"),
     ]
 
-    z_display_indices = [0, len(solver_A.evolution) // 4, len(solver_A.evolution) // 2,
-                         3 * len(solver_A.evolution) // 4, len(solver_A.evolution) - 1]
-    z_display_indices = sorted(set(min(i, len(solver_A.evolution) - 1) for i in z_display_indices))
+    z_display_indices = [
+        0,
+        len(solver_A.evolution) // 4,
+        len(solver_A.evolution) // 2,
+        3 * len(solver_A.evolution) // 4,
+        len(solver_A.evolution) - 1,
+    ]
+    z_display_indices = sorted(
+        set(min(i, len(solver_A.evolution) - 1) for i in z_display_indices)
+    )
     cmap = plt.cm.viridis
-    z_colors = [cmap(i / max(len(z_display_indices) - 1, 1)) for i in range(len(z_display_indices))]
+    z_colors = [
+        cmap(i / max(len(z_display_indices) - 1, 1))
+        for i in range(len(z_display_indices))
+    ]
 
     for solver, ax, title in cases:
         z_array = solver.z_array
@@ -186,12 +200,17 @@ def main():
         for k, zi in enumerate(z_display_indices):
             A = solver.evolution[zi].envelope_field
             A_pad = np.zeros(N_pad, dtype=complex)
-            A_pad[:len(A)] = A
+            A_pad[: len(A)] = A
             spec = np.abs(np.fft.fftshift(np.fft.fft(A_pad))) ** 2
             spec_dB = 10 * np.log10(spec[mask] + 1e-30)
             spec_dB -= spec_dB.max()
-            ax.plot(freq_offset_THz_fine[mask], spec_dB, color=z_colors[k], linewidth=1.5,
-                    label=f"z={z_array[zi]*1e3:.0f} mm")
+            ax.plot(
+                freq_offset_THz_fine[mask],
+                spec_dB,
+                color=z_colors[k],
+                linewidth=1.5,
+                label=f"z={z_array[zi] * 1e3:.0f} mm",
+            )
 
         ax.set_xlabel("Frequency offset (THz)")
         ax.set_ylabel("Normalized spectrum (dB)")
@@ -204,7 +223,9 @@ def main():
 
     plt.tight_layout()
     plt.savefig(
-        "examples/images/14_gnlse_raman_steepening_spectra.png", dpi=150, bbox_inches="tight"
+        "examples/images/14_gnlse_raman_steepening_spectra.png",
+        dpi=150,
+        bbox_inches="tight",
     )
     print("Saved: examples/images/14_gnlse_raman_steepening_spectra.png")
     plt.close()
@@ -233,7 +254,9 @@ def main():
 
     # Panel 2: Raman-induced redshift (zero-padded FFT for sub-bin resolution)
     N_pad = 2**17
-    freq_offset_THz_fine = np.fft.fftshift(np.fft.fftfreq(N_pad, d=pulse.grid.dt)) / 1e12
+    freq_offset_THz_fine = (
+        np.fft.fftshift(np.fft.fftfreq(N_pad, d=pulse.grid.dt)) / 1e12
+    )
 
     z_A = solver_A.z_array
     z_D = solver_D.z_array
@@ -243,7 +266,7 @@ def main():
         for wave in evolution:
             A = wave.envelope_field
             A_pad = np.zeros(N_pad, dtype=complex)
-            A_pad[:len(A)] = A
+            A_pad[: len(A)] = A
             spec = np.abs(np.fft.fftshift(np.fft.fft(A_pad))) ** 2
             total = np.sum(spec)
             centroid = np.sum(freq_offset_THz_fine * spec) / total if total > 0 else 0
@@ -253,11 +276,13 @@ def main():
     centroids_A = compute_centroids(solver_A.evolution)
     centroids_D = compute_centroids(solver_D.evolution)
 
+    axes[1].plot(z_A * 1e3, centroids_A, "b-", linewidth=2.0, label="Kerr only")
     axes[1].plot(
-        z_A * 1e3, centroids_A, "b-", linewidth=2.0, label="Kerr only"
-    )
-    axes[1].plot(
-        z_D * 1e3, centroids_D, "r-", linewidth=2.0, label="Kerr + Raman",
+        z_D * 1e3,
+        centroids_D,
+        "r-",
+        linewidth=2.0,
+        label="Kerr + Raman",
     )
     axes[1].set_xlabel("Propagation distance (mm)")
     axes[1].set_ylabel("Spectral centroid shift (THz)")
@@ -267,7 +292,9 @@ def main():
 
     plt.tight_layout()
     plt.savefig(
-        "examples/images/14_gnlse_raman_steepening_temporal.png", dpi=150, bbox_inches="tight"
+        "examples/images/14_gnlse_raman_steepening_temporal.png",
+        dpi=150,
+        bbox_inches="tight",
     )
     print("Saved: examples/images/14_gnlse_raman_steepening_temporal.png")
     plt.close()
@@ -280,7 +307,7 @@ def main():
         N_pad = 2**17
         A = evolution[-1].envelope_field
         A_pad = np.zeros(N_pad, dtype=complex)
-        A_pad[:len(A)] = A
+        A_pad[: len(A)] = A
         spec = np.abs(np.fft.fftshift(np.fft.fft(A_pad))) ** 2
         freq = np.fft.fftshift(np.fft.fftfreq(N_pad, d=pulse.grid.dt)) / 1e12
         peak_idx = np.argmax(spec)
@@ -292,13 +319,17 @@ def main():
         if left > 0:
             fl, fc = freq[left - 1], freq[left]
             sl, sc = spec[left - 1], spec[left]
-            left_interp = fc - (fc - fl) * (half_max - sl) / (sc - sl) if sc != sl else fc
+            left_interp = (
+                fc - (fc - fl) * (half_max - sl) / (sc - sl) if sc != sl else fc
+            )
         else:
             left_interp = freq[left]
         if right < len(freq) - 1:
             fc, fr = freq[right], freq[right + 1]
             sc, sr = spec[right], spec[right + 1]
-            right_interp = fc + (fr - fc) * (half_max - sc) / (sr - sc) if sr != sc else fc
+            right_interp = (
+                fc + (fr - fc) * (half_max - sc) / (sr - sc) if sr != sc else fc
+            )
         else:
             right_interp = freq[right]
         return right_interp - left_interp

@@ -18,6 +18,7 @@ Key physics shown:
 """
 
 import matplotlib
+
 matplotlib.use("Agg")
 import numpy as np
 import matplotlib.pyplot as plt
@@ -43,15 +44,18 @@ blocks = {
     "H": Block(length=Length(d_H, "m"), material=const_material(n_H, name="TiO2")),
     "L": Block(length=Length(d_L, "m"), material=const_material(n_L, name="SiO2")),
 }
-pattern = Pattern(style="HLHLHLHL", mapping=blocks,
-                  central_wavelength=Wavelength(lam0_nm, "nm"))
+pattern = Pattern(
+    style="HLHLHLHL", mapping=blocks, central_wavelength=Wavelength(lam0_nm, "nm")
+)
 
 # Historic behaviour (air on both sides) vs. realistic deposition on glass.
 # Defaults keep every existing air/air result identical.
 tmm_air = TMM(pattern=pattern, angle_of_incidence=0.0, polarisation="TE")
 tmm_glass = TMM(
-    pattern=pattern, angle_of_incidence=0.0, polarisation="TE",
-    n_incident=1.0 + 0.0j,   # air — semi-infinite incident medium
+    pattern=pattern,
+    angle_of_incidence=0.0,
+    polarisation="TE",
+    n_incident=1.0 + 0.0j,  # air — semi-infinite incident medium
     n_substrate=1.5 + 0.0j,  # glass — semi-infinite exit medium
 )
 R_air, T_air = tmm_air.spectrum(wl_array)
@@ -63,8 +67,10 @@ print("=" * 60)
 print(f"  R @ {lam0_nm:.0f} nm, air/air      : {R_air[i0]:.4f}")
 print(f"  R @ {lam0_nm:.0f} nm, on glass     : {R_glass[i0]:.4f}")
 print(f"  T @ {lam0_nm:.0f} nm, into glass   : {T_glass[i0]:.4f}")
-print(f"  max |R + T − 1| (lossless/lossless): "
-      f"{np.max(np.abs((R_glass + T_glass) - 1.0)):.2e}")
+print(
+    f"  max |R + T − 1| (lossless/lossless): "
+    f"{np.max(np.abs((R_glass + T_glass) - 1.0)):.2e}"
+)
 # Stopband shift: the mirror's reflectivity changes because the exit
 # admittance changed — the substrate is no longer a fake thin layer.
 side = np.max(np.abs(R_glass - R_air))
@@ -72,21 +78,30 @@ print(f"  max substrate-vs-air |ΔR|          : {side:.4f}")
 
 # ── 2. Continuous intra-layer field profile: absorbing film on glass ────
 blocks2 = {
-    "A": Block(length=Length(40e-9, "m"), material=const_material(0.14, 4.5, name="Ag")),
-    "B": Block(length=Length(120e-9, "m"), material=const_material(1.52, 0.0, name="glass")),
+    "A": Block(
+        length=Length(40e-9, "m"), material=const_material(0.14, 4.5, name="Ag")
+    ),
+    "B": Block(
+        length=Length(120e-9, "m"), material=const_material(1.52, 0.0, name="glass")
+    ),
 }
-pattern2 = Pattern(style="AB", mapping=blocks2,
-                   central_wavelength=Wavelength(1550, "nm"))
+pattern2 = Pattern(
+    style="AB", mapping=blocks2, central_wavelength=Wavelength(1550, "nm")
+)
 tmm_abs = TMM(
-    pattern=pattern2, angle_of_incidence=0.0, polarisation="TE",
+    pattern=pattern2,
+    angle_of_incidence=0.0,
+    polarisation="TE",
     n_substrate=1.5 + 0.0j,
 )
 
 wl633 = Wavelength(1550.0, "nm")
 z, E_of_z = tmm_abs.field_profile_z(wl633, n_points_per_layer=50)
-print(f"  field_profile_z: {len(z)} samples spanning "
-      f"{z[0]*1e9:.0f}–{z[-1]*1e9:.0f} nm, monotonically increasing: "
-      f"{bool(np.all(np.diff(z) > 0))}.")
+print(
+    f"  field_profile_z: {len(z)} samples spanning "
+    f"{z[0] * 1e9:.0f}–{z[-1] * 1e9:.0f} nm, monotonically increasing: "
+    f"{bool(np.all(np.diff(z) > 0))}."
+)
 # Tangential E is continuous at interfaces, so the sampled profile at the
 # Ag/B boundary joins the interface value from field_profile().
 fp_vals = tmm_abs.field_profile(wl633)
@@ -112,8 +127,7 @@ axes[1].set_ylabel("|E(z)|")
 axes[1].set_title("Continuous |E(z)| profile (1550 nm, TE)")
 axes[1].grid(alpha=0.3, which="both")
 plt.tight_layout()
-fig.savefig("examples/images/tmm_media_field_profile.png", dpi=150,
-            bbox_inches="tight")
+fig.savefig("examples/images/tmm_media_field_profile.png", dpi=150, bbox_inches="tight")
 print("  Saved examples/images/tmm_media_field_profile.png")
 plt.close(fig)
 

@@ -67,6 +67,7 @@ def _normalize_betas(betas, betas_unit: BetasUnit = "ps^k/m") -> NDArray:
         out[i] = out[i] * 10.0 ** (12 * k)
     return out
 
+
 if TYPE_CHECKING:
     from photonics_helper.pulse import Wave, TemporalGrid
     from photonics_helper.fiber import ZDependentDispersion
@@ -104,6 +105,7 @@ __all__ = [
 # ---------------------------------------------------------------------------
 # FiberProfile
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class FiberProfile:
@@ -186,7 +188,10 @@ class FiberProfile:
 # Nonlinear effect functions
 # ---------------------------------------------------------------------------
 
-def _gamma(n2: float, omega0: float, A_eff: Area, confinement_factor: float = 1.0) -> float:
+
+def _gamma(
+    n2: float, omega0: float, A_eff: Area, confinement_factor: float = 1.0
+) -> float:
     """Nonlinear coefficient γ = n₂·ω₀·Γ / (c·A_eff).
 
     Parameters
@@ -302,14 +307,12 @@ def raman_step(
 
     intensity = np.abs(A) ** 2
     if not hasattr(fiber.raman_response, "fR"):
-        raise ValueError(
-            "fiber.raman_response must define fR when include_raman=True"
-        )
+        raise ValueError("fiber.raman_response must define fR when include_raman=True")
     fR = fiber.raman_response.fR
 
     # Compute h_R_fft on the fly (no cache available for standalone function)
     h_R_fft = None
-    if hasattr(fiber.raman_response, '_h_R'):
+    if hasattr(fiber.raman_response, "_h_R"):
         h_R = fiber.raman_response._h_R(grid.t)  # causal: h_R[t<0] = 0
         h_R_fft = grid.fft(h_R)
 
@@ -388,6 +391,7 @@ def tpa_step(
 # SplitStepEngine
 # ---------------------------------------------------------------------------
 
+
 class SplitStepEngine:
     """Split-step Fourier engine for GNLSE propagation.
 
@@ -412,12 +416,36 @@ class SplitStepEngine:
     include_self_steepening : bool
         Include self-steepening (shock term). Default ``False``.
 
-        When enabled, the Kerr/Raman nonlinear source is multiplied in the
-        frequency domain by ``ω/ω₀ = (ω₀ + Ω)/ω₀`` (laserfun / Dudley Eq. 3.13
-        convention) before the nonlinear step. Enable explicitly for
-        cross-library comparisons; laserfun defaults to shock on.
+        When enabled, the shock operator ``(1 + (i/ω₀)∂t)`` of Blow & Wood
+        (1989) and Dudley–Genty–Coen RMP 78, 1135 (2006), Eq. (3), is
+        integrated with frequency-domain RK4 (``τ_shock`` settable, default
+        ``1/ω₀``). Enable explicitly for cross-library comparisons; laserfun
+        defaults to shock on (but its shock term has the opposite
+        linear-in-Ω asymmetry).
+
+        Sign audit (2026): the multiplier ``1 + Ω·τ_shock`` is the correct
+        physical factor ``ω/ω₀`` under this codebase's FFT convention. The
+        grid FFT uses the numpy ``e^{−iΩt}`` kernel while the linear
+        dispersion step, all spectral plots, and the DW/MI utilities map bin
+        ``W`` to optical frequency ``ω₀ + W``; that fixes the carrier
+        convention to ``e^{+iω₀t}`` and makes ``W > 0`` the blue side. The
+        convention set was verified numerically to be self-consistent:
+        (i) Raman-only soliton propagation red-shifts under the same mapping
+        (Gordon SSFS), (ii) a fundamental soliton with shock and β₂ only
+        develops a blue-shifted centroid and positive spectral skew with
+        ``1 + Ω·τ`` and the mirror-image red shift with ``1 − Ω·τ``, and
+        (iii) energy is conserved. laserfun's opposite raw-bin asymmetry
+        follows from its own (unshifted-FFT) convention, not from different
+        physics.
     include_tpa : bool
         Include TPA. Default False.
+    tau_shock : float | None
+        Shock (self-steepening) timescale in seconds (SI). ``None``
+        (default) uses ``1/ω₀`` at the pulse carrier frequency, matching
+        Agrawal and the uncorrected Dudley Eq. (3) value (0.443 fs at
+        835 nm). Pass an explicit value for the effective-area-corrected
+        timescale (Dudley–Genty–Coen RMP 78, 1135 (2006), Sec. V.B:
+        ``tau_shock = 0.56e-15`` for the Fig. 3 PCF config). Must be > 0.
     step_size : Length | None
         Fixed step size (m). If None, adaptive stepping is used.
     min_shrink_factor : float
@@ -433,6 +461,7 @@ class SplitStepEngine:
         include_raman: bool = False,
         include_self_steepening: bool = False,
         include_tpa: bool = False,
+        tau_shock: float | None = None,
         step_size: Length | None = None,
         dispersion_profile: "ZDependentDispersion | Callable[[NDArray, float], NDArray] | None" = None,
         a_eff_fn: Callable[[float], float] | None = None,
@@ -449,10 +478,17 @@ class SplitStepEngine:
         self.include_raman = include_raman
         self.include_self_steepening = include_self_steepening
         self.include_tpa = include_tpa
+        if tau_shock is not None and not tau_shock > 0.0:
+            raise ValueError(
+                f"tau_shock must be positive (seconds, SI), got {tau_shock!r}"
+            )
+        self._tau_shock_override = float(tau_shock) if tau_shock is not None else None
         self.step_size = step_size
 
         if not (0.0 < min_shrink_factor <= 1.0):
-            raise ValueError(f"min_shrink_factor must be in (0, 1], got {min_shrink_factor!r}")
+            raise ValueError(
+                f"min_shrink_factor must be in (0, 1], got {min_shrink_factor!r}"
+            )
         self._min_shrink_factor = min_shrink_factor
         self._h_R_fft_cache: NDArray | None = None
 
@@ -471,7 +507,15 @@ class SplitStepEngine:
         self._z_positions: list[float] = [0.0]
         self._current_z: float = 0.0
         self._spectra_vs_z: Tuple[NDArray, NDArray] | None = None
+        self._energy_vs_z: list[float] | None = None
         self._U = 0.0  # carrier density for TPA
+
+    @property
+    def tau_shock(self) -> float:
+        """Shock timescale in seconds (SI): explicit override or ``1/ω₀``."""
+        if self._tau_shock_override is not None:
+            return self._tau_shock_override
+        return 1.0 / float(self.omega0)
 
     def _linear_step(self, A: NDArray, dz: float) -> NDArray:
         """Apply dispersion via FFT: A(ω) ← A(ω) · exp(−i·Σ β_k(Ω)·Δz).
@@ -495,16 +539,18 @@ class SplitStepEngine:
             # grid.w is the offset Ω (centered at 0), so absolute frequency is ω₀ + grid.w.
             omega_abs = self.omega0 + self.grid.w  # absolute angular frequency (rad/s)
             # Clip to dispersion profile's valid omega range to avoid NaN from extrapolation
-            if (
-                self._dispersion_profile is not None
-                and hasattr(self._dispersion_profile, "omegas")
+            if self._dispersion_profile is not None and hasattr(
+                self._dispersion_profile, "omegas"
             ):
-                omega_min, omega_max = float(min(self._dispersion_profile.omegas)), float(max(self._dispersion_profile.omegas))
+                omega_min, omega_max = (
+                    float(min(self._dispersion_profile.omegas)),
+                    float(max(self._dispersion_profile.omegas)),
+                )
                 clipped_mask = (omega_abs < omega_min) | (omega_abs > omega_max)
                 fraction_clipped = clipped_mask.sum() / len(omega_abs)
                 if fraction_clipped > 0:
                     warnings.warn(
-                        f"{fraction_clipped*100:.1f}% of simulation grid frequencies are clipped "
+                        f"{fraction_clipped * 100:.1f}% of simulation grid frequencies are clipped "
                         f"to dispersion bounds [{omega_min:.2e}, {omega_max:.2e}] rad/s. "
                         f"Grid range: [{omega_abs.min():.2e}, {omega_abs.max():.2e}] rad/s.",
                         UserWarning,
@@ -529,7 +575,7 @@ class SplitStepEngine:
             # φ(Ω) = Σ_{k≥2} βₖ·Ωᵏ/k!  with Ω in rad/ps, β_k in ps^k/m.
             phi = np.zeros_like(omega_ps, dtype=float)
             for k, beta_k in enumerate(self.betas, start=2):
-                phi += beta_k * omega_ps ** k / factorial(k)
+                phi += beta_k * omega_ps**k / factorial(k)
             phi *= dz
 
             # Apply loss: exp(-α·Δz/2)
@@ -566,10 +612,18 @@ class SplitStepEngine:
             return self.gamma_fn(z)
         if self._a_eff_fn is not None:
             a_eff = self._a_eff_fn(z)
-            return _gamma(self.fiber.n2, self.omega0, Area(a_eff, "m^2"), self.fiber.confinement_factor)
+            return _gamma(
+                self.fiber.n2,
+                self.omega0,
+                Area(a_eff, "m^2"),
+                self.fiber.confinement_factor,
+            )
         else:
             return _gamma(
-                self.fiber.n2, self.omega0, self.fiber.A_eff, self.fiber.confinement_factor
+                self.fiber.n2,
+                self.omega0,
+                self.fiber.A_eff,
+                self.fiber.confinement_factor,
             )
 
     def _get_alpha(self, z: float) -> float:
@@ -607,9 +661,21 @@ class SplitStepEngine:
     def _nonlinear_step(self, A: NDArray, dz: float) -> Tuple[NDArray, float]:
         """Apply nonlinear effects.
 
-        Without self-steepening: uses exponential step for exact Kerr+Raman.
-        With self-steepening: uses direct analytical FFT-based computation of
-        the linear self-steepening operator.
+        Kerr/Raman phase rotation is an exact exponential (unitary). With
+        self-steepening, the shock operator ``(1 + (i/ω₀)∂t)`` (Blow & Wood
+        1989; Dudley–Genty–Coen RMP 78, 1135 (2006), Eq. (3)) is integrated
+        with classical RK4 in the frequency domain: the nonlinear source
+        spectrum is multiplied by ``(1 + Ω·τ_shock)`` with ``τ_shock``
+        settable (default ``1/ω₀``).  This is the sign that reproduces the
+        paper's femtosecond SCG, where self-steepening counteracts the Raman
+        self-frequency red-shift (adding the shock term *reduces* the red
+        edge).  laserfun applies the opposite linear-in-Ω asymmetry, so a
+        cross-library shock comparison disagrees (tracked in
+        ``tests/test_gnlse_regression.py``).  The factor is clamped at zero:
+        FFT bins with ``1 + Ω·τ_shock < 0`` correspond to non-positive
+        absolute frequencies (aliased band) where the multiplier would
+        unphysically flip the sign of the nonlinear drive — the source of the
+        historic energy drift.
 
         The total nonlinear polarization is:
           P_NL = (1-fR)|A|² + fR·(h_R ⊗ |A|²)
@@ -629,42 +695,64 @@ class SplitStepEngine:
 
         P_NL = self._nl_intensity(intensity, h_R_fft)
 
+        # Exact (unitary) Kerr/Raman phase rotation.
+        A_noshock = A * np.exp(1j * gamma * P_NL * dz)
+
         if self.include_self_steepening:
-            # Self-steepening: RK4 in frequency domain (laserfun / Dudley Eq. 3.13).
-            #
-            # laserfun absorbs 1/ω₀ into γ and multiplies the nonlinear source
-            # by absolute angular frequency ω = ω₀ + Ω.  Equivalent to the
-            # shock term (1 + (i/ω₀)∂/∂t) acting on P_NL·A in the time domain.
-            #
-            # dÃ/dz = iγ · (ω/ω₀) · FFT(NL_src); NL_src = P_NL·A (Raman) or
-            # |A|²·A (Kerr). Recompute P_NL from the stage field so the Raman
-            # convolution tracks the evolving intensity profile.
-            shock_factor = (self.omega0 + self.grid.w) / self.omega0
+            # Self-steepening: RK4 in the frequency domain with the shock
+            # factor (ω/ω₀ = 1 + Ω·τ_shock).  This sign reproduces the Fig. 3
+            # SCG (self-steepening reduces the Raman red edge); laserfun's
+            # Ω-asymmetry is opposite.  ``τ_shock = 1/ω₀`` matches the paper's
+            # uncorrected value; ``0.56 fs`` gives Dudley's
+            # effective-area-corrected value. The factor is clamped at zero
+            # (see docstring).
+            shock_factor = np.clip(1.0 + self.grid.w * self.tau_shock, 0.0, None)
             A_w = self.grid.fft(A)
 
-            def shock_rhs_freq(A_w_stage: NDArray) -> NDArray:
+            def shock_rhs_freq(A_w_stage):
                 a = self.grid.ifft(A_w_stage)
                 p_nl = self._nl_intensity(np.abs(a) ** 2, h_R_fft)
                 nl_src = p_nl * a
                 nl_w = self.grid.fft(nl_src)
                 nl_w *= shock_factor
-                return np.asarray(1j * gamma * nl_w)
+                return 1j * gamma * nl_w
 
-            k1 = shock_rhs_freq(A_w)
-            k2 = shock_rhs_freq(A_w + 0.5 * dz * k1)
-            k3 = shock_rhs_freq(A_w + 0.5 * dz * k2)
-            k4 = shock_rhs_freq(A_w + dz * k3)
-            A = self.grid.ifft(A_w + (dz / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4))
+            def _rk4_shock_step(A_w_in, h):
+                k1 = shock_rhs_freq(A_w_in)
+                k2 = shock_rhs_freq(A_w_in + 0.5 * h * k1)
+                k3 = shock_rhs_freq(A_w_in + 0.5 * h * k2)
+                k4 = shock_rhs_freq(A_w_in + h * k3)
+                return A_w_in + (h / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
+
+            # The shock factor (up to ~1 + Ωmax·τ_shock ≈ 4–5 at the band
+            # edge) amplifies the effective nonlinear phase per step; at
+            # fission spikes γ·P·factor·dz can approach O(1), where a single
+            # RK4 step loses accuracy and leaks energy. Substep the shock
+            # update so the effective phase per substep stays ≤ 0.05 rad
+            # (RK4 local error ~ (0.05)⁵ — negligible). Deterministic: M is
+            # fixed by the step-opening state, not by iteration.
+            phase_scale = gamma * float(np.max(P_NL)) * float(shock_factor.max()) * dz
+            n_sub = int(min(50, max(1, np.ceil(phase_scale / 0.05))))
+            h_sub = dz / n_sub
+            for _ in range(n_sub):
+                A_w = _rk4_shock_step(A_w, h_sub)
+            A = self.grid.ifft(A_w)
         else:
-            A = A * np.exp(1j * gamma * P_NL * dz)
+            A = A_noshock
 
-        A, U_new = tpa_step(A, self.fiber, self.grid, dz, self.include_tpa, self._U, self.omega0)
+        A, U_new = tpa_step(
+            A, self.fiber, self.grid, dz, self.include_tpa, self._U, self.omega0
+        )
         return A, U_new
 
     def _get_omega_bounds(self) -> tuple[float, float]:
         """Return (omega_min, omega_max) from the dispersion profile, or a wide default."""
-        if self._dispersion_profile is not None and hasattr(self._dispersion_profile, 'omegas'):
-            return float(min(self._dispersion_profile.omegas)), float(max(self._dispersion_profile.omegas))
+        if self._dispersion_profile is not None and hasattr(
+            self._dispersion_profile, "omegas"
+        ):
+            return float(min(self._dispersion_profile.omegas)), float(
+                max(self._dispersion_profile.omegas)
+            )
         # Fallback: wide range around carrier
         return self.omega0 - 5e15, self.omega0 + 5e15
 
@@ -795,6 +883,8 @@ class SplitStepEngine:
         *,
         nsaves: int | None = None,
         show_progress: bool = False,
+        raman_noise: bool = False,
+        noise_seed: int | None = None,
     ) -> None:
         """Run split-step simulation for num_steps steps.
 
@@ -812,13 +902,32 @@ class SplitStepEngine:
         show_progress : bool
             If True, show a ``tqdm`` progress bar over propagation distance.
             Requires ``tqdm`` (``pip install tqdm``).
+        raman_noise : bool
+            If True, inject spontaneous-Raman noise (Dudley Eq. 5 ``Γ_R``)
+            once per step. Default False (bit-identical to legacy runs).
+            Requires ``include_raman=True`` with a Raman response on the fiber.
+        noise_seed : int, optional
+            Seed for the per-step noise generator; same seed gives
+            bit-identical output. ``None`` draws nondeterministically.
         """
         from photonics_helper.pulse import Wave
+
+        noise_rng: np.random.Generator | None = None
+        h_R_fft_noise = None
+        if raman_noise:
+            if not self.include_raman or self.fiber.raman_response is None:
+                raise ValueError(
+                    "raman_noise=True requires include_raman=True and a "
+                    "Raman response on the fiber."
+                )
+            noise_rng = np.random.default_rng(noise_seed)
+            h_R_fft_noise = self._get_h_R_fft()
 
         length = self.fiber.length.as_m
         dz_base = length / num_steps
         z = 0.0
         self.evolution = []
+        self._energy_vs_z = None
         self._z_positions = [0.0]
 
         pbar = None
@@ -854,6 +963,9 @@ class SplitStepEngine:
             )
             wave._pulse_train_field = self.A.copy()
             self.evolution.append(wave)
+            if self._energy_vs_z is None:
+                self._energy_vs_z = []
+            self._energy_vs_z.append(float(np.sum(np.abs(self.A) ** 2) * self.grid.dt))
 
         def _maybe_save(current_z: float) -> None:
             nonlocal next_save_idx
@@ -861,7 +973,10 @@ class SplitStepEngine:
                 _append_snapshot()
                 return
             assert next_save_idx is not None
-            while next_save_idx < len(save_z) and current_z >= save_z[next_save_idx] - 1e-15:
+            while (
+                next_save_idx < len(save_z)
+                and current_z >= save_z[next_save_idx] - 1e-15
+            ):
                 _append_snapshot()
                 next_save_idx += 1
 
@@ -913,6 +1028,16 @@ class SplitStepEngine:
             self.A = self._linear_step(self.A, dz / 2)
             # Full nonlinear step
             self.A, self._U = self._nonlinear_step(self.A, dz)
+            if noise_rng is not None:
+                from .noise import raman_noise_field
+
+                assert h_R_fft_noise is not None  # set whenever noise_rng is
+                self.A = self.A + raman_noise_field(
+                    self.grid,
+                    h_R_fft_noise,
+                    rng=noise_rng,
+                    omega0=float(self.omega0),
+                ) * np.sqrt(dz)
             # Half linear step
             self.A = self._linear_step(self.A, dz / 2)
 
@@ -939,7 +1064,11 @@ class SplitStepEngine:
                     refresh=False,
                 )
 
-        if save_z is not None and next_save_idx is not None and next_save_idx < len(save_z):
+        if (
+            save_z is not None
+            and next_save_idx is not None
+            and next_save_idx < len(save_z)
+        ):
             _append_snapshot()
 
         if pbar is not None:
@@ -950,6 +1079,12 @@ class SplitStepEngine:
 
         if save_z is not None:
             self._z_positions = save_z[: len(self.evolution)].tolist()
+
+        # Energy-conservation monitor (REPORT P2 item 5): with unitary loss
+        # mechanisms disabled (α = 0, TPA off), Σ|A|²·dt must be conserved by
+        # the split-step flow (Kerr/Raman phase + unitary shock shift). Warn
+        # instead of raising so exploratory runs are never blocked.
+        self._emit_energy_drift_warning()
 
         # Compute spectra vs z
         omega = self.grid.w
@@ -974,6 +1109,25 @@ class SplitStepEngine:
         """Array of propagation distances (m) for each evolution entry."""
         return np.array(self._z_positions)
 
+    def _emit_energy_drift_warning(self) -> None:
+        """Warn if recorded energy drifted >5% with loss/TPA disabled."""
+        if not self._energy_vs_z:
+            return
+        e0 = self._energy_vs_z[0]
+        e1 = self._energy_vs_z[-1]
+        if e0 <= 0.0:
+            return
+        drift = abs(e1 / e0 - 1.0)
+        lossless = (self._get_alpha(self._current_z) == 0.0) and not self.include_tpa
+        if lossless and drift > 0.05:
+            warnings.warn(
+                f"GNLSE energy drift {drift * 100:.2f}% exceeds 5% with "
+                f"loss/TPA disabled (E₀={e0:.3e}, E={e1:.3e}). "
+                f"Reduce step size (num_steps) or check shock/Raman settings.",
+                UserWarning,
+                stacklevel=3,
+            )
+
     @property
     def spectra_vs_z(self) -> Tuple[NDArray, NDArray]:
         """Tuple of (frequency array, spectra at each step)."""
@@ -981,10 +1135,16 @@ class SplitStepEngine:
             raise RuntimeError("Call propagate() first.")
         return self._spectra_vs_z
 
+    @property
+    def energy_vs_z(self) -> NDArray:
+        """Pulse energy ``Σ|A|²·dt`` at each saved step (same length as ``z_array``)."""
+        if self._energy_vs_z is None:
+            raise RuntimeError("Call propagate() first.")
+        return np.asarray(self._energy_vs_z, dtype=float)
+
 
 # ---------------------------------------------------------------------------
-# GNLSESolver
-# ---------------------------------------------------------------------------
+
 
 class GNLSESolver:
     """High-level GNLSE solver using split-step Fourier method.
@@ -1007,11 +1167,11 @@ class GNLSESolver:
     include_self_steepening : bool
         Include self-steepening (shock term). Default ``False``.
 
-        Models intensity-dependent group velocity via a frequency-domain factor
-        ``(1 - Ω/ω₀)`` on the nonlinear polarization (see
-        :class:`SplitStepEngine`). ``False`` by default; laserfun's ``NLSE``
-        uses ``shock=True`` by default — set ``True`` when comparing against
-        laserfun or reproducing Dudley-style supercontinuum demos.
+        Models intensity-dependent group velocity with the shock operator
+        ``(1 + (i/ω₀)∂t)`` (see :class:`SplitStepEngine`; ``τ_shock``
+        settable, default ``1/ω₀``). ``False`` by default; laserfun's
+        ``NLSE`` uses ``shock=True`` by default — set ``True`` when comparing
+        against laserfun or reproducing Dudley-style supercontinuum demos.
     include_tpa : bool
         Include two-photon absorption. Default False.
     check_phase_matching : bool
@@ -1035,6 +1195,7 @@ class GNLSESolver:
         check_phase_matching: bool = False,
         step_size: Length | None = None,
         betas_unit: BetasUnit = "ps^k/m",
+        tau_shock: float | None = None,
     ):
         self.pulse = pulse
         self.fiber = fiber
@@ -1046,13 +1207,25 @@ class GNLSESolver:
         self.include_tpa = include_tpa
         self.check_phase_matching = check_phase_matching
         self.step_size = step_size
+        if tau_shock is not None and not tau_shock > 0.0:
+            raise ValueError(
+                f"tau_shock must be positive (seconds, SI), got {tau_shock!r}"
+            )
+        self.tau_shock = float(tau_shock) if tau_shock is not None else None
         self._evolution: list["Wave"] = []
         self._z_positions: NDArray | None = None
         self._spectra_vs_z: Tuple[NDArray, NDArray] | None = None
+        self._energy_vs_z: NDArray | None = None
         self._preflight_report: "SimulationReadinessReport | None" = None
 
     def propagate(
-        self, num_steps: int = 100, *, nsaves: int | None = None, show_progress: bool = False
+        self,
+        num_steps: int = 100,
+        *,
+        nsaves: int | None = None,
+        show_progress: bool = False,
+        raman_noise: bool = False,
+        noise_seed: int | None = None,
     ) -> None:
         """Run split-step simulation for num_steps steps."""
         if self.check_phase_matching:
@@ -1069,12 +1242,20 @@ class GNLSESolver:
             include_raman=self.include_raman,
             include_self_steepening=self.include_self_steepening,
             include_tpa=self.include_tpa,
+            tau_shock=self.tau_shock,
             step_size=self.step_size,
         )
-        engine.propagate(num_steps, nsaves=nsaves, show_progress=show_progress)
+        engine.propagate(
+            num_steps,
+            nsaves=nsaves,
+            show_progress=show_progress,
+            raman_noise=raman_noise,
+            noise_seed=noise_seed,
+        )
         self._evolution = engine.evolution
         self._z_positions = engine.z_array
         self._spectra_vs_z = engine.spectra_vs_z
+        self._energy_vs_z = engine.energy_vs_z
 
     @classmethod
     def estimate_num_steps(
@@ -1184,6 +1365,13 @@ class GNLSESolver:
         return self._spectra_vs_z
 
     @property
+    def energy_vs_z(self) -> NDArray:
+        """Pulse energy ``Σ|A|²·dt`` at each saved step (same length as ``z_array``)."""
+        if self._energy_vs_z is None:
+            raise RuntimeError("Call propagate() first.")
+        return self._energy_vs_z
+
+    @property
     def preflight_report(self) -> "SimulationReadinessReport | None":
         """Lazy preflight report from phase-matching assessment.
 
@@ -1194,6 +1382,7 @@ class GNLSESolver:
             return None
         if self._preflight_report is None:
             from .phase_matching import assess_simulation_readiness
+
             report = assess_simulation_readiness(
                 pulse=self.pulse,
                 fiber=self.fiber,
@@ -1211,6 +1400,7 @@ class GNLSESolver:
 # ---------------------------------------------------------------------------
 # TaperedGNLSESolver
 # ---------------------------------------------------------------------------
+
 
 class TaperedGNLSESolver:
     """High-level GNLSE solver for z-dependent (tapered/dispersion-managed) waveguides.
@@ -1264,6 +1454,7 @@ class TaperedGNLSESolver:
         min_shrink_factor: float = 0.1,
         step_size: Length | None = None,
         betas_unit: BetasUnit = "ps^k/m",
+        tau_shock: float | None = None,
     ):
         self.pulse = pulse
         self.fiber = fiber
@@ -1278,10 +1469,16 @@ class TaperedGNLSESolver:
         self.include_tpa = include_tpa
         self.check_phase_matching = check_phase_matching
         self.min_shrink_factor = min_shrink_factor
+        if tau_shock is not None and not tau_shock > 0.0:
+            raise ValueError(
+                f"tau_shock must be positive (seconds, SI), got {tau_shock!r}"
+            )
+        self.tau_shock = float(tau_shock) if tau_shock is not None else None
         self._engine: SplitStepEngine | None = None
         self._evolution: list["Wave"] = []
         self._z_positions: NDArray | None = None
         self._spectra_vs_z: Tuple[NDArray, NDArray] | None = None
+        self._energy_vs_z: NDArray | None = None
         self._preflight_report: "SimulationReadinessReport | None" = None
         self._strict_mode = False
 
@@ -1292,6 +1489,8 @@ class TaperedGNLSESolver:
         *,
         nsaves: int | None = None,
         show_progress: bool = False,
+        raman_noise: bool = False,
+        noise_seed: int | None = None,
     ) -> None:
         """Run split-step simulation for num_steps steps.
 
@@ -1306,13 +1505,18 @@ class TaperedGNLSESolver:
 
         if strict:
             # Pre-flight check: verify dispersion coverage
-            if hasattr(self.dispersion_profile, 'omegas'):
-                omega_min, omega_max = float(min(self.dispersion_profile.omegas)), float(max(self.dispersion_profile.omegas))
+            if hasattr(self.dispersion_profile, "omegas"):
+                omega_min, omega_max = (
+                    float(min(self.dispersion_profile.omegas)),
+                    float(max(self.dispersion_profile.omegas)),
+                )
                 omega_abs = self.omega0 + self.pulse.grid.w
-                clipped = ((omega_abs < omega_min) | (omega_abs > omega_max)).sum() / len(omega_abs)
+                clipped = (
+                    (omega_abs < omega_min) | (omega_abs > omega_max)
+                ).sum() / len(omega_abs)
                 if clipped > 0.05:
                     raise ValueError(
-                        f"{clipped*100:.1f}% of grid frequencies clipped (>5% threshold in strict mode). "
+                        f"{clipped * 100:.1f}% of grid frequencies clipped (>5% threshold in strict mode). "
                         f"Grid: [{omega_abs.min():.2e}, {omega_abs.max():.2e}] rad/s, "
                         f"Bounds: [{omega_min:.2e}, {omega_max:.2e}] rad/s. "
                         f"Reduce bandwidth or use broader dispersion table."
@@ -1339,12 +1543,20 @@ class TaperedGNLSESolver:
             alpha_fn=self.alpha_fn,
             gamma_fn=self.gamma_fn,
             min_shrink_factor=self.min_shrink_factor,
+            tau_shock=self.tau_shock,
             step_size=self.step_size,
         )
-        self._engine.propagate(num_steps, nsaves=nsaves, show_progress=show_progress)
+        self._engine.propagate(
+            num_steps,
+            nsaves=nsaves,
+            show_progress=show_progress,
+            raman_noise=raman_noise,
+            noise_seed=noise_seed,
+        )
         self._evolution = self._engine.evolution
         self._z_positions = self._engine.z_array
         self._spectra_vs_z = self._engine.spectra_vs_z
+        self._energy_vs_z = self._engine.energy_vs_z
 
     @property
     def evolution(self) -> list["Wave"]:
@@ -1371,6 +1583,13 @@ class TaperedGNLSESolver:
         return self._spectra_vs_z
 
     @property
+    def energy_vs_z(self) -> NDArray:
+        """Pulse energy ``Σ|A|²·dt`` at each saved step (same length as ``z_array``)."""
+        if self._energy_vs_z is None:
+            raise RuntimeError("Call propagate() first.")
+        return self._energy_vs_z
+
+    @property
     def preflight_report(self) -> "SimulationReadinessReport | None":
         """Lazy preflight report from phase-matching assessment.
 
@@ -1381,6 +1600,7 @@ class TaperedGNLSESolver:
             return None
         if self._preflight_report is None:
             from .phase_matching import assess_simulation_readiness
+
             report = assess_simulation_readiness(
                 pulse=self.pulse,
                 fiber=self.fiber,
@@ -1393,6 +1613,7 @@ class TaperedGNLSESolver:
 # ---------------------------------------------------------------------------
 # Evolution arrays (wavelength / time grids for contour plots)
 # ---------------------------------------------------------------------------
+
 
 def spectral_evolution_on_wavelength_grid(
     solver: "GNLSESolver",
@@ -1462,16 +1683,16 @@ def spectral_evolution_on_frequency_grid(
     n_z = spectra.shape[0]
     interpolated = np.zeros((n_z, n_f))
     for i in range(n_z):
-        interpolated[i] = np.interp(
-            f_grid, f_THz, spectra[i], left=0.0, right=0.0
-        )
+        interpolated[i] = np.interp(f_grid, f_THz, spectra[i], left=0.0, right=0.0)
 
     global_max = interpolated.max()
     spectra_dB = 10 * np.log10(interpolated / global_max + 1e-30)
     return solver.z_array, f_grid, spectra_dB
 
 
-def temporal_evolution_intensity(solver: "GNLSESolver") -> Tuple[NDArray, NDArray, NDArray]:
+def temporal_evolution_intensity(
+    solver: "GNLSESolver",
+) -> Tuple[NDArray, NDArray, NDArray]:
     """Build |A(t)|² at each stored propagation step.
 
     Returns
@@ -1487,8 +1708,15 @@ def temporal_evolution_intensity(solver: "GNLSESolver") -> Tuple[NDArray, NDArra
     return z_m, t_ps, intensity
 
 
-def plot_waterfall(solver: "GNLSESolver", ax=None, dB: bool = True) -> "plt.Figure":
+def plot_waterfall(
+    solver: "GNLSESolver", ax=None, dB: bool = True, offset_scale: float = 1.0
+) -> "plt.Figure":
     """Pulse envelope waterfall plot (envelope vs propagation distance).
+
+    Each saved trace ``i`` is drawn as ``y_norm + i * offset_scale`` where
+    ``y_norm`` is the trace normalized to unit range (0..1 linear, or
+    -1..0 for dB scaled by 90 dB). Y-tick labels show the propagation
+    distance of each trace, so offsets are documented and interpretable.
 
     Parameters
     ----------
@@ -1498,6 +1726,9 @@ def plot_waterfall(solver: "GNLSESolver", ax=None, dB: bool = True) -> "plt.Figu
         Axis to plot on. Creates new figure if None.
     dB : bool
         Plot in dB scale. Default True.
+    offset_scale : float
+        Vertical spacing between consecutive traces in normalized units.
+        Must be > 0. Default 1.0.
 
     Returns
     -------
@@ -1511,6 +1742,8 @@ def plot_waterfall(solver: "GNLSESolver", ax=None, dB: bool = True) -> "plt.Figu
     else:
         fig = ax.figure
 
+    if not offset_scale > 0.0:
+        raise ValueError(f"offset_scale must be positive, got {offset_scale!r}")
     z_steps = solver.z_array
     t = solver.pulse.grid.t * 1e12  # ps
 
@@ -1531,20 +1764,27 @@ def plot_waterfall(solver: "GNLSESolver", ax=None, dB: bool = True) -> "plt.Figu
             y = np.abs(envelope)
             y = y / max(y.max(), 1e-30)  # 0..1
         color = cmap(norm(z_mm[i])) if norm is not None else "b"
-        ax.plot(t, y + i, color=color, linewidth=0.5)
+        ax.plot(t, y + i * offset_scale, color=color, linewidth=0.5)
 
     if norm is not None:
         sm = cm.ScalarMappable(norm=norm, cmap=cmap)
         sm.set_array([])
         fig.colorbar(sm, ax=ax, label="Propagation distance (mm)")
 
+    # Label y ticks with the z distance of each trace so the offsets are
+    # documented on the axis itself (one label per trace).
+    n_traces = len(solver.evolution)
+    ax.set_yticks([i * offset_scale for i in range(n_traces)])
+    ax.set_yticklabels([f"{z * 1e3:.2f} mm" for z in z_steps])
     ax.set_xlabel("Time (ps)")
-    ax.set_ylabel("Trace offset")
+    ax.set_ylabel("Propagation distance (z)")
     ax.set_title("Pulse Evolution Waterfall Plot")
     return fig
 
 
-def plot_spectrum_vs_distance(solver: "GNLSESolver", ax=None, dB: bool = True) -> "plt.Figure":
+def plot_spectrum_vs_distance(
+    solver: "GNLSESolver", ax=None, dB: bool = True
+) -> "plt.Figure":
     """Spectrum vs propagation distance contour (legacy wrapper).
 
     See :func:`plot_spectral_evolution` for wavelength range and dynamic-range
@@ -1627,7 +1867,9 @@ def plot_spectral_evolution(
         x_min, x_max = wl_min, wl_max
 
     z_plot = z_m * 1e3 if z_scale == "mm" else z_m
-    z_label = "Propagation distance (mm)" if z_scale == "mm" else "Propagation distance (m)"
+    z_label = (
+        "Propagation distance (mm)" if z_scale == "mm" else "Propagation distance (m)"
+    )
 
     if dB:
         vmin, vmax = -dynamic_range_db, 0.0
@@ -1647,7 +1889,9 @@ def plot_spectral_evolution(
             cmap=cmap,
         )
     else:
-        ax.pcolormesh(x_axis, z_plot, data, shading="auto", cmap=cmap, vmin=vmin, vmax=vmax)
+        ax.pcolormesh(
+            x_axis, z_plot, data, shading="auto", cmap=cmap, vmin=vmin, vmax=vmax
+        )
 
     ax.set_xlabel(x_label)
     ax.set_ylabel(z_label)
@@ -1715,7 +1959,9 @@ def plot_temporal_evolution(
         t_max = float(t_ps[-1])
 
     z_plot = z_m * 1e3 if z_scale == "mm" else z_m
-    z_label = "Propagation distance (mm)" if z_scale == "mm" else "Propagation distance (m)"
+    z_label = (
+        "Propagation distance (mm)" if z_scale == "mm" else "Propagation distance (m)"
+    )
 
     if use_imshow:
         ax.imshow(
@@ -1744,7 +1990,9 @@ def plot_temporal_evolution(
     return fig
 
 
-def _default_wl_bounds(solver: "GNLSESolver", fraction: float = 0.5) -> Tuple[float, float]:
+def _default_wl_bounds(
+    solver: "GNLSESolver", fraction: float = 0.5
+) -> Tuple[float, float]:
     """Default wavelength window (nm) around the carrier: ``(1-f)·λ0, (1+f)·λ0``."""
     pump_nm = float(solver.pulse.central_wavelength.as_nm)
     return (pump_nm * (1.0 - fraction), pump_nm * (1.0 + fraction))
@@ -1820,23 +2068,17 @@ def _field_feature_labels(
     n_t = np.asarray(snapshots[0], dtype=complex).shape[0]
     labels = np.empty((n_z, n_t), dtype=object)
     for iz, snapshot in enumerate(snapshots):
-        spectrum = np.fft.fftshift(
-            np.fft.fft(np.asarray(snapshot, dtype=complex))
-        )
+        spectrum = np.fft.fftshift(np.fft.fft(np.asarray(snapshot, dtype=complex)))
         best = np.full(n_t, -np.inf)
         best_band = np.zeros(n_t, dtype=int)
         for b, mask in enumerate(band_masks):
             if not mask.any():
                 continue
-            profile = np.abs(
-                np.fft.ifft(np.fft.ifftshift(spectrum * mask))
-            ) ** 2
+            profile = np.abs(np.fft.ifft(np.fft.ifftshift(spectrum * mask))) ** 2
             update = profile > best
             best[update] = profile[update]
             best_band[update] = b
-        row = np.asarray(
-            _classify_features(centers[best_band], pump_nm), dtype=object
-        )
+        row = np.asarray(_classify_features(centers[best_band], pump_nm), dtype=object)
         peak = float(best.max()) if np.isfinite(best).any() else 0.0
         if peak > 0.0:
             row[best < peak * 10.0 ** (-abs(floor_db) / 10.0)] = "low-level background"
@@ -2475,7 +2717,9 @@ def _plotly_spectrogram(
             mask = custom == name
             if not mask.any():
                 continue
-            idx = np.unravel_index(np.argmax(np.where(mask, trace_dB, -np.inf)), trace_dB.shape)
+            idx = np.unravel_index(
+                np.argmax(np.where(mask, trace_dB, -np.inf)), trace_dB.shape
+            )
             fig.add_trace(
                 go.Scatter(
                     x=[delay_ps[idx[1]]],
@@ -2483,7 +2727,9 @@ def _plotly_spectrogram(
                     mode="markers+text",
                     text=[name.split(" (")[0]],
                     textposition="middle right",
-                    marker=dict(size=9, color="white", line=dict(color="black", width=1)),
+                    marker=dict(
+                        size=9, color="white", line=dict(color="black", width=1)
+                    ),
                     showlegend=False,
                     hoverinfo="skip",
                 )
@@ -2682,10 +2928,15 @@ def plot_intensity_metrics(solver: "GNLSESolver", ax=None) -> "plt.Figure":
 
     peak_power = np.array([w.peak_power() for w in solver.evolution])
     t = solver.pulse.grid.t
-    pulse_width = np.array([
-        np.sqrt(np.sum(t**2 * np.abs(w.envelope_field)**2) / np.sum(np.abs(w.envelope_field)**2))
-        for w in solver.evolution
-    ])
+    pulse_width = np.array(
+        [
+            np.sqrt(
+                np.sum(t**2 * np.abs(w.envelope_field) ** 2)
+                / np.sum(np.abs(w.envelope_field) ** 2)
+            )
+            for w in solver.evolution
+        ]
+    )
 
     ax1.plot(z_mm, peak_power)
     ax1.set_ylabel("Peak Power (W)")

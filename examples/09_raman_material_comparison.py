@@ -11,11 +11,14 @@ by letting you visually compare materials side by side.
 """
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from photonics_helper.raman import (
-    MaterialComparison, RamanSpec, COMMON_COMPARISONS,
+    MaterialComparison,
+    RamanSpec,
+    COMMON_COMPARISONS,
 )
 from photonics_helper.pulse import TemporalGrid
 from photonics_helper.base import Time
@@ -34,7 +37,9 @@ def main():
 
     # Spectra overlay
     comp.plot_spectra_overlay(backend="matplotlib", shift_range_cm=600)
-    plt.savefig("examples/images/09_raman_spectra_overlay.png", dpi=150, bbox_inches="tight")
+    plt.savefig(
+        "examples/images/09_raman_spectra_overlay.png", dpi=150, bbox_inches="tight"
+    )
     print("Saved: examples/09_raman_spectra_overlay.png")
     plt.close()
 
@@ -50,7 +55,9 @@ def main():
     # Frequency overlay — shows gain spectra
     grid = TemporalGrid(N=2**14, Tmax=Time(10e-12, "s"))
     comp2.plot_frequency_overlay(backend="matplotlib", grid=grid)
-    plt.savefig("examples/images/09_raman_frequency_overlay.png", dpi=150, bbox_inches="tight")
+    plt.savefig(
+        "examples/images/09_raman_frequency_overlay.png", dpi=150, bbox_inches="tight"
+    )
     print("Saved: examples/09_raman_frequency_overlay.png")
     plt.close()
 
@@ -63,14 +70,18 @@ def main():
 
     # Time-domain response overlay
     comp3.plot_response_overlay(backend="matplotlib", grid=grid)
-    plt.savefig("examples/images/09_raman_response_overlay.png", dpi=150, bbox_inches="tight")
+    plt.savefig(
+        "examples/images/09_raman_response_overlay.png", dpi=150, bbox_inches="tight"
+    )
     print("Saved: examples/09_raman_response_overlay.png")
     plt.close()
 
     # ── 4. All-in-one: 3-panel comparison ───────────────────────────────────
 
     comp3.plot_all(backend="matplotlib", grid=grid, figsize=(12, 12))
-    plt.savefig("examples/images/09_raman_material_comparison.png", dpi=150, bbox_inches="tight")
+    plt.savefig(
+        "examples/images/09_raman_material_comparison.png", dpi=150, bbox_inches="tight"
+    )
     print("Saved: examples/09_raman_material_comparison.png")
     plt.close()
 
@@ -109,8 +120,10 @@ def main():
         fR=0.25,  # higher than default
     )
     comp_demo.add(custom_silica)
-    print(f"After replacing Silica: {len(comp_demo.materials)} material(s), "
-          f"fR={comp_demo.materials[0].fR}")
+    print(
+        f"After replacing Silica: {len(comp_demo.materials)} material(s), "
+        f"fR={comp_demo.materials[0].fR}"
+    )
 
     # Remove one
     comp_demo.remove("Diamond")

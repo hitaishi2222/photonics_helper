@@ -15,6 +15,7 @@ References:
 
 import numpy as np
 import matplotlib
+
 matplotlib.use("Agg")  # Non-interactive backend for CI compatibility
 import matplotlib.pyplot as plt
 
@@ -46,6 +47,7 @@ def _fmt(val, unit):
 
 # ─── Example 1: Gaussian Chirp Sweep ───────────────────────────────
 
+
 def example_gaussian_chirp_sweep():
     """Plot spectral width vs √(1+α²) for chirped Gaussian pulses.
 
@@ -66,18 +68,22 @@ def example_gaussian_chirp_sweep():
 
     # Transform-limited reference
     env_ref = Envelope(shape="gaussian", peak_amplitude=1.0, pulse_width=T0, chirp=0.0)
-    wave_ref = Wave(grid=grid, envelope=env_ref, central_wavelength=Wavelength(800, "nm"))
+    wave_ref = Wave(
+        grid=grid, envelope=env_ref, central_wavelength=Wavelength(800, "nm")
+    )
     spec_ref = np.abs(wave_ref.spectrum) ** 2
     # Use spectral-weighted mean for correct RMS width calculation
     w_mean = np.sum(grid.w * spec_ref) / np.sum(spec_ref)
     sigma_0 = np.sqrt(np.sum((grid.w - w_mean) ** 2 * spec_ref) / np.sum(spec_ref))
 
-    print(f"\n{T0.as_s*1e15:.0f}fs Gaussian pulse, σ₀ = {sigma_0/1e12:.2f} rad/ps")
+    print(f"\n{T0.as_s * 1e15:.0f}fs Gaussian pulse, σ₀ = {sigma_0 / 1e12:.2f} rad/ps")
     print(f"{'α':>6s}  {'σ_σ₀ ratio':>12s}  {'√(1+α²)':>12s}  {'Error':>8s}")
     print("-" * 40)
 
     for alpha in alphas:
-        env = Envelope(shape="gaussian", peak_amplitude=1.0, pulse_width=T0, chirp=alpha)
+        env = Envelope(
+            shape="gaussian", peak_amplitude=1.0, pulse_width=T0, chirp=alpha
+        )
         wave = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(800, "nm"))
         # Compute spectrum from envelope field using FFT to ensure chirp is captured
         E_t = wave.envelope_field
@@ -95,21 +101,33 @@ def example_gaussian_chirp_sweep():
         else:
             sigma_c = 0.0
         ratio = sigma_c / sigma_0 if sigma_0 > 1e-30 else 0.0
-        expected = np.sqrt(1 + alpha ** 2)
+        expected = np.sqrt(1 + alpha**2)
         error = abs(ratio - expected) / expected if ratio > 0 else 1.0
         ratios.append(error)
-        print(f"{alpha:6.1f}  {ratio:12.4f}  {expected:12.4f}  {error*100:7.1f}%  sigma={sigma_c/1e12:.2f} rad/ps")
-        print(f"{alpha:6.1f}  {ratio:12.4f}  {expected:12.4f}  {error*100:7.1f}%  σ={sigma_c/1e12:.2f} rad/ps")
+        print(
+            f"{alpha:6.1f}  {ratio:12.4f}  {expected:12.4f}  {error * 100:7.1f}%  sigma={sigma_c / 1e12:.2f} rad/ps"
+        )
+        print(
+            f"{alpha:6.1f}  {ratio:12.4f}  {expected:12.4f}  {error * 100:7.1f}%  σ={sigma_c / 1e12:.2f} rad/ps"
+        )
 
     max_error = max(ratios)
-    print(f"\nMax relative error: {max_error*100:.1f}%")
+    print(f"\nMax relative error: {max_error * 100:.1f}%")
     print(f"Code agrees with theory: {'✓' if max_error < 0.1 else '✗'}")
 
     # Plot
     fig, ax = plt.subplots(figsize=(6, 4))
     alpha_grid = np.linspace(0, 10, 100)
-    ax.plot(alpha_grid, np.sqrt(1 + alpha_grid**2), "k--", label="Theory: √(1+α²)", alpha=0.7)
-    ax.plot(alphas, [np.sqrt(1 + a**2) for a in alphas], "o", color="C1", label="Analytical")
+    ax.plot(
+        alpha_grid,
+        np.sqrt(1 + alpha_grid**2),
+        "k--",
+        label="Theory: √(1+α²)",
+        alpha=0.7,
+    )
+    ax.plot(
+        alphas, [np.sqrt(1 + a**2) for a in alphas], "o", color="C1", label="Analytical"
+    )
     ax.plot(alphas, ratios, "s", color="C2", label="Code output")
     ax.set_xlabel("Chirp parameter α")
     ax.set_ylabel("σ_chirped / σ₀")
@@ -120,6 +138,7 @@ def example_gaussian_chirp_sweep():
 
 
 # ─── Example 2: TBP Comparison Table ───────────────────────────────
+
 
 def example_tbp_comparison():
     """Compare TBP values across all pulse shapes.
@@ -134,8 +153,15 @@ def example_tbp_comparison():
     print("=" * 60)
 
     shapes = [
-        "gaussian", "sech", "lorentzian", "rectangular",
-        "super-gaussian", "cosine", "exponential", "triangular", "parabolic",
+        "gaussian",
+        "sech",
+        "lorentzian",
+        "rectangular",
+        "super-gaussian",
+        "cosine",
+        "exponential",
+        "triangular",
+        "parabolic",
     ]
     orders = {"super-gaussian": 2}
 
@@ -160,7 +186,11 @@ def example_tbp_comparison():
     grid = TemporalGrid(N=N, Tmax=Tmax)
 
     for shape in shapes:
-        extra = {"super_gaussian_order": orders.get(shape, 2)} if shape == "super-gaussian" else {}
+        extra = (
+            {"super_gaussian_order": orders.get(shape, 2)}
+            if shape == "super-gaussian"
+            else {}
+        )
         env = Envelope(shape=shape, peak_amplitude=1.0, pulse_width=fwhm, **extra)
         wave = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(800, "nm"))
         tbp = wave.time_bandwidth_product()
@@ -173,6 +203,7 @@ def example_tbp_comparison():
 
 
 # ─── Example 3: FROG Trace + Retrieval ─────────────────────────────
+
 
 def example_frog_retrieval():
     """FROG trace and PCGPA retrieval for each pulse shape.
@@ -199,7 +230,7 @@ def example_frog_retrieval():
         t = np.arange(N) * dt - N * dt / 2
 
         if shape == "gaussian":
-            E = np.exp(-t**2 / (2 * T0**2))
+            E = np.exp(-(t**2) / (2 * T0**2))
         elif shape == "sech":
             E = 1.0 / np.cosh(t / T0)
 
@@ -213,15 +244,17 @@ def example_frog_retrieval():
 
         # Compute FWHM of original and retrieved
         half_max = E.max() ** 2 / 2
-        idx = np.where(np.abs(E)**2 >= half_max)[0]
+        idx = np.where(np.abs(E) ** 2 >= half_max)[0]
         fwhm_orig = (t[idx[-1]] - t[idx[0]]) * 1e15
 
         half_max_r = result.field.max() ** 2 / 2
-        idx_r = np.where(np.abs(result.field)**2 >= half_max_r)[0]
+        idx_r = np.where(np.abs(result.field) ** 2 >= half_max_r)[0]
         fwhm_rec = (t[idx_r[-1]] - t[idx_r[0]]) * 1e15
 
         fwhm_error = abs(fwhm_orig - fwhm_rec) / fwhm_orig * 100
-        print(f"{'':>10s}  fidelity = {f:.4f}, FWHM: {fwhm_orig:.1f}fs → {fwhm_rec:.1f}fs ({fwhm_error:.1f}% error)")
+        print(
+            f"{'':>10s}  fidelity = {f:.4f}, FWHM: {fwhm_orig:.1f}fs → {fwhm_rec:.1f}fs ({fwhm_error:.1f}% error)"
+        )
         results.append(f)
 
         # Save trace plot
@@ -230,20 +263,27 @@ def example_frog_retrieval():
         ax.set_title(f"{shape.capitalize()} FROG Trace")
         ax.set_xlabel("Delay (fs)")
         ax.set_ylabel("Frequency (rad/s)")
-        fig.savefig(f"examples/images/16_frog_{shape}.png", dpi=150, bbox_inches="tight")
+        fig.savefig(
+            f"examples/images/16_frog_{shape}.png", dpi=150, bbox_inches="tight"
+        )
         print(f"{'':>10s}  Saved: examples/images/16_frog_{shape}.png")
 
     # Note on FWHM: PCGPA has inherent bias toward E² rather than E,
     # so FWHM errors of ~30-50% are expected even with fidelity ≈ 1.0.
     # See Reid et al., Opt. Commun. 181, 73 (2000) for discussion.
     # Fidelity > 0.99 is the correct quality metric, not FWHM match.
-    print("\nNote: FWHM errors of ~30-50% are typical for PCGPA (algorithm bias toward E²).")
-    print("Fidelity > 0.99 is the correct quality metric (Reid et al., Opt. Commun. 181, 73 (2000)).")
+    print(
+        "\nNote: FWHM errors of ~30-50% are typical for PCGPA (algorithm bias toward E²)."
+    )
+    print(
+        "Fidelity > 0.99 is the correct quality metric (Reid et al., Opt. Commun. 181, 73 (2000))."
+    )
     all_pass = all(f > 0.99 for f in results)
     print(f"All retrievals passed (>0.99 fidelity): {'✓' if all_pass else '✗'}")
 
 
 # ─── Example 4: Parabolic Pulse ────────────────────────────────────
+
 
 def example_parabolic_pulse():
     """Parabolic pulse from amplifier: α = 0.2726 · g₀ · z.
@@ -286,6 +326,7 @@ def example_parabolic_pulse():
 
 # ─── Example 5: Airy Pulse Acceleration ────────────────────────────
 
+
 def example_airy_acceleration():
     """Airy pulse main lobe acceleration direction.
 
@@ -314,12 +355,17 @@ def example_airy_acceleration():
 
     print(f"\nMain lobe position: t_peak = {main_lobe_pos:.2f} fs")
     print(f"Main lobe width: ~{right_edge - left_edge:.2f} fs")
-    print(f"Expected: peak at t ≈ 1.0188·T₀ = {1.0188 * T0*1e15:.2f} fs")
-    print(f"Direction: {'toward +t (positive)' if peak_t > 0 else 'toward -t (negative)'}")
-    print(f"Convention matches Siviloglou & Christodoulides: {'✓' if peak_t > 0 else '✗'}")
+    print(f"Expected: peak at t ≈ 1.0188·T₀ = {1.0188 * T0 * 1e15:.2f} fs")
+    print(
+        f"Direction: {'toward +t (positive)' if peak_t > 0 else 'toward -t (negative)'}"
+    )
+    print(
+        f"Convention matches Siviloglou & Christodoulides: {'✓' if peak_t > 0 else '✗'}"
+    )
 
 
 # ─── Example 6: FWHM Factor Summary ────────────────────────────────
+
 
 def example_fwhm_summary():
     """Summary of FWHM factors for all pulse shapes."""
@@ -347,9 +393,15 @@ def example_fwhm_summary():
 
     # Super-gaussian for different orders
     for order in [2, 4, 8]:
-        env = Envelope(shape="super-gaussian", peak_amplitude=1.0,
-                       pulse_width=Time(1e-12, "s"), super_gaussian_order=order)
-        print(f"{'super-gaussian':<16s}  N={order:<6d}  {env.fwhm.as_s/1e-12:10.4f}  Trebs et al. §2.1")
+        env = Envelope(
+            shape="super-gaussian",
+            peak_amplitude=1.0,
+            pulse_width=Time(1e-12, "s"),
+            super_gaussian_order=order,
+        )
+        print(
+            f"{'super-gaussian':<16s}  N={order:<6d}  {env.fwhm.as_s / 1e-12:10.4f}  Trebs et al. §2.1"
+        )
 
 
 # ─── Main ──────────────────────────────────────────────────────────
@@ -359,6 +411,7 @@ if __name__ == "__main__":
 
     # Ensure output directory exists
     import os
+
     os.makedirs("examples/images", exist_ok=True)
 
     print("Physics-Backed Verification Examples")

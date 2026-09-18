@@ -162,7 +162,9 @@ def test_wavelength_array_sequence_protocol():
     indexed = wl[1:3]
     assert len(indexed) == 2
     assert indexed[0].as_nm == pytest.approx(1600.0)
-    from_wls = WavelengthArray.from_wavelengths([Wavelength(1300, "nm"), Wavelength(1400, "nm")])
+    from_wls = WavelengthArray.from_wavelengths(
+        [Wavelength(1300, "nm"), Wavelength(1400, "nm")]
+    )
     assert len(from_wls) == 2
     assert from_wls[1].as_nm == pytest.approx(1400.0)
 
@@ -481,9 +483,7 @@ def test_wavelength_array_from_meep_custom_base():
 
 def test_frequency_array_from_meep_default_base():
     fa = FrequencyArray.from_meep(np.array([1.0, 2.0]))
-    np.testing.assert_allclose(
-        fa.as_Hz, np.array([1.0, 2.0]) * C_MS / 1e-6, rtol=1e-10
-    )
+    np.testing.assert_allclose(fa.as_Hz, np.array([1.0, 2.0]) * C_MS / 1e-6, rtol=1e-10)
 
 
 def test_frequency_array_from_meep_custom_base():
@@ -525,8 +525,3 @@ def test_wavenumber_array_from_meep_custom_base():
     np.testing.assert_allclose(
         wna.as_1_m, 2 * PI * np.array([1.0, 2.0]) / 2e-6, rtol=1e-10
     )
-
-
-
-
-

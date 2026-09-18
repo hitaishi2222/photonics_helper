@@ -62,7 +62,9 @@ def make_pulse() -> Wave:
     )
 
 
-def spectrum_db_thz(A: np.ndarray, grid: TemporalGrid, omega0: float) -> tuple[np.ndarray, np.ndarray]:
+def spectrum_db_thz(
+    A: np.ndarray, grid: TemporalGrid, omega0: float
+) -> tuple[np.ndarray, np.ndarray]:
     """Absolute-frequency spectrum (THz) in dB relative to peak."""
     spec = np.abs(grid.fft(A)) ** 2
     f_thz = (grid.w + omega0) / (2 * np.pi) / 1e12
@@ -75,10 +77,10 @@ def spectrum_db_thz(A: np.ndarray, grid: TemporalGrid, omega0: float) -> tuple[n
 
 def temporal_db(A: np.ndarray, t_ps: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Temporal intensity in dB relative to peak."""
-    I = np.abs(A) ** 2
+    intensity = np.abs(A) ** 2
     mask = (t_ps >= T_MIN_PS) & (t_ps <= T_MAX_PS)
-    I_db = 10 * np.log10(I[mask] / I.max() + 1e-30)
-    return t_ps[mask], I_db
+    intensity_db = 10 * np.log10(intensity[mask] / intensity.max() + 1e-30)
+    return t_ps[mask], intensity_db
 
 
 def main() -> None:

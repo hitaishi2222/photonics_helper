@@ -77,8 +77,10 @@ def validate(fast: bool = False, make_plot: bool = True) -> dict:
     scales = soliton_scales(P0=P0)
 
     # 1. Paper length scales (Sec. V.B.1 and Fig. 5 caption).
-    assert abs(scales.L_D - 0.068) / 0.068 < 0.05, f"L_D={scales.L_D*100:.2f} cm"
-    assert abs(scales.z_sol - 0.106) / 0.106 < 0.05, f"z_sol={scales.z_sol*100:.2f} cm"
+    assert abs(scales.L_D - 0.068) / 0.068 < 0.05, f"L_D={scales.L_D * 100:.2f} cm"
+    assert abs(scales.z_sol - 0.106) / 0.106 < 0.05, (
+        f"z_sol={scales.z_sol * 100:.2f} cm"
+    )
     assert abs(scales.N - 3.0) < 0.15, f"N={scales.N:.3f}"
 
     evo = run(fast=fast)
@@ -101,7 +103,9 @@ def validate(fast: bool = False, make_plot: bool = True) -> dict:
         (evo.intensity[within_first].max(axis=1) / evo.intensity[0].max()).max()
     )
     assert peak_ratio > 3.0, f"peak compression factor = {peak_ratio:.2f}"
-    assert peak_ratio < 15.0, f"peak compression factor unexpectedly large: {peak_ratio:.2f}"
+    assert peak_ratio < 15.0, (
+        f"peak compression factor unexpectedly large: {peak_ratio:.2f}"
+    )
 
     result = {
         "L_D_cm": scales.L_D * 100,
@@ -141,7 +145,7 @@ def _plot(evo: Evolution, scales, result: dict) -> None:
     axes[1].set_title("(b) Temporal evolution")
 
     fig.suptitle(
-        f"Ideal N=3 soliton (NLSE only): z_sol={z_sol*100:.2f} cm, "
+        f"Ideal N=3 soliton (NLSE only): z_sol={z_sol * 100:.2f} cm, "
         f"periodicity overlap={result['periodicity_overlap']:.4f}",
         fontsize=10,
     )

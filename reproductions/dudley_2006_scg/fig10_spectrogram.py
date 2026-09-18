@@ -60,9 +60,7 @@ SOLITON_BAND = (900.0, 1150.0)
 
 def compute(fast: bool = False, n_delays: int = 181):
     evo = scg.run(fast=fast)
-    pulse = common.build_pulse(
-        scg.P0, N_points=scg.N_POINTS, Tmax_ps=scg.TMAX_PS
-    )
+    pulse = common.build_pulse(scg.P0, N_points=scg.N_POINTS, Tmax_ps=scg.TMAX_PS)
     gate = common.input_gate(pulse)
     delays, omega, S = common.spectrogram(
         evo.fields[-1], evo.t, gate, evo.omega, n_delays=n_delays, delay_span_ps=5.0

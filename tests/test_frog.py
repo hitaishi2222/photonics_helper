@@ -15,7 +15,7 @@ class TestGenerateTrace:
         N = 256
         dt = 10 * T0 / N
         t = np.arange(N) * dt - N * dt / 2
-        E = np.exp(-t**2 / (2 * T0**2))
+        E = np.exp(-(t**2) / (2 * T0**2))
 
         trace = generate_trace(E, dt=dt)
 
@@ -30,7 +30,7 @@ class TestGenerateTrace:
         N = 512
         dt = 10 * T0 / N
         t = np.arange(N) * dt - N * dt / 2
-        E = np.exp(-t**2 / (2 * T0**2))
+        E = np.exp(-(t**2) / (2 * T0**2))
 
         trace = generate_trace(E, dt=dt, normalize=True)
 
@@ -43,7 +43,7 @@ class TestGenerateTrace:
         N = 256
         dt = 10 * T0 / N
         t = np.arange(N) * dt - N * dt / 2
-        E = 2.0 * np.exp(-t**2 / (2 * T0**2))
+        E = 2.0 * np.exp(-(t**2) / (2 * T0**2))
 
         trace = generate_trace(E, dt=dt, normalize=False)
 
@@ -58,12 +58,12 @@ class TestGenerateTrace:
         t = np.arange(N) * dt - N * dt / 2
 
         # Transform-limited
-        E_tl = np.exp(-t**2 / (2 * T0**2))
+        E_tl = np.exp(-(t**2) / (2 * T0**2))
         trace_tl = generate_trace(E_tl, dt=dt)
 
         # Chirped
         chirp = 3.0
-        E_chirped = np.exp(-t**2 / (2 * T0**2)) * np.exp(
+        E_chirped = np.exp(-(t**2) / (2 * T0**2)) * np.exp(
             1j * 0.5 * chirp * (t / T0) ** 2
         )
         trace_chirped = generate_trace(E_chirped, dt=dt)
@@ -82,7 +82,7 @@ class TestRetrieve:
         N = 512
         dt = 10 * T0 / N
         t = np.arange(N) * dt - N * dt / 2
-        E = np.exp(-t**2 / (2 * T0**2))
+        E = np.exp(-(t**2) / (2 * T0**2))
 
         trace = generate_trace(E, dt=dt)
         result = retrieve(trace, max_iter=50, verbose=False)
@@ -112,10 +112,7 @@ class TestRetrieve:
         N = 256
         dt = window * T0 / N
         t = np.arange(N) * dt - N * dt / 2
-        E = (
-            np.exp(-t**2 / (2 * T0**2))
-            * np.exp(1j * 0.5 * chirp * (t / T0) ** 2)
-        )
+        E = np.exp(-(t**2) / (2 * T0**2)) * np.exp(1j * 0.5 * chirp * (t / T0) ** 2)
 
         trace = generate_trace(E, dt=dt)
         result = retrieve(trace, max_iter=100, verbose=False)
@@ -131,10 +128,7 @@ class TestRetrieve:
         N = 256
         dt = window * T0 / N
         t = np.arange(N) * dt - N * dt / 2
-        E = (
-            np.exp(-t**2 / (2 * T0**2))
-            * np.exp(1j * 0.5 * chirp * (t / T0) ** 2)
-        )
+        E = np.exp(-(t**2) / (2 * T0**2)) * np.exp(1j * 0.5 * chirp * (t / T0) ** 2)
 
         trace = generate_trace(E, dt=dt)
         result = retrieve(trace, max_iter=150, verbose=False, n_restarts=6)
@@ -164,7 +158,7 @@ class TestRetrieve:
         N = 128
         dt = 8 * T0 / N
         t = np.arange(N) * dt - N * dt / 2
-        E = np.exp(-t**2 / (2 * T0**2)) * np.exp(1j * 2.0 * (t / T0) ** 2)
+        E = np.exp(-(t**2) / (2 * T0**2)) * np.exp(1j * 2.0 * (t / T0) ** 2)
 
         trace = generate_trace(E, dt=dt)
         r1 = retrieve(trace, max_iter=30, verbose=False)
@@ -177,7 +171,7 @@ class TestRetrieve:
         N = 512
         dt = 10 * T0 / N
         t = np.arange(N) * dt - N * dt / 2
-        E = np.exp(-t**2 / (2 * T0**2))
+        E = np.exp(-(t**2) / (2 * T0**2))
 
         trace = generate_trace(E, dt=dt)
         result = retrieve(trace, max_iter=50, verbose=False)
@@ -195,7 +189,7 @@ class TestRetrieve:
         fwhm_rec = t[idx_rec[-1]] - t[idx_rec[0]]
 
         assert abs(fwhm_orig - fwhm_rec) / fwhm_orig < 0.05, (
-            f"FWHM mismatch: {fwhm_orig*1e15:.2f} fs vs {fwhm_rec*1e15:.2f} fs"
+            f"FWHM mismatch: {fwhm_orig * 1e15:.2f} fs vs {fwhm_rec * 1e15:.2f} fs"
         )
 
     def test_retrieval_convergence(self):
@@ -204,7 +198,7 @@ class TestRetrieve:
         N = 256
         dt = 10 * T0 / N
         t = np.arange(N) * dt - N * dt / 2
-        E = np.exp(-t**2 / (2 * T0**2))
+        E = np.exp(-(t**2) / (2 * T0**2))
 
         trace = generate_trace(E, dt=dt)
         result = retrieve(trace, max_iter=20, verbose=False)
@@ -223,7 +217,7 @@ class TestFidelity:
         N = 256
         dt = 10 * T0 / N
         t = np.arange(N) * dt - N * dt / 2
-        E = np.exp(-t**2 / (2 * T0**2))
+        E = np.exp(-(t**2) / (2 * T0**2))
 
         trace1 = generate_trace(E, dt=dt)
         trace2 = generate_trace(E, dt=dt)
@@ -237,8 +231,8 @@ class TestFidelity:
         N = 256
         dt = 10 * T0 / N
         t = np.arange(N) * dt - N * dt / 2
-        E1 = np.exp(-t**2 / (2 * T0**2))
-        E2 = np.exp(-t**2 / (2 * (2 * T0) ** 2))  # Different width
+        E1 = np.exp(-(t**2) / (2 * T0**2))
+        E2 = np.exp(-(t**2) / (2 * (2 * T0) ** 2))  # Different width
 
         trace1 = generate_trace(E1, dt=dt)
         trace2 = generate_trace(E2, dt=dt)
@@ -252,8 +246,8 @@ class TestFidelity:
         N = 256
         dt = 10 * T0 / N
         t = np.arange(N) * dt - N * dt / 2
-        E1 = np.exp(-t**2 / (2 * T0**2))
-        E2 = 1.5 * np.exp(-t**2 / (2 * T0**2))  # Scaled
+        E1 = np.exp(-(t**2) / (2 * T0**2))
+        E2 = 1.5 * np.exp(-(t**2) / (2 * T0**2))  # Scaled
 
         trace1 = generate_trace(E1, dt=dt)
         trace2 = generate_trace(E2, dt=dt)
@@ -271,11 +265,12 @@ class TestFROGTraceFormula:
         (Iaconis & Walmsley, Opt. Lett. 23, 792 (1998))
         """
         from scipy.fft import fft, fftshift
+
         T0 = 50e-15
         N = 256
         dt = 10 * T0 / N
         t = np.arange(N) * dt - N * dt / 2
-        E = np.exp(-t**2 / (2 * T0**2)) * np.exp(1j * 0.5 * 2.0 * (t / T0)**2)
+        E = np.exp(-(t**2) / (2 * T0**2)) * np.exp(1j * 0.5 * 2.0 * (t / T0) ** 2)
 
         # Independent computation: I(ω,τ) = |FFT[E(t)·E(t−τ)]|²
         # Follow the same axis convention as FROGTrace.from_field
@@ -311,7 +306,7 @@ class TestFROGTraceFormula:
         N = 256
         dt = 10 * T0 / N
         t = np.arange(N) * dt - N * dt / 2
-        E = np.exp(-t**2 / (2 * T0**2))
+        E = np.exp(-(t**2) / (2 * T0**2))
 
         trace = generate_trace(E, dt=dt)
 
@@ -330,12 +325,14 @@ class TestFROGTraceFormula:
         if len(nonzero) > 0:
             center_of_energy = (nonzero[0] + nonzero[-1]) / 2
             assert abs(center_of_energy - N // 2) < 10, (
-                f"Center of energy {center_of_energy} far from middle {N//2}"
+                f"Center of energy {center_of_energy} far from middle {N // 2}"
             )
             # Non-zero region should be roughly symmetric around peak
             left_width = peak_idx - nonzero[0]
             right_width = nonzero[-1] - peak_idx
-            assert max(left_width, right_width) / max(left_width, 1, right_width, 1) < 1.5
+            assert (
+                max(left_width, right_width) / max(left_width, 1, right_width, 1) < 1.5
+            )
 
 
 class TestFROGTrace:
@@ -346,7 +343,7 @@ class TestFROGTrace:
         N = 256
         dt = 1e-13
         t = np.arange(N) * dt - N * dt / 2
-        E = np.exp(-t**2 / (2 * (1e-14) ** 2))
+        E = np.exp(-(t**2) / (2 * (1e-14) ** 2))
 
         trace = FROGTrace.from_field(E, dt=dt)
 
@@ -362,7 +359,7 @@ class TestFROGTrace:
         N = 256
         dt = 10 * T0 / N
         t = np.arange(N) * dt - N * dt / 2
-        E = np.exp(-t**2 / (2 * T0**2))
+        E = np.exp(-(t**2) / (2 * T0**2))
 
         trace = generate_trace(E, dt=dt)
         fig = trace.visualize()
@@ -378,7 +375,7 @@ class TestFROGTrace:
         N = 256
         dt = 10 * T0 / N
         t = np.arange(N) * dt - N * dt / 2
-        E = np.exp(-t**2 / (2 * T0**2))
+        E = np.exp(-(t**2) / (2 * T0**2))
 
         trace = generate_trace(E, dt=dt)
         result = retrieve(trace, max_iter=20, verbose=False)

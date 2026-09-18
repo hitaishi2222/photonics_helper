@@ -96,7 +96,9 @@ def test_ase_noise_level_is_correct():
     P0, level = 0.7, -50.0
     field = ase_noise_field(grid, P0, level, seed=7)
     spec = np.abs(np.asarray(grid.fft(field)))
-    pump_spec = np.abs(np.asarray(grid.fft(np.full(grid.N, np.sqrt(P0), dtype=complex))))
+    pump_spec = np.abs(
+        np.asarray(grid.fft(np.full(grid.N, np.sqrt(P0), dtype=complex)))
+    )
     dc = pump_spec[grid.N // 2]
     expected = dc * 10 ** (level / 20.0)
     # DC removed, all other bins at the requested level

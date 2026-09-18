@@ -6,7 +6,9 @@ from photonics_helper.base import Area, Length, Time
 
 def test_fiber_profile_construction():
     """FiberProfile can be constructed with required fields."""
-    fp = FiberProfile(n2=1.0e-19, alpha=1e-5, A_eff=Area(5e-11, "m^2"), length=Length(1.0, "m"))
+    fp = FiberProfile(
+        n2=1.0e-19, alpha=1e-5, A_eff=Area(5e-11, "m^2"), length=Length(1.0, "m")
+    )
     assert fp.n2 == 1.0e-19
     assert fp.alpha == 1e-5
     assert fp.A_eff.as_m2 == 5e-11
@@ -15,7 +17,9 @@ def test_fiber_profile_construction():
 
 def test_fiber_profile_defaults():
     """Optional fields default correctly."""
-    fp = FiberProfile(n2=1.0e-19, alpha=1e-5, A_eff=Area(5e-11, "m^2"), length=Length(1.0, "m"))
+    fp = FiberProfile(
+        n2=1.0e-19, alpha=1e-5, A_eff=Area(5e-11, "m^2"), length=Length(1.0, "m")
+    )
     assert fp.sigma_tpa == 0.0
     assert fp.carrier_lifetime is None
     assert fp.raman_response is None

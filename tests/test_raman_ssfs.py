@@ -6,7 +6,6 @@ red-shifting solitons).
 """
 
 import numpy as np
-import pytest
 
 from photonics_helper.base import C_MS, Length, Time, Wavelength
 from photonics_helper.gnlse import FiberProfile, GNLSESolver
@@ -16,7 +15,9 @@ from reproductions.gordon_1986_ssfs.reproduce import validate as validate_gordon
 
 
 def _raman(grid):
-    spec = RamanSpec(name="Silica", raman_shift_cm=440.0, raman_linewidth_cm=45.0, fR=0.18)
+    spec = RamanSpec(
+        name="Silica", raman_shift_cm=440.0, raman_linewidth_cm=45.0, fR=0.18
+    )
     return RamanResponse(spec=spec, fR=0.18, tau1=12.2e-15, tau2=32e-15, grid=grid)
 
 
@@ -29,15 +30,22 @@ def test_raman_amplifies_stokes_not_anti_stokes():
     i_p = int(np.argmin(np.abs(w - omega_r)))
     i_m = int(np.argmin(np.abs(w + omega_r)))
 
-    env = Envelope(shape="gaussian", peak_amplitude=np.sqrt(5.0), pulse_width=Time(1.0, "s"))
+    env = Envelope(
+        shape="gaussian", peak_amplitude=np.sqrt(5.0), pulse_width=Time(1.0, "s")
+    )
     pulse = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(wl0, "m"))
     field = np.sqrt(5.0) * (1 + 1e-3 * np.cos(omega_r * t))
     pulse = pulse.with_field(field)
     fiber = FiberProfile.from_gamma(
-        gamma=2.0e-3, n2=2.6e-20, omega0=pulse.central_frequency,
-        length=Length(2.0, "m"), raman_response=_raman(grid),
+        gamma=2.0e-3,
+        n2=2.6e-20,
+        omega0=pulse.central_frequency,
+        length=Length(2.0, "m"),
+        raman_response=_raman(grid),
     )
-    solver = GNLSESolver(pulse=pulse, fiber=fiber, betas=np.array([0.0]), include_raman=True)
+    solver = GNLSESolver(
+        pulse=pulse, fiber=fiber, betas=np.array([0.0]), include_raman=True
+    )
     solver.propagate(num_steps=500)
 
     W0 = np.abs(grid.fft(field)) ** 2
@@ -57,14 +65,19 @@ def test_fundamental_soliton_is_stable_and_red_shifts():
     env = Envelope(shape="sech", peak_amplitude=np.sqrt(P0), pulse_width=Time(T0, "s"))
     pulse = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(wl0, "m"))
     fiber = FiberProfile.from_gamma(
-        gamma=gamma, n2=2.6e-20, omega0=pulse.central_frequency,
-        length=Length(20.0, "m"), raman_response=_raman(grid),
+        gamma=gamma,
+        n2=2.6e-20,
+        omega0=pulse.central_frequency,
+        length=Length(20.0, "m"),
+        raman_response=_raman(grid),
     )
-    solver = GNLSESolver(pulse=pulse, fiber=fiber, betas=np.array([beta2 * 1e24]), include_raman=True)
+    solver = GNLSESolver(
+        pulse=pulse, fiber=fiber, betas=np.array([beta2 * 1e24]), include_raman=True
+    )
     solver.propagate(num_steps=4000)
     A = solver.evolution[-1].envelope_field
-    I = np.abs(A) ** 2
-    idx = np.where(I / I.max() >= 0.5)[0]
+    intensity = np.abs(A) ** 2
+    idx = np.where(intensity / intensity.max() >= 0.5)[0]
     fwhm = (grid.t[idx[-1]] - grid.t[idx[0]]) * 1e15
     assert fwhm < 2.0 * 234.375, "fundamental soliton must stay intact (no dispersion)"
     W = np.abs(grid.fft(A)) ** 2

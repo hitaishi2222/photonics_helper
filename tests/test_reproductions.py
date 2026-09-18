@@ -15,15 +15,22 @@ from reproductions.dudley_2006_cherenkov_dw.reproduce import validate as validat
 from reproductions.kuznetsov_ma_2012_breather.reproduce import validate as validate_km
 from reproductions.narhi_2016_mi_breathers.reproduce import validate as validate_narhi
 from reproductions.tomlinson_1985_wave_breaking.reproduce import validate as validate_wb
+from reproductions.shg_textbook.reproduce import validate as validate_shg
 
 from reproductions.dudley_2006_scg.fig03_basic_scg import validate as validate_fig03
-from reproductions.dudley_2006_scg.fig04_output_features import validate as validate_fig04
+from reproductions.dudley_2006_scg.fig04_output_features import (
+    validate as validate_fig04,
+)
 from reproductions.dudley_2006_scg.fig05_ideal_soliton_period import (
     validate as validate_fig05,
 )
 from reproductions.dudley_2006_scg.fig06_raman_fission import validate as validate_fig06
-from reproductions.dudley_2006_scg.fig07_fission_detail import validate as validate_fig07
-from reproductions.dudley_2006_scg.fig08_dispersive_wave import validate as validate_fig08
+from reproductions.dudley_2006_scg.fig07_fission_detail import (
+    validate as validate_fig07,
+)
+from reproductions.dudley_2006_scg.fig08_dispersive_wave import (
+    validate as validate_fig08,
+)
 from reproductions.dudley_2006_scg.fig10_spectrogram import validate as validate_fig10
 from reproductions.dudley_2006_scg.fig23_mi_gain import validate as validate_fig23
 
@@ -54,7 +61,11 @@ def test_gordon_1986_ssfs():
 def test_dudley_2006_cherenkov_dw():
     """Dispersive-wave root finder and GNLSE DW peak match the analytic -3β₂/β₃ value."""
     result = validate_dw(make_plot=False)
-    assert abs(result["lambda_root_nm"] - result["lambda_analytic_nm"]) / result["lambda_analytic_nm"] < 0.02
+    assert (
+        abs(result["lambda_root_nm"] - result["lambda_analytic_nm"])
+        / result["lambda_analytic_nm"]
+        < 0.02
+    )
     assert result["rel_err"] < 0.05
 
 
@@ -91,6 +102,15 @@ def test_tomlinson_1985_wave_breaking():
     assert result["z_oscillation_m"] / result["sqrt_LD_LNL_m"] < 4.5
     assert -0.65 < result["scaling_slope"] < -0.35
     assert result["scaling_constant_spread"] < 1.35
+
+
+def test_shg_textbook():
+    """Textbook SHG eta = tanh^2(kappa L) and first-order QPM recovery."""
+    result = validate_shg(make_plot=False)
+    assert result["max_rel_error"] < 0.01
+    assert result["eta_off_qpm"] < 0.01
+    assert result["qpm_rel_error"] < 0.01
+    assert result["eta_on_qpm"] > 0.1
 
 
 # ---------------------------------------------------------------------------

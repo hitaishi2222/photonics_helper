@@ -11,7 +11,8 @@ from photonics_helper.base import (
 
 from functools import cached_property
 from numpy.typing import NDArray
-from typing import Literal, Self
+from pathlib import Path
+from typing import Any, Literal, Self
 from pydantic.dataclasses import dataclass
 from pydantic import model_validator
 
@@ -196,7 +197,7 @@ class Dispersion:
             raise ValueError(
                 f"values of disersion available between {_min_wl} and {_max_wl} nm."
             )
-        beta2 = -self.wavelengths.as_m**2 / (2 * PI * C_MS) * self.as_s_m_m
+        beta2 = -(self.wavelengths.as_m**2) / (2 * PI * C_MS) * self.as_s_m_m
         spline = make_splrep(self.wavelengths.as_nm, beta2)
         return float(spline(wavelength_nm))
 
@@ -294,6 +295,24 @@ class PropagationConstant:
             self.wavelengths = self.x_values.to_wl()
         return self
 
+    def beta2(self, wavelength: Wavelength) -> float:
+        """Return the group-velocity dispersion ``d²β/dω²`` (s²/m).
+
+        Differentiates a cubic spline through the tabulated ``β(ω)``. Requires
+        at least four points (cubic-spline minimum).
+        """
+        omega = np.asarray(self.omegas.as_rad_s, dtype=float)
+        beta = np.asarray(self.values, dtype=float)
+        if len(omega) < 4:
+            raise ValueError(
+                "beta2 requires at least 4 tabulated points, got "
+                f"{len(omega)}"
+            )
+        order = np.argsort(omega)
+        spline = make_splrep(omega[order], beta[order])
+        d2 = spline.derivative(2)
+        return float(d2(wavelength.to_omega().as_rad_s))
+
     @classmethod
     def beta_from_neff(
         cls, neff: NDArray, x_values: WavelengthArray | AngularFrequencyArray
@@ -328,6 +347,235 @@ class PropagationConstant:
 
         betas = omega.as_rad_s * neff / C_MS
         return cls(values=betas, x_values=omega)
+
+
+def _read_table(
+    path: str | Path, delimiter: str, skiprows: int
+) -> NDArray:
+    """Read a delimited numeric table with an optional header row.
+
+    Blank lines and ``#`` comments are ignored; ``skiprows`` counts raw lines
+    before that filtering. The first remaining row is treated as a header when
+    any of its fields is non-numeric.
+    """
+    with open(path) as fh:
+        lines = fh.readlines()
+    data_lines = [
+        ln
+        for ln in lines[skiprows:]
+        if ln.strip() and not ln.lstrip().startswith("#")
+    ]
+    if not data_lines:
+        raise ValueError(f"no data rows found in {path}")
+    fields = [f.strip() for f in data_lines[0].split(delimiter) if f.strip()]
+    try:
+        [float(f) for f in fields]
+    except ValueError:
+        data_lines = data_lines[1:]
+    if not data_lines:
+        raise ValueError(f"no data rows found in {path} after the header")
+    rows = [[float(f) for f in ln.split(delimiter)] for ln in data_lines]
+    return np.asarray(rows, dtype=float)
+
+
+def _pick_key(data: dict[str, Any], candidates: tuple[str, ...]) -> str | None:
+    """Return the first candidate key present in ``data`` (case-insensitive)."""
+    lowered: dict[str, str] = {k.lower(): k for k in data}
+    for name in candidates:
+        if name in data:
+            return name
+        if name.lower() in lowered:
+            return lowered[name.lower()]
+    return None
+
+
+@dataclass(config={"arbitrary_types_allowed": True})
+class WaveguideMode:
+    """Imported waveguide mode: effective index ``n_eff(λ)`` from an FEM solver.
+
+    Tabulated effective indices are converted into the library's dispersion
+    objects. This is the documented bridge from an external eigenmode solver
+    (Lumerical MODE, COMSOL Wave Optics, …) into
+    :class:`PropagationConstant` / :class:`Dispersion`.
+
+    File conventions
+    ----------------
+    **CSV** — comma separated, optional header, two or three columns::
+
+        wavelength_um, neff
+        1.50, 2.4310
+        1.55, 2.4205
+        ...
+
+    or ``wavelength_um, neff, ng`` with the optional group index ``ng``. A
+    header line is detected automatically (any non-numeric first row).
+
+    **NPZ** — ``np.savez`` archive with keys:
+
+    * ``wavelength_um`` (required) — 1-D vacuum wavelengths in **micrometres**.
+    * ``neff`` (required) — 1-D effective indices, same length.
+    * ``ng`` (optional) — group index.
+    * ``central_wavelength_nm`` or ``central_wavelength_um`` (optional) —
+      design wavelength; defaults to the mid-point of the grid.
+
+    Validation mirrors :class:`~photonics_helper.materials.RefractiveIndex`:
+    a finite, positive, strictly increasing wavelength grid with at least four
+    points (cubic-spline requirement).
+
+    Attributes
+    ----------
+    neff : 1-D effective index array.
+    wavelengths : :class:`WavelengthArray` of the tabulated grid.
+    central_wavelength : design wavelength.
+    ng : optional 1-D group-index array.
+    """
+
+    neff: NDArray
+    wavelengths: WavelengthArray
+    central_wavelength: Wavelength | None = None
+    ng: NDArray | None = None
+
+    @model_validator(mode="after")
+    def _validate(self) -> "WaveguideMode":
+        neff = np.asarray(self.neff, dtype=float).ravel()
+        wl_um = np.asarray(self.wavelengths.as_um, dtype=float).ravel()
+        if neff.ndim != 1 or wl_um.ndim != 1:
+            raise ValueError("neff and wavelengths must be one-dimensional")
+        if len(neff) != len(wl_um):
+            raise ValueError(
+                "neff and wavelength arrays must have equal length, got "
+                f"{len(neff)} and {len(wl_um)}"
+            )
+        if len(wl_um) < 4:
+            raise ValueError(
+                "cubic spline interpolation requires at least 4 wavelength "
+                f"points, got {len(wl_um)}"
+            )
+        if not np.all(np.isfinite(neff)):
+            raise ValueError("neff contains non-finite values")
+        if not np.all(np.isfinite(wl_um)):
+            raise ValueError("wavelength grid contains non-finite values")
+        if np.any(wl_um <= 0):
+            raise ValueError("wavelength grid must be positive")
+        if not np.all(np.diff(wl_um) > 0):
+            raise ValueError("wavelengths must be strictly increasing")
+        self.neff = neff
+        if self.ng is not None:
+            ng = np.asarray(self.ng, dtype=float).ravel()
+            if ng.shape != neff.shape:
+                raise ValueError(
+                    f"ng must have the same shape as neff, got {ng.shape} vs {neff.shape}"
+                )
+            self.ng = ng
+        if self.central_wavelength is None:
+            self.central_wavelength = Wavelength(float(wl_um[len(wl_um) // 2]), "um")
+        return self
+
+    def __repr__(self) -> str:
+        return (
+            f"WaveguideMode: neff from {self.wavelengths.as_um.min():.3f} to "
+            f"{self.wavelengths.as_um.max():.3f} um, {len(self.neff)} points"
+        )
+
+    @cached_property
+    def _neff_spline(self) -> BSpline:
+        return make_splrep(self.wavelengths.as_um, self.neff)
+
+    def neff_at(self, wavelength: Wavelength) -> float:
+        """Interpolated ``n_eff`` at ``wavelength`` within the tabulated range."""
+        wl_um = wavelength.as_um
+        lo, hi = float(self.wavelengths.as_um.min()), float(self.wavelengths.as_um.max())
+        if not (lo <= wl_um <= hi):
+            raise ValueError(
+                f"n_eff available only between {lo:.4f} and {hi:.4f} um, "
+                f"got {wl_um:.4f} um"
+            )
+        return float(self._neff_spline(wl_um))
+
+    def to_propagation_constant(self) -> PropagationConstant:
+        """Build a :class:`PropagationConstant` with ``β = n_eff·ω/c``."""
+        return PropagationConstant.beta_from_neff(self.neff, self.wavelengths)
+
+    def to_dispersion(self, ignore_fit_error: bool = True) -> Dispersion:
+        """Build a :class:`Dispersion` ``D(λ)`` from ``n_eff(λ)``.
+
+        ``ignore_fit_error`` defaults to ``True`` because FEM exports are often
+        coarse and the smoothness guard in :meth:`Dispersion.from_neff` can
+        otherwise reject a perfectly usable table.
+        """
+        if self.central_wavelength is None:  # pragma: no cover - validator sets it
+            raise ValueError("central_wavelength is not set")
+        return Dispersion.from_neff(
+            neff=self.neff,
+            wavelengths=self.wavelengths,
+            central_wavelength=self.central_wavelength,
+            ignore_fit_error=ignore_fit_error,
+        )
+
+    @classmethod
+    def from_csv(
+        cls,
+        path: str | Path,
+        *,
+        central_wavelength: Wavelength | None = None,
+        delimiter: str = ",",
+        skiprows: int = 0,
+    ) -> "WaveguideMode":
+        """Load ``wavelength_um, neff[, ng]`` from a CSV/text file."""
+        data = _read_table(path, delimiter, skiprows)
+        if data.ndim != 2 or data.shape[1] < 2:
+            raise ValueError(
+                "expected at least 2 columns (wavelength_um, neff), got "
+                f"shape {data.shape}"
+            )
+        ng = data[:, 2] if data.shape[1] >= 3 else None
+        return cls(
+            neff=data[:, 1],
+            wavelengths=WavelengthArray(data[:, 0], "um"),
+            central_wavelength=central_wavelength,
+            ng=ng,
+        )
+
+    @classmethod
+    def from_npz(
+        cls,
+        path: str | Path,
+        *,
+        central_wavelength: Wavelength | None = None,
+    ) -> "WaveguideMode":
+        """Load an ``n_eff(λ)`` table from an ``np.savez`` archive.
+
+        Required keys: ``wavelength_um`` (µm) and ``neff``. Optional: ``ng``,
+        ``central_wavelength_nm``/``central_wavelength_um``.
+        """
+        data = dict(np.load(path, allow_pickle=False))
+        wl_key = _pick_key(
+            data, ("wavelength_um", "wavelengths_um", "wavelength", "wl")
+        )
+        neff_key = _pick_key(data, ("neff", "n_eff", "neff_um"))
+        if wl_key is None or neff_key is None:
+            raise ValueError(
+                "NPZ must contain a wavelength key (wavelength_um) and an "
+                f"effective-index key (neff); found {sorted(data)}"
+            )
+        ng_key = _pick_key(data, ("ng", "n_group", "group_index"))
+        if central_wavelength is None:
+            if "central_wavelength_nm" in data:
+                central_wavelength = Wavelength(
+                    float(data["central_wavelength_nm"]), "nm"
+                )
+            elif "central_wavelength_um" in data:
+                central_wavelength = Wavelength(
+                    float(data["central_wavelength_um"]), "um"
+                )
+        return cls(
+            neff=np.asarray(data[neff_key], dtype=float),
+            wavelengths=WavelengthArray(
+                np.asarray(data[wl_key], dtype=float), "um"
+            ),
+            central_wavelength=central_wavelength,
+            ng=None if ng_key is None else np.asarray(data[ng_key], dtype=float),
+        )
 
 
 @dataclass(config={"arbitrary_types_allowed": True})
@@ -409,7 +657,9 @@ class ZDependentDispersion:
         Out-of-range values return NaN (not an error).
         """
         omega_arr = np.atleast_1d(np.asarray(omega, dtype=float))
-        result = self._interpolator(np.column_stack([omega_arr, np.full_like(omega_arr, z)]))
+        result = self._interpolator(
+            np.column_stack([omega_arr, np.full_like(omega_arr, z)])
+        )
         if np.isscalar(omega):
             return float(result[0])
         return np.asarray(result)
@@ -450,7 +700,7 @@ class ZDependentDispersion:
         omega_fit = self.omegas[mask]
         beta_at_z = np.asarray(self.fn(omega_fit, z), dtype=float)
         valid = ~np.isnan(beta_at_z)
-        
+
         if valid.sum() < order + 1:
             return np.full(order - 1, np.nan)
 
@@ -509,7 +759,9 @@ class ZDependentDispersion:
         )
 
     @classmethod
-    def from_npz(cls, path: str, central_wavelength: float | None = None) -> "ZDependentDispersion":
+    def from_npz(
+        cls, path: str, central_wavelength: float | None = None
+    ) -> "ZDependentDispersion":
         """Load β(ω, z) from an NPZ file.
 
         Expected keys:

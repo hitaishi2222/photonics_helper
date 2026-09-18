@@ -92,7 +92,8 @@ def peregrine_soliton(xi: float, tau: NDArray | float) -> NDArray | complex:
     """
     tau = _asarray(tau)
     return np.asarray(
-        np.exp(1j * xi) * (1.0 - 4.0 * (1.0 + 2j * xi) / (1.0 + 4.0 * tau**2 + 4.0 * xi**2)),
+        np.exp(1j * xi)
+        * (1.0 - 4.0 * (1.0 + 2j * xi) / (1.0 + 4.0 * tau**2 + 4.0 * xi**2)),
         dtype=complex,
     )
 

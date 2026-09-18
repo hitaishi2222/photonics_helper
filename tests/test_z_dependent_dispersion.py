@@ -1,4 +1,5 @@
 """Tests for ZDependentDispersion dataclass."""
+
 import math
 import numpy as np
 import pytest
@@ -20,7 +21,7 @@ def _make_simple_profile():
     beta2_profile = np.linspace(beta2_start, beta2_end, len(z_positions))
     beta = np.zeros((len(omegas), len(z_positions)))
     for j, beta2_j in enumerate(beta2_profile):
-        beta[:, j] = 1e8 + beta2_j * omegas ** 2 / 2  # β0 = 1e8 rad/m
+        beta[:, j] = 1e8 + beta2_j * omegas**2 / 2  # β0 = 1e8 rad/m
     return omegas, z_positions, beta
 
 
@@ -72,8 +73,13 @@ class TestZDependentDispersion:
         z_mid = (z_positions[5] + z_positions[6]) / 2
         result = zdd.fn(omega_mid, z_mid)
         # Should be close to the interpolated value (within linear interpolation tolerance)
-        expected = zdd.fn(omegas[10], z_positions[5]) * 0.5 + zdd.fn(omegas[11], z_positions[6]) * 0.5
-        assert np.isclose(result, expected, rtol=0.1)  # Loose tolerance for linear interp
+        expected = (
+            zdd.fn(omegas[10], z_positions[5]) * 0.5
+            + zdd.fn(omegas[11], z_positions[6]) * 0.5
+        )
+        assert np.isclose(
+            result, expected, rtol=0.1
+        )  # Loose tolerance for linear interp
 
     def test_out_of_range_returns_nan(self):
         """Test that out-of-range queries return NaN."""
@@ -143,7 +149,9 @@ class TestZDependentDispersion:
                 beta=beta,
             )
             # Should require central_wavelength as argument
-            zdd = ZDependentDispersion.from_npz(npz_path, central_wavelength=central_wavelength)
+            zdd = ZDependentDispersion.from_npz(
+                npz_path, central_wavelength=central_wavelength
+            )
             assert zdd.central_wavelength == central_wavelength
 
     def test_from_npz_missing_central_wavelength_raises(self):
@@ -262,7 +270,10 @@ class TestZDependentDispersion:
         beta0 = float(zdd.fn(omega0, z))
         beta_taylor = beta0
         for k in range(2, 8):
-            beta_taylor = beta_taylor + betas[k - 2] / math.factorial(k) * (omega_fit - omega0) ** k
+            beta_taylor = (
+                beta_taylor
+                + betas[k - 2] / math.factorial(k) * (omega_fit - omega0) ** k
+            )
         valid = ~np.isnan(beta_table)
         rel_err = np.abs(beta_taylor[valid] - beta_table[valid]) / np.maximum(
             np.abs(beta_table[valid]), 1e-30

@@ -44,7 +44,10 @@ from scipy.signal import find_peaks
 from photonics_helper.base import C_MS, AngularFrequencyArray, Length, Time, Wavelength
 from photonics_helper.fiber import PropagationConstant
 from photonics_helper.gnlse import FiberProfile, GNLSESolver
-from photonics_helper.phase_matching import PropagationConstantAdaptor, dispersive_wave_roots
+from photonics_helper.phase_matching import (
+    PropagationConstantAdaptor,
+    dispersive_wave_roots,
+)
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
 HERE = Path(__file__).resolve().parent
@@ -58,7 +61,9 @@ def validate(params: dict | None = None, make_plot: bool = True) -> dict:
     beta3 = params["beta3_ps3_per_m"]
     betas = np.array([beta2, beta3])
 
-    grid = TemporalGrid(N=params["grid_N"], Tmax=Time(params["grid_Tmax_ps"] * 1e-12, "s"))
+    grid = TemporalGrid(
+        N=params["grid_N"], Tmax=Time(params["grid_Tmax_ps"] * 1e-12, "s")
+    )
     env = Envelope.from_fwhm(
         "sech",
         peak_amplitude=np.sqrt(params["peak_power_W"]),
@@ -87,14 +92,20 @@ def validate(params: dict | None = None, make_plot: bool = True) -> dict:
         wl_range=(Wavelength(300, "nm"), Wavelength(2500, "nm")),
         n_brackets=1000,
     )
-    lambda_root = float(roots.wavelengths.as_nm[0]) if roots.wavelengths.as_m.size else float("nan")
+    lambda_root = (
+        float(roots.wavelengths.as_nm[0])
+        if roots.wavelengths.as_m.size
+        else float("nan")
+    )
     assert abs(lambda_root - lambda_analytic) / lambda_analytic < 0.02, (
         f"root finder {lambda_root:.1f} nm vs analytic {lambda_analytic:.1f} nm"
     )
 
     # GNLSE spectrum and the blue DW peak.
     fiber = FiberProfile.from_gamma(
-        gamma=params["gamma_per_Wm"], n2=2.7e-20, omega0=w0,
+        gamma=params["gamma_per_Wm"],
+        n2=2.7e-20,
+        omega0=w0,
         length=Length(params["length_m"], "m"),
     )
     solver = GNLSESolver(pulse=pulse, fiber=fiber, betas=betas, include_raman=False)
@@ -112,7 +123,7 @@ def validate(params: dict | None = None, make_plot: bool = True) -> dict:
     rel_err = abs(lambda_sim - lambda_analytic) / lambda_analytic
     assert rel_err < params["dw_tolerance"], (
         f"simulated DW {lambda_sim:.1f} nm vs analytic {lambda_analytic:.1f} nm "
-        f"({rel_err*100:.1f}%)"
+        f"({rel_err * 100:.1f}%)"
     )
 
     if make_plot:
@@ -123,8 +134,15 @@ def validate(params: dict | None = None, make_plot: bool = True) -> dict:
 
         fig, ax = plt.subplots(figsize=(8, 5))
         ax.plot(Ls, Ws / Ws.max(), color="C0")
-        ax.axvline(lambda_analytic, color="k", ls=":", label=f"analytic DW {lambda_analytic:.0f} nm")
-        ax.axvline(lambda_sim, color="C3", ls="--", label=f"simulated DW {lambda_sim:.0f} nm")
+        ax.axvline(
+            lambda_analytic,
+            color="k",
+            ls=":",
+            label=f"analytic DW {lambda_analytic:.0f} nm",
+        )
+        ax.axvline(
+            lambda_sim, color="C3", ls="--", label=f"simulated DW {lambda_sim:.0f} nm"
+        )
         ax.set_xlim(450, 950)
         ax.set_xlabel("Wavelength (nm)")
         ax.set_ylabel("Normalized spectrum")
@@ -139,7 +157,7 @@ def validate(params: dict | None = None, make_plot: bool = True) -> dict:
     print("Cherenkov DW reproduction passed:")
     print(f"  analytic -3β₂/β₃ = {lambda_analytic:.1f} nm")
     print(f"  dispersive_wave_roots = {lambda_root:.1f} nm")
-    print(f"  GNLSE blue DW peak = {lambda_sim:.1f} nm (rel err {rel_err*100:.2f}%)")
+    print(f"  GNLSE blue DW peak = {lambda_sim:.1f} nm (rel err {rel_err * 100:.2f}%)")
     return {
         "lambda_analytic_nm": lambda_analytic,
         "lambda_root_nm": lambda_root,

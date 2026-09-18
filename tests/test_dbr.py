@@ -76,8 +76,12 @@ def test_block_position_setter_and_deleter(constant_material):
 
 def test_pattren_construction_and_get_index(constant_material):
     # Two blocks with different lengths
-    block_a = Block(length=Length(100e-9, "m"), material=constant_material, colour="red")
-    block_b = Block(length=Length(150e-9, "m"), material=constant_material, colour="blue")
+    block_a = Block(
+        length=Length(100e-9, "m"), material=constant_material, colour="red"
+    )
+    block_b = Block(
+        length=Length(150e-9, "m"), material=constant_material, colour="blue"
+    )
     mapping = {"A": block_a, "B": block_b}
     pat = Pattern(
         style="AB", mapping=mapping, central_wavelength=Wavelength(1.55, "um")
@@ -99,13 +103,17 @@ def test_pattren_construction_and_get_index(constant_material):
 
 
 def test_pattren_add_and_remove_block(constant_material):
-    block_a = Block(length=Length(100e-9, "m"), material=constant_material, colour="red")
+    block_a = Block(
+        length=Length(100e-9, "m"), material=constant_material, colour="red"
+    )
     pat = Pattern(
         style="A", mapping={"A": block_a}, central_wavelength=Wavelength(1.55, "um")
     )
 
     # Add a new block B after the first position
-    block_b = Block(length=Length(200e-9, "m"), material=constant_material, colour="blue")
+    block_b = Block(
+        length=Length(200e-9, "m"), material=constant_material, colour="blue"
+    )
     pat.add_block(block_b, mapping="B", index=1)
     assert pat.style == "AB"
     assert pat.length == 300e-9
@@ -125,8 +133,12 @@ def test_tmm_slab_reflects_at_normal_incidence(constant_material):
     Two blocks with identical material still have entry/exit interfaces.
     The stack acts as a Fabry–Perot etalon: R oscillates with wavelength.
     """
-    block_a = Block(length=Length(100e-9, "m"), material=constant_material, colour="red")
-    block_b = Block(length=Length(100e-9, "m"), material=constant_material, colour="blue")
+    block_a = Block(
+        length=Length(100e-9, "m"), material=constant_material, colour="red"
+    )
+    block_b = Block(
+        length=Length(100e-9, "m"), material=constant_material, colour="blue"
+    )
     pat = Pattern(
         style="AB",
         mapping={"A": block_a, "B": block_b},
@@ -163,8 +175,12 @@ def test_tmm_energy_conservation_lossless(high_index_material, low_index_materia
     style_chars = []
     mapping = {}
     for i in range(5):
-        h_block = Block(length=Length(d_h, "m"), material=high_index_material, colour="high")
-        l_block = Block(length=Length(d_l, "m"), material=low_index_material, colour="low")
+        h_block = Block(
+            length=Length(d_h, "m"), material=high_index_material, colour="high"
+        )
+        l_block = Block(
+            length=Length(d_l, "m"), material=low_index_material, colour="low"
+        )
         blocks.extend([h_block, l_block])
         style_chars.extend(["H", "L"])
         mapping["H"] = h_block
@@ -177,7 +193,9 @@ def test_tmm_energy_conservation_lossless(high_index_material, low_index_materia
     )
     tmm = TMM(pattern=pat, angle_of_incidence=0.0, polarisation="TE")
 
-    wl_vals = np.linspace(1100, 1900, 200)  # nm — within material valid range (1000–2000 nm)
+    wl_vals = np.linspace(
+        1100, 1900, 200
+    )  # nm — within material valid range (1000–2000 nm)
     wl_arr = WavelengthArray(wl_vals, "nm")
     R, T = tmm.spectrum(wl_arr)
 
@@ -197,8 +215,12 @@ def test_tmm_oblique_incidence_blue_shift(high_index_material, low_index_materia
     style_chars = []
     mapping = {}
     for i in range(8):
-        h_block = Block(length=Length(d_h, "m"), material=high_index_material, colour="high")
-        l_block = Block(length=Length(d_l, "m"), material=low_index_material, colour="low")
+        h_block = Block(
+            length=Length(d_h, "m"), material=high_index_material, colour="high"
+        )
+        l_block = Block(
+            length=Length(d_l, "m"), material=low_index_material, colour="low"
+        )
         blocks.extend([h_block, l_block])
         style_chars.extend(["H", "L"])
         mapping["H"] = h_block
@@ -243,8 +265,12 @@ def test_tmm_te_tm_difference(high_index_material, low_index_material):
     style_chars = []
     mapping = {}
     for i in range(5):
-        h_block = Block(length=Length(d_h, "m"), material=high_index_material, colour="high")
-        l_block = Block(length=Length(d_l, "m"), material=low_index_material, colour="low")
+        h_block = Block(
+            length=Length(d_h, "m"), material=high_index_material, colour="high"
+        )
+        l_block = Block(
+            length=Length(d_l, "m"), material=low_index_material, colour="low"
+        )
         blocks.extend([h_block, l_block])
         style_chars.extend(["H", "L"])
         mapping["H"] = h_block
@@ -277,9 +303,15 @@ def test_tmm_te_tm_difference(high_index_material, low_index_material):
 
 def test_tmm_field_profile_shape(constant_material):
     """Field profile returns one value per layer in the pattern."""
-    block_a = Block(length=Length(100e-9, "m"), material=constant_material, colour="red")
-    block_b = Block(length=Length(150e-9, "m"), material=constant_material, colour="blue")
-    block_c = Block(length=Length(120e-9, "m"), material=constant_material, colour="green")
+    block_a = Block(
+        length=Length(100e-9, "m"), material=constant_material, colour="red"
+    )
+    block_b = Block(
+        length=Length(150e-9, "m"), material=constant_material, colour="blue"
+    )
+    block_c = Block(
+        length=Length(120e-9, "m"), material=constant_material, colour="green"
+    )
     pat = Pattern(
         style="ABC",
         mapping={"A": block_a, "B": block_b, "C": block_c},
@@ -296,7 +328,9 @@ def test_tmm_field_profile_shape(constant_material):
 
 def test_tmm_absorbing_layer_energy_deficit(absorbing_material):
     """With k > 0, R + T < 1 (energy is absorbed by the layer)."""
-    block_a = Block(length=Length(200e-9, "m"), material=absorbing_material, colour="red")
+    block_a = Block(
+        length=Length(200e-9, "m"), material=absorbing_material, colour="red"
+    )
     pat = Pattern(
         style="A",
         mapping={"A": block_a},

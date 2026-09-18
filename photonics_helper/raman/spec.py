@@ -1,6 +1,5 @@
 """RamanSpec - material Raman scattering properties and derivations."""
 
-
 from __future__ import annotations
 
 from functools import cached_property
@@ -28,7 +27,6 @@ except ImportError:
     HAS_PLOTLY = False
 
 if TYPE_CHECKING:
-
     from ..materials import NKMaterial
 
 from .db import RamanDatabase
@@ -228,9 +226,7 @@ class RamanSpec:
             lines.append(f"Multi-mode: {len(self.phonon_modes)} phonon modes")
         return "\n".join(lines)
 
-    def nk(
-        self, wavelength_um: float, source: str | None = None
-    ) -> complex:
+    def nk(self, wavelength_um: float, source: str | None = None) -> complex:
         """Interpolated complex refractive index at wavelength (μm).
 
         Returns n + i·k from the nk_data table, or falls back to Sellmeier
@@ -311,7 +307,6 @@ class RamanSpec:
         ValueError : If wavelength outside valid range or no data available
         """
         import numpy as np
-
 
         if sellmeier_data is None:
             db = RamanDatabase()
@@ -408,7 +403,7 @@ class RamanSpec:
                 center + width,
                 alpha=0.2,
                 color="orange",
-                label=f"FWHM: {2*width:.1f} cm⁻¹",
+                label=f"FWHM: {2 * width:.1f} cm⁻¹",
             )
             ax.set_xlabel("Raman shift (cm⁻¹)", fontsize=12)
             ax.set_ylabel("Intensity (arb.)", fontsize=12)

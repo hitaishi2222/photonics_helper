@@ -31,7 +31,9 @@ def make_pulse(wavelength_nm=1550, T0_fs=100, peak_power_W=5000):
     """Create a Gaussian pulse at the given wavelength."""
     grid = TemporalGrid(N=2**10, Tmax=Time(3 * T0_fs * 1e-15, "s"))
     env = Envelope(
-        shape="gaussian", peak_amplitude=np.sqrt(peak_power_W), pulse_width=Time(T0_fs, "fs")
+        shape="gaussian",
+        peak_amplitude=np.sqrt(peak_power_W),
+        pulse_width=Time(T0_fs, "fs"),
     )
     pulse = Wave(
         grid=grid,
@@ -63,7 +65,9 @@ def main():
     T0 = Time(100, "fs")
     fiber_length = Length(200, "mm")
 
-    pulse = make_pulse(wavelength_nm=central_wl.as_nm, T0_fs=T0.as_fs, peak_power_W=5000)
+    pulse = make_pulse(
+        wavelength_nm=central_wl.as_nm, T0_fs=T0.as_fs, peak_power_W=5000
+    )
     fiber = make_fiber(length_m=fiber_length.as_m)
     betas = make_betas(beta2_ps2_per_km=20.0)  # normal dispersion
 
@@ -151,7 +155,9 @@ def main():
     axes[2].set_xlim([-1, 1])
 
     plt.tight_layout()
-    plt.savefig("examples/images/12_gnlse_basic_propagation.png", dpi=150, bbox_inches="tight")
+    plt.savefig(
+        "examples/images/12_gnlse_basic_propagation.png", dpi=150, bbox_inches="tight"
+    )
     print("Saved: examples/images/12_gnlse_basic_propagation.png")
     plt.close()
 
@@ -216,32 +222,32 @@ def main():
     print("\n— Energy conservation check —")
     print(f"Input energy:      {initial_energy:.6e}")
     print(
-        f"After dispersion:  {final_disp_energy:.6e}  (Δ={final_disp_energy/initial_energy*100-100:.2f}%)"
+        f"After dispersion:  {final_disp_energy:.6e}  (Δ={final_disp_energy / initial_energy * 100 - 100:.2f}%)"
     )
     print(
-        f"After Kerr:        {final_kerr_energy:.6e}  (Δ={final_kerr_energy/initial_energy*100-100:.2f}%)"
+        f"After Kerr:        {final_kerr_energy:.6e}  (Δ={final_kerr_energy / initial_energy * 100 - 100:.2f}%)"
     )
     print(
-        f"After combined:    {final_both_energy:.6e}  (Δ={final_both_energy/initial_energy*100-100:.2f}%)"
+        f"After combined:    {final_both_energy:.6e}  (Δ={final_both_energy / initial_energy * 100 - 100:.2f}%)"
     )
 
     # Pulse width evolution
     def pulse_width(wave):
         t = wave.grid.t
-        I = np.abs(wave.envelope_field) ** 2
-        return np.sqrt(np.sum(t**2 * I) / np.sum(I))
+        intensity = np.abs(wave.envelope_field) ** 2
+        return np.sqrt(np.sum(t**2 * intensity) / np.sum(intensity))
 
     print("\n— Pulse width evolution —")
     w0 = pulse_width(pulse)
-    print(f"Input:  {w0*1e12:.2f} ps")
+    print(f"Input:  {w0 * 1e12:.2f} ps")
     print(
-        f"Disp:   {pulse_width(solver_disp.evolution[-1])*1e12:.2f} ps  ({pulse_width(solver_disp.evolution[-1])/w0*100-100:.1f}%)"
+        f"Disp:   {pulse_width(solver_disp.evolution[-1]) * 1e12:.2f} ps  ({pulse_width(solver_disp.evolution[-1]) / w0 * 100 - 100:.1f}%)"
     )
     print(
-        f"Kerr:   {pulse_width(solver_kerr.evolution[-1])*1e12:.2f} ps  ({pulse_width(solver_kerr.evolution[-1])/w0*100-100:.1f}%)"
+        f"Kerr:   {pulse_width(solver_kerr.evolution[-1]) * 1e12:.2f} ps  ({pulse_width(solver_kerr.evolution[-1]) / w0 * 100 - 100:.1f}%)"
     )
     print(
-        f"Both:   {pulse_width(solver_both.evolution[-1])*1e12:.2f} ps  ({pulse_width(solver_both.evolution[-1])/w0*100-100:.1f}%)"
+        f"Both:   {pulse_width(solver_both.evolution[-1]) * 1e12:.2f} ps  ({pulse_width(solver_both.evolution[-1]) / w0 * 100 - 100:.1f}%)"
     )
 
 

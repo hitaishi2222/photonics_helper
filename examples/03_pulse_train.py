@@ -10,7 +10,8 @@ import numpy as np
 from photonics_helper.pulse import Envelope, Wave, TemporalGrid
 from photonics_helper.base import Wavelength, Frequency, Time
 import matplotlib
-matplotlib.use('Agg')
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 # Create a 50 fs Gaussian pulse
@@ -102,7 +103,9 @@ plt.close(fig_zoom)
 
 # Also show a single pulse for comparison
 single_fig = pulse.visualize_2d(backend="matplotlib", figsize=(14, 10))
-single_fig.savefig("examples/images/single_pulse_comparison.png", dpi=150, bbox_inches="tight")
+single_fig.savefig(
+    "examples/images/single_pulse_comparison.png", dpi=150, bbox_inches="tight"
+)
 print("Saved single_pulse_comparison.png")
 plt.close(single_fig)
 

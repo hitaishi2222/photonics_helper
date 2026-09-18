@@ -39,6 +39,7 @@ def _setup():
 # 3.1 / 3.3 — equivalence and default behaviour
 # ---------------------------------------------------------------------------
 
+
 def test_equivalent_units_give_identical_propagation():
     """ps^k/m and equivalent s^k/m inputs propagate identically."""
     pulse, fiber = _setup()
@@ -78,6 +79,7 @@ def test_default_unit_is_backwards_compatible():
 # 3.2 — per-order conversion factor
 # ---------------------------------------------------------------------------
 
+
 def test_si_conversion_is_order_correct():
     """Order-2 SI coefficient 5e-28 s²/m becomes 5e-4 ps²/m."""
     pulse, fiber = _setup()
@@ -108,6 +110,7 @@ def test_si_conversion_third_order():
 # ---------------------------------------------------------------------------
 # 3.4 / 3.5 — validation
 # ---------------------------------------------------------------------------
+
 
 def test_invalid_unit_string_rejected():
     pulse, fiber = _setup()
@@ -144,6 +147,7 @@ def test_non_1d_betas_rejected():
 # ---------------------------------------------------------------------------
 # 3.6 — all three constructors accept the flag
 # ---------------------------------------------------------------------------
+
 
 def test_splitstep_engine_accepts_betas_unit():
     pulse, fiber = _setup()

@@ -104,7 +104,9 @@ def _octave_span(wavelength_nm: np.ndarray, psd: np.ndarray, level_db: float = -
 def validate(fast: bool = False, make_plot: bool = True) -> dict:
     scales = soliton_scales(P0=P0)
     assert abs(scales.N - 8.5) / 8.5 < 0.05, f"N={scales.N:.2f}"
-    assert abs(scales.z_sol - 0.106) / 0.106 < 0.05, f"z_sol={scales.z_sol*100:.2f} cm"
+    assert abs(scales.z_sol - 0.106) / 0.106 < 0.05, (
+        f"z_sol={scales.z_sol * 100:.2f} cm"
+    )
 
     evo = run(fast=fast)
     wl, psd = evo.spectrum_on_wavelength()
@@ -339,7 +341,6 @@ def write_html(
     fig.write_html(out, include_plotlyjs="cdn", full_html=True)
     print(f"wrote {out}")
     return out
-
 
 
 def main() -> None:

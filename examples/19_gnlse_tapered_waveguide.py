@@ -47,8 +47,8 @@ from photonics_helper.gnlse import FiberProfile, TaperedGNLSESolver
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
 # ── SiN material parameters ──────────────────────────────────────────
-N_SiN = 2.0        # SiN core refractive index
-N_SIO2 = 1.444     # SiO₂ cladding refractive index
+N_SiN = 2.0  # SiN core refractive index
+N_SIO2 = 1.444  # SiO₂ cladding refractive index
 
 
 # ╔══════════════════════════════════════════════════════════════════════╗
@@ -56,24 +56,33 @@ N_SIO2 = 1.444     # SiO₂ cladding refractive index
 # ╚══════════════════════════════════════════════════════════════════════╝
 
 
-def _waveguide_mesh(w_core: float, w_sim: float = 4.0,
-                    h_clad: float = 1.0, h_box: float = 1.0,
-                    resolution_core: float = 0.02) -> object:
+def _waveguide_mesh(
+    w_core: float,
+    w_sim: float = 4.0,
+    h_clad: float = 1.0,
+    h_box: float = 1.0,
+    resolution_core: float = 0.02,
+) -> object:
     """Build a Gmsh mesh for a SiN ridge waveguide (2D cross-section).
 
     All dimensions in **micrometers**.
     """
     polygons = OrderedDict(
-        core=Polygon([(-w_core / 2, 0), (-w_core / 2, 0.5),
-                      (w_core / 2, 0.5), (w_core / 2, 0)]),
-        clad=Polygon([(-w_sim / 2, 0), (-w_sim / 2, h_clad),
-                      (w_sim / 2, h_clad), (w_sim / 2, 0)]),
-        box=Polygon([(-w_sim / 2, 0), (-w_sim / 2, -h_box),
-                     (w_sim / 2, -h_box), (w_sim / 2, 0)]),
+        core=Polygon(
+            [(-w_core / 2, 0), (-w_core / 2, 0.5), (w_core / 2, 0.5), (w_core / 2, 0)]
+        ),
+        clad=Polygon(
+            [(-w_sim / 2, 0), (-w_sim / 2, h_clad), (w_sim / 2, h_clad), (w_sim / 2, 0)]
+        ),
+        box=Polygon(
+            [(-w_sim / 2, 0), (-w_sim / 2, -h_box), (w_sim / 2, -h_box), (w_sim / 2, 0)]
+        ),
     )
     resolutions = {"core": {"resolution": resolution_core, "distance": 0.5}}
     mesh = mesh_from_OrderedDict(
-        polygons, resolutions, default_resolution_max=0.5,
+        polygons,
+        resolutions,
+        default_resolution_max=0.5,
     )
     return mesh
 
@@ -101,16 +110,21 @@ def compute_neff_wavelengths(
 
     basis0 = Basis(mesh, ElementTriP0())
     epsilon = basis0.zeros()
-    epsilon[basis0.get_dofs(elements="core")] = N_SiN ** 2
-    epsilon[basis0.get_dofs(elements="clad")] = N_SIO2 ** 2
-    epsilon[basis0.get_dofs(elements="box")] = N_SIO2 ** 2
+    epsilon[basis0.get_dofs(elements="core")] = N_SiN**2
+    epsilon[basis0.get_dofs(elements="clad")] = N_SIO2**2
+    epsilon[basis0.get_dofs(elements="box")] = N_SIO2**2
 
     neff = np.empty(len(wavelengths_um))
     for i, wl_um in enumerate(wavelengths_um):
         wl_m = wl_um * 1e-6
         modes = compute_modes(
-            basis0, epsilon, wavelength=wl_m, num_modes=1, order=1,
-            metallic_boundaries=False, n_guess=1.8,
+            basis0,
+            epsilon,
+            wavelength=wl_m,
+            num_modes=1,
+            order=1,
+            metallic_boundaries=False,
+            n_guess=1.8,
         )
         neff[i] = modes[0].n_eff.real
     return neff
@@ -143,7 +157,9 @@ def build_tapered_dispersion(
         Core widths at each z-station (µm).
     """
     if wavelengths_um is None:
-        wavelengths_um = np.linspace(0.8, 2.5, 100)  # broad range to capture ZDW migration from 1100 nm to 1750 nm
+        wavelengths_um = np.linspace(
+            0.8, 2.5, 100
+        )  # broad range to capture ZDW migration from 1100 nm to 1750 nm
 
     z_positions = np.linspace(0, length_m, n_z)
     core_widths = np.linspace(w_core_start_um, w_core_end_um, n_z)
@@ -151,8 +167,10 @@ def build_tapered_dispersion(
     # Pre-compute n_eff at all (wavelength, z) points
     neff_table = np.zeros((len(wavelengths_um), n_z))
     for j, w_core in enumerate(core_widths):
-        print(f"  femwell n_eff(λ) at z={z_positions[j]*1e3:.1f} mm, "
-              f"w_core={w_core:.2f} µm ...")
+        print(
+            f"  femwell n_eff(λ) at z={z_positions[j] * 1e3:.1f} mm, "
+            f"w_core={w_core:.2f} µm ..."
+        )
         neff_table[:, j] = compute_neff_wavelengths(w_core, wavelengths_um)
         # Print ZDW estimate from neff slope
         neff_slope = np.gradient(neff_table[:, j], wavelengths_um)
@@ -204,7 +222,9 @@ def extract_beta2_zdw(
     for j, z_val in enumerate(z_positions):
         beta_at_z = zdep.fn(omega_near, z_val)
         coeffs = np.polyfit(omega_near - omega0, beta_at_z, 2)
-        beta2_profile[j] = 2 * coeffs[0] * 1e24  # s²/m → ps²/m (coeffs[0] is quadratic term)
+        beta2_profile[j] = (
+            2 * coeffs[0] * 1e24
+        )  # s²/m → ps²/m (coeffs[0] is quadratic term)
 
         # ZDW: where d neff / dλ changes sign
         wl_near = 2 * PI * C_MS / omega_near * 1e6  # µm
@@ -276,7 +296,9 @@ def main():
 
     # ── femwell dispersion computation ───────────────────────────────
     print("\n--- Building tapered dispersion β(ω, z) via femwell ---")
-    wavelengths_um = np.linspace(0.8, 2.5, 100)  # broad range to capture ZDW migration from 1100 nm to 1750 nm
+    wavelengths_um = np.linspace(
+        0.8, 2.5, 100
+    )  # broad range to capture ZDW migration from 1100 nm to 1750 nm
     zdep, z_positions, core_widths = build_tapered_dispersion(
         w_core_start_um=1.2,
         w_core_end_um=0.5,
@@ -285,28 +307,33 @@ def main():
         wavelengths_um=wavelengths_um,
     )
     print(f"  β(ω, z) table shape: {zdep.beta.shape}")
-    print(f"  ω range: {zdep.omegas[0]/1e15:.2f} – {zdep.omegas[-1]/1e15:.2f} PHz (broader than original 1.2–1.7 µm)")
-    print(f"  z range: {z_positions[0]*1e3:.1f} – {z_positions[-1]*1e3:.1f} mm")
+    print(
+        f"  ω range: {zdep.omegas[0] / 1e15:.2f} – {zdep.omegas[-1] / 1e15:.2f} PHz (broader than original 1.2–1.7 µm)"
+    )
+    print(f"  z range: {z_positions[0] * 1e3:.1f} – {z_positions[-1] * 1e3:.1f} mm")
 
     # ── Extract β₂(z) and ZDW(z) for diagnostics ─────────────────────
     print("\n--- Dispersion diagnostics β₂(z), ZDW(z) ---")
     beta2_profile, zdw_profile, z_mm = extract_beta2_zdw(
-        zdep, z_positions, central_wl_nm=1550.0,
+        zdep,
+        z_positions,
+        central_wl_nm=1550.0,
     )
 
     print(f"  β₂(0)     = {beta2_profile[0]:+.3f} ps²/m  (z = 0 mm, anomalous)")
-    print(f"  β₂(L)     = {beta2_profile[-1]:+.3f} ps²/m  (z = {z_mm[-1]:.0f} mm, normal)")
+    print(
+        f"  β₂(L)     = {beta2_profile[-1]:+.3f} ps²/m  (z = {z_mm[-1]:.0f} mm, normal)"
+    )
     for i, (z, b2, zd) in enumerate(zip(z_mm, beta2_profile, zdw_profile)):
         if not np.isnan(zd):
             print(f"    z={z:5.1f} mm → β₂={b2:+7.3f} ps²/m, ZDW={zd:.0f} nm")
 
     # ── A_eff(z) — shrinks with narrower core ────────────────────────
     A_eff_base = 0.3e-12  # m² at wide end
-    A_eff_min = 0.08e-12   # m² at narrow end
-    A_eff_z = (A_eff_min
-               + (A_eff_base - A_eff_min)
-               * (z_positions - z_positions[-1])
-               / (z_positions[0] - z_positions[-1]))
+    A_eff_min = 0.08e-12  # m² at narrow end
+    A_eff_z = A_eff_min + (A_eff_base - A_eff_min) * (z_positions - z_positions[-1]) / (
+        z_positions[0] - z_positions[-1]
+    )
 
     def a_eff_fn(z: float) -> float:
         idx = np.argmin(np.abs(z_positions - z))
@@ -325,7 +352,9 @@ def main():
         include_tpa=False,
     )
     solver.propagate(num_steps=100)
-    print(f"  Propagated {len(solver.evolution)} steps over {solver.z_array[-1]*1e3:.1f} mm")
+    print(
+        f"  Propagated {len(solver.evolution)} steps over {solver.z_array[-1] * 1e3:.1f} mm"
+    )
 
     # ── Energy conservation check ────────────────────────────────────
     dt = pulse.grid.dt
@@ -388,8 +417,9 @@ def main():
 
     # Panel 3: Spectrum evolution
     ax = axes[1, 0]
-    ax.pcolormesh(wavelength_nm, z_mm_full, spectra_dB, shading="auto",
-                  cmap="inferno", vmin=-50)
+    ax.pcolormesh(
+        wavelength_nm, z_mm_full, spectra_dB, shading="auto", cmap="inferno", vmin=-50
+    )
     ax.axvline(1550, color="cyan", linestyle=":", alpha=0.6, label="Pump")
     ax.set_xlabel("Wavelength (nm)")
     ax.set_ylabel("Distance (mm)")
@@ -407,10 +437,18 @@ def main():
     # Filter to positive wavelengths only
     valid_wl = wl_full > 0
     sort0 = np.argsort(wl_full[valid_wl])
-    ax.plot(wl_full[valid_wl][sort0], spec0_norm[valid_wl][sort0], "b-", linewidth=1.5, label="Input")
+    ax.plot(
+        wl_full[valid_wl][sort0],
+        spec0_norm[valid_wl][sort0],
+        "b-",
+        linewidth=1.5,
+        label="Input",
+    )
     # Final spectrum - try spectra_sorted[-1], fallback to last sorted column
     spec_final = spectra_sorted[-1]
-    spec_final_norm = spec_final / spec_final.max() if spec_final.max() > 0 else spec0_norm
+    spec_final_norm = (
+        spec_final / spec_final.max() if spec_final.max() > 0 else spec0_norm
+    )
     # Use wavelength_nm computed from absolute frequency for the final spectrum axis
     ax.plot(wavelength_nm, spec_final_norm, "r-", linewidth=1.5, label="Output")
     if spec_final.max() <= 0:
@@ -424,12 +462,14 @@ def main():
 
     plt.suptitle(
         "Tapered SiN Waveguide SCG — femwell dispersion → GNLSE",
-        fontsize=14, fontweight="bold",
+        fontsize=14,
+        fontweight="bold",
     )
     plt.tight_layout()
     os.makedirs("examples/images", exist_ok=True)
-    plt.savefig("examples/images/19_gnlse_tapered_waveguide.png",
-                dpi=150, bbox_inches="tight")
+    plt.savefig(
+        "examples/images/19_gnlse_tapered_waveguide.png", dpi=150, bbox_inches="tight"
+    )
     print("\nSaved: examples/images/19_gnlse_tapered_waveguide.png")
     plt.close()
 
@@ -441,7 +481,9 @@ def main():
     print(f"  β₂(z=L)    = {beta2_profile[-1]:+.3f} ps²/m  (normal)")
     valid_zdw = zdw_profile[~np.isnan(zdw_profile)]
     if len(valid_zdw) >= 2:
-        print(f"  ZDW migration: {valid_zdw[0]:.0f} → {valid_zdw[-1]:.0f} nm (1100→1750 nm taper)")
+        print(
+            f"  ZDW migration: {valid_zdw[0]:.0f} → {valid_zdw[-1]:.0f} nm (1100→1750 nm taper)"
+        )
     print(f"  Energy drift: {drift:.4f}%")
     print("  All checks passed ✓")
 

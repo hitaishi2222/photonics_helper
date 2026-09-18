@@ -1,6 +1,5 @@
 """PumpWavelengthExplorer and MaterialComparison visualisation helpers."""
 
-
 from __future__ import annotations
 
 from importlib.util import find_spec
@@ -205,7 +204,7 @@ class PumpWavelengthExplorer:
             0.15,
             colors="#3b82f6",
             linewidth=3,
-            label=f"Anti-Stokes ({C_MS/nu_anti*1e12:.0f} nm)",
+            label=f"Anti-Stokes ({C_MS / nu_anti * 1e12:.0f} nm)",
         )
         ax.vlines(
             nu_pump,
@@ -221,7 +220,7 @@ class PumpWavelengthExplorer:
             0.15,
             colors="#22c55e",
             linewidth=3,
-            label=f"Stokes ({C_MS/nu_stokes*1e12:.0f} nm)",
+            label=f"Stokes ({C_MS / nu_stokes * 1e12:.0f} nm)",
         )
 
         # Annotations
@@ -406,7 +405,7 @@ class PumpWavelengthExplorer:
             0.15,
             colors="#3b82f6",
             linewidth=3,
-            label=f"AS ({C_MS/nu_anti*1e12:.0f} nm)",
+            label=f"AS ({C_MS / nu_anti * 1e12:.0f} nm)",
         )
         ax1.vlines(
             nu_pump,
@@ -422,7 +421,7 @@ class PumpWavelengthExplorer:
             0.15,
             colors="#22c55e",
             linewidth=3,
-            label=f"S ({C_MS/nu_stokes*1e12:.0f} nm)",
+            label=f"S ({C_MS / nu_stokes * 1e12:.0f} nm)",
         )
         ax1.set_xlabel("Frequency (THz)", fontsize=11)
         ax1.set_title("Frequency Axis (equidistant)", fontsize=11)
@@ -559,7 +558,7 @@ class PumpWavelengthExplorer:
             x=nu_anti,
             y1=0.15,
             line=dict(color="#3b82f6", width=3),
-            annotation_text=f"AS ({C_MS/nu_anti*1e12:.0f} nm)",
+            annotation_text=f"AS ({C_MS / nu_anti * 1e12:.0f} nm)",
         )
         fig.add_vline(
             x=nu_pump,
@@ -571,7 +570,7 @@ class PumpWavelengthExplorer:
             x=nu_stokes,
             y1=0.15,
             line=dict(color="#22c55e", width=3),
-            annotation_text=f"S ({C_MS/nu_stokes*1e12:.0f} nm)",
+            annotation_text=f"S ({C_MS / nu_stokes * 1e12:.0f} nm)",
         )
 
         fig.update_layout(

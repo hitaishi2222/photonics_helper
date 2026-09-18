@@ -26,7 +26,9 @@ def linear_setup():
         central_wavelength=Wavelength(1550, "nm"),
     )
     # Low loss for measurable but small attenuation
-    fiber = FiberProfile(n2=0.0, alpha=0.1, A_eff=Area(1e-10, "m^2"), length=Length(0.1, "m"))
+    fiber = FiberProfile(
+        n2=0.0, alpha=0.1, A_eff=Area(1e-10, "m^2"), length=Length(0.1, "m")
+    )
     # Zero dispersion for pure loss test
     betas = np.array([])
     return pulse, fiber, betas
@@ -42,7 +44,9 @@ def dispersion_setup():
         envelope=env,
         central_wavelength=Wavelength(1550, "nm"),
     )
-    fiber = FiberProfile(n2=0.0, alpha=0.0, A_eff=Area(1e-10, "m^2"), length=Length(0.01, "m"))
+    fiber = FiberProfile(
+        n2=0.0, alpha=0.0, A_eff=Area(1e-10, "m^2"), length=Length(0.01, "m")
+    )
     # Some dispersion but no loss
     betas = np.array([0.01])  # 10 ps²/km (= 0.01 ps²/m)
     return pulse, fiber, betas
@@ -55,8 +59,12 @@ class TestLossApplication:
         """Pulse amplitude decreases with propagation due to loss."""
         pulse, fiber, betas = linear_setup
         solver = GNLSESolver(
-            pulse=pulse, fiber=fiber, betas=betas,
-            include_raman=False, include_self_steepening=False, include_tpa=False,
+            pulse=pulse,
+            fiber=fiber,
+            betas=betas,
+            include_raman=False,
+            include_self_steepening=False,
+            include_tpa=False,
         )
         solver.propagate(num_steps=10)
 
@@ -73,13 +81,19 @@ class TestLossApplication:
         length = fiber.length
 
         solver = GNLSESolver(
-            pulse=pulse, fiber=fiber, betas=betas,
-            include_raman=False, include_self_steepening=False, include_tpa=False,
+            pulse=pulse,
+            fiber=fiber,
+            betas=betas,
+            include_raman=False,
+            include_self_steepening=False,
+            include_tpa=False,
         )
         solver.propagate(num_steps=50)
 
         initial_energy = np.sum(np.abs(pulse.envelope_field) ** 2) * pulse.grid.dt
-        final_energy = np.sum(np.abs(solver.evolution[-1].envelope_field) ** 2) * pulse.grid.dt
+        final_energy = (
+            np.sum(np.abs(solver.evolution[-1].envelope_field) ** 2) * pulse.grid.dt
+        )
 
         # Energy decays as exp(-α·L) (intensity, not field)
         expected_ratio = np.exp(-alpha * length.as_m)
@@ -91,12 +105,18 @@ class TestLossApplication:
         """With alpha=0, energy is conserved (pure dispersion)."""
         pulse, fiber, betas = dispersion_setup
         solver = GNLSESolver(
-            pulse=pulse, fiber=fiber, betas=betas,
-            include_raman=False, include_self_steepening=False, include_tpa=False,
+            pulse=pulse,
+            fiber=fiber,
+            betas=betas,
+            include_raman=False,
+            include_self_steepening=False,
+            include_tpa=False,
         )
         initial_energy = np.sum(np.abs(pulse.envelope_field) ** 2) * pulse.grid.dt
         solver.propagate(num_steps=20)
-        final_energy = np.sum(np.abs(solver.evolution[-1].envelope_field) ** 2) * pulse.grid.dt
+        final_energy = (
+            np.sum(np.abs(solver.evolution[-1].envelope_field) ** 2) * pulse.grid.dt
+        )
 
         assert np.isclose(final_energy, initial_energy, rtol=1e-6)
 
@@ -108,17 +128,25 @@ class TestNoDriftPropagation:
         """Pulse temporal center remains at t=0 with pure dispersion."""
         pulse, fiber, betas = dispersion_setup
         solver = GNLSESolver(
-            pulse=pulse, fiber=fiber, betas=betas,
-            include_raman=False, include_self_steepening=False, include_tpa=False,
+            pulse=pulse,
+            fiber=fiber,
+            betas=betas,
+            include_raman=False,
+            include_self_steepening=False,
+            include_tpa=False,
         )
 
         # Initial pulse center
         init_field = pulse.envelope_field
-        init_center = np.sum(pulse.grid.t * np.abs(init_field) ** 2) / np.sum(np.abs(init_field) ** 2)
+        init_center = np.sum(pulse.grid.t * np.abs(init_field) ** 2) / np.sum(
+            np.abs(init_field) ** 2
+        )
 
         solver.propagate(num_steps=50)
         final_field = solver.evolution[-1].envelope_field
-        final_center = np.sum(pulse.grid.t * np.abs(final_field) ** 2) / np.sum(np.abs(final_field) ** 2)
+        final_center = np.sum(pulse.grid.t * np.abs(final_field) ** 2) / np.sum(
+            np.abs(final_field) ** 2
+        )
 
         # Center should not drift significantly (within numerical tolerance)
         assert np.abs(final_center - init_center) < 1e-13
@@ -158,7 +186,9 @@ class TestRamanFullResponse:
         betas = np.array([])
 
         solver = GNLSESolver(
-            pulse=pulse, fiber=fiber, betas=betas,
+            pulse=pulse,
+            fiber=fiber,
+            betas=betas,
             include_raman=True,
             include_self_steepening=False,
             include_tpa=False,
@@ -177,7 +207,9 @@ class TestRamanFullResponse:
         from photonics_helper.gnlse import SplitStepEngine
 
         grid = TemporalGrid(N=512, Tmax=Time(40e-12, "s"))
-        env = Envelope(shape="gaussian", peak_amplitude=100.0, pulse_width=Time(2, "ps"))
+        env = Envelope(
+            shape="gaussian", peak_amplitude=100.0, pulse_width=Time(2, "ps")
+        )
         pulse = Wave(
             grid=grid,
             envelope=env,
@@ -193,24 +225,34 @@ class TestRamanFullResponse:
         raman = RamanResponse(spec=spec, grid=grid)
 
         fiber_raman = FiberProfile(
-            n2=2.6e-20, alpha=0.0, A_eff=Area(5e-11, "m^2"), length=Length(0.1, "m"),
+            n2=2.6e-20,
+            alpha=0.0,
+            A_eff=Area(5e-11, "m^2"),
+            length=Length(0.1, "m"),
             raman_response=raman,
         )
         fiber_kerr = FiberProfile(
-            n2=2.6e-20, alpha=0.0, A_eff=Area(5e-11, "m^2"), length=Length(0.1, "m"),
+            n2=2.6e-20,
+            alpha=0.0,
+            A_eff=Area(5e-11, "m^2"),
+            length=Length(0.1, "m"),
         )
 
         betas = np.array([])
 
         # Use engine directly to access actual field
         engine_kerr = SplitStepEngine(
-            pulse=pulse, fiber=fiber_kerr, betas=betas,
+            pulse=pulse,
+            fiber=fiber_kerr,
+            betas=betas,
             include_raman=False,
         )
         engine_kerr.propagate(num_steps=50)
 
         engine_raman = SplitStepEngine(
-            pulse=pulse, fiber=fiber_raman, betas=betas,
+            pulse=pulse,
+            fiber=fiber_raman,
+            betas=betas,
             include_raman=True,
         )
         engine_raman.propagate(num_steps=50)
@@ -278,9 +320,14 @@ class TestSelfSteepeningConservation:
         # The step estimate is based on dispersion/nonlinear length scales;
         # tighten the safety factor to ~3 (≈144 steps) so the RK4 shock term
         # integration error keeps energy drift well below 0.1%.
-        nsteps = max(nsteps, int(GNLSESolver.estimate_num_steps(
-            pulse, fiber, betas, include_self_steepening=True, safety_factor=3.0
-        )))
+        nsteps = max(
+            nsteps,
+            int(
+                GNLSESolver.estimate_num_steps(
+                    pulse, fiber, betas, include_self_steepening=True, safety_factor=3.0
+                )
+            ),
+        )
         solver = GNLSESolver(
             pulse=pulse,
             fiber=fiber,
@@ -295,17 +342,24 @@ class TestSelfSteepeningConservation:
         E1 = np.sum(np.abs(solver.evolution[-1].envelope_field) ** 2) * grid.dt
         assert np.isclose(E1 / E0, 1.0, rtol=0.001)
 
-        ph_sw = np.abs(np.fft.ifftshift(grid.fft(solver.evolution[-1].envelope_field))) ** 2
+        ph_sw = (
+            np.abs(np.fft.ifftshift(grid.fft(solver.evolution[-1].envelope_field))) ** 2
+        )
         ph_sw /= ph_sw.max()
         lf_sw = np.abs(np.fft.fft(res_lf.AT[-1])) ** 2
         lf_sw /= lf_sw.max()
         corr = np.corrcoef(ph_sw, lf_sw)[0, 1]
         # laserfun integrates the full RHS with an adaptive ODE solver while
-        # photonics_helper uses split-step + frequency-domain RK4; the residual
-        # spectral mismatch is the known shock-term discrepancy tracked in
-        # openspec/changes/archive/2026-08-15-fix-self-steepening-shock-term-discrepancy.
+        # photonics_helper uses split-step + frequency-domain RK4.  The two
+        # libraries also apply the self-steepening Ω-asymmetry with opposite
+        # signs: photonics_helper's ``(1 + Ω/ω₀)`` reproduces the paper's
+        # femtosecond SCG (self-steepening counteracts the Raman red-shift),
+        # whereas laserfun uses the opposite asymmetry.  Matching laserfun
+        # here would require flipping the sign, which breaks the Fig. 3
+        # reproduction (red edge runs to >2 µm).  Keep this as a documented
+        # xfail; see REVIEW_STEP1.md and reproductions/dudley_2006_scg/.
         if corr <= 0.95:
-            pytest.xfail(f"known laserfun shock discrepancy (corr={corr:.3f})")
+            pytest.xfail(f"laserfun shock-sign convention differs (corr={corr:.3f})")
         assert corr > 0.95
 
 
@@ -395,16 +449,24 @@ class TestGNLSEPhysics:
         grid = TemporalGrid(N=2**11, Tmax=Time(20e-12, "s"))
         T0 = 141.83e-15
         env = Envelope(shape="sech", peak_amplitude=1.0, pulse_width=Time(T0, "s"))
-        pulse = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(1.5e-6, "m"))
+        pulse = Wave(
+            grid=grid, envelope=env, central_wavelength=Wavelength(1.5e-6, "m")
+        )
         t = grid.t
         omega0 = -2 * np.pi * 1.0e12  # 1 THz red shift
         pulse = pulse.with_field((1.0 / np.cosh(t / T0)) * np.exp(-1j * omega0 * t))
         beta2 = -1.7917e-26  # standard anomalous dispersion
         fiber = FiberProfile.from_gamma(
-            gamma=1e-30, n2=2.6e-20, omega0=pulse.central_frequency, length=Length(20.0, "m")
+            gamma=1e-30,
+            n2=2.6e-20,
+            omega0=pulse.central_frequency,
+            length=Length(20.0, "m"),
         )
         solver = GNLSESolver(
-            pulse=pulse, fiber=fiber, betas=np.array([beta2 * 1e24]), include_raman=False
+            pulse=pulse,
+            fiber=fiber,
+            betas=np.array([beta2 * 1e24]),
+            include_raman=False,
         )
         solver.propagate(num_steps=1000)
 
@@ -412,7 +474,11 @@ class TestGNLSEPhysics:
             inten = np.abs(A) ** 2
             return np.trapezoid(t * inten, t) / np.trapezoid(inten, t)
 
-        assert centroid(solver.evolution[-1].envelope_field) - centroid(pulse.envelope_field) > 0.0
+        assert (
+            centroid(solver.evolution[-1].envelope_field)
+            - centroid(pulse.envelope_field)
+            > 0.0
+        )
 
     def test_initial_snapshot_preserves_with_field(self):
         """evolution[0] must reflect a Wave.with_field override, not the raw envelope.
@@ -422,7 +488,9 @@ class TestGNLSEPhysics:
         """
         grid = TemporalGrid(N=2**10, Tmax=Time(20e-12, "s"))
         env = Envelope(shape="sech", peak_amplitude=1.0, pulse_width=Time(1e-12, "s"))
-        pulse = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(1.5e-6, "m"))
+        pulse = Wave(
+            grid=grid, envelope=env, central_wavelength=Wavelength(1.5e-6, "m")
+        )
         custom = np.exp(-((grid.t / 2e-12) ** 2)).astype(complex)
         pulse.with_field(custom)
         fiber = FiberProfile.from_gamma(

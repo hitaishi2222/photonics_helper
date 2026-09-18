@@ -10,7 +10,9 @@ from photonics_helper.base import Area, Length, Time
 
 @pytest.fixture
 def fiber():
-    return FiberProfile(n2=1e-19, alpha=1e-5, A_eff=Area(5e-11, "m^2"), length=Length(1.0, "m"))
+    return FiberProfile(
+        n2=1e-19, alpha=1e-5, A_eff=Area(5e-11, "m^2"), length=Length(1.0, "m")
+    )
 
 
 @pytest.fixture
@@ -21,7 +23,7 @@ def grid():
 @pytest.fixture
 def A():
     t = np.linspace(-5e-12, 5e-12, 256)
-    return np.exp(-t**2 / (2 * (1e-12) ** 2))
+    return np.exp(-(t**2) / (2 * (1e-12) ** 2))
 
 
 def test_kerr_step_phase_shift(fiber, grid, A):
@@ -31,7 +33,9 @@ def test_kerr_step_phase_shift(fiber, grid, A):
     assert np.allclose(np.abs(A_new), np.abs(A))
     # Phase should be non-zero for non-zero intensity
     phase_shift = np.angle(A_new / A)
-    expected = fiber.n2 * 2e15 * np.abs(A) ** 2 * 1e-3 / (299792458.0 * fiber.A_eff.as_m2)
+    expected = (
+        fiber.n2 * 2e15 * np.abs(A) ** 2 * 1e-3 / (299792458.0 * fiber.A_eff.as_m2)
+    )
     assert np.allclose(phase_shift, expected, rtol=1e-10)
 
 
@@ -65,7 +69,9 @@ def test_tpa_step_attenuation(fiber, grid):
     """TPA step attenuates field when sigma_tpa > 0."""
     fiber.sigma_tpa = 1e-11
     A = np.ones(256) * 1e6  # high intensity
-    A_new, U_new = tpa_step(A, fiber, grid, dz=1e-3, include_tpa=True, U=0.0, omega0=2e15)
+    A_new, U_new = tpa_step(
+        A, fiber, grid, dz=1e-3, include_tpa=True, U=0.0, omega0=2e15
+    )
     # Field should be attenuated
     assert np.all(np.abs(A_new) <= np.abs(A))
     # Carrier density should increase

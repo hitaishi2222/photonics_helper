@@ -1,6 +1,5 @@
 """Dash dashboard app for browsing Raman material data."""
 
-
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -30,7 +29,22 @@ def _nk_browser_style(layer: str) -> dict:
     return {"display": "block" if layer == "layer-7-nk" else "none"}
 
 
-def app() -> "dash.Dash":  # type: ignore[valid-type]
+
+
+def _import_dash():
+    """Import Dash lazily and return the pieces the app needs."""
+    try:
+        import dash
+        from dash import Input, Output, State, dcc, html
+    except ImportError as exc:
+        raise ImportError(
+            "Dash is required for the interactive app. "
+            "Install it with: pip install dash>=2.18.0"
+        ) from exc
+    return dash, dcc, html, Input, Output, State
+
+
+def build_layout(*, dcc, html):
     """Interactive Dash app tying all 6 Raman layers together.
 
     Layout::
@@ -67,23 +81,6 @@ def app() -> "dash.Dash":  # type: ignore[valid-type]
         if __name__ == "__main__":
             app().run(debug=True)
     """
-    try:
-        import dash
-        from dash import (
-            Input,
-            Output,
-            State,
-            dcc,
-            html,
-        )
-    except ImportError as exc:
-        raise ImportError(
-            "Dash is required for the interactive app. "
-            "Install it with: pip install dash>=2.18.0"
-        ) from exc
-
-    dash_app = dash.Dash(__name__, title="Photonics Helper — Raman Explorer")
-
     # ── Build layout ──────────────────────────────────────────────────────────
 
     sidebar = html.Div(
@@ -211,18 +208,27 @@ def app() -> "dash.Dash":  # type: ignore[valid-type]
                     html.P(
                         "Every stored (λ, n, k) dataset with source/author provenance. "
                         "Filter below, then select a dataset to plot its n(λ) and k(λ).",
-                        style={"color": "#666", "marginBottom": "12px", "fontSize": "13px"},
+                        style={
+                            "color": "#666",
+                            "marginBottom": "12px",
+                            "fontSize": "13px",
+                        },
                     ),
                     html.Label("Filter:", style={"fontWeight": "bold"}),
                     dcc.Input(
                         id="nk-filter",
                         type="text",
                         placeholder="type to filter material or source…",
-                        style={"width": "100%", "padding": "6px", "boxSizing": "border-box"},
+                        style={
+                            "width": "100%",
+                            "padding": "6px",
+                            "boxSizing": "border-box",
+                        },
                     ),
                     html.Br(),
                     html.Label(
-                        "Dataset:", style={"fontWeight": "bold", "marginTop": "8px"},
+                        "Dataset:",
+                        style={"fontWeight": "bold", "marginTop": "8px"},
                     ),
                     dcc.Dropdown(
                         id="nk-dataset-dropdown",
@@ -249,7 +255,7 @@ def app() -> "dash.Dash":  # type: ignore[valid-type]
         style={"flex": "1", "padding": "10px", "overflowY": "auto"},
     )
 
-    dash_app.layout = html.Div(
+    return html.Div(
         [
             html.Div(
                 [sidebar, main_content],
@@ -261,6 +267,10 @@ def app() -> "dash.Dash":  # type: ignore[valid-type]
         ]
     )
 
+
+
+def register_callbacks(dash_app, *, dcc, html, Input, Output, State):
+    """Register every Raman Explorer callback on ``dash_app``."""
     # ── Callbacks ─────────────────────────────────────────────────────────────
 
     @dash_app.callback(
@@ -438,7 +448,9 @@ def app() -> "dash.Dash":  # type: ignore[valid-type]
                 textAlign="center",
             )
             ax.axis("off")
-            summary_lines.append("n/k dataset browser — see the table and dropdown below.")
+            summary_lines.append(
+                "n/k dataset browser — see the table and dropdown below."
+            )
 
         else:
             fig, ax = plt.subplots()
@@ -479,8 +491,7 @@ def app() -> "dash.Dash":  # type: ignore[valid-type]
             summaries = [
                 s
                 for s in summaries
-                if q in str(s["material"]).lower()
-                or q in str(s["source"]).lower()
+                if q in str(s["material"]).lower() or q in str(s["source"]).lower()
             ]
         options = [
             {
@@ -551,8 +562,32 @@ def app() -> "dash.Dash":  # type: ignore[valid-type]
         buf.seek(0)
         img_base64 = base64.b64encode(buf.read()).decode()
         return (
-            html.Img(src=f"data:image/png;base64,{img_base64}", style={"width": "100%"}),
+            html.Img(
+                src=f"data:image/png;base64,{img_base64}", style={"width": "100%"}
+            ),
             "\n".join(info_lines),
         )
 
-    return dash_app
+
+
+def app() -> "dash.Dash":  # type: ignore[valid-type]
+    """Build the standalone Raman Explorer Dash app.
+
+    Returns
+    -------
+    dash.Dash — configured Dash application object.
+
+    Notes
+    -----
+    Requires ``dash`` to be installed. Run with::
+
+        if __name__ == "__main__":
+            app().run(debug=True)
+    """
+    dash, dcc, html, Input, Output, State = _import_dash()
+    dash_app = dash.Dash(__name__, title="Photonics Helper — Raman Explorer")
+    dash_app.layout = build_layout(dcc=dcc, html=html)
+    register_callbacks(
+        dash_app, dcc=dcc, html=html, Input=Input, Output=Output, State=State
+    )
+    return dash_app  # type: ignore[no-any-return]

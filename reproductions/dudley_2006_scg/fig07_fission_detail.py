@@ -55,7 +55,9 @@ def _ejected_soliton(evo: Evolution) -> dict:
     }
 
 
-def _sech_overlap(evo: Evolution, idx: int, T_j_fs: float, n_widths: float = 8.0) -> float:
+def _sech_overlap(
+    evo: Evolution, idx: int, T_j_fs: float, n_widths: float = 8.0
+) -> float:
     """Normalised field overlap between the measured peak and sech(t/T_j)."""
     t = evo.t
     intensity = evo.intensity[-1]
@@ -79,11 +81,11 @@ def validate(fast: bool = False, make_plot: bool = True) -> dict:
 
     assert power_err < 0.15, (
         f"ejected P = {sol['power_W']:.0f} W vs KH {kh['P_W']:.0f} W "
-        f"({power_err*100:.1f}%)"
+        f"({power_err * 100:.1f}%)"
     )
     assert fwhm_err < 0.20, (
         f"ejected FWHM = {sol['fwhm_fs']:.2f} fs vs KH {kh['fwhm_fs']:.2f} fs "
-        f"({fwhm_err*100:.1f}%)"
+        f"({fwhm_err * 100:.1f}%)"
     )
     assert overlap > 0.97, f"sech shape overlap = {overlap:.4f}"
 

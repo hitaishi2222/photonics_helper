@@ -11,7 +11,16 @@ expected.
 import numpy as np
 import pytest
 
-from photonics_helper.base import Wavelength, Frequency, Time
+from photonics_helper.base import (
+    Wavelength,
+    Frequency,
+    Time,
+    Area,
+    Power,
+    PeakPower,
+    C_MS,
+    EPS_0,
+)
 from photonics_helper.pulse import SHAPE_FACTORS, Envelope, TemporalGrid, Wave  # type: ignore[import-not-found]
 
 
@@ -117,7 +126,9 @@ def test_from_fwhm_different_peak_amplitude(shape):
 def test_super_gaussian_field_peak():
     """Super-gaussian envelope should peak at A0 at t=0."""
     env = Envelope(
-        shape="super-gaussian", peak_amplitude=2.0, pulse_width=Time(1, "ps"),
+        shape="super-gaussian",
+        peak_amplitude=2.0,
+        pulse_width=Time(1, "ps"),
         super_gaussian_order=4,
     )
     t = np.array([0.0])
@@ -127,8 +138,18 @@ def test_super_gaussian_field_peak():
 def test_super_gaussian_order_effect():
     """Higher super-gaussian order should produce a flatter top (more energy near centre)."""
     T0 = Time(1, "ps")
-    env_n2 = Envelope(shape="super-gaussian", peak_amplitude=1.0, pulse_width=T0, super_gaussian_order=2)
-    env_n4 = Envelope(shape="super-gaussian", peak_amplitude=1.0, pulse_width=T0, super_gaussian_order=4)
+    env_n2 = Envelope(
+        shape="super-gaussian",
+        peak_amplitude=1.0,
+        pulse_width=T0,
+        super_gaussian_order=2,
+    )
+    env_n4 = Envelope(
+        shape="super-gaussian",
+        peak_amplitude=1.0,
+        pulse_width=T0,
+        super_gaussian_order=4,
+    )
     t_near = T0.as_s * 0.3
     # At |t|/T0 = 0.3, order 4 should be closer to peak (flat-top) → higher intensity
     I_n2 = env_n2.intensity(np.array([t_near]))[0]
@@ -139,8 +160,18 @@ def test_super_gaussian_order_effect():
 def test_super_gaussian_fwhm_increases_with_order_at_fixed_T0():
     """Higher super-gaussian order → wider FWHM when T0 is fixed (flatter top)."""
     T0 = Time(1, "ps")
-    fwhm_n2 = Envelope(shape="super-gaussian", peak_amplitude=1.0, pulse_width=T0, super_gaussian_order=2).fwhm.as_s
-    fwhm_n4 = Envelope(shape="super-gaussian", peak_amplitude=1.0, pulse_width=T0, super_gaussian_order=4).fwhm.as_s
+    fwhm_n2 = Envelope(
+        shape="super-gaussian",
+        peak_amplitude=1.0,
+        pulse_width=T0,
+        super_gaussian_order=2,
+    ).fwhm.as_s
+    fwhm_n4 = Envelope(
+        shape="super-gaussian",
+        peak_amplitude=1.0,
+        pulse_width=T0,
+        super_gaussian_order=4,
+    ).fwhm.as_s
     # Super-Gaussian: FWHM = 2*T0*(log(2)/2)^(1/(2N)).
     # Base < 1, exponent 1/(2N) decreases with N → factor increases → FWHM increases.
     assert fwhm_n4 > fwhm_n2
@@ -196,7 +227,9 @@ def test_parabolic_clips_at_zero():
 
 def test_parabolic_chirp_applied():
     """Parabolic envelope with chirp should have quadratic phase."""
-    env = Envelope(shape="parabolic", peak_amplitude=1.0, pulse_width=Time(1, "ps"), chirp=2.0)
+    env = Envelope(
+        shape="parabolic", peak_amplitude=1.0, pulse_width=Time(1, "ps"), chirp=2.0
+    )
     t = np.array([0.5e-12])
     phase = np.angle(env.field(t)[0])
     # Phase = chirp * (t/T0)^2 = 2.0 * (0.5)^2 = 0.5
@@ -206,7 +239,9 @@ def test_parabolic_chirp_applied():
 
 def test_parabolic_chirp_zero_no_phase():
     """Parabolic envelope with zero chirp should have zero phase."""
-    env = Envelope(shape="parabolic", peak_amplitude=1.0, pulse_width=Time(1, "ps"), chirp=0.0)
+    env = Envelope(
+        shape="parabolic", peak_amplitude=1.0, pulse_width=Time(1, "ps"), chirp=0.0
+    )
     t = np.linspace(-0.5e-12, 0.5e-12, 10)
     phases = np.unwrap(np.angle(env.field(t)))
     assert np.max(np.abs(phases)) < 1e-14
@@ -215,8 +250,11 @@ def test_parabolic_chirp_zero_no_phase():
 def test_parabolic_from_asymptotic():
     """from_parabolic_asymptotic should set chirp ≈ 0.2726 * length * gain."""
     env = Envelope.from_parabolic_asymptotic(
-        peak_amplitude=1.0, pulse_width=Time(1, "ps"),
-        gain=10.0, length=0.05, chirp=0.0,
+        peak_amplitude=1.0,
+        pulse_width=Time(1, "ps"),
+        gain=10.0,
+        length=0.05,
+        chirp=0.0,
     )
     expected_chirp = 0.2726 * 0.05 * 10.0
     assert env.shape == "parabolic"
@@ -226,8 +264,11 @@ def test_parabolic_from_asymptotic():
 def test_parabolic_from_asymptotic_with_extra_chirp():
     """from_parabolic_asymptotic should add extra chirp on top."""
     env = Envelope.from_parabolic_asymptotic(
-        peak_amplitude=1.0, pulse_width=Time(1, "ps"),
-        gain=10.0, length=0.05, chirp=1.5,
+        peak_amplitude=1.0,
+        pulse_width=Time(1, "ps"),
+        gain=10.0,
+        length=0.05,
+        chirp=1.5,
     )
     expected_chirp = 0.2726 * 0.05 * 10.0 + 1.5
     assert pytest.approx(env.chirp, rel=1e-6) == expected_chirp
@@ -281,9 +322,9 @@ def test_exponential_field_peak():
 def test_exponential_decay():
     """Exponential envelope: I(t) = exp(-2|t|/T0)."""
     env = Envelope(shape="exponential", peak_amplitude=1.0, pulse_width=Time(1, "ps"))
-    I = env.intensity(np.array([1e-12]))[0]
+    intensity = env.intensity(np.array([1e-12]))[0]
     expected = np.exp(-2.0)
-    assert pytest.approx(I, rel=1e-10) == expected
+    assert pytest.approx(intensity, rel=1e-10) == expected
 
 
 def test_exponential_fwhm():
@@ -298,9 +339,7 @@ def test_exponential_symmetric():
     """Exponential envelope should be symmetric: A(-t) = A(t)."""
     env = Envelope(shape="exponential", peak_amplitude=1.0, pulse_width=Time(1, "ps"))
     t = np.array([0.5e-12])
-    assert pytest.approx(np.abs(env.field(t)[0]), rel=1e-12) == np.abs(
-        env.field(-t)[0]
-    )
+    assert pytest.approx(np.abs(env.field(t)[0]), rel=1e-12) == np.abs(env.field(-t)[0])
 
 
 # ─── Gauss-Hermite shape tests ─────────────────────────────────────────
@@ -311,8 +350,11 @@ def test_gauss_hermite_mode0_is_gaussian():
     T0 = Time(1, "ps")
     w = Time(2, "ps")
     env_hg = Envelope(
-        shape="gauss-hermite", peak_amplitude=1.0, pulse_width=T0,
-        beam_waist=w, hg_mode=0,
+        shape="gauss-hermite",
+        peak_amplitude=1.0,
+        pulse_width=T0,
+        beam_waist=w,
+        hg_mode=0,
     )
     # HG mode-0: A(t) = A0 * exp(-t²/w²)
     t = np.linspace(-2e-12, 2e-12, 1000)
@@ -324,8 +366,11 @@ def test_gauss_hermite_mode0_is_gaussian():
 def test_gauss_hermite_mode1_has_node():
     """HG mode m=1 (H_1(x) = 2x) should have a zero at t=0."""
     env_hg = Envelope(
-        shape="gauss-hermite", peak_amplitude=1.0, pulse_width=Time(1, "ps"),
-        beam_waist=Time(1, "ps"), hg_mode=1,
+        shape="gauss-hermite",
+        peak_amplitude=1.0,
+        pulse_width=Time(1, "ps"),
+        beam_waist=Time(1, "ps"),
+        hg_mode=1,
     )
     assert pytest.approx(np.abs(env_hg.field(np.array([0.0]))[0]), abs=1e-14) == 0.0
 
@@ -333,8 +378,11 @@ def test_gauss_hermite_mode1_has_node():
 def test_gauss_hermite_odd_mode_is_odd_function():
     """HG odd modes should be odd: A(-t) = -A(t)."""
     env_hg = Envelope(
-        shape="gauss-hermite", peak_amplitude=1.0, pulse_width=Time(1, "ps"),
-        beam_waist=Time(1, "ps"), hg_mode=1,
+        shape="gauss-hermite",
+        peak_amplitude=1.0,
+        pulse_width=Time(1, "ps"),
+        beam_waist=Time(1, "ps"),
+        hg_mode=1,
     )
     t = np.array([0.5e-12])
     A_pos = env_hg.field(t)[0]
@@ -345,8 +393,11 @@ def test_gauss_hermite_odd_mode_is_odd_function():
 def test_gauss_hermite_even_mode_is_even_function():
     """HG even modes should be even: A(-t) = A(t)."""
     env_hg = Envelope(
-        shape="gauss-hermite", peak_amplitude=1.0, pulse_width=Time(1, "ps"),
-        beam_waist=Time(1, "ps"), hg_mode=2,
+        shape="gauss-hermite",
+        peak_amplitude=1.0,
+        pulse_width=Time(1, "ps"),
+        beam_waist=Time(1, "ps"),
+        hg_mode=2,
     )
     t = np.array([0.5e-12])
     A_pos = env_hg.field(t)[0]
@@ -357,12 +408,15 @@ def test_gauss_hermite_even_mode_is_even_function():
 def test_gauss_hermite_defaults_to_T0_when_no_waist():
     """When beam_waist is None, it should default to T0."""
     env = Envelope(
-        shape="gauss-hermite", peak_amplitude=1.0, pulse_width=Time(1, "ps"), hg_mode=0,
+        shape="gauss-hermite",
+        peak_amplitude=1.0,
+        pulse_width=Time(1, "ps"),
+        hg_mode=0,
     )
     # Without beam_waist, w = T0 = 1e-12
     # H_0 = 1, x = sqrt(2)*t/w, A = A0 * exp(-x²/2) = A0 * exp(-t²/w²)
     t = np.array([0.5e-12])
-    expected = np.exp(-(0.5) ** 2)  # exp(-0.25)
+    expected = np.exp(-((0.5) ** 2))  # exp(-0.25)
     assert pytest.approx(np.abs(env.field(t)[0]), rel=1e-10) == expected
 
 
@@ -372,11 +426,14 @@ def test_gauss_hermite_defaults_to_T0_when_no_waist():
 def test_custom_func_basic():
     """Custom envelope should call user func."""
     t0 = Time(1, "ps")
+
     def my_func(t, T0, A0):
-        return A0 * np.exp(-t**4 / (2 * T0**4))
+        return A0 * np.exp(-(t**4) / (2 * T0**4))
 
     env = Envelope(
-        shape="custom", peak_amplitude=1.0, pulse_width=t0,
+        shape="custom",
+        peak_amplitude=1.0,
+        pulse_width=t0,
         func=my_func,
     )
     assert pytest.approx(np.abs(env.field(np.array([0.0]))[0]), rel=1e-12) == 1.0
@@ -385,12 +442,15 @@ def test_custom_func_basic():
 def test_custom_phase_func():
     """Custom envelope with phase_func should use it instead of default chirp phase."""
     t0 = Time(1, "ps")
+
     def my_phase(t, T0, chirp):
         return chirp * (t / T0) ** 3
 
     env = Envelope(
-        shape="custom", peak_amplitude=1.0, pulse_width=t0,
-        func=lambda t, T0, A0: A0 * np.exp(-(t/T0)**2),
+        shape="custom",
+        peak_amplitude=1.0,
+        pulse_width=t0,
+        func=lambda t, T0, A0: A0 * np.exp(-((t / T0) ** 2)),
         phase_func=my_phase,
         chirp=2.0,
     )
@@ -403,7 +463,9 @@ def test_custom_phase_func():
 def test_custom_without_func_raises():
     """Custom envelope without func should raise ValueError."""
     env = Envelope(
-        shape="custom", peak_amplitude=1.0, pulse_width=Time(1, "ps"),
+        shape="custom",
+        peak_amplitude=1.0,
+        pulse_width=Time(1, "ps"),
     )
     with pytest.raises(ValueError, match="'custom' shape requires 'func'"):
         env.field(np.array([0.0]))
@@ -411,12 +473,16 @@ def test_custom_without_func_raises():
 
 def test_custom_peak_preserved():
     """Custom envelope should allow user to define any peak shape."""
+
     def quartic(t, T0, A0):
-        return A0 * np.exp(-t**4 / (2 * T0**4))
+        return A0 * np.exp(-(t**4) / (2 * T0**4))
 
     t0 = Time(1, "ps")
     env = Envelope(
-        shape="custom", peak_amplitude=3.0, pulse_width=t0, func=quartic,
+        shape="custom",
+        peak_amplitude=3.0,
+        pulse_width=t0,
+        func=quartic,
     )
     assert pytest.approx(np.abs(env.field(np.array([0.0]))[0]), rel=1e-12) == 3.0
 
@@ -440,6 +506,7 @@ def test_pulse_train_repetition_spacing():
     spacing = 1.0 / repetition_rate.as_Hz  # 100 ps
     # Check that peaks occur near expected positions
     from scipy.signal import find_peaks
+
     envelope_mag = np.abs(wave.envelope_field)
     peaks, _ = find_peaks(envelope_mag, height=0.1 * np.max(envelope_mag))
     peak_times = grid.t[peaks]
@@ -495,7 +562,9 @@ def test_pulse_train_average_power():
 def test_pulse_train_multiple_pulses_energy():
     """Pulse train energy ≈ n_pulses × single pulse energy (for well-separated pulses)."""
     env = Envelope(shape="gaussian", peak_amplitude=1.0, pulse_width=Time(50, "fs"))
-    repetition_rate = Frequency(100, "GHz")  # 10 ps spacing, 50 fs pulses → well separated
+    repetition_rate = Frequency(
+        100, "GHz"
+    )  # 10 ps spacing, 50 fs pulses → well separated
     n_pulses = 10
     # First compute single-pulse energy using the same grid size
     grid_single = TemporalGrid(N=2**14, Tmax=Time(500e-12, "s"))
@@ -619,7 +688,9 @@ def test_parseval_gaussian():
 def test_chirp_zero_phase_profile():
     """Transform-limited (chirp=0) envelope should have flat phase."""
     for shape in ["gaussian", "sech", "super-gaussian", "triangular", "cosine"]:
-        env = Envelope(shape=shape, peak_amplitude=1.0, pulse_width=Time(1, "ps"), chirp=0.0)  # type: ignore[arg-type]
+        env = Envelope(
+            shape=shape, peak_amplitude=1.0, pulse_width=Time(1, "ps"), chirp=0.0
+        )  # type: ignore[arg-type]
         t = np.linspace(-0.5e-12, 0.5e-12, 200)
         phases = np.unwrap(np.angle(env.field(t)))
         assert np.max(np.abs(phases)) < 1e-13, (
@@ -629,7 +700,9 @@ def test_chirp_zero_phase_profile():
 
 def test_chirp_positive_induces_phase_increase():
     """Positive chirp should cause instantaneous frequency to increase."""
-    env = Envelope(shape="gaussian", peak_amplitude=1.0, pulse_width=Time(100, "fs"), chirp=5.0)
+    env = Envelope(
+        shape="gaussian", peak_amplitude=1.0, pulse_width=Time(100, "fs"), chirp=5.0
+    )
     t = np.linspace(-200e-15, 200e-15, 1000)
     phase = np.unwrap(np.angle(env.field(t)))
     # Instantaneous frequency detuning: dφ/dt = chirp * t / T0²
@@ -643,18 +716,28 @@ def test_chirp_positive_induces_phase_increase():
 def test_chirp_broadens_spectrum():
     """Chirped pulse should have a broader spectrum than transform-limited pulse."""
     T0 = Time(100, "fs")
-    env_unchirped = Envelope(shape="gaussian", peak_amplitude=1.0, pulse_width=T0, chirp=0.0)
-    env_chirped = Envelope(shape="gaussian", peak_amplitude=1.0, pulse_width=T0, chirp=10.0)
+    env_unchirped = Envelope(
+        shape="gaussian", peak_amplitude=1.0, pulse_width=T0, chirp=0.0
+    )
+    env_chirped = Envelope(
+        shape="gaussian", peak_amplitude=1.0, pulse_width=T0, chirp=10.0
+    )
     grid = TemporalGrid(N=2**13, Tmax=Time(10 * 2 * np.sqrt(np.log(2)) * T0.as_s, "s"))
-    wave_unchirped = Wave(grid=grid, envelope=env_unchirped,
-                          central_wavelength=Wavelength(800, "nm"))
-    wave_chirped = Wave(grid=grid, envelope=env_chirped,
-                        central_wavelength=Wavelength(800, "nm"))
+    wave_unchirped = Wave(
+        grid=grid, envelope=env_unchirped, central_wavelength=Wavelength(800, "nm")
+    )
+    wave_chirped = Wave(
+        grid=grid, envelope=env_chirped, central_wavelength=Wavelength(800, "nm")
+    )
     # Spectral width: standard deviation of spectral intensity
     spec_unchirped = np.abs(wave_unchirped.spectrum) ** 2
     spec_chirped = np.abs(wave_chirped.spectrum) ** 2
-    sigma_unchirped = np.sqrt(np.sum(wave_unchirped.grid.w ** 2 * spec_unchirped) * wave_unchirped.grid.dw)
-    sigma_chirped = np.sqrt(np.sum(wave_chirped.grid.w ** 2 * spec_chirped) * wave_chirped.grid.dw)
+    sigma_unchirped = np.sqrt(
+        np.sum(wave_unchirped.grid.w**2 * spec_unchirped) * wave_unchirped.grid.dw
+    )
+    sigma_chirped = np.sqrt(
+        np.sum(wave_chirped.grid.w**2 * spec_chirped) * wave_chirped.grid.dw
+    )
     assert sigma_chirped > sigma_unchirped * 1.5
 
 
@@ -683,17 +766,29 @@ def test_wave_peak_power_is_max_intensity():
         envelope=env,
         central_wavelength=Wavelength(1550, "nm"),
     )
-    assert pytest.approx(wave.peak_power(), rel=1e-12) == np.max(wave.envelope_intensity)
+    assert pytest.approx(wave.peak_power(), rel=1e-12) == np.max(
+        wave.envelope_intensity
+    )
 
 
 def test_envelope_intensity_is_non_negative():
     """Intensity should be non-negative for all t."""
-    for shape in ["gaussian", "sech", "lorentzian", "super-gaussian", "triangular",
-                  "parabolic", "cosine", "exponential", "gauss-hermite", "airy"]:
+    for shape in [
+        "gaussian",
+        "sech",
+        "lorentzian",
+        "super-gaussian",
+        "triangular",
+        "parabolic",
+        "cosine",
+        "exponential",
+        "gauss-hermite",
+        "airy",
+    ]:
         env = Envelope(shape=shape, peak_amplitude=1.0, pulse_width=Time(1, "ps"))  # type: ignore[arg-type]
         t = np.linspace(-5e-12, 5e-12, 5000)
-        I = env.intensity(t)
-        assert np.all(I >= 0), f"Intensity negative for shape={shape}"
+        intensity = env.intensity(t)
+        assert np.all(intensity >= 0), f"Intensity negative for shape={shape}"
 
 
 # ─── Wave property tests ───────────────────────────────────────────────
@@ -781,7 +876,9 @@ def test_unknown_shape_raises():
     """An unknown shape should be rejected by pydantic validation."""
     with pytest.raises(Exception):
         Envelope(
-            shape="nonexistent", peak_amplitude=1.0, pulse_width=Time(1, "ps"),  # type: ignore[arg-type]
+            shape="nonexistent",
+            peak_amplitude=1.0,
+            pulse_width=Time(1, "ps"),  # type: ignore[arg-type]
         )
 
 
@@ -846,20 +943,31 @@ def test_tbp_transform_limited_bands():
 def test_all_shapes_have_valid_field_and_intensity():
     """Every supported shape should produce non-NaN field and intensity."""
     shapes = [
-        "gaussian", "sech", "lorentzian", "rectangular",
-        "super-gaussian", "triangular", "parabolic", "cosine",
-        "exponential", "gauss-hermite", "airy", "custom",
+        "gaussian",
+        "sech",
+        "lorentzian",
+        "rectangular",
+        "super-gaussian",
+        "triangular",
+        "parabolic",
+        "cosine",
+        "exponential",
+        "gauss-hermite",
+        "airy",
+        "custom",
     ]
     for shape in shapes:
         kwargs = {
-            "shape": shape, "peak_amplitude": 1.0, "pulse_width": Time(1, "ps"),
+            "shape": shape,
+            "peak_amplitude": 1.0,
+            "pulse_width": Time(1, "ps"),
         }
         if shape == "super-gaussian":
             kwargs["super_gaussian_order"] = 2
         elif shape == "gauss-hermite":
             kwargs.update({"beam_waist": Time(1, "ps"), "hg_mode": 0})
         elif shape == "custom":
-            kwargs["func"] = lambda t, T0, A0: A0 * np.exp(-(t/T0)**2)  # type: ignore[typed-dict-item]
+            kwargs["func"] = lambda t, T0, A0: A0 * np.exp(-((t / T0) ** 2))  # type: ignore[typed-dict-item]
 
         env = Envelope(**kwargs)  # type: ignore[arg-type]
         t = np.linspace(-5e-12, 5e-12, 5000)
@@ -878,6 +986,7 @@ def test_all_shapes_have_valid_field_and_intensity():
 def test_gaussian_fwhm_siegman():
     """FWHM/T₀ = 2√(ln 2) = 1.6651… — Siegman §3.3."""
     from math import sqrt, log
+
     expected = 2 * sqrt(log(2))
     assert pytest.approx(SHAPE_FACTORS["gaussian"], rel=1e-12) == expected
 
@@ -885,6 +994,7 @@ def test_gaussian_fwhm_siegman():
 def test_sech_fwhm_agrawal():
     """FWHM/T₀ = 2·acosh(√2) = 1.7627… — Agrawal NLO Ch.1."""
     from math import acosh, sqrt
+
     expected = 2 * acosh(sqrt(2))
     assert pytest.approx(SHAPE_FACTORS["sech"], rel=1e-12) == expected
 
@@ -892,6 +1002,7 @@ def test_sech_fwhm_agrawal():
 def test_lorentzian_fwhm_siegman():
     """FWHM/T₀ = 2√(√2−1) = 1.0824… — Siegman §3.3."""
     from math import sqrt
+
     expected = 2 * sqrt(sqrt(2) - 1)
     assert pytest.approx(SHAPE_FACTORS["lorentzian"], rel=1e-12) == expected
 
@@ -904,18 +1015,28 @@ def test_rectangular_fwhm():
 def test_super_gaussian_fwhm_order2():
     """FWHM/T₀ = 2·(ln2/2)^(1/4) for order=2."""
     from math import log
+
     expected_ratio = 2.0 * (log(2) / 2) ** (1.0 / 4.0)
-    env = Envelope(shape="super-gaussian", peak_amplitude=1.0,
-                   pulse_width=Time(1e-12, "s"), super_gaussian_order=2)
+    env = Envelope(
+        shape="super-gaussian",
+        peak_amplitude=1.0,
+        pulse_width=Time(1e-12, "s"),
+        super_gaussian_order=2,
+    )
     assert pytest.approx(env.fwhm.as_s, rel=1e-10) == expected_ratio * 1e-12
 
 
 def test_super_gaussian_fwhm_order4():
     """FWHM/T₀ = 2·(ln2/2)^(1/8) for order=4."""
     from math import log
+
     expected_ratio = 2.0 * (log(2) / 2) ** (1.0 / 8.0)
-    env = Envelope(shape="super-gaussian", peak_amplitude=1.0,
-                   pulse_width=Time(1e-12, "s"), super_gaussian_order=4)
+    env = Envelope(
+        shape="super-gaussian",
+        peak_amplitude=1.0,
+        pulse_width=Time(1e-12, "s"),
+        super_gaussian_order=4,
+    )
     assert pytest.approx(env.fwhm.as_s, rel=1e-10) == expected_ratio * 1e-12
 
 
@@ -928,6 +1049,7 @@ def test_cosine_fwhm_trebs():
 def test_exponential_fwhm_factor():
     """Exponential FWHM/T₀ = ln(2) (intensity half-max)."""
     from math import log
+
     expected = log(2)
     env = Envelope(shape="exponential", peak_amplitude=1.0, pulse_width=Time(100, "fs"))
     assert pytest.approx(env.fwhm.as_s / 100e-15, rel=1e-10) == expected
@@ -943,8 +1065,7 @@ def test_tbp_gaussian_rms():
     N = 2**12
     Tmax = Time(10 * fwhm.as_s, "s")
     grid = TemporalGrid(N=N, Tmax=Tmax)
-    wave = Wave(grid=grid, envelope=envelope,
-                central_wavelength=Wavelength(800, "nm"))
+    wave = Wave(grid=grid, envelope=envelope, central_wavelength=Wavelength(800, "nm"))
     tbp = wave.time_bandwidth_product()
     assert pytest.approx(tbp, rel=1e-4) == 0.500
 
@@ -959,8 +1080,7 @@ def test_tbp_sech_rms():
     N = 2**12
     Tmax = Time(10 * fwhm.as_s, "s")
     grid = TemporalGrid(N=N, Tmax=Tmax)
-    wave = Wave(grid=grid, envelope=envelope,
-                central_wavelength=Wavelength(800, "nm"))
+    wave = Wave(grid=grid, envelope=envelope, central_wavelength=Wavelength(800, "nm"))
     tbp = wave.time_bandwidth_product()
     # RMS TBP for sech (intensity-weighted RMS, angular frequency) ≈ 0.524
     assert pytest.approx(tbp, abs=0.02) == 0.524
@@ -978,16 +1098,20 @@ def test_chirp_gaussian_spectral_broadening():
 
     for alpha in [0.5, 1.0, 2.0]:
         # Transform-limited (chirp=0)
-        env_0 = Envelope(shape="gaussian", peak_amplitude=1.0,
-                          pulse_width=T0, chirp=0.0)
+        env_0 = Envelope(
+            shape="gaussian", peak_amplitude=1.0, pulse_width=T0, chirp=0.0
+        )
         # Chirped (same T₀, different chirp)
-        env_c = Envelope(shape="gaussian", peak_amplitude=1.0,
-                          pulse_width=T0, chirp=alpha)
+        env_c = Envelope(
+            shape="gaussian", peak_amplitude=1.0, pulse_width=T0, chirp=alpha
+        )
 
-        wave_0 = Wave(grid=grid, envelope=env_0,
-                       central_wavelength=Wavelength(800, "nm"))
-        wave_c = Wave(grid=grid, envelope=env_c,
-                       central_wavelength=Wavelength(800, "nm"))
+        wave_0 = Wave(
+            grid=grid, envelope=env_0, central_wavelength=Wavelength(800, "nm")
+        )
+        wave_c = Wave(
+            grid=grid, envelope=env_c, central_wavelength=Wavelength(800, "nm")
+        )
 
         # Spectral RMS widths
         spec_0 = np.abs(wave_0.spectrum) ** 2
@@ -997,7 +1121,7 @@ def test_chirp_gaussian_spectral_broadening():
         sigma_c = np.sqrt(np.sum((w - np.mean(w)) ** 2 * spec_c) / np.sum(spec_c))
 
         ratio = sigma_c / sigma_0
-        expected = np.sqrt(1 + alpha ** 2)
+        expected = np.sqrt(1 + alpha**2)
         # Finite-window effect: larger α → broader spectrum → more truncation
         tolerances = {0.5: 0.03, 1.0: 0.05, 2.0: 0.08}
         assert pytest.approx(ratio, rel=tolerances[alpha]) == expected, (
@@ -1032,4 +1156,109 @@ def test_airy_acceleration_direction():
     peak_idx = np.argmax(intensity)
     peak_t = t[peak_idx]
     assert peak_t > 0, "Airy main lobe should accelerate towards +t"
-    assert peak_t < 2e-15, f"Airy peak at {peak_t*1e15:.3f} fs seems too large"
+    assert peak_t < 2e-15, f"Airy peak at {peak_t * 1e15:.3f} fs seems too large"
+
+
+# ─── Task 4.x: physical power/energy scaling ────────────────────────
+
+
+def _physical_wave(shape, A0, T0, n=1.44):
+    """Build a wave with a known analytic envelope and an effective area."""
+    env = Envelope(shape=shape, peak_amplitude=A0, pulse_width=Time(T0, "s"))
+    grid = TemporalGrid(N=2**15, Tmax=Time(40 * T0, "s"))
+    wave = Wave(
+        grid=grid,
+        envelope=env,
+        central_wavelength=Wavelength(800, "nm"),
+        refractive_index=n,
+    )
+    return wave.with_effective_area(Area(80, "um^2")), n, Area(80, "um^2")
+
+
+def test_gaussian_pulse_energy_matches_analytic():
+    """Gaussian physical energy: E = ½·n·c·ε₀·A_eff·A₀²·T₀·√π within 1%."""
+    A0, T0 = 2.0, 50e-15
+    wave, n, A_eff = _physical_wave("gaussian", A0, T0)
+    expected = 0.5 * n * C_MS * EPS_0 * A_eff.as_m2 * A0**2 * T0 * np.sqrt(np.pi)
+    assert pytest.approx(wave.pulse_energy(), rel=0.01) == expected
+
+
+def test_sech_pulse_energy_matches_analytic():
+    """Sech physical energy: E = ½·n·c·ε₀·A_eff·2·A₀²·T₀ within 1%."""
+    A0, T0 = 1.5, 60e-15
+    wave, n, A_eff = _physical_wave("sech", A0, T0)
+    expected = 0.5 * n * C_MS * EPS_0 * A_eff.as_m2 * 2 * A0**2 * T0
+    assert pytest.approx(wave.pulse_energy(), rel=0.01) == expected
+
+
+def test_physical_peak_power_matches_analytic():
+    """Physical peak power: P = ½·n·c·ε₀·A_eff·A₀²."""
+    A0, T0 = 2.0, 50e-15
+    wave, n, A_eff = _physical_wave("gaussian", A0, T0)
+    expected = 0.5 * n * C_MS * EPS_0 * A_eff.as_m2 * A0**2
+    assert pytest.approx(wave.peak_power(), rel=1e-3) == expected
+
+
+def test_peak_power_from_envelope_matches_wave():
+    """``PeakPower.from_envelope`` agrees with ``Wave.peak_power`` and is a Power."""
+    A0, T0 = 2.0, 50e-15
+    wave, n, A_eff = _physical_wave("gaussian", A0, T0)
+    helper = PeakPower.from_envelope(
+        wave.envelope_field, A_eff, n, Wavelength(800, "nm")
+    )
+    assert isinstance(helper, Power)
+    assert pytest.approx(helper.as_W, rel=1e-6) == wave.peak_power()
+
+
+def test_with_effective_area_returns_copy():
+    """``with_effective_area`` must not mutate the original wave."""
+    A0, T0 = 1.0, 50e-15
+    env = Envelope(shape="gaussian", peak_amplitude=A0, pulse_width=Time(T0, "s"))
+    grid = TemporalGrid(N=2**12, Tmax=Time(20 * T0, "s"))
+    wave = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(800, "nm"))
+    scaled = wave.with_effective_area(Area(80, "um^2"))
+    assert wave._effective_area is None
+    assert scaled._effective_area is not None
+    expected = 0.5 * C_MS * EPS_0 * Area(80, "um^2").as_m2 * A0**2
+    assert pytest.approx(scaled.peak_power(), rel=1e-6) == expected
+    assert scaled.peak_power() != wave.peak_power()
+
+
+def test_normalized_units_warn_once():
+    """Normalized-unit metrics warn exactly once per wave instance."""
+    import warnings as _warnings
+
+    A0, T0 = 1.0, 50e-15
+    env = Envelope(shape="gaussian", peak_amplitude=A0, pulse_width=Time(T0, "s"))
+    grid = TemporalGrid(N=2**12, Tmax=Time(20 * T0, "s"))
+    wave = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(800, "nm"))
+    with _warnings.catch_warnings(record=True) as caught:
+        _warnings.simplefilter("always")
+        wave.peak_power()
+        wave.peak_power()
+        wave.pulse_energy()
+    assert len(caught) == 1
+    assert issubclass(caught[0].category, UserWarning)
+    assert "normalized" in str(caught[0].message).lower()
+
+
+def test_no_warning_when_area_attached():
+    """No warning is emitted once an effective area is attached."""
+    import warnings as _warnings
+
+    A0, T0 = 1.0, 50e-15
+    wave, _, _ = _physical_wave("gaussian", A0, T0)
+    with _warnings.catch_warnings(record=True) as caught:
+        _warnings.simplefilter("always")
+        wave.peak_power()
+        wave.pulse_energy()
+    assert len(caught) == 0
+
+
+def test_peak_power_from_envelope_validates_arguments():
+    """Invalid refractive index / wavelength are rejected."""
+    A_eff = Area(80, "um^2")
+    with pytest.raises(ValueError):
+        PeakPower.from_envelope(1.0, A_eff, n=0.0)
+    with pytest.raises(ValueError):
+        PeakPower.from_envelope(1.0, A_eff, n=1.0, lambda0=Wavelength(-1, "nm"))

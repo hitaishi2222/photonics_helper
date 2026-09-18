@@ -44,7 +44,9 @@ HERE = Path(__file__).resolve().parent
 PARAMETERS = HERE / "parameters.json"
 
 
-def _analytic_spectrum(grid: TemporalGrid, P0: float, T0: float, phi_max: float) -> np.ndarray:
+def _analytic_spectrum(
+    grid: TemporalGrid, P0: float, T0: float, phi_max: float
+) -> np.ndarray:
     t = grid.t
     A0 = np.sqrt(P0) * np.exp(-(t**2) / (2 * T0**2))
     A = A0 * np.exp(1j * phi_max * np.exp(-(t**2) / T0**2))
@@ -54,7 +56,9 @@ def _analytic_spectrum(grid: TemporalGrid, P0: float, T0: float, phi_max: float)
 
 def _simulated_field(grid, P0, T0, gamma, phi_max, lam):
     L = phi_max / (gamma * P0)
-    env = Envelope(shape="gaussian", peak_amplitude=np.sqrt(P0), pulse_width=Time(T0, "s"))
+    env = Envelope(
+        shape="gaussian", peak_amplitude=np.sqrt(P0), pulse_width=Time(T0, "s")
+    )
     pulse = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(lam, "m"))
     fiber = FiberProfile.from_gamma(
         gamma=gamma, n2=2.6e-20, omega0=2 * np.pi * C_MS / lam, length=Length(L, "m")
@@ -67,7 +71,9 @@ def _simulated_field(grid, P0, T0, gamma, phi_max, lam):
         include_self_steepening=False,
         include_tpa=False,
     )
-    solver.propagate(num_steps=GNLSESolver.estimate_num_steps(pulse, fiber, np.array([0.0])))
+    solver.propagate(
+        num_steps=GNLSESolver.estimate_num_steps(pulse, fiber, np.array([0.0]))
+    )
     return solver.evolution[-1].envelope_field
 
 
@@ -78,12 +84,16 @@ def validate(params: dict | None = None, make_plot: bool = True) -> dict:
     T0 = params["pulse_width_T0_fs"] * 1e-15
     P0 = params["peak_power_W"]
     gamma = params["gamma_per_Wm"]
-    grid = TemporalGrid(N=params["grid_N"], Tmax=Time(params["grid_Tmax_ps"] * 1e-12, "s"))
+    grid = TemporalGrid(
+        N=params["grid_N"], Tmax=Time(params["grid_Tmax_ps"] * 1e-12, "s")
+    )
 
     results = []
     for phi_pi in params["phi_max_over_pi"]:
         phi_max = float(phi_pi) * np.pi
-        W_num = np.abs(grid.fft(_simulated_field(grid, P0, T0, gamma, phi_max, lam))) ** 2
+        W_num = (
+            np.abs(grid.fft(_simulated_field(grid, P0, T0, gamma, phi_max, lam))) ** 2
+        )
         W_num /= W_num.max()
         W_an = _analytic_spectrum(grid, P0, T0, phi_max)
         max_diff = float(np.max(np.abs(W_num - W_an)))
@@ -104,17 +114,26 @@ def validate(params: dict | None = None, make_plot: bool = True) -> dict:
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
 
-        fig, axes = plt.subplots(len(results), 1, figsize=(8, 2.2 * len(results)), sharex=True)
+        fig, axes = plt.subplots(
+            len(results), 1, figsize=(8, 2.2 * len(results)), sharex=True
+        )
         omega = grid.w
-        for ax, phi_pi, res in zip(np.atleast_1d(axes), params["phi_max_over_pi"], results):
+        for ax, phi_pi, res in zip(
+            np.atleast_1d(axes), params["phi_max_over_pi"], results
+        ):
             phi_max = float(phi_pi) * np.pi
-            W_num = np.abs(grid.fft(_simulated_field(grid, P0, T0, gamma, phi_max, lam))) ** 2
+            W_num = (
+                np.abs(grid.fft(_simulated_field(grid, P0, T0, gamma, phi_max, lam)))
+                ** 2
+            )
             W_num /= W_num.max()
             W_an = _analytic_spectrum(grid, P0, T0, phi_max)
             ax.plot(omega * 1e-12, W_an, "k-", lw=1, label="analytic")
             ax.plot(omega * 1e-12, W_num, "r--", lw=1, label="GNLSE")
             ax.set_ylabel(r"$|A|^2$")
-            ax.set_title(rf"$\phi_{{max}}={phi_pi}\pi$  (peaks {res['n_peaks']}, expected {res['n_peaks_expected']})")
+            ax.set_title(
+                rf"$\phi_{{max}}={phi_pi}\pi$  (peaks {res['n_peaks']}, expected {res['n_peaks_expected']})"
+            )
         np.atleast_1d(axes)[-1].set_xlabel(r"$\Omega$ (rad/ps)")
         np.atleast_1d(axes)[0].legend()
         fig.tight_layout()

@@ -101,8 +101,7 @@ def validate(fast: bool = False, make_plot: bool = True) -> dict:
     dw_err = abs(dw_nm - predicted) / predicted
     assert dw_rel > 0.05, f"DW peak too weak (rel={dw_rel:.3f})"
     assert dw_err < TOL, (
-        f"DW {dw_nm:.1f} nm vs phase-matching {predicted:.1f} nm "
-        f"({dw_err*100:.2f}%)"
+        f"DW {dw_nm:.1f} nm vs phase-matching {predicted:.1f} nm ({dw_err * 100:.2f}%)"
     )
 
     result = {
@@ -165,7 +164,9 @@ def _plot(evo: Evolution, dw_nm: float, predicted: float) -> None:
     axes[1].legend()
     axes[1].grid(True, alpha=0.3)
 
-    fig.suptitle("Fig. 8 — Cherenkov dispersive wave from a fundamental soliton", fontsize=10)
+    fig.suptitle(
+        "Fig. 8 — Cherenkov dispersive wave from a fundamental soliton", fontsize=10
+    )
     fig.tight_layout()
     out = HERE / "fig08_dispersive_wave.png"
     fig.savefig(out, dpi=150)

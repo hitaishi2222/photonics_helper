@@ -1,6 +1,5 @@
 """Raman response functions: time domain, frequency domain, pulse interaction."""
 
-
 from __future__ import annotations
 
 import warnings
@@ -26,7 +25,6 @@ except ImportError:
     HAS_PLOTLY = False
 
 if TYPE_CHECKING:
-
     pass
 
 from .spec import RamanSpec
@@ -77,7 +75,7 @@ class RamanResponse:
         if self.tau2 is None and self.spec.linewidth_Hz > 0:
             self.tau2 = 1.0 / (np.pi * self.spec.linewidth_Hz)
             warnings.warn(
-                f"Auto-derived τ2 = {self.tau2*1e15:.1f} fs from linewidth. "
+                f"Auto-derived τ2 = {self.tau2 * 1e15:.1f} fs from linewidth. "
                 f"This approximation (τ2 = 1/(π·linewidth)) assumes weak damping "
                 f"and may be inaccurate for materials like Silica where τ2/τ1 is small. "
                 f"Consider providing τ1 and τ2 explicitly for accurate Raman responses.",
@@ -87,11 +85,10 @@ class RamanResponse:
         if self.grid is None:
             # Default grid: cover ~20 τ2 for damped oscillation to decay
             from ..base import Time
+
             tau2_val = self.tau2 or 1e-12
             tmax = max(10e-12, 20 * tau2_val)
-            self.grid = TemporalGrid(
-                N=2**14, Tmax=Time(tmax, unit='s')
-            )
+            self.grid = TemporalGrid(N=2**14, Tmax=Time(tmax, unit="s"))
 
         return self
 
@@ -217,7 +214,7 @@ class RamanResponse:
         fig, axes = plt.subplots(3, 1, figsize=figsize or (10, 9), sharex=True)
         fig.suptitle(
             f"Raman Response: {self.spec.name}  "
-            f"(fR={self.fR:.2f}, τ1={self.tau1*1e15:.2f} fs, τ2={self.tau2*1e15:.2f} fs)",  # type: ignore
+            f"(fR={self.fR:.2f}, τ1={self.tau1 * 1e15:.2f} fs, τ2={self.tau2 * 1e15:.2f} fs)",  # type: ignore
             fontsize=13,
             fontweight="bold",
         )
@@ -335,7 +332,7 @@ class RamanResponse:
 
         fig.update_layout(
             title_text=f"Raman Response: {self.spec.name}  "
-            f"(fR={self.fR:.2f}, τ1={self.tau1*1e15:.2f} fs, τ2={self.tau2*1e15:.2f} fs)",  # type: ignore
+            f"(fR={self.fR:.2f}, τ1={self.tau1 * 1e15:.2f} fs, τ2={self.tau2 * 1e15:.2f} fs)",  # type: ignore
             height=750,
             showlegend=False,
         )
@@ -1030,8 +1027,7 @@ class RamanPulseInteraction:
 
             # Update title with frame info
             fig.suptitle(
-                f"Pulse-Raman Interaction: {self.spec.name}  "
-                f"(frame {frame}/{frames})",
+                f"Pulse-Raman Interaction: {self.spec.name}  (frame {frame}/{frames})",
                 fontsize=13,
                 fontweight="bold",
             )

@@ -14,7 +14,11 @@ def test_create_mode_animation_filepath_construction():
     with tempfile.TemporaryDirectory() as tmpdir:
         img_names = ["a.png", "b.png", "c.png"]
         filepath = [os.path.join(tmpdir, img) for img in img_names]
-        assert filepath == [os.path.join(tmpdir, "a.png"), os.path.join(tmpdir, "b.png"), os.path.join(tmpdir, "c.png")]
+        assert filepath == [
+            os.path.join(tmpdir, "a.png"),
+            os.path.join(tmpdir, "b.png"),
+            os.path.join(tmpdir, "c.png"),
+        ]
 
 
 def test_create_mode_animation_appends_gif_extension():

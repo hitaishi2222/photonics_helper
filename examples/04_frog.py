@@ -10,7 +10,8 @@ and assess retrieval quality.
 import numpy as np
 from photonics_helper.pulse import generate_trace, retrieve, fidelity
 import matplotlib
-matplotlib.use('Agg')  # Non-interactive backend for PNG export
+
+matplotlib.use("Agg")  # Non-interactive backend for PNG export
 import matplotlib.pyplot as plt
 
 # --- Setup: create test pulses ---
@@ -22,11 +23,10 @@ dt = Tmax / N
 t = np.arange(N) * dt - N * dt / 2
 
 pulses = {
-    "gaussian": np.exp(-t**2 / (2 * T0**2)),
+    "gaussian": np.exp(-(t**2) / (2 * T0**2)),
     "sech": 1.0 / np.cosh(t / T0),
-    "chirped_gaussian": np.exp(-t**2 / (2 * T0**2)) * np.exp(
-        1j * 0.5 * 2.0 * (t / T0) ** 2
-    ),
+    "chirped_gaussian": np.exp(-(t**2) / (2 * T0**2))
+    * np.exp(1j * 0.5 * 2.0 * (t / T0) ** 2),
 }
 
 print("FROG Trace Generation & PCGPA Retrieval")

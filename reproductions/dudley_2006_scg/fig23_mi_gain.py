@@ -106,8 +106,8 @@ def validate(fast: bool = False, make_plot: bool = True) -> dict:
     omega_peak_ext = abs(float(ext_800["Omega_peak"]))
     peak_rel_err = abs(omega_peak_ext - omega_peak_classical) / omega_peak_classical
     assert peak_rel_err < 0.15, (
-        f"peak Ω_ext={omega_peak_ext/2/np.pi/1e12:.2f} THz vs classical "
-        f"{omega_peak_classical/2/np.pi/1e12:.2f} THz"
+        f"peak Ω_ext={omega_peak_ext / 2 / np.pi / 1e12:.2f} THz vs classical "
+        f"{omega_peak_classical / 2 / np.pi / 1e12:.2f} THz"
     )
 
     # 3. Normal pump at 750 nm: classical zero, extended displaced further.

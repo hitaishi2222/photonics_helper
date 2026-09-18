@@ -76,6 +76,7 @@ def beta3_si() -> float:
 
 # ── Scalar soliton scales ────────────────────────────────────────────────────
 
+
 @dataclass(frozen=True)
 class SolitonScales:
     """Characteristic length scales of the input pulse (paper Sec. V.B)."""
@@ -126,9 +127,7 @@ def soliton_scales(
     )
 
 
-def kodama_hasegawa(
-    N_order: float, P0: float, T0_fs: float = T0_FS
-) -> list[dict]:
+def kodama_hasegawa(N_order: float, P0: float, T0_fs: float = T0_FS) -> list[dict]:
     """Kodama-Hasegawa fundamental solitons ejected by an ideal N-soliton.
 
     From the paper (Sec. V.B.1, quoting Kodama and Hasegawa 1987)::
@@ -154,6 +153,7 @@ def kodama_hasegawa(
 
 
 # ── Pulse / fiber / solver builders ──────────────────────────────────────────
+
 
 def build_pulse(
     peak_power_W: float,
@@ -236,8 +236,14 @@ def make_solver(
     *,
     raman: bool = False,
     shock: bool = False,
+    tau_shock: float | None = None,
 ) -> GNLSESolver:
-    """Construct a ``GNLSESolver`` for the Dudley model."""
+    """Construct a ``GNLSESolver`` for the Dudley model.
+
+    ``tau_shock`` is the shock timescale in seconds (SI); ``None`` uses the
+    library default ``1/ω₀``. Pass ``SHOCK_FS * 1e-15`` (0.56 fs) for the
+    paper's effective-area-corrected value (RMP 2006 Eq. (3), Sec. V.B).
+    """
     return GNLSESolver(
         pulse=pulse,
         fiber=fiber,
@@ -245,20 +251,22 @@ def make_solver(
         include_raman=raman,
         include_self_steepening=shock,
         include_tpa=False,
+        tau_shock=tau_shock,
     )
 
 
 # ── Field-evolution container and analysis helpers ───────────────────────────
 
+
 @dataclass
 class Evolution:
     """Stored field snapshots from a GNLSE run, plus spectral helpers."""
 
-    z: np.ndarray            # (nz,) propagation distance (m)
-    fields: np.ndarray       # (nz, N) complex envelope
-    t: np.ndarray            # (N,) time grid (s)
-    omega: np.ndarray        # (N,) angular-frequency offset grid (rad/s)
-    omega0: float            # carrier angular frequency (rad/s)
+    z: np.ndarray  # (nz,) propagation distance (m)
+    fields: np.ndarray  # (nz, N) complex envelope
+    t: np.ndarray  # (N,) time grid (s)
+    omega: np.ndarray  # (N,) angular-frequency offset grid (rad/s)
+    omega0: float  # carrier angular frequency (rad/s)
     metadata: dict = field(default_factory=dict)
 
     # -- intensity / spectra -------------------------------------------------
@@ -423,8 +431,7 @@ def measure_peak_fwhm(t: np.ndarray, intensity: np.ndarray, idx: int) -> float:
         if profile[i1] == profile[i0]:
             return float(t[i1])
         return float(
-            t[i0]
-            + (half - profile[i0]) * (t[i1] - t[i0]) / (profile[i1] - profile[i0])
+            t[i0] + (half - profile[i0]) * (t[i1] - t[i0]) / (profile[i1] - profile[i0])
         )
 
     t_left = _cross(left, left + 1) if left < idx else float(t[left])
@@ -515,10 +522,13 @@ def dispersive_wave_wavelength_nm(
     rhs = (1.0 - fR) * gamma * Ps if nonlinear else 0.0
 
     def _mismatch(Omega_ps: float) -> float:
-        return sum(
-            float(b) * Omega_ps**k / factorial(k)
-            for k, b in enumerate(np.asarray(betas, dtype=float), start=2)
-        ) - rhs
+        return (
+            sum(
+                float(b) * Omega_ps**k / factorial(k)
+                for k, b in enumerate(np.asarray(betas, dtype=float), start=2)
+            )
+            - rhs
+        )
 
     grid = np.linspace(100.0, 1600.0, 60000)
     values = np.array([_mismatch(x) for x in grid])
@@ -573,6 +583,7 @@ def mean_spectral_wavelength_nm(evo: Evolution, index: int = -1) -> float:
 
 
 # ── Plotting helpers ─────────────────────────────────────────────────────────
+
 
 def interpolate_on_wavelength(
     wl_sorted: NDArray,
@@ -673,9 +684,7 @@ def _z_axis(evo: Evolution, z_scale: str) -> Tuple[NDArray, str]:
             "mm": (1e3, "Distance (mm)"),
         }[z_scale]
     except KeyError as exc:
-        raise ValueError(
-            f"z_scale must be 'm', 'cm' or 'mm', got {z_scale!r}"
-        ) from exc
+        raise ValueError(f"z_scale must be 'm', 'cm' or 'mm', got {z_scale!r}") from exc
     return np.asarray(evo.z, dtype=float) * factor, label
 
 
@@ -775,9 +784,7 @@ def temporal_feature_labels(
     edges = np.geomspace(float(wl_range[0]), float(wl_range[1]), n_bands + 1)
     centers = np.sqrt(edges[:-1] * edges[1:])
     band_of_bin = np.digitize(lam, edges) - 1
-    band_masks = [
-        (band_of_bin == b) for b in range(int(n_bands))
-    ]
+    band_masks = [(band_of_bin == b) for b in range(int(n_bands))]
 
     pump_nm = carrier_wavelength_nm(evo)
     n_z, n_t = evo.fields.shape
@@ -789,9 +796,7 @@ def temporal_feature_labels(
         for b, mask in enumerate(band_masks):
             if not mask.any():
                 continue
-            profile = np.abs(
-                np.fft.ifft(np.fft.ifftshift(spectrum * mask))
-            ) ** 2
+            profile = np.abs(np.fft.ifft(np.fft.ifftshift(spectrum * mask))) ** 2
             update = profile > best
             best[update] = profile[update]
             best_band[update] = b
@@ -885,7 +890,9 @@ def _plotly_density(
                     mode="markers+text",
                     text=[str(name).split(" (")[0]],
                     textposition="middle right",
-                    marker=dict(size=9, color="white", line=dict(color="black", width=1)),
+                    marker=dict(
+                        size=9, color="white", line=dict(color="black", width=1)
+                    ),
                     showlegend=False,
                     hoverinfo="skip",
                 )

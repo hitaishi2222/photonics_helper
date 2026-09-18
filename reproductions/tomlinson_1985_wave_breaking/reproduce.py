@@ -127,7 +127,9 @@ def _run(
         N=int(params["grid_N"]), Tmax=Time(float(params["grid_Tmax_ps"]) * 1e-12, "s")
     )
     env = Envelope(
-        shape="gaussian", peak_amplitude=float(np.sqrt(P0)), pulse_width=Time(wb.T0_s, "s")
+        shape="gaussian",
+        peak_amplitude=float(np.sqrt(P0)),
+        pulse_width=Time(wb.T0_s, "s"),
     )
     pulse = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(wb.lam_m, "m"))
     fiber = FiberProfile.from_gamma(
@@ -155,10 +157,17 @@ def _steepness(intensity: NDArray, t: NDArray, T0: float) -> float:
 def _analyze(
     wb: WaveBreakingParameters, z: NDArray, evolution: list[Wave], grid: TemporalGrid
 ) -> dict:
-    steep = np.array([_steepness(np.abs(w.envelope_field) ** 2, grid.t, wb.T0_s) for w in evolution])
+    steep = np.array(
+        [_steepness(np.abs(w.envelope_field) ** 2, grid.t, wb.T0_s) for w in evolution]
+    )
     n_peaks = np.array(
         [
-            len(find_peaks(np.abs(w.envelope_field) ** 2, prominence=0.01 * np.max(np.abs(w.envelope_field) ** 2))[0])
+            len(
+                find_peaks(
+                    np.abs(w.envelope_field) ** 2,
+                    prominence=0.01 * np.max(np.abs(w.envelope_field) ** 2),
+                )[0]
+            )
             for w in evolution
         ]
     )
@@ -166,7 +175,9 @@ def _analyze(
     i_steepest = int(np.argmax(steep))
     i_osc = int(np.argmax(n_peaks >= 2))
     return {
-        "z_onset_m": float(z[i_onset]) if steep[i_onset] > 1.10 * GAUSSIAN_STEEPNESS else float("nan"),
+        "z_onset_m": float(z[i_onset])
+        if steep[i_onset] > 1.10 * GAUSSIAN_STEEPNESS
+        else float("nan"),
         "z_steepest_m": float(z[i_steepest]),
         "z_oscillation_m": float(z[i_osc]) if n_peaks[i_osc] >= 2 else float("nan"),
         "peak_steepness": float(steep.max()),
@@ -239,9 +250,15 @@ def validate(
         "_plot": (wb, z, evolution, grid, ref, sweep, P0_arr, z_arr),
     }
 
-    assert tol["z_onset_over_zWB_low"] < ratio_onset < tol["z_onset_over_zWB_high"], result
-    assert ref["peak_steepness"] / GAUSSIAN_STEEPNESS > tol["peak_steepness_min"], result
-    assert ref["z_oscillation_m"] / wb.sqrt_LD_LNL < tol["oscillation_z_over_sqrt_max"], result
+    assert tol["z_onset_over_zWB_low"] < ratio_onset < tol["z_onset_over_zWB_high"], (
+        result
+    )
+    assert ref["peak_steepness"] / GAUSSIAN_STEEPNESS > tol["peak_steepness_min"], (
+        result
+    )
+    assert (
+        ref["z_oscillation_m"] / wb.sqrt_LD_LNL < tol["oscillation_z_over_sqrt_max"]
+    ), result
     assert tol["scaling_slope_low"] < slope < tol["scaling_slope_high"], result
     assert result["scaling_constant_spread"] < 1.35, result
 
@@ -261,7 +278,9 @@ def validate(
         f"  peak edge steepness {result['peak_steepness']:.2f} "
         f"({result['peak_steepness_over_gaussian']:.2f}× Gaussian)"
     )
-    print(f"  first oscillations at {result['z_oscillation_m']:.0f} m ({result['z_oscillation_m'] / wb.sqrt_LD_LNL:.2f} sqrt)")
+    print(
+        f"  first oscillations at {result['z_oscillation_m']:.0f} m ({result['z_oscillation_m'] / wb.sqrt_LD_LNL:.2f} sqrt)"
+    )
     print(
         f"  scaling z_onset ∝ P0^({slope:.2f}) (theory −0.5); "
         f"z_onset/sqrt spread {result['scaling_constant_spread']:.3f}"
@@ -291,7 +310,10 @@ def _plot(wb: WaveBreakingParameters, params: dict, result: dict) -> None:
         i = int(np.argmin(np.abs(z - z_target)))
         inten = np.abs(evolution[i].envelope_field) ** 2
         axes[0, 0].plot(
-            t_ps / (wb.T0_s * 1e12), inten / wb.P0, linestyle=style, label=f"z = {z[i] / z_WB:.2f} z_WB"
+            t_ps / (wb.T0_s * 1e12),
+            inten / wb.P0,
+            linestyle=style,
+            label=f"z = {z[i] / z_WB:.2f} z_WB",
         )
     axes[0, 0].set_xlim(-5, 5)
     axes[0, 0].set_xlabel("T / T₀")
@@ -324,7 +346,9 @@ def _plot(wb: WaveBreakingParameters, params: dict, result: dict) -> None:
         i = int(np.argmin(np.abs(z - z_target)))
         Aw = grid.fft(evolution[i].envelope_field)
         P = np.abs(Aw) ** 2
-        axes[1, 1].plot(grid.w * wb.T0_s, P / P.max(), style, label=f"z = {z[i] / z_WB:.2f} z_WB")
+        axes[1, 1].plot(
+            grid.w * wb.T0_s, P / P.max(), style, label=f"z = {z[i] / z_WB:.2f} z_WB"
+        )
     axes[1, 1].set_xlim(-30, 30)
     axes[1, 1].set_xlabel(r"$\Omega\,T_0$")
     axes[1, 1].set_ylabel("normalised spectral intensity")

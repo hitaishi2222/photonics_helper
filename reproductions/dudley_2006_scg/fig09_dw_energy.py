@@ -51,9 +51,7 @@ def _soliton_mean_wavelength(evo, soliton_band=SOLITON_BAND) -> np.ndarray:
 def _dw_fraction_series(evo, band=DW_BAND) -> np.ndarray:
     wl, psd = evo.spectrum_on_wavelength()
     mask = (wl >= band[0]) & (wl <= band[1])
-    return np.asarray(
-        psd[:, mask].sum(axis=1) / np.maximum(psd.sum(axis=1), 1e-30)
-    )
+    return np.asarray(psd[:, mask].sum(axis=1) / np.maximum(psd.sum(axis=1), 1e-30))
 
 
 def validate(fast: bool = False, make_plot: bool = True) -> dict:

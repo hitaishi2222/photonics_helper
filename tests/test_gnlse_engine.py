@@ -18,7 +18,9 @@ def setup():
         envelope=env,
         central_wavelength=Wavelength(1550, "nm"),
     )
-    fiber = FiberProfile(n2=1e-19, alpha=1e-5, A_eff=Area(5e-11, "m^2"), length=Length(1e-3, "m"))
+    fiber = FiberProfile(
+        n2=1e-19, alpha=1e-5, A_eff=Area(5e-11, "m^2"), length=Length(1e-3, "m")
+    )
     betas = np.array([0.02])  # beta2 = +20 ps²/km (= 0.02 ps²/m)
     return pulse, fiber, betas
 
@@ -62,8 +64,12 @@ def test_engine_energy_conservation_pure_kerr(setup):
     """Pure Kerr GNLSE conserves pulse energy."""
     pulse, fiber, betas = setup
     engine = SplitStepEngine(
-        pulse=pulse, fiber=fiber, betas=betas,
-        include_raman=False, include_self_steepening=False, include_tpa=False,
+        pulse=pulse,
+        fiber=fiber,
+        betas=betas,
+        include_raman=False,
+        include_self_steepening=False,
+        include_tpa=False,
     )
     initial_energy = np.sum(np.abs(pulse.envelope_field) ** 2) * pulse.grid.dt
     engine.propagate(num_steps=10)
@@ -75,13 +81,23 @@ def test_engine_dispersion_spreads_pulse(setup):
     """Dispersion broadens a Gaussian pulse over propagation."""
     pulse, fiber, betas = setup
     engine = SplitStepEngine(
-        pulse=pulse, fiber=fiber, betas=betas,
-        include_raman=False, include_self_steepening=False, include_tpa=False,
+        pulse=pulse,
+        fiber=fiber,
+        betas=betas,
+        include_raman=False,
+        include_self_steepening=False,
+        include_tpa=False,
     )
-    initial_width = np.sqrt(np.sum(pulse.grid.t**2 * np.abs(pulse.envelope_field)**2) / np.sum(np.abs(pulse.envelope_field)**2))
+    initial_width = np.sqrt(
+        np.sum(pulse.grid.t**2 * np.abs(pulse.envelope_field) ** 2)
+        / np.sum(np.abs(pulse.envelope_field) ** 2)
+    )
     engine.propagate(num_steps=50)
     final_field = engine.A
-    final_width = np.sqrt(np.sum(pulse.grid.t**2 * np.abs(final_field)**2) / np.sum(np.abs(final_field)**2))
+    final_width = np.sqrt(
+        np.sum(pulse.grid.t**2 * np.abs(final_field) ** 2)
+        / np.sum(np.abs(final_field) ** 2)
+    )
     # Pulse should broaden due to dispersion
     assert final_width > initial_width
 

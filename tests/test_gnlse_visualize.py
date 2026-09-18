@@ -3,6 +3,7 @@
 import numpy as np
 import pytest
 import matplotlib
+
 matplotlib.use("Agg")  # non-interactive backend
 import matplotlib.pyplot as plt
 
@@ -27,7 +28,9 @@ def solver():
         envelope=env,
         central_wavelength=Wavelength(1550, "nm"),
     )
-    fiber = FiberProfile(n2=1e-19, alpha=1e-5, A_eff=Area(5e-11, "m^2"), length=Length(1e-3, "m"))
+    fiber = FiberProfile(
+        n2=1e-19, alpha=1e-5, A_eff=Area(5e-11, "m^2"), length=Length(1e-3, "m")
+    )
     betas = np.array([0.02])  # 20 ps²/km
     solver = GNLSESolver(pulse=pulse, fiber=fiber, betas=betas, include_raman=False)
     solver.propagate(num_steps=10)
@@ -46,8 +49,8 @@ def test_waterfall_plot_has_axis_labels(solver):
     fig = plot_waterfall(solver)
     ax = fig.axes[0]
     assert ax.get_xlabel() == "Time (ps)"
-    assert ax.get_ylabel() == "Trace offset"
-    # Propagation distance is encoded by the colorbar, not the y-axis.
+    assert ax.get_ylabel() == "Propagation distance (z)"
+    # Each y-tick is labeled with its trace distance; colorbar repeats it.
     cb_labels = [a.get_ylabel() for a in fig.axes[1:]]
     assert any("Propagation distance" in lbl for lbl in cb_labels)
     plt.close(fig)

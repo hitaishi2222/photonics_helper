@@ -139,7 +139,9 @@ def test_breather_propagates_with_gnlse():
     expected = np.asarray(sob.field(sob.L_NL, grid.t, 0.66), dtype=complex)
     intensity = np.abs(A) ** 2
     expected_intensity = np.abs(expected) ** 2
-    rel = np.linalg.norm(intensity - expected_intensity) / np.linalg.norm(expected_intensity)
+    rel = np.linalg.norm(intensity - expected_intensity) / np.linalg.norm(
+        expected_intensity
+    )
     assert rel < 5e-3
 
 

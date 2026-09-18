@@ -156,7 +156,7 @@ def validate(params: dict | None = None, make_plot: bool = True) -> dict:
     print(f"  N={N}: R(lambda0)={peak:.6f}")
     print(
         f"  stopband width (R>0.5) = {measured_width:.1f} nm, "
-        f"analytic = {analytic_width:.1f} nm (err {width_err*100:.1f}%)"
+        f"analytic = {analytic_width:.1f} nm (err {width_err * 100:.1f}%)"
     )
     return {
         "peak_checks": peak_checks,

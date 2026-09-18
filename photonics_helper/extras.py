@@ -33,4 +33,3 @@ def create_mode_animation(
         export_name += ".gif"
 
     io.mimsave(str(export_dir / export_name), frames, format="gif", duration=0.2)  # type: ignore[call-overload]
-

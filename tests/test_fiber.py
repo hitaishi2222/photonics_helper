@@ -84,12 +84,16 @@ def test_dispersion_unit_conversion_ps_nm_km():
     cw = Wavelength(1550, "nm")
 
     disp_ps = Dispersion(
-        values=np.full(51, 17.0), unit="ps/nm.km",
-        wavelengths=wl_arr, central_wavelength=cw,
+        values=np.full(51, 17.0),
+        unit="ps/nm.km",
+        wavelengths=wl_arr,
+        central_wavelength=cw,
     )
     disp_si = Dispersion(
-        values=np.full(51, 17.0e-6), unit="s/m^2",
-        wavelengths=wl_arr, central_wavelength=cw,
+        values=np.full(51, 17.0e-6),
+        unit="s/m^2",
+        wavelengths=wl_arr,
+        central_wavelength=cw,
     )
 
     # Accessors reflect correct, converted units on both sides.

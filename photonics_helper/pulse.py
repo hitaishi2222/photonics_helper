@@ -1,12 +1,29 @@
+"""Pulse envelopes, temporal grids, and pulse trains.
+
+Envelope-field convention
+-------------------------
+An :class:`Envelope` describes a *normalized* complex envelope ``A(t)``. The
+absolute scale of ``A`` is whatever ``peak_amplitude`` the user chose, so
+``Wave.envelope_intensity`` (``|A|²``) and the metrics derived from it
+(``pulse_energy``, ``peak_power``) are in normalized envelope units, **not**
+W/m², joules, or watts, unless a physical effective mode area is attached with
+:meth:`Wave.with_effective_area`. Without one, ``peak_power``/``pulse_energy``
+emit a one-time :class:`UserWarning` and the visualization summary labels the
+value as normalized. With an effective area ``A_eff`` the library uses
+``P = ½·n·c·ε₀·A_eff·|A|²`` (see :class:`~photonics_helper.base.PeakPower`).
+"""
+
 from __future__ import annotations
 from pydantic.dataclasses import dataclass
 from math import sqrt, log, acosh, pi
 from typing import Any, Callable, Dict, Literal, Self
 from functools import cached_property, lru_cache
+import copy
 import logging
+import warnings
 from matplotlib import gridspec
 from numpy.typing import NDArray
-from photonics_helper.base import Wavelength, Frequency, Time, C_MS
+from photonics_helper.base import Wavelength, Frequency, Time, C_MS, EPS_0, Area
 from photonics_helper._fftw import fft as _fft_backend, ifft as _ifft_backend
 
 import numpy as np
@@ -353,11 +370,11 @@ class Envelope:
 
             phase = np.zeros_like(omega_ps, dtype=float)
             if GDD != 0.0:
-                phase += 0.5 * GDD * omega_ps ** 2
+                phase += 0.5 * GDD * omega_ps**2
             if TOD != 0.0:
-                phase += (1.0 / 6.0) * TOD * omega_ps ** 3
+                phase += (1.0 / 6.0) * TOD * omega_ps**3
             if FOD != 0.0:
-                phase += (1.0 / 24.0) * FOD * omega_ps ** 4
+                phase += (1.0 / 24.0) * FOD * omega_ps**4
 
             # Apply dispersion phase (same sign convention as GNLSE linear step)
             A_w_disp = A_w * np.exp(-1j * phase)
@@ -381,7 +398,9 @@ class Envelope:
         new_env = Envelope(
             shape="custom",
             peak_amplitude=float(np.max(np.abs(disp_field))),
-            pulse_width=Time(measured_width, "s") if measured_width > 0.0 else self.pulse_width,
+            pulse_width=Time(measured_width, "s")
+            if measured_width > 0.0
+            else self.pulse_width,
             chirp=0.0,
             func=_disp_field,
             phase_func=None,
@@ -396,7 +415,7 @@ class Envelope:
 
     def visualize_2d(
         self,
-        backend: Literal["plotly", "matplotlib", "xy"] = "plotly",
+        backend: Literal["plotly", "matplotlib"] = "plotly",
         N: int = 2**12,
         show_phase: bool = True,
         show_fwhm: bool = True,
@@ -408,7 +427,7 @@ class Envelope:
 
         Parameters
         ----------
-        backend : "plotly", "matplotlib", or "xy" (default "plotly")
+        backend : "plotly" or "matplotlib" (default "plotly")
         N : number of time points (default 2^12)
         show_phase : show instantaneous phase overlay (default True)
         show_fwhm : show FWHM markers (default True)
@@ -416,8 +435,8 @@ class Envelope:
         title : optional title override (default uses shape name)
         theme : "light" or "dark" (default "light")
         """
-        if backend not in ("plotly", "matplotlib", "xy"):
-            raise ValueError("backend must be 'plotly', 'matplotlib', or 'xy'")
+        if backend not in ("plotly", "matplotlib"):
+            raise ValueError("backend must be 'plotly' or 'matplotlib'")
 
         grid = self._make_grid(N)
         t = grid.t
@@ -428,26 +447,13 @@ class Envelope:
         phase = np.unwrap(np.angle(A))
 
         if title is None:
-            title = f"{self.shape.title()} Pulse Envelope (T₀={self.pulse_width.as_s*1e15:.1f} fs)"
+            title = f"{self.shape.title()} Pulse Envelope (T₀={self.pulse_width.as_s * 1e15:.1f} fs)"
 
         if theme not in ("light", "dark"):
             raise ValueError("theme must be 'light' or 'dark'")
 
         if backend == "plotly":
             return self._visualize_2d_plotly(
-                t,
-                A,
-                intensity_t,
-                intensity_w,
-                phase,
-                grid,
-                show_phase,
-                show_fwhm,
-                title,
-                theme,
-            )
-        elif backend == "xy":
-            return self._visualize_2d_xy(
                 t,
                 A,
                 intensity_t,
@@ -584,8 +590,8 @@ class Envelope:
         # Parameters text box
         params_text = (
             f"Shape: {self.shape}<br>"
-            f"T₀ = {self.pulse_width.as_s:.3g} s ({self.pulse_width.as_s*1e15:.1f} fs)<br>"
-            f"FWHM = {self.fwhm.as_s:.3g} s ({self.fwhm.as_s*1e15:.1f} fs)<br>"
+            f"T₀ = {self.pulse_width.as_s:.3g} s ({self.pulse_width.as_s * 1e15:.1f} fs)<br>"
+            f"FWHM = {self.fwhm.as_s:.3g} s ({self.fwhm.as_s * 1e15:.1f} fs)<br>"
             f"Chirp = {self.chirp:.2f}"
         )
         fig.add_annotation(
@@ -729,8 +735,8 @@ class Envelope:
         # Parameters text box
         params_text = (
             f"Shape: {self.shape}\n"
-            f"T₀ = {self.pulse_width.as_s:.3g} s ({self.pulse_width.as_s*1e15:.1f} fs)\n"
-            f"FWHM = {self.fwhm.as_s:.3g} s ({self.fwhm.as_s*1e15:.1f} fs)\n"
+            f"T₀ = {self.pulse_width.as_s:.3g} s ({self.pulse_width.as_s * 1e15:.1f} fs)\n"
+            f"FWHM = {self.fwhm.as_s:.3g} s ({self.fwhm.as_s * 1e15:.1f} fs)\n"
             f"Chirp = {self.chirp:.2f}"
         )
         ax_t.text(
@@ -769,34 +775,6 @@ class Envelope:
 
         plt.tight_layout()
         return fig
-
-    def _visualize_2d_xy(
-        self,
-        t,
-        A,
-        intensity_t,
-        intensity_w,
-        phase,
-        grid,
-        show_phase,
-        show_fwhm,
-        title,
-        theme,
-    ):
-        """Interactive ``xy`` backend (a real method, not a monkey-patch)."""
-        return _visualize_2d_xy_impl(
-            self,
-            t,
-            A,
-            intensity_t,
-            intensity_w,
-            phase,
-            grid,
-            show_phase,
-            show_fwhm,
-            title,
-            theme,
-        )
 
     def visualize_3d(
         self,
@@ -903,123 +881,6 @@ class Envelope:
         )
 
 
-class _XyHtmlView:
-    """Lightweight wrapper so xy backends return an object with .to_html()."""
-
-    def __init__(self, html: str) -> None:
-        self._html = html
-
-    def to_html(self, full_html: bool = False, include_plotlyjs: str | None = None) -> str:
-        return self._html
-
-
-def _visualize_2d_xy_impl(
-    self,
-    t,
-    A,
-    intensity_t,
-    intensity_w,
-    phase,
-    grid,
-    show_phase,
-    show_fwhm,
-    title,
-    theme,
-):
-    """XY backend implementation of 2D visualization."""
-    import re
-
-    try:
-        import xy
-    except ImportError as exc:  # pragma: no cover - exercised when extra absent
-        raise ImportError(
-            "The 'xy' visualization backend requires the optional 'xy' package. "
-            "Install it with: pip install 'photonics-helper[xy]'"
-        ) from exc
-
-    # Convert to fs and THz for readable axes
-    t_fs = t * 1e15
-    w_THz = grid.w / (2 * np.pi * 1e12)  # rad/s -> THz
-
-    # Theme colors
-    colors = {
-        "dark": {
-            "bg": "#1a1a2e",
-            "intensity": "#00d4ff",
-            "spectrum": "#a78bfa",
-            "phase": "#ff6b6b",
-            "polar": "#34d399",
-            "text": "#e0e0e0",
-        },
-        "light": {
-            "bg": "#ffffff",
-            "intensity": "#0088cc",
-            "spectrum": "#7c3aed",
-            "phase": "#dc2626",
-            "polar": "#059669",
-            "text": "#1a1a1a",
-        },
-    }
-    c = colors[theme]
-
-    # Temporal intensity chart
-    t_children = [xy.line(x=t_fs, y=intensity_t, color=c["intensity"])]
-    if show_fwhm:
-        t0_fs = self.pulse_width.as_s * 1e15
-        t_children.extend([xy.vline(x=-t0_fs, color="#fbbf24"), xy.vline(x=t0_fs, color="#fbbf24")])
-    t_chart = xy.line_chart(*t_children, title="Temporal Intensity", width=400, height=280)
-
-    # Spectral intensity chart
-    s_chart = xy.line_chart(
-        xy.line(x=w_THz, y=intensity_w, color=c["spectrum"]),
-        title="Spectral Intensity",
-        width=400,
-        height=280,
-    )
-
-    # Phase chart
-    if show_phase:
-        p_chart = xy.line_chart(
-            xy.line(x=t_fs, y=phase, color=c["phase"]),
-            title="Instantaneous Phase",
-            width=400,
-            height=280,
-        )
-    else:
-        p_chart = xy.line_chart(
-            xy.line(x=t_fs[:0], y=np.array([])),
-            title="Instantaneous Phase",
-            width=400,
-            height=280,
-        )
-
-    # Polar plot (Re vs Im)
-    polar_chart = xy.line_chart(
-        xy.line(x=np.real(A), y=np.imag(A), color=c["polar"]),
-        title="Polar Plot",
-        width=400,
-        height=280,
-    )
-
-    # Combine into grid HTML
-    charts = [t_chart, s_chart, p_chart, polar_chart]
-    chart_htmls = []
-    for ch in charts:
-        full_html = ch.to_html()
-        body_match = re.search(r"<body>(.*?)</body>", full_html, re.DOTALL)
-        if body_match:
-            chart_htmls.append(body_match.group(1))
-
-    grid_html = (
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:8px;background:'
-        + ("#1a1a2e" if theme == "dark" else "#ffffff")
-        + '">\n'
-        + "".join(chart_htmls)
-        + "\n</div>"
-    )
-    return _XyHtmlView(grid_html)
-
-
 @dataclass
 class TemporalGrid:
     N: int
@@ -1103,6 +964,8 @@ class Wave:
     _pulse_train_field: Any = None
     refractive_index: float = 1.0
     repetition_rate: Frequency | None = None
+    _effective_area: Area | None = None
+    _warned_normalized: bool = False
 
     @cached_property
     def central_frequency(self) -> float:
@@ -1127,8 +990,50 @@ class Wave:
     def envelope_intensity(self):
         return np.abs(self.envelope_field) ** 2
 
-    def pulse_energy(self):
-        return np.sum(self.envelope_intensity) * self.grid.dt
+    @property
+    def _power_scale(self) -> float | None:
+        """Intensity→power factor ``½·n·c·ε₀·A_eff`` (W per unit ``|A|²``).
+
+        Returns ``None`` when no effective mode area has been attached, in
+        which case the power and energy metrics stay in normalized envelope
+        units.
+        """
+        if self._effective_area is None:
+            return None
+        return (
+            0.5 * self.refractive_index * C_MS * EPS_0 * self._effective_area.as_m2
+        )
+
+    def _warn_normalized(self, method: str) -> None:
+        """Emit a one-time warning that ``method`` is in normalized units."""
+        if self._warned_normalized:
+            return
+        self._warned_normalized = True
+        warnings.warn(
+            f"Wave.{method}() is in normalized envelope units, not physical "
+            "watts/joules. Attach an effective mode area with "
+            "Wave.with_effective_area(A_eff) to obtain physical units.",
+            UserWarning,
+            stacklevel=3,
+        )
+
+    def pulse_energy(self) -> float:
+        """Pulse energy (or normalized integral ``∫|A|²dt``).
+
+        Returns
+        -------
+        float
+            Joules when an effective mode area has been attached with
+            :meth:`with_effective_area`; otherwise the normalized integral
+            ``∫|A|²dt`` in field-units²·seconds and a one-time
+            :class:`UserWarning` is emitted.
+        """
+        energy = float(np.sum(self.envelope_intensity) * self.grid.dt)
+        scale = self._power_scale
+        if scale is None:
+            self._warn_normalized("pulse_energy")
+            return energy
+        return scale * energy
 
     def calc_width(self, level: float = 0.5) -> Time:
         """Calculate the pulse width using linear interpolation at crossing points.
@@ -1147,9 +1052,45 @@ class Wave:
         """
         return Time(_crossing_width(self.grid.t, self.envelope_intensity, level), "s")
 
-    def peak_power(self):
+    def peak_power(self) -> float:
+        """Peak power (or normalized peak intensity ``max|A|²``).
+
+        Returns
+        -------
+        float
+            Watts when an effective mode area has been attached with
+            :meth:`with_effective_area` (using
+            ``P = ½·n·c·ε₀·A_eff·|A|²``); otherwise ``max|A|²`` in normalized
+            envelope units and a one-time :class:`UserWarning` is emitted.
+        """
         A = self.envelope_field
-        return np.max(np.abs(A) ** 2)
+        peak_intensity = float(np.max(np.abs(A) ** 2))
+        scale = self._power_scale
+        if scale is None:
+            self._warn_normalized("peak_power")
+            return peak_intensity
+        return scale * peak_intensity
+
+    def with_effective_area(self, A_eff: Area) -> Self:
+        """Return a copy of this ``Wave`` bound to a physical mode area.
+
+        Once an effective area is attached, :meth:`peak_power` and
+        :meth:`pulse_energy` return physical watts and joules via the
+        intensity relation ``P = ½·n·c·ε₀·A_eff·|A|²`` (with
+        :attr:`refractive_index` as ``n``). Without one they stay in
+        normalized envelope units.
+
+        Parameters
+        ----------
+        A_eff : Area — effective mode area (e.g. ``Area(80, "um^2")``).
+
+        Returns
+        -------
+        Wave — a copy sharing this wave's field with the area attached.
+        """
+        scaled = copy.copy(self)
+        scaled._effective_area = A_eff
+        return scaled
 
     def average_power(self, repetition_rate: Frequency) -> float:
         """Average power = pulse energy × repetition_rate.
@@ -1372,7 +1313,8 @@ class Wave:
         ax_t.text(
             0.02,
             0.92,
-            f"TBP = {tbp:.3f}   |   Peak power = {self.peak_power():.3g} W",
+            f"TBP = {tbp:.3f}   |   Peak power = {self.peak_power():.3g} "
+            + ("W" if self._effective_area is not None else "(normalized units)"),
             transform=ax_t.transAxes,
             color=COLORS["text"],
             fontsize=8,
@@ -1650,12 +1592,21 @@ class FROGTrace:
                     ret_integrated = ret_integrated / ret_integrated.max()
                 tau_ps = self.tau * 1e12
                 ax_comp.plot(
-                    tau_ps, orig_integrated, color="#a78bfa",
-                    linewidth=1.2, label="Original", alpha=0.7
+                    tau_ps,
+                    orig_integrated,
+                    color="#a78bfa",
+                    linewidth=1.2,
+                    label="Original",
+                    alpha=0.7,
                 )
                 ax_comp.plot(
-                    tau_ps, ret_integrated, color="#ff6b6b",
-                    linewidth=1.2, linestyle="--", label="Retrieved", alpha=0.7
+                    tau_ps,
+                    ret_integrated,
+                    color="#ff6b6b",
+                    linewidth=1.2,
+                    linestyle="--",
+                    label="Retrieved",
+                    alpha=0.7,
                 )
                 ax_comp.legend(fontsize=8)
             ax_comp.set_xlabel("Delay (ps)")
@@ -1893,16 +1844,14 @@ def retrieve(
                 err = np.inf
 
             if verbose and (iteration % 10 == 0 or iteration == max(1, max_iter) - 1):
-                print(f"  Restart {restart} iter {iteration:3d}: FROG error = {err:.6e}")
+                print(
+                    f"  Restart {restart} iter {iteration:3d}: FROG error = {err:.6e}"
+                )
 
             E = E_new
             if err < tol:
                 break
-            if (
-                prev_err is not None
-                and iteration > 5
-                and abs(prev_err - err) < tol
-            ):
+            if prev_err is not None and iteration > 5 and abs(prev_err - err) < tol:
                 break
             prev_err = err
 

@@ -3,6 +3,7 @@
 import numpy as np
 import pytest
 import matplotlib
+
 matplotlib.use("Agg")  # Non-interactive backend for tests
 import matplotlib.pyplot as plt
 
@@ -18,13 +19,16 @@ from photonics_helper.gnlse import FiberProfile
 from photonics_helper.base import Wavelength, Time, Area, Length, C_MS, PI
 
 
-def _make_analyzer_manual(T0_s, P_peak_w, gamma_val, beta2_si, beta3_si=0.0,
-                          confinement=1.0, n_steps=2):
+def _make_analyzer_manual(
+    T0_s, P_peak_w, gamma_val, beta2_si, beta3_si=0.0, confinement=1.0, n_steps=2
+):
     """Create SolitonAnalyzer with manually specified parameters."""
     grid = TemporalGrid(N=256, Tmax=Time(20e-12, "s"))
     env = Envelope(shape="sech", peak_amplitude=1.0, pulse_width=Time(T0_s, "s"))
     pulse = Wave(
-        grid=grid, envelope=env, central_wavelength=Wavelength(1550, "nm"),
+        grid=grid,
+        envelope=env,
+        central_wavelength=Wavelength(1550, "nm"),
     )
 
     # Set fiber to give desired gamma: gamma = n2*omega0*Gamma/(c*A_eff)
@@ -35,7 +39,10 @@ def _make_analyzer_manual(T0_s, P_peak_w, gamma_val, beta2_si, beta3_si=0.0,
     A_eff = Area(A_eff_val, "m^2")
 
     fiber = FiberProfile(
-        n2=n2, alpha=0.0, A_eff=A_eff, length=Length(1e-3, "m"),
+        n2=n2,
+        alpha=0.0,
+        A_eff=A_eff,
+        length=Length(1e-3, "m"),
         confinement_factor=confinement,
     )
 
@@ -53,8 +60,11 @@ def _make_analyzer_manual(T0_s, P_peak_w, gamma_val, beta2_si, beta3_si=0.0,
     z_array = np.linspace(0, 1e-3, n_steps)
 
     analyzer = SolitonAnalyzer(
-        pulse=pulse, fiber=fiber, betas=betas,
-        z_array=z_array, spectra_vs_z=(omega, spectra),
+        pulse=pulse,
+        fiber=fiber,
+        betas=betas,
+        z_array=z_array,
+        spectra_vs_z=(omega, spectra),
     )
     # Override P_peak to match desired value (peak_power() depends on grid)
     analyzer.P_peak = P_peak_w
@@ -70,8 +80,9 @@ def test_soliton_order_formula():
 
     N_expected = np.sqrt(gamma * P * T0**2 / abs(beta2_si))
 
-    analyzer = _make_analyzer_manual(T0_s=T0, P_peak_w=P, gamma_val=gamma,
-                                     beta2_si=beta2_si)
+    analyzer = _make_analyzer_manual(
+        T0_s=T0, P_peak_w=P, gamma_val=gamma, beta2_si=beta2_si
+    )
     N = analyzer.soliton_order()
     assert abs(N - N_expected) / N_expected < 1e-10
 
@@ -103,8 +114,9 @@ def test_dispersion_length_formula():
     beta2_si = -3e-24
     L_D_expected = T0**2 / abs(beta2_si)
 
-    analyzer = _make_analyzer_manual(T0_s=T0, P_peak_w=1.0, gamma_val=0.07,
-                                     beta2_si=beta2_si)
+    analyzer = _make_analyzer_manual(
+        T0_s=T0, P_peak_w=1.0, gamma_val=0.07, beta2_si=beta2_si
+    )
     L_D = analyzer.dispersion_length()
     assert abs(L_D.as_m - L_D_expected) / L_D_expected < 1e-10
 
@@ -123,8 +135,9 @@ def test_nonlinear_length_formula():
     P = 5.0
     L_NL_expected = 1.0 / (gamma * P)
 
-    analyzer = _make_analyzer_manual(T0_s=100e-15, P_peak_w=P, gamma_val=gamma,
-                                     beta2_si=-2e-27)
+    analyzer = _make_analyzer_manual(
+        T0_s=100e-15, P_peak_w=P, gamma_val=gamma, beta2_si=-2e-27
+    )
     L_NL = analyzer.nonlinear_length()
     assert abs(L_NL.as_m - L_NL_expected) / L_NL_expected < 1e-10
 
@@ -133,8 +146,9 @@ def test_fission_length_formula():
     """Task 3.6: L_fiss = L_D / (N * eta)."""
     eta = 0.7
 
-    analyzer = _make_analyzer_manual(T0_s=100e-15, P_peak_w=1.0, gamma_val=0.07,
-                                     beta2_si=-3e-24)
+    analyzer = _make_analyzer_manual(
+        T0_s=100e-15, P_peak_w=1.0, gamma_val=0.07, beta2_si=-3e-24
+    )
     L_fiss = analyzer.fission_length(eta=eta)
     # Verify the formula: L_fiss = L_D / (N * eta)
     L_D_actual = analyzer.dispersion_length()
@@ -169,6 +183,7 @@ def test_beta3_si_uses_engine_convention():
 def test_dispersive_wave_wavelength():
     """Task 3.7: DW wavelength from beta2 and beta3."""
     from photonics_helper.base import Wavelength
+
     omega0 = 2 * PI * C_MS / 1550e-9
     beta2_si = -5e-24
     beta3_si = -5e-27
@@ -176,16 +191,18 @@ def test_dispersive_wave_wavelength():
     omega_dw = omega0 + delta_omega
     lambda_dw = Wavelength(2 * PI * C_MS / omega_dw, "m")
 
-    analyzer = _make_analyzer_manual(T0_s=100e-15, P_peak_w=1.0, gamma_val=0.07,
-                                     beta2_si=beta2_si, beta3_si=beta3_si)
+    analyzer = _make_analyzer_manual(
+        T0_s=100e-15, P_peak_w=1.0, gamma_val=0.07, beta2_si=beta2_si, beta3_si=beta3_si
+    )
     lambda_calc = analyzer.dispersive_wave_wavelength()
     assert abs(lambda_calc.as_m - lambda_dw.as_m) / lambda_dw.as_m < 1e-6
 
 
 def test_count_solitons_basic():
     """Task 3.8: count_solitons() returns int >= 0."""
-    analyzer = _make_analyzer_manual(T0_s=100e-15, P_peak_w=1.0, gamma_val=0.07,
-                                     beta2_si=-2e-27)
+    analyzer = _make_analyzer_manual(
+        T0_s=100e-15, P_peak_w=1.0, gamma_val=0.07, beta2_si=-2e-27
+    )
     count = analyzer.count_solitons()
     assert isinstance(count, int)
     assert count >= 0
@@ -193,16 +210,18 @@ def test_count_solitons_basic():
 
 def test_soliton_trajectories_basic():
     """Task 3.9: soliton_trajectories() returns list."""
-    analyzer = _make_analyzer_manual(T0_s=100e-15, P_peak_w=1.0, gamma_val=0.07,
-                                     beta2_si=-2e-27)
+    analyzer = _make_analyzer_manual(
+        T0_s=100e-15, P_peak_w=1.0, gamma_val=0.07, beta2_si=-2e-27
+    )
     traj = analyzer.soliton_trajectories()
     assert isinstance(traj, list)
 
 
 def test_raman_shift_rate_basic():
     """Task 3.10: raman_shift_rate() returns float."""
-    analyzer = _make_analyzer_manual(T0_s=100e-15, P_peak_w=1.0, gamma_val=0.07,
-                                     beta2_si=-2e-27)
+    analyzer = _make_analyzer_manual(
+        T0_s=100e-15, P_peak_w=1.0, gamma_val=0.07, beta2_si=-2e-27
+    )
     rate = analyzer.raman_shift_rate()
     assert isinstance(rate, float)
 
@@ -219,7 +238,10 @@ def test_waveguide_confinement_factor():
     pulse = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(1550, "nm"))
 
     fiber = FiberProfile(
-        n2=n2, alpha=0.0, A_eff=A_eff, length=Length(1e-3, "m"),
+        n2=n2,
+        alpha=0.0,
+        A_eff=A_eff,
+        length=Length(1e-3, "m"),
         confinement_factor=Gamma,
     )
     betas = np.array([-0.2])
@@ -229,7 +251,11 @@ def test_waveguide_confinement_factor():
     z_array = np.array([0.0])
 
     analyzer = SolitonAnalyzer(
-        pulse=pulse, fiber=fiber, betas=betas, z_array=z_array, spectra_vs_z=(omega, spectra)
+        pulse=pulse,
+        fiber=fiber,
+        betas=betas,
+        z_array=z_array,
+        spectra_vs_z=(omega, spectra),
     )
 
     expected_gamma = n2 * omega0 * Gamma / (C_MS * A_eff.as_m2)
@@ -239,8 +265,9 @@ def test_waveguide_confinement_factor():
 # ─── Visualization tests (tasks 5.1-5.5) ─────────────────────────────────────
 
 
-def _make_solver(T0_s=100e-15, P_peak=1.0, gamma_val=0.07, beta2_si=-2e-27,
-                 beta3_si=0.0, n_steps=5):
+def _make_solver(
+    T0_s=100e-15, P_peak=1.0, gamma_val=0.07, beta2_si=-2e-27, beta3_si=0.0, n_steps=5
+):
     """Helper to create a minimal GNLSESolver-like object for visualization tests."""
     grid = TemporalGrid(N=256, Tmax=Time(20e-12, "s"))
     env = Envelope(shape="sech", peak_amplitude=1.0, pulse_width=Time(T0_s, "s"))
@@ -253,7 +280,11 @@ def _make_solver(T0_s=100e-15, P_peak=1.0, gamma_val=0.07, beta2_si=-2e-27,
     fiber = FiberProfile(n2=n2, alpha=0.0, A_eff=A_eff, length=Length(1e-3, "m"))
 
     betas_ps2 = beta2_si * 1e24
-    betas = np.array([betas_ps2]) if beta3_si == 0 else np.array([betas_ps2, beta3_si * 1e36])
+    betas = (
+        np.array([betas_ps2])
+        if beta3_si == 0
+        else np.array([betas_ps2, beta3_si * 1e36])
+    )
 
     omega = grid.w
     A0_w = grid.fft(pulse.envelope_field)
@@ -285,8 +316,9 @@ def test_plot_soliton_trajectories():
 def test_plot_fission_dynamics():
     """Task 5.2: plot_fission_dynamics renders without error."""
     solver = _make_solver()
-    analyzer = SolitonAnalyzer(solver.pulse, solver.fiber, solver.betas,
-                               solver.z_array, solver.spectra_vs_z)
+    analyzer = SolitonAnalyzer(
+        solver.pulse, solver.fiber, solver.betas, solver.z_array, solver.spectra_vs_z
+    )
     N = analyzer.soliton_order()
     L_D = analyzer.dispersion_length()
     fig = plot_fission_dynamics(solver, N=N, L_D=L_D)

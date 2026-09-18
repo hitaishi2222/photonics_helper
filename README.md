@@ -24,6 +24,11 @@ the system FFTW3 library with cached plans; otherwise the solver transparently
 falls back to `numpy.fft`. See `photonics_helper._fftw` (env vars
 `PHOTONICS_FFTW_PLANNER`, `PHOTONICS_FFTW_THREADS`).
 
+For very large grids an optional **cupy (GPU)** backend can be forced with
+`PHOTONICS_FFT_BACKEND=cupy`. It is never auto-selected and falls back to the
+CPU chain with a warning when cupy or a GPU is unavailable. Benchmark it with
+`python benchmarks/fft_backend_benchmark.py`.
+
 # Key Features
 
 - **Type Safety**: Full inline type hints (PEP 561 `py.typed`)
@@ -174,6 +179,146 @@ wave = Wave.from_pulse_train(
 fig = wave.visualize(t_unit="ns", w_unit="THz", t_scale=1e9, w_scale=1e12)
 fig.savefig("pulse_train.png", dpi=150, bbox_inches="tight")
 ```
+
+# Physical Power & Energy
+
+`Wave.peak_power()` and `Wave.pulse_energy()` operate on the **normalized**
+envelope `A(t)` by default, so their values are in field-units², not watts or
+joules. Calling them without an effective area emits a one-time `UserWarning`,
+and the `Wave.visualize()` summary labels the value as `(normalized units)`.
+
+To get physical units, attach an effective mode area:
+
+```python
+from photonics_helper import Area, Frequency, Wavelength, Time
+from photonics_helper.pulse import Envelope, TemporalGrid, Wave
+
+A0 = 2.0          # envelope peak amplitude (V/m)
+T0 = 50e-15       # pulse width
+env = Envelope(shape="gaussian", peak_amplitude=A0, pulse_width=Time(T0, "s"))
+grid = TemporalGrid(N=2**14, Tmax=Time(20 * T0, "s"))
+wave = Wave(
+    grid=grid,
+    envelope=env,
+    central_wavelength=Wavelength(800, "nm"),
+    refractive_index=1.44,
+)
+
+wave = wave.with_effective_area(Area(80, "um^2"))
+
+wave.peak_power()                          # W = ½·n·c·ε₀·A_eff·A₀²
+wave.pulse_energy()                        # J = ∫ P dt
+wave.average_power(Frequency(80, "MHz"))   # W
+```
+
+For one-shot conversions without a `Wave`, use
+`PeakPower.from_envelope(A, A_eff, n, lambda0)`:
+
+```python
+from photonics_helper import Area, PeakPower, Wavelength
+
+PeakPower.from_envelope(A0, Area(80, "um^2"), n=1.44, lambda0=Wavelength(800, "nm"))
+# → Power -> ... W
+```
+
+The conversion follows the plane-wave intensity relation
+`I = ½·n·c·ε₀·|A|²`, evaluated at the envelope peak.
+
+# Waveguide Mode Import (FEM)
+
+Bring an effective-index table from an external eigenmode solver (Lumerical
+MODE, COMSOL Wave Optics, …) into the library's dispersion objects with
+`WaveguideMode`.
+
+**CSV** — comma-separated, optional header, columns `wavelength_um, neff`
+(optionally a third `ng` column):
+
+```csv
+wavelength_um, neff
+1.50, 2.4310
+1.55, 2.4205
+1.60, 2.4102
+```
+
+**NPZ** — `np.savez` archive with `wavelength_um` (µm) and `neff`, optionally
+`ng` and `central_wavelength_nm`:
+
+```python
+import numpy as np
+np.savez("mode.npz", wavelength_um=wl_um, neff=neff, central_wavelength_nm=1550.0)
+```
+
+```python
+from photonics_helper import WaveguideMode, Wavelength
+
+mode = WaveguideMode.from_csv("mode.csv")   # or .from_npz("mode.npz")
+pc = mode.to_propagation_constant()         # β = n_eff·ω/c
+D = mode.to_dispersion()                    # D(λ) = -λ/c · d²n_eff/dλ²
+
+mode.neff_at(Wavelength(1550, "nm"))        # interpolated n_eff
+pc.beta2(Wavelength(1550, "nm"))            # d²β/dω² (s²/m)
+```
+
+The table is validated on load: a finite, positive, strictly increasing
+wavelength grid with at least four points (the cubic-spline minimum), mirroring
+`RefractiveIndex`.
+
+Runnable example: [`examples/29_waveguide_mode_import.py`](examples/29_waveguide_mode_import.py)
+(fabricates a synthetic FEM export, round-trips CSV/NPZ, and checks `beta2`
+against the analytic derivative).
+
+### Real solver exports (femwell + Tidy3D)
+
+[`examples/generate_waveguide_mode_data.py`](examples/generate_waveguide_mode_data.py)
+solves a canonical Si strip (500 × 220 nm on SiO₂) with **femwell** (FEM) and
+**Tidy3D**'s local mode solver, and writes `n_eff(λ)` tables in the conventions
+above to `examples/data/`. The committed exports let the consumer example run
+without either solver installed:
+
+```bash
+pip install femwell tidy3d          # or: pip install -e '.[mode-export]'
+python examples/generate_waveguide_mode_data.py   # regenerate examples/data/
+python examples/31_waveguide_mode_import_femwell_tidy3d.py
+```
+
+The two independent solvers agree on `n_eff` to **0.76 %** over 1.5–1.6 µm;
+the import example cross-checks them, builds `PropagationConstant` /
+`Dispersion`, and feeds the result into `phase_matching`.
+
+# χ⁽²⁾ Nonlinear Optics (SHG / SFG / DFG)
+
+`photonics_helper.chi2` integrates scalar, long-pulse three-wave mixing in a
+waveguide with a fourth-order Runge–Kutta step in the interaction picture
+(RK4IP). Envelopes are normalized so `|A|²` is power in watts. At perfect
+phase matching the pump-depleted SHG solution is exact,
+`η = tanh²(κL)` with `κ = σ√P₀` (see `reproductions/shg_textbook/`).
+
+```python
+from photonics_helper import Area, Wavelength
+from photonics_helper.chi2 import Lambda_qpm, shg_coupling, solve_shg
+
+wl = Wavelength(1550, "nm")
+sigma = shg_coupling(wl, d_eff=10e-12, n=2.0, A_eff=Area(1.0, "um^2"))
+
+result = solve_shg(length=4e-3, P0=0.1, sigma=sigma, n_steps=4000)
+result.efficiency()[-1]     # η at the output
+result.power("sh")          # SH power vs z (W)
+
+# Quasi-phase-matching: Λ = 2π/|Δk| from the phase mismatch
+period = Lambda_qpm(delta_k)
+result = solve_shg(length=4e-3, P0=0.1, sigma=sigma, delta_k=delta_k, qpm_period=period)
+
+# SFG / DFG (generic ω₃ = ω₁ + ω₂)
+from photonics_helper.chi2 import solve_sfg, solve_dfg
+solve_sfg(length=5e-3, P1=0.1, P2=0.1, sigma=sigma)
+solve_dfg(length=5e-3, Ppump=0.1, Psignal=1e-3, sigma=sigma)
+```
+
+Scope: scalar envelopes, no group-velocity mismatch, dispersion, walk-off or
+loss — suitable for CW / long-pulse efficiency estimates.
+`delta_k_shg(beta_fn, omega)` computes `Δk = β(2ω) − 2β(ω)` from any
+`phase_matching` adaptor, and `qpm_grating(z, Λ)` gives the square-wave poling
+sign.
 
 # FROG (Frequency-Resolved Optical Gating)
 
@@ -357,6 +502,40 @@ print(f"z_WB = {wb.z_WB:.1f} m, sqrt(L_D L_NL) = {wb.sqrt_LD_LNL:.1f} m")
 # result["z_onset_m"], result["z_oscillation_m"], result["peak_steepness"]
 ```
 
+# Structured light — Laguerre-Gaussian / OAM (`structured.py`)
+
+Analytic Laguerre-Gaussian transverse modes carrying orbital angular momentum
+(OAM), Gaussian-beam propagation helpers and discrete overlap integrals. Modes
+are normalized to unit power, so ``overlap`` gives the modal overlap directly:
+
+```python
+from photonics_helper.structured import (
+    LaguerreGaussianMode,
+    overlap,
+    rayleigh_range,
+    beam_waist,
+)
+
+w0, lam = 1e-3, 1064e-9                      # 1 mm waist at 1064 nm
+lg01 = LaguerreGaussianMode(p=0, l=1, w0=w0, wavelength=lam)  # OAM = hbar
+lg02 = LaguerreGaussianMode(p=0, l=2, w0=w0, wavelength=lam)
+
+print(overlap(lg01, lg01))                    # 1.0  (normalized)
+print(overlap(lg01, lg02))                    # ~ 0  (orthogonal OAM)
+
+z_r = rayleigh_range(w0, lam)                 # pi w0^2 / lambda
+print(beam_waist(w0, z_r, lam))               # sqrt(2) * w0
+
+field = lg01.structured()                     # StructuredField on (x, y)
+print(field.power, field.second_moment_radius())
+fig = field.plot()                            # intensity + phase panels
+```
+
+``plot_transverse_profile`` mirrors the pulse backend pattern
+(``backend="matplotlib"`` default, ``backend="plotly"`` when plotly is
+installed). The ``OAM`` winding of a mode is ``2 pi l`` around any loop that
+encloses the optical axis; see `examples/28_structured_light.py`.
+
 # Reproductions
 
 The `reproductions/` directory validates the library against published results,
@@ -384,6 +563,30 @@ for the figure-by-figure reproducibility map of the Dudley review.
 python -m pytest tests/test_reproductions.py   # all reproduction regressions
 python reproductions/dudley_2006_scg/fig05_ideal_soliton_period.py   # one figure
 ```
+
+# Dashboard & API docs
+
+One Dash app hosts both the Raman explorer and a GNLSE result viewer:
+
+```python
+from photonics_helper.dashboard import app
+
+app().run(debug=False, port=8050)   # Raman Explorer | GNLSE Viewer
+```
+
+Requires the `webapp` (Dash) and `plotting` (Plotly) extras; see
+`examples/32_unified_dashboard.py`. The standalone Raman app remains available
+as `photonics_helper.raman.app()`.
+
+API documentation is built with mkdocs + mkdocstrings from the docstrings:
+
+```bash
+pip install -e ".[docs]"
+mkdocs serve        # http://127.0.0.1:8000
+```
+
+`.github/workflows/` also provides the CI matrix, the mkdocs build/deploy, and
+the PyPI Trusted Publishing release (cut a `v*` tag to publish).
 
 # Development
 
@@ -439,11 +642,16 @@ pip install -e .
 - **Waveguide Support** ✅
   - Confinement factor Γ in γ formula: `γ = n₂·ω₀·Γ/(c·A_eff)`
   - Backward compatible (Γ=1.0 recovers fiber behavior)
+- **Waveguide mode import (FEM)** ✅ — `WaveguideMode.from_csv/from_npz` → `PropagationConstant`/`Dispersion`, `PropagationConstant.beta2`
+- **χ⁽²⁾ nonlinear optics** ✅ — `chi2` SHG/SFG/DFG RK4IP solver, QPM grating, `Lambda_qpm`, textbook `tanh²(κL)` reproduction
+- **GPU FFT backend** ✅ — opt-in cupy path (`PHOTONICS_FFT_BACKEND=cupy`) with transparent CPU fallback and a benchmark
+- **Unified dashboard** ✅ — `photonics_helper.dashboard.app()` combines the Raman Explorer and an interactive GNLSE result viewer
+- **Release engineering** ✅ — PyPI Trusted Publishing, mkdocs API docs, and a Python 3.12/3.13 × ±pyfftw CI matrix (ruff + mypy gates)
 - **Chalcogenide Materials** ✅
   - GeAsSe added (n₂=6e-18 m²/W, 44 materials total)
   - Suitable for soliton fission in chalcogenide waveguides
-- Structured Light
-- Add methods for bandwidth calculations
-- Add methods for power/intensity conversions
+- **Structured Light** ✅ — Laguerre–Gaussian / OAM modes, Gaussian-beam propagation helpers, modal overlap integrals and transverse-profile plotting (`structured.py`)
+- ~~Add methods for bandwidth calculations~~
+- ~~Add methods for power/intensity conversions~~ (physical scaling via `Wave.with_effective_area` / `PeakPower.from_envelope`)
 
 > ⚠️ **Note**: The TMM / DBR module (`dbr.py`) is still under active development. The API and internals may change.

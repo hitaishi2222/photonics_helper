@@ -20,6 +20,7 @@ Key observations:
 
 import numpy as np
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
@@ -46,16 +47,21 @@ def main():
         fr = RamanFrequencyResponse(response=resp, grid=grid)
         freq_responses[name] = fr
 
-        print(f"{name:10s}: f_res={fr.resonance_frequency_THz:8.2f} THz, "
-              f"FWHM={fr.resonance_FWHM_THz:7.3f} THz, "
-              f"Q={fr.quality_factor:7.1f}")
+        print(
+            f"{name:10s}: f_res={fr.resonance_frequency_THz:8.2f} THz, "
+            f"FWHM={fr.resonance_FWHM_THz:7.3f} THz, "
+            f"Q={fr.quality_factor:7.1f}"
+        )
     print()
 
     # ── Plot 1: Im(H) comparison — Raman gain spectra ───────────────────────
 
     fig, ax = plt.subplots(figsize=(10, 6))
-    fig.suptitle("Raman Gain Spectra Im(H(Ω)) — Material Comparison",
-                 fontsize=14, fontweight="bold")
+    fig.suptitle(
+        "Raman Gain Spectra Im(H(Ω)) — Material Comparison",
+        fontsize=14,
+        fontweight="bold",
+    )
 
     colors = {"Silica": "#00d4ff", "CdS": "#a78bfa", "As2Se3": "#fbbf24"}
 
@@ -64,19 +70,32 @@ def main():
         w_THz = fr.grid.w / (2 * np.pi * 1e12)
         # Plot only positive frequencies
         pos = w_THz > 0
-        ax.plot(w_THz[pos], fr.H_imag[pos], color=colors[name], linewidth=1.5, label=name)
-        ax.axvline(fr.resonance_frequency_THz, color=colors[name], linestyle="--",
-                   alpha=0.3, linewidth=0.8)
+        ax.plot(
+            w_THz[pos], fr.H_imag[pos], color=colors[name], linewidth=1.5, label=name
+        )
+        ax.axvline(
+            fr.resonance_frequency_THz,
+            color=colors[name],
+            linestyle="--",
+            alpha=0.3,
+            linewidth=0.8,
+        )
 
     ax.set_xlabel("Frequency (THz)", fontsize=12)
     ax.set_ylabel("Im(H(Ω))", fontsize=12)
-    ax.set_title("Raman Gain Spectrum (Imaginary part of frequency response)", fontsize=13)
+    ax.set_title(
+        "Raman Gain Spectrum (Imaginary part of frequency response)", fontsize=13
+    )
     ax.grid(True, alpha=0.3)
     ax.legend(fontsize=11)
     ax.axhline(0, color="k", linewidth=0.5)
 
     plt.tight_layout()
-    plt.savefig("examples/images/06_raman_frequency_comparison.png", dpi=150, bbox_inches="tight")
+    plt.savefig(
+        "examples/images/06_raman_frequency_comparison.png",
+        dpi=150,
+        bbox_inches="tight",
+    )
     print("Saved: examples/06_raman_frequency_comparison.png")
     plt.close()
 
@@ -90,7 +109,8 @@ def main():
         f"Silica Raman Frequency Response  "
         f"(f_res={silica.resonance_frequency_THz:.2f} THz, "
         f"Q={silica.quality_factor:.1f})",
-        fontsize=13, fontweight="bold",
+        fontsize=13,
+        fontweight="bold",
     )
 
     # Panel 1: Real part
@@ -100,8 +120,13 @@ def main():
     ax1.set_title("Real Part — Dispersive Response", fontsize=11)
     ax1.grid(True, alpha=0.3)
     ax1.axhline(0, color="k", linewidth=0.5)
-    ax1.axvline(silica.resonance_frequency_THz, color="r", linestyle="--", alpha=0.5,
-                label=f"Resonance: {silica.resonance_frequency_THz:.2f} THz")
+    ax1.axvline(
+        silica.resonance_frequency_THz,
+        color="r",
+        linestyle="--",
+        alpha=0.5,
+        label=f"Resonance: {silica.resonance_frequency_THz:.2f} THz",
+    )
     ax1.legend(fontsize=8)
 
     # Panel 2: Imaginary part (gain spectrum)
@@ -115,8 +140,13 @@ def main():
     # Shade FWHM region
     fwhm = silica.resonance_FWHM_THz
     f_res = silica.resonance_frequency_THz
-    ax2.axvspan(f_res - fwhm/2, f_res + fwhm/2, alpha=0.15, color="orange",
-                label=f"FWHM: {fwhm:.3f} THz")
+    ax2.axvspan(
+        f_res - fwhm / 2,
+        f_res + fwhm / 2,
+        alpha=0.15,
+        color="orange",
+        label=f"FWHM: {fwhm:.3f} THz",
+    )
     ax2.legend(fontsize=8)
 
     # Panel 3: Magnitude
@@ -136,12 +166,14 @@ def main():
     ax4.set_title("Phase Spectrum", fontsize=11)
     ax4.grid(True, alpha=0.3)
     ax4.axhline(0, color="k", linewidth=0.5)
-    ax4.axhline(np.pi/2, color="r", linestyle=":", alpha=0.5, label="π/2 (causal)")
+    ax4.axhline(np.pi / 2, color="r", linestyle=":", alpha=0.5, label="π/2 (causal)")
     ax4.axvline(silica.resonance_frequency_THz, color="r", linestyle="--", alpha=0.5)
     ax4.legend(fontsize=8)
 
     plt.tight_layout()
-    plt.savefig("examples/images/06_raman_frequency_silica.png", dpi=150, bbox_inches="tight")
+    plt.savefig(
+        "examples/images/06_raman_frequency_silica.png", dpi=150, bbox_inches="tight"
+    )
     print("Saved: examples/06_raman_frequency_silica.png")
     plt.close()
 
@@ -176,7 +208,9 @@ def main():
         ax.axvline(fr.resonance_frequency_THz, color="r", linestyle="--", alpha=0.5)
 
     plt.tight_layout()
-    plt.savefig("examples/images/06_raman_linewidth_effect.png", dpi=150, bbox_inches="tight")
+    plt.savefig(
+        "examples/images/06_raman_linewidth_effect.png", dpi=150, bbox_inches="tight"
+    )
     print("Saved: examples/06_raman_linewidth_effect.png")
     plt.close()
 

@@ -8,7 +8,8 @@ Demonstrates the theme parameter for visualize_2d() and visualize_3d().
 from photonics_helper.base import Time
 from photonics_helper.pulse import Envelope
 import matplotlib
-matplotlib.use('Agg')
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 # Create a chirped pulse (good for showing phase in both themes) — 50 fs
@@ -30,12 +31,16 @@ print("Saved pulse_dark_plotly.html")
 
 # Matplotlib: light vs dark
 fig_light = pulse.visualize_2d(backend="matplotlib", theme="light", figsize=(14, 10))
-fig_light.savefig("examples/images/pulse_light_matplotlib.png", dpi=150, bbox_inches="tight")
+fig_light.savefig(
+    "examples/images/pulse_light_matplotlib.png", dpi=150, bbox_inches="tight"
+)
 print("Saved pulse_light_matplotlib.png")
 plt.close(fig_light)
 
 fig_dark = pulse.visualize_2d(backend="matplotlib", theme="dark", figsize=(14, 10))
-fig_dark.savefig("examples/images/pulse_dark_matplotlib.png", dpi=150, bbox_inches="tight")
+fig_dark.savefig(
+    "examples/images/pulse_dark_matplotlib.png", dpi=150, bbox_inches="tight"
+)
 print("Saved pulse_dark_matplotlib.png")
 plt.close(fig_dark)
 

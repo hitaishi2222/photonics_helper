@@ -1,6 +1,5 @@
 """RamanDatabase - SQLite CRUD for Raman material data."""
 
-
 from __future__ import annotations
 
 import sqlite3
@@ -14,7 +13,6 @@ from pydantic.dataclasses import dataclass
 from ..phonon import PhononMode
 
 if TYPE_CHECKING:
-
     from ..materials import NKMaterial
 
 from .reference import RAMAN_MATERIALS, THORLABS_SUBSTRATE_MATERIALS

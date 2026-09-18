@@ -25,6 +25,7 @@ from photonics_helper.dbr import Block, Material, Pattern, TMM
 # Independent references
 # ---------------------------------------------------------------------------
 
+
 def _make_material(n: float, k: float = 0.0, name: str = "m") -> Material:
     wl = WavelengthArray(np.linspace(1000, 2000, 51), "nm")
     return Material(name=name, n=np.full(51, n), k=np.full(51, k), wl=wl)
@@ -81,6 +82,7 @@ WL1 = WavelengthArray(np.array([1550.0]), "nm")
 # N1 — transfer-matrix ordering
 # ---------------------------------------------------------------------------
 
+
 def test_lossy_asymmetric_stack_matches_reference():
     """Absorbing asymmetric stack must not alias its reversed counterpart."""
     pattern = _build_pattern(LOSSY, LENGTHS, style="ABC")
@@ -127,6 +129,7 @@ def test_lossless_normal_is_reciprocal():
 # ---------------------------------------------------------------------------
 # N2 — field-profile forward propagation
 # ---------------------------------------------------------------------------
+
 
 def test_field_profile_matches_analytic_single_layer():
     """Non-quarter-wave layer must reproduce the analytic transmitted field."""
@@ -184,6 +187,7 @@ def test_absorbing_stack_energy_deficit():
 # ---------------------------------------------------------------------------
 # Configurable media + continuous field profile
 # ---------------------------------------------------------------------------
+
 
 def test_default_media_match_explicit_air():
     """Omitting n_incident/n_substrate equals explicitly setting air."""

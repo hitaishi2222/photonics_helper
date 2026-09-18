@@ -70,7 +70,9 @@ def example_sech_pulse():
     envelope shapes (``gaussian``, ``sech``, ``lorentzian`` and ``rectangular``).
     """
     central_wl = Wavelength(1550e-9, "m")  # telecom wavelength
-    env = Envelope(shape="sech", peak_amplitude=1.0, pulse_width=Time(60, "fs"), chirp=5e-27)
+    env = Envelope(
+        shape="sech", peak_amplitude=1.0, pulse_width=Time(60, "fs"), chirp=5e-27
+    )
 
     N = 2**12
     Tmax = 12 * env.pulse_width.as_s

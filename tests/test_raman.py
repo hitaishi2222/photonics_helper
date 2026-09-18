@@ -6,7 +6,12 @@ from numpy.testing import assert_almost_equal, assert_array_almost_equal
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from photonics_helper.raman import RamanSpec, RamanDatabase, RAMAN_MATERIALS, THORLABS_SUBSTRATE_MATERIALS
+from photonics_helper.raman import (
+    RamanSpec,
+    RamanDatabase,
+    RAMAN_MATERIALS,
+    THORLABS_SUBSTRATE_MATERIALS,
+)
 from photonics_helper.base import Wavelength, C_MS, Energy, Time
 
 
@@ -58,7 +63,7 @@ class TestRamanSpec:
                 "raman_shift_cm": 500,
                 "raman_linewidth_cm": 25,
                 "fR": 0.4,
-            }
+            },
         )
         assert spec.name == "CustomMat"
         assert spec.raman_shift_cm == 500
@@ -166,6 +171,7 @@ class TestRamanSpec:
     def test_plot_spectrum_matplotlib(self):
         """Test spectrum plot with matplotlib backend."""
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
 
@@ -177,10 +183,7 @@ class TestRamanSpec:
 
     def test_plot_spectrum_plotly(self):
         """Test spectrum plot with plotly backend."""
-        try:
-            import plotly
-        except ImportError:
-            pytest.skip("plotly not installed")
+        pytest.importorskip("plotly")
 
         silica = RamanSpec.from_database("Silica")
         fig = silica.plot_spectrum(backend="plotly")
@@ -190,6 +193,7 @@ class TestRamanSpec:
     def test_plot_phonons_matplotlib(self):
         """Test phonon plot with matplotlib backend."""
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
 
@@ -202,6 +206,7 @@ class TestRamanSpec:
     def test_plot_phonons_missing_data(self):
         """Test phonon plot with missing phonon data."""
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
 
@@ -266,6 +271,7 @@ class TestRamanDatabase:
             RamanDatabase(db_path=db_path)
 
             import sqlite3
+
             conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
@@ -312,8 +318,12 @@ class TestRamanDatabase:
             db_path = Path(tmpdir) / "test.db"
             db = RamanDatabase(db_path=db_path)
 
-            db.add_material({"name": "Mat1", "raman_shift_cm": 400, "raman_linewidth_cm": 20})
-            db.add_material({"name": "Mat2", "raman_shift_cm": 500, "raman_linewidth_cm": 25})
+            db.add_material(
+                {"name": "Mat1", "raman_shift_cm": 400, "raman_linewidth_cm": 20}
+            )
+            db.add_material(
+                {"name": "Mat2", "raman_shift_cm": 500, "raman_linewidth_cm": 25}
+            )
 
             materials = db.list_materials()
             assert "Mat1" in materials
@@ -326,7 +336,9 @@ class TestRamanDatabase:
             db_path = Path(tmpdir) / "test.db"
             db = RamanDatabase(db_path=db_path)
 
-            db.add_material({"name": "TestMat", "raman_shift_cm": 400, "raman_linewidth_cm": 20})
+            db.add_material(
+                {"name": "TestMat", "raman_shift_cm": 400, "raman_linewidth_cm": 20}
+            )
 
             db.update_material("TestMat", fR=0.5, n2=1e-19)
 
@@ -342,7 +354,9 @@ class TestRamanDatabase:
             db_path = Path(tmpdir) / "test.db"
             db = RamanDatabase(db_path=db_path)
 
-            db.add_material({"name": "TestMat", "raman_shift_cm": 400, "raman_linewidth_cm": 20})
+            db.add_material(
+                {"name": "TestMat", "raman_shift_cm": 400, "raman_linewidth_cm": 20}
+            )
             db.delete_material("TestMat")
 
             result = db.get_material("TestMat")
@@ -354,7 +368,9 @@ class TestRamanDatabase:
             db_path = Path(tmpdir) / "test.db"
             db = RamanDatabase(db_path=db_path)
 
-            db.add_material({"name": "TestMat", "raman_shift_cm": 400, "raman_linewidth_cm": 20})
+            db.add_material(
+                {"name": "TestMat", "raman_shift_cm": 400, "raman_linewidth_cm": 20}
+            )
             db.add_nk_data("TestMat", 1.0, 2.5, 0.01)
             db.add_nk_data("TestMat", 1.5, 2.3, 0.02)
 
@@ -381,20 +397,24 @@ class TestRamanDatabase:
             db_path = Path(tmpdir) / "test.db"
             db = RamanDatabase(db_path=db_path)
 
-            db.add_material({
-                "name": "Silica",
-                "crystal": "Amorphous SiO2",
-                "raman_shift_cm": 440,
-                "raman_linewidth_cm": 45,
-                "references": "Agrawal book",
-            })
-            db.add_material({
-                "name": "CdS",
-                "crystal": "Wurtzite",
-                "raman_shift_cm": 305,
-                "raman_linewidth_cm": 12,
-                "references": "Pankove book",
-            })
+            db.add_material(
+                {
+                    "name": "Silica",
+                    "crystal": "Amorphous SiO2",
+                    "raman_shift_cm": 440,
+                    "raman_linewidth_cm": 45,
+                    "references": "Agrawal book",
+                }
+            )
+            db.add_material(
+                {
+                    "name": "CdS",
+                    "crystal": "Wurtzite",
+                    "raman_shift_cm": 305,
+                    "raman_linewidth_cm": 12,
+                    "references": "Pankove book",
+                }
+            )
 
             results = db.search_materials("Silica")
             assert len(results) == 1
@@ -414,8 +434,12 @@ class TestRamanDatabase:
             db_path = Path(tmpdir) / "test.db"
             db = RamanDatabase(db_path=db_path)
 
-            db.add_material({"name": "Mat1", "raman_shift_cm": 400, "raman_linewidth_cm": 20})
-            db.add_material({"name": "Mat2", "raman_shift_cm": 500, "raman_linewidth_cm": 25})
+            db.add_material(
+                {"name": "Mat1", "raman_shift_cm": 400, "raman_linewidth_cm": 20}
+            )
+            db.add_material(
+                {"name": "Mat2", "raman_shift_cm": 500, "raman_linewidth_cm": 25}
+            )
 
             exported = db.export_to_dict()
             assert "Mat1" in exported
@@ -461,10 +485,28 @@ class TestRAMAN_MATERIALS:
     def test_all_new_materials_present(self):
         """Test all 22 new materials are present."""
         new = {
-            "As2S3", "Si3N4", "SiC_4H", "YAG", "BaTiO3", "ZBLAN",
-            "GaN", "AlN", "InP", "LiTaO3", "KTP", "AlGaAs", "Al2O3",
-            "YLF", "ZnO", "CdTe", "Ga2O3", "LBO", "AgGaS2", "AgGaSe2",
-            "InGaAs", "GeO2",
+            "As2S3",
+            "Si3N4",
+            "SiC_4H",
+            "YAG",
+            "BaTiO3",
+            "ZBLAN",
+            "GaN",
+            "AlN",
+            "InP",
+            "LiTaO3",
+            "KTP",
+            "AlGaAs",
+            "Al2O3",
+            "YLF",
+            "ZnO",
+            "CdTe",
+            "Ga2O3",
+            "LBO",
+            "AgGaS2",
+            "AgGaSe2",
+            "InGaAs",
+            "GeO2",
         }
         for name in new:
             assert name in RAMAN_MATERIALS
@@ -490,9 +532,22 @@ class TestRAMAN_MATERIALS:
     def test_zero_fR_materials(self):
         """Test materials with fR=0.0 (purely Kerr, no Raman)."""
         zero_fr = [
-            "Diamond", "LiNbO3", "LiTaO3", "KTP", "LBO",
-            "BaTiO3", "GaN", "AlN", "SiC_4H", "YAG", "Al2O3",
-            "YLF", "AgGaS2", "AgGaSe2", "Si", "Ge",
+            "Diamond",
+            "LiNbO3",
+            "LiTaO3",
+            "KTP",
+            "LBO",
+            "BaTiO3",
+            "GaN",
+            "AlN",
+            "SiC_4H",
+            "YAG",
+            "Al2O3",
+            "YLF",
+            "AgGaS2",
+            "AgGaSe2",
+            "Si",
+            "Ge",
         ]
         for name in zero_fr:
             spec = RamanSpec.from_database(name)
@@ -512,8 +567,8 @@ class TestRAMAN_MATERIALS:
             spec = RamanSpec.from_database(name)
             stokes = spec.stokes_wavelength(pump)
             anti = spec.anti_stokes_wavelength(pump)
-            nu_diff_stokes = (1/pump.as_m - 1/stokes.as_m) * 3e8
-            nu_diff_anti = (1/anti.as_m - 1/pump.as_m) * 3e8
+            nu_diff_stokes = (1 / pump.as_m - 1 / stokes.as_m) * 3e8
+            nu_diff_anti = (1 / anti.as_m - 1 / pump.as_m) * 3e8
             assert np.isclose(nu_diff_stokes, spec.raman_shift_Hz, rtol=1e-3)
             assert np.isclose(nu_diff_anti, spec.raman_shift_Hz, rtol=1e-3)
 
@@ -537,18 +592,18 @@ class TestNewMaterialsDatabase:
 
     def test_all_materials_in_database(self):
         """Test that all 30 materials are queryable from the bundled DB.
-        
+
         Seeds the DB with RAMAN_MATERIALS if it's empty.
         """
         db = RamanDatabase()
         materials = db.list_materials()
-        
+
         # Seed DB if empty
         if not materials:
             for name, data in RAMAN_MATERIALS.items():
                 db.add_material(data)
             materials = db.list_materials()
-        
+
         for name in RAMAN_MATERIALS:
             assert name in materials, f"{name} not found in DB"
 
@@ -561,17 +616,20 @@ class TestNewMaterialsDatabase:
     def test_from_database_with_custom_db(self):
         """Test from_database with an explicitly created temporary DB."""
         from tempfile import TemporaryDirectory
+
         with TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "custom.db"
             db = RamanDatabase(db_path=db_path)
-            db.add_material({
-                "name": "CustomDB",
-                "crystal": "Custom",
-                "raman_shift_cm": 500,
-                "raman_linewidth_cm": 25,
-                "fR": 0.3,
-                "n2": 1e-19,
-            })
+            db.add_material(
+                {
+                    "name": "CustomDB",
+                    "crystal": "Custom",
+                    "raman_shift_cm": 500,
+                    "raman_linewidth_cm": 25,
+                    "fR": 0.3,
+                    "n2": 1e-19,
+                }
+            )
             spec = RamanSpec.from_database("CustomDB", db_path=db_path)
             assert spec.name == "CustomDB"
             assert spec.raman_shift_cm == 500
@@ -592,18 +650,21 @@ class TestThorlabsSubstrateMaterials:
             from seed_db import THORLABS_SELLMEIER_MATERIALS
 
             for name, sellmeier in THORLABS_SELLMEIER_MATERIALS.items():
-                db.add_sellmeier(material=name, **{
-                    k: sellmeier[k]
-                    for k in (
-                        "form",
-                        "a0",
-                        "coefficients",
-                        "wavelengths",
-                        "valid_from_um",
-                        "valid_to_um",
-                        "source",
-                    )
-                })
+                db.add_sellmeier(
+                    material=name,
+                    **{
+                        k: sellmeier[k]
+                        for k in (
+                            "form",
+                            "a0",
+                            "coefficients",
+                            "wavelengths",
+                            "valid_from_um",
+                            "valid_to_um",
+                            "source",
+                        )
+                    },
+                )
 
     def test_thorlabs_material_count(self):
         assert len(THORLABS_SUBSTRATE_MATERIALS) == 12
@@ -627,7 +688,9 @@ class TestThorlabsSubstrateMaterials:
         for name, (wl_um, n_expected, tol) in checks.items():
             spec = RamanSpec.from_database(name)
             n = spec.nk(wl_um).real
-            assert abs(n - n_expected) < tol, f"{name}: n={n:.4f}, expected≈{n_expected}"
+            assert abs(n - n_expected) < tol, (
+                f"{name}: n={n:.4f}, expected≈{n_expected}"
+            )
 
     def test_refractive_index_from_material_database(self):
         from photonics_helper.materials import RefractiveIndex
@@ -693,8 +756,9 @@ class TestRamanFrequencyResponse:
         # Allow 10% tolerance due to FFT binning
         expected = spec.raman_shift_THz  # Already in THz
         actual = fr.resonance_frequency_THz
-        assert abs(actual - expected) / expected < 0.1, \
+        assert abs(actual - expected) / expected < 0.1, (
             f"Resonance {actual:.2f} THz too far from expected {expected:.2f} THz"
+        )
 
     def test_resonance_frequency_positive(self):
         """Test that resonance frequency is positive."""
@@ -715,8 +779,9 @@ class TestRamanFrequencyResponse:
         """Test that Q factor is in reasonable range for Silica."""
         fr = self._make_freq_resp()
         # Silica Q factor should be around 10 (shift/linewidth ≈ 440/45 ≈ 9.8)
-        assert 1 < fr.quality_factor < 100, \
+        assert 1 < fr.quality_factor < 100, (
             f"Q factor {fr.quality_factor:.1f} outside expected range"
+        )
 
     def test_H_at_zero_frequency(self):
         """Test H(0) is real and positive (DC component)."""
@@ -730,6 +795,7 @@ class TestRamanFrequencyResponse:
     def test_plot_real_returns_figure(self):
         """Test plot_real returns a matplotlib figure."""
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
 
@@ -741,6 +807,7 @@ class TestRamanFrequencyResponse:
     def test_plot_imag_returns_figure(self):
         """Test plot_imag returns a matplotlib figure."""
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
 
@@ -752,6 +819,7 @@ class TestRamanFrequencyResponse:
     def test_plot_magnitude_returns_figure(self):
         """Test plot_magnitude returns a matplotlib figure."""
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
 
@@ -763,6 +831,7 @@ class TestRamanFrequencyResponse:
     def test_plot_phase_returns_figure(self):
         """Test plot_phase returns a matplotlib figure."""
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
 
@@ -774,6 +843,7 @@ class TestRamanFrequencyResponse:
     def test_plot_all_returns_figure(self):
         """Test plot_all returns a 4-panel figure."""
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
 
@@ -785,10 +855,7 @@ class TestRamanFrequencyResponse:
 
     def test_plot_all_plotly(self):
         """Test plot_all with plotly backend."""
-        try:
-            import plotly
-        except ImportError:
-            pytest.skip("plotly not installed")
+        pytest.importorskip("plotly")
 
         fr = self._make_freq_resp()
         fig = fr.plot_all(backend="plotly")
@@ -887,7 +954,9 @@ class TestRamanResponse:
 
         # Should have multiple zero crossings (oscillation)
         zero_crossings = np.where(np.diff(np.sign(h)))[0]
-        assert len(zero_crossings) > 5, "Expected multiple zero crossings from oscillation"
+        assert len(zero_crossings) > 5, (
+            "Expected multiple zero crossings from oscillation"
+        )
 
         # Envelope should decay (absolute values at later times < earlier times)
         # Check that the envelope of the last peak is smaller than the first peak
@@ -898,8 +967,9 @@ class TestRamanResponse:
             dh = np.diff(positive_h)
             peaks = np.where((dh[:-1] > 0) & (dh[1:] < 0))[0]
             if len(peaks) >= 2:
-                assert positive_h[peaks[-1]] < positive_h[peaks[0]], \
+                assert positive_h[peaks[-1]] < positive_h[peaks[0]], (
                     "Delayed response should show decaying oscillation"
+                )
 
     def test_instantaneous_response_is_gaussian(self):
         """Test that instantaneous response is a narrow Gaussian approximation of δ(t)."""
@@ -915,8 +985,8 @@ class TestRamanResponse:
         # For a narrow Gaussian on a discrete grid, perfect symmetry isn't achievable,
         # but values at equal distances from the peak should be close.
         offset = 5
-        left = inst[max_idx - offset:max_idx][::-1]
-        right = inst[max_idx + 1:max_idx + offset + 1]
+        left = inst[max_idx - offset : max_idx][::-1]
+        right = inst[max_idx + 1 : max_idx + offset + 1]
         # Relative tolerance of 5% accounts for discrete sampling of narrow peak
         np.testing.assert_allclose(left, right, rtol=0.05)
 
@@ -1000,6 +1070,7 @@ class TestRamanResponse:
     def test_plot_components_returns_figure(self):
         """Test that plot_components returns a matplotlib figure."""
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
 
@@ -1013,10 +1084,7 @@ class TestRamanResponse:
 
     def test_plot_components_plotly(self):
         """Test plot_components with plotly backend."""
-        try:
-            import plotly
-        except ImportError:
-            pytest.skip("plotly not installed")
+        pytest.importorskip("plotly")
 
         resp = self._make_response()
         fig = resp.plot_components(backend="plotly")
@@ -1026,8 +1094,9 @@ class TestRamanResponse:
         """Test that the default grid is wide enough to capture the response."""
         resp = self._make_response()
         # Grid should cover at least several τ2
-        assert resp.grid.Tmax.as_s > 10 * resp.tau2, \
+        assert resp.grid.Tmax.as_s > 10 * resp.tau2, (
             "Grid Tmax should cover at least 10× τ2 to capture damped oscillation"
+        )
 
     def test_different_materials_different_tau(self):
         """Test that different materials produce different τ1, τ2."""
@@ -1091,7 +1160,9 @@ class TestRamanPulseInteraction:
             central_wavelength=Wavelength(800, "nm"),
         )
         response = RamanResponse(spec=spec, grid=grid)
-        return RamanPulseInteraction(pulse=wave, response=response, spec=spec, **overrides)
+        return RamanPulseInteraction(
+            pulse=wave, response=response, spec=spec, **overrides
+        )
 
     def test_construction(self):
         """Test basic construction."""
@@ -1110,32 +1181,34 @@ class TestRamanPulseInteraction:
         """Test that P_NL is negligible where pulse intensity is negligible."""
         interaction = self._make_interaction()
         P_NL = interaction.nonlinear_polarization
-        I = interaction.pulse.envelope_intensity
+        intensity = interaction.pulse.envelope_intensity
 
         # Find where intensity is negligible (< 1% of peak)
-        threshold = 0.01 * np.max(I)
-        quiet_mask = I < threshold
+        threshold = 0.01 * np.max(intensity)
+        quiet_mask = intensity < threshold
 
         if quiet_mask.any():
             # P_NL should be much smaller than max in quiet regions
             max_PNL_in_quiet = np.max(np.abs(P_NL[quiet_mask]))
             max_PNL = np.max(np.abs(P_NL))
-            assert max_PNL_in_quiet < 0.1 * max_PNL, \
+            assert max_PNL_in_quiet < 0.1 * max_PNL, (
                 "P_NL should be small where pulse intensity is negligible"
+            )
 
     def test_polarization_lags_pulse(self):
         """Test that the delayed polarization peaks after the pulse."""
         interaction = self._make_interaction()
         P_NL = interaction.nonlinear_polarization
-        I = interaction.pulse.envelope_intensity
+        intensity = interaction.pulse.envelope_intensity
 
-        pulse_peak_t = interaction.grid.t[np.argmax(I)]  # type: ignore[union-attr]
+        pulse_peak_t = interaction.grid.t[np.argmax(intensity)]  # type: ignore[union-attr]
         PNL_peak_t = interaction.grid.t[np.argmax(P_NL)]  # type: ignore[union-attr]
 
         # The delayed polarization should peak after the pulse peak
         # (due to the convolution with the delayed Raman response)
-        assert PNL_peak_t > pulse_peak_t, \
-            f"P_NL peak at {PNL_peak_t*1e12:.3f} ps should be after pulse peak at {pulse_peak_t*1e12:.3f} ps"
+        assert PNL_peak_t > pulse_peak_t, (
+            f"P_NL peak at {PNL_peak_t * 1e12:.3f} ps should be after pulse peak at {pulse_peak_t * 1e12:.3f} ps"
+        )
 
     def test_polarization_positive_with_positive_response(self):
         """Test that P_NL is positive when both R(t) and I(t) are positive."""
@@ -1144,15 +1217,16 @@ class TestRamanPulseInteraction:
         # Get the delayed (positive) part of Raman response
         t = interaction.grid.t  # type: ignore[union-attr]
         R_delayed = interaction.response.delayed_response(t)
-        I = interaction.pulse.envelope_intensity
+        intensity = interaction.pulse.envelope_intensity
 
         # Where both are positive, P_NL should be positive
-        positive_mask = (R_delayed > 0) & (I > 0)
+        positive_mask = (R_delayed > 0) & (intensity > 0)
         if positive_mask.any():
             P_NL = interaction.nonlinear_polarization
             # The convolution should preserve sign in regions where both are positive
-            assert np.any(P_NL[positive_mask] > 0), \
+            assert np.any(P_NL[positive_mask] > 0), (
                 "P_NL should be positive where both R(t) and I(t) are positive"
+            )
 
     def test_polarization_zero_for_zero_fR(self):
         """Test that P_NL has no delayed component when fR=0 (pure Kerr)."""
@@ -1173,8 +1247,9 @@ class TestRamanPulseInteraction:
         P_high = interaction_high.nonlinear_polarization
 
         # Higher n2 should give larger polarization
-        assert np.max(np.abs(P_high)) > np.max(np.abs(P_low)), \
+        assert np.max(np.abs(P_high)) > np.max(np.abs(P_low)), (
             "Higher n2 should produce larger P_NL"
+        )
 
     def test_different_pulse_shapes(self):
         """Test interaction with different pulse shapes."""
@@ -1207,6 +1282,7 @@ class TestRamanPulseInteraction:
     def test_plot_interaction_returns_figure(self):
         """Test that plot_interaction returns a matplotlib figure."""
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
 
@@ -1220,10 +1296,7 @@ class TestRamanPulseInteraction:
 
     def test_plot_interaction_plotly(self):
         """Test plot_interaction with plotly backend."""
-        try:
-            import plotly
-        except ImportError:
-            pytest.skip("plotly not installed")
+        pytest.importorskip("plotly")
 
         interaction = self._make_interaction()
         fig = interaction.plot_interaction(backend="plotly")
@@ -1232,6 +1305,7 @@ class TestRamanPulseInteraction:
     def test_animation_returns_figure(self):
         """Test that animate returns a matplotlib figure."""
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
 
@@ -1263,8 +1337,9 @@ class TestRamanPulseInteraction:
 
         # They should be within a few grid points of each other
         # (the pulse broadens the response slightly)
-        assert abs(PNL_peak_t - R_peak_t) < 10 * interaction.grid.dt, \
-            f"P_NL peak at {PNL_peak_t*1e12:.3f} ps too far from R peak at {R_peak_t*1e12:.3f} ps"  # type: ignore[union-attr]
+        assert abs(PNL_peak_t - R_peak_t) < 10 * interaction.grid.dt, (
+            f"P_NL peak at {PNL_peak_t * 1e12:.3f} ps too far from R peak at {R_peak_t * 1e12:.3f} ps"
+        )  # type: ignore[union-attr]
 
     def test_polarization_scales_with_intensity(self):
         """Test that P_NL scales linearly with pulse intensity."""
@@ -1283,8 +1358,9 @@ class TestRamanPulseInteraction:
         ratio_actual = np.max(np.abs(P_strong)) / np.max(np.abs(P_weak))
 
         # Allow 10% tolerance due to convolution effects
-        assert abs(ratio_actual - ratio_expected) / ratio_expected < 0.1, \
+        assert abs(ratio_actual - ratio_expected) / ratio_expected < 0.1, (
             f"P_NL scaling ratio {ratio_actual:.1f} too far from expected {ratio_expected}"
+        )
 
     def test_grid_default_sizing(self):
         """Test that the grid covers the pulse and response."""
@@ -1300,13 +1376,13 @@ class TestRamanPulseInteraction:
         """
         interaction = self._make_interaction()
         P_NL = interaction.nonlinear_polarization
-        I = interaction.pulse.envelope_intensity
+        intensity = interaction.pulse.envelope_intensity
         t = interaction.grid.t  # type: ignore[union-attr]
 
         # The convolution integral: ∫ P_NL dt ∝ (∫ R dt) × (∫ I dt)
         # Both integrals should be finite and positive
         integral_PNL = np.trapezoid(P_NL, t)
-        integral_I = np.trapezoid(I, t)
+        integral_I = np.trapezoid(intensity, t)
 
         # For a symmetric pulse and response, the integral should be positive
         # (the DC component of the convolution)
@@ -1423,8 +1499,9 @@ class TestPumpWavelengthExplorer:
         delta_anti_nm = pump.as_nm - anti_stokes.as_nm
 
         # Wavelength shifts should NOT be equal
-        assert delta_stokes_nm != delta_anti_nm, \
+        assert delta_stokes_nm != delta_anti_nm, (
             "Wavelength shifts should differ (key concept of Layer 5)"
+        )
 
         # Stokes wavelength shift should be larger in nm for visible/NIR pump
         # (because dλ/dν = -c/ν², and |Δν| is the same)
@@ -1452,6 +1529,7 @@ class TestPumpWavelengthExplorer:
     def test_missing_raman_shift_raises(self):
         """Test that missing Raman shift raises ValueError."""
         from photonics_helper.raman import PumpWavelengthExplorer
+
         spec = RamanSpec(name="NoShift", raman_shift_cm=None)
         explorer = PumpWavelengthExplorer(spec=spec)
 
@@ -1480,6 +1558,7 @@ class TestPumpWavelengthExplorer:
     def test_plot_frequency_axis_returns_figure(self):
         """Test plot_frequency_axis returns a matplotlib figure."""
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
 
@@ -1493,6 +1572,7 @@ class TestPumpWavelengthExplorer:
     def test_plot_wavelength_axis_returns_figure(self):
         """Test plot_wavelength_axis returns a matplotlib figure."""
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
 
@@ -1506,6 +1586,7 @@ class TestPumpWavelengthExplorer:
     def test_plot_both_returns_figure(self):
         """Test plot_both returns a 2-panel figure."""
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
 
@@ -1520,6 +1601,7 @@ class TestPumpWavelengthExplorer:
     def test_plot_vs_pump_returns_figure(self):
         """Test plot_vs_pump returns a figure."""
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
 
@@ -1531,10 +1613,7 @@ class TestPumpWavelengthExplorer:
 
     def test_plot_both_plotly(self):
         """Test plot_both with plotly backend."""
-        try:
-            import plotly
-        except ImportError:
-            pytest.skip("plotly not installed")
+        pytest.importorskip("plotly")
 
         explorer = self._make_explorer()
         pump = Wavelength(800, "nm")
@@ -1543,10 +1622,7 @@ class TestPumpWavelengthExplorer:
 
     def test_plot_vs_pump_plotly(self):
         """Test plot_vs_pump with plotly backend."""
-        try:
-            import plotly
-        except ImportError:
-            pytest.skip("plotly not installed")
+        pytest.importorskip("plotly")
 
         explorer = self._make_explorer()
         fig = explorer.plot_vs_pump(pump_range_um=(0.5, 2.0), backend="plotly")
@@ -1579,12 +1655,14 @@ class TestPumpWavelengthExplorer:
 
         stokes_wls = np.array(stokes_wls)
         # Stokes wavelength should increase as pump wavelength increases
-        assert np.all(np.diff(stokes_wls) > 0), \
+        assert np.all(np.diff(stokes_wls) > 0), (
             "Stokes wavelength should increase monotonically with pump wavelength"
+        )
 
     def test_frequency_axis_marks_three_lines(self):
         """Test that frequency axis plot marks Anti-Stokes, Pump, and Stokes."""
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
 
@@ -1719,6 +1797,7 @@ class TestMaterialComparison:
     def test_plot_spectra_overlay_single(self):
         """Test spectra overlay with a single material."""
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
         from photonics_helper.raman import RamanSpec
@@ -1736,6 +1815,7 @@ class TestMaterialComparison:
     def test_plot_spectra_overlay_multiple(self):
         """Test spectra overlay with multiple materials has one line per material."""
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
         from photonics_helper.raman import RamanSpec
@@ -1762,6 +1842,7 @@ class TestMaterialComparison:
     def test_plot_spectra_overlay_colors_differ(self):
         """Test that each material gets a different color."""
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
         from photonics_helper.raman import RamanSpec
@@ -1783,15 +1864,15 @@ class TestMaterialComparison:
 
     def test_plot_spectra_overlay_plotly(self):
         """Test spectra overlay with plotly backend."""
-        try:
-            import plotly
-        except ImportError:
-            pytest.skip("plotly not installed")
+        pytest.importorskip("plotly")
 
         from photonics_helper.raman import RamanSpec
 
         comp = self._make_comparison(
-            materials=[RamanSpec.from_database("Silica"), RamanSpec.from_database("CdS")]
+            materials=[
+                RamanSpec.from_database("Silica"),
+                RamanSpec.from_database("CdS"),
+            ]
         )
         fig = comp.plot_spectra_overlay(backend="plotly")
         assert fig is not None
@@ -1805,6 +1886,7 @@ class TestMaterialComparison:
     def test_plot_response_overlay_single(self):
         """Test response overlay with a single material."""
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
         from photonics_helper.raman import RamanSpec
@@ -1824,6 +1906,7 @@ class TestMaterialComparison:
     def test_plot_response_overlay_multiple(self):
         """Test response overlay with multiple materials."""
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
         from photonics_helper.raman import RamanSpec
@@ -1841,7 +1924,11 @@ class TestMaterialComparison:
         assert fig is not None
         lines = fig.axes[0].get_lines()  # type: ignore[attr-defined]
         # Filter out internal lines (axhline has labels like '_child2')
-        labeled_lines = [l for l in lines if l.get_label() and not l.get_label().startswith("_")]
+        labeled_lines = [
+            line
+            for line in lines
+            if line.get_label() and not line.get_label().startswith("_")
+        ]
         assert len(labeled_lines) == 2
         labels = [line.get_label() for line in labeled_lines]
         assert "Silica" in labels
@@ -1857,6 +1944,7 @@ class TestMaterialComparison:
     def test_plot_frequency_overlay_single(self):
         """Test frequency overlay with a single material."""
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
         from photonics_helper.raman import RamanSpec
@@ -1876,6 +1964,7 @@ class TestMaterialComparison:
     def test_plot_frequency_overlay_multiple(self):
         """Test frequency overlay with multiple materials."""
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
         from photonics_helper.raman import RamanSpec
@@ -1892,7 +1981,11 @@ class TestMaterialComparison:
 
         assert fig is not None
         lines = fig.axes[0].get_lines()  # type: ignore[attr-defined]
-        labeled_lines = [l for l in lines if l.get_label() and not l.get_label().startswith("_")]
+        labeled_lines = [
+            line
+            for line in lines
+            if line.get_label() and not line.get_label().startswith("_")
+        ]
         assert len(labeled_lines) == 2
         labels = [line.get_label() for line in labeled_lines]
         assert "Silica" in labels
@@ -1902,14 +1995,13 @@ class TestMaterialComparison:
     def test_plot_frequency_overlay_annotates_resonances(self):
         """Test that frequency overlay marks resonance frequencies."""
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
         from photonics_helper.raman import RamanSpec
         from photonics_helper.pulse import TemporalGrid
 
-        comp = self._make_comparison(
-            materials=[RamanSpec.from_database("Silica")]
-        )
+        comp = self._make_comparison(materials=[RamanSpec.from_database("Silica")])
         grid = TemporalGrid(N=2**14, Tmax=Time(10e-12, "s"))
         fig = comp.plot_frequency_overlay(backend="matplotlib", grid=grid)
 
@@ -1963,6 +2055,7 @@ class TestMaterialComparison:
     def test_plot_all_single(self):
         """Test plot_all with a single material."""
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
         from photonics_helper.raman import RamanSpec
@@ -1981,6 +2074,7 @@ class TestMaterialComparison:
     def test_plot_all_multiple(self):
         """Test plot_all with multiple materials."""
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
         from photonics_helper.raman import RamanSpec
@@ -2004,10 +2098,20 @@ class TestMaterialComparison:
         from photonics_helper.raman import COMMON_COMPARISONS
 
         expected_groups = [
-            "glass_vs_chalcogenide", "semiconductor", "high_n2", "high_shift",
-            "nitride_semiconductor", "nonlinear_crystal", "high_gain",
-            "wide_bandgap", "iii_v", "laser_host", "nlo_crystal",
-            "chalcogenide", "ferroelectric", "negative_n2",
+            "glass_vs_chalcogenide",
+            "semiconductor",
+            "high_n2",
+            "high_shift",
+            "nitride_semiconductor",
+            "nonlinear_crystal",
+            "high_gain",
+            "wide_bandgap",
+            "iii_v",
+            "laser_host",
+            "nlo_crystal",
+            "chalcogenide",
+            "ferroelectric",
+            "negative_n2",
         ]
         for group in expected_groups:
             assert group in COMMON_COMPARISONS, f"Missing: {group}"
@@ -2047,6 +2151,7 @@ class TestMaterialComparison:
     def test_common_comparison_nitride_semiconductor(self):
         """Test the nitride_semiconductor preset comparison."""
         from photonics_helper.raman import COMMON_COMPARISONS
+
         names = COMMON_COMPARISONS["nitride_semiconductor"]
         for mat in ["GaN", "AlN", "Si3N4"]:
             assert mat in names
@@ -2057,6 +2162,7 @@ class TestMaterialComparison:
     def test_common_comparison_nonlinear_crystal(self):
         """Test the nonlinear_crystal preset comparison."""
         from photonics_helper.raman import COMMON_COMPARISONS
+
         names = COMMON_COMPARISONS["nonlinear_crystal"]
         for mat in ["LiNbO3", "KTP", "LBO", "BaTiO3"]:
             assert mat in names
@@ -2067,6 +2173,7 @@ class TestMaterialComparison:
     def test_common_comparison_high_gain(self):
         """Test the high_gain preset comparison."""
         from photonics_helper.raman import COMMON_COMPARISONS
+
         names = COMMON_COMPARISONS["high_gain"]
         for mat in ["Diamond", "As2Se3", "YAG"]:
             assert mat in names
@@ -2074,6 +2181,7 @@ class TestMaterialComparison:
     def test_common_comparison_wide_bandgap(self):
         """Test the wide_bandgap preset comparison."""
         from photonics_helper.raman import COMMON_COMPARISONS
+
         names = COMMON_COMPARISONS["wide_bandgap"]
         for mat in ["Diamond", "GaN", "SiC_4H", "AlN", "Ga2O3"]:
             assert mat in names
@@ -2081,6 +2189,7 @@ class TestMaterialComparison:
     def test_common_comparison_iii_v(self):
         """Test the iii_v preset comparison."""
         from photonics_helper.raman import COMMON_COMPARISONS
+
         names = COMMON_COMPARISONS["iii_v"]
         for mat in ["GaAs", "InP", "AlGaAs", "InGaAs"]:
             assert mat in names
@@ -2088,6 +2197,7 @@ class TestMaterialComparison:
     def test_common_comparison_laser_host(self):
         """Test the laser_host preset comparison."""
         from photonics_helper.raman import COMMON_COMPARISONS
+
         names = COMMON_COMPARISONS["laser_host"]
         for mat in ["YAG", "Al2O3", "YLF"]:
             assert mat in names
@@ -2095,6 +2205,7 @@ class TestMaterialComparison:
     def test_common_comparison_nlo_crystal(self):
         """Test the nlo_crystal preset comparison."""
         from photonics_helper.raman import COMMON_COMPARISONS
+
         names = COMMON_COMPARISONS["nlo_crystal"]
         for mat in ["LBO", "KTP", "AgGaS2", "AgGaSe2", "LiNbO3"]:
             assert mat in names
@@ -2102,6 +2213,7 @@ class TestMaterialComparison:
     def test_common_comparison_chalcogenide(self):
         """Test the chalcogenide preset comparison."""
         from photonics_helper.raman import COMMON_COMPARISONS
+
         names = COMMON_COMPARISONS["chalcogenide"]
         for mat in ["As2S3", "As2Se3"]:
             assert mat in names
@@ -2109,6 +2221,7 @@ class TestMaterialComparison:
     def test_common_comparison_ferroelectric(self):
         """Test the ferroelectric preset comparison."""
         from photonics_helper.raman import COMMON_COMPARISONS
+
         names = COMMON_COMPARISONS["ferroelectric"]
         for mat in ["LiNbO3", "LiTaO3", "BaTiO3", "KTP"]:
             assert mat in names
@@ -2116,6 +2229,7 @@ class TestMaterialComparison:
     def test_common_comparison_negative_n2(self):
         """Test the negative_n2 preset loads both materials."""
         from photonics_helper.raman import COMMON_COMPARISONS
+
         names = COMMON_COMPARISONS["negative_n2"]
         for mat in ["ZnO", "CdTe"]:
             assert mat in names
@@ -2125,10 +2239,7 @@ class TestMaterialComparison:
 
     def test_plot_spectra_overlay_plotly_multiple(self):
         """Test spectra overlay with plotly and multiple materials."""
-        try:
-            import plotly
-        except ImportError:
-            pytest.skip("plotly not installed")
+        pytest.importorskip("plotly")
 
         from photonics_helper.raman import RamanSpec
 
@@ -2144,51 +2255,36 @@ class TestMaterialComparison:
 
     def test_plot_response_overlay_plotly(self):
         """Test response overlay with plotly backend."""
-        try:
-            import plotly
-        except ImportError:
-            pytest.skip("plotly not installed")
+        pytest.importorskip("plotly")
 
         from photonics_helper.raman import RamanSpec
         from photonics_helper.pulse import TemporalGrid
 
-        comp = self._make_comparison(
-            materials=[RamanSpec.from_database("Silica")]
-        )
+        comp = self._make_comparison(materials=[RamanSpec.from_database("Silica")])
         grid = TemporalGrid(N=2**14, Tmax=Time(10e-12, "s"))
         fig = comp.plot_response_overlay(backend="plotly", grid=grid)
         assert fig is not None
 
     def test_plot_frequency_overlay_plotly(self):
         """Test frequency overlay with plotly backend."""
-        try:
-            import plotly
-        except ImportError:
-            pytest.skip("plotly not installed")
+        pytest.importorskip("plotly")
 
         from photonics_helper.raman import RamanSpec
         from photonics_helper.pulse import TemporalGrid
 
-        comp = self._make_comparison(
-            materials=[RamanSpec.from_database("Silica")]
-        )
+        comp = self._make_comparison(materials=[RamanSpec.from_database("Silica")])
         grid = TemporalGrid(N=2**14, Tmax=Time(10e-12, "s"))
         fig = comp.plot_frequency_overlay(backend="plotly", grid=grid)
         assert fig is not None
 
     def test_plot_all_plotly(self):
         """Test plot_all with plotly backend."""
-        try:
-            import plotly
-        except ImportError:
-            pytest.skip("plotly not installed")
+        pytest.importorskip("plotly")
 
         from photonics_helper.raman import RamanSpec
         from photonics_helper.pulse import TemporalGrid
 
-        comp = self._make_comparison(
-            materials=[RamanSpec.from_database("Silica")]
-        )
+        comp = self._make_comparison(materials=[RamanSpec.from_database("Silica")])
         grid = TemporalGrid(N=2**14, Tmax=Time(10e-12, "s"))
         fig = comp.plot_all(backend="plotly", grid=grid)
         assert fig is not None
@@ -2196,6 +2292,7 @@ class TestMaterialComparison:
     def test_plot_spectra_overlay_uses_lorentzian_lineshape(self):
         """Test that spectra overlay plots Lorentzian-shaped curves."""
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
         from photonics_helper.raman import RamanSpec
@@ -2221,20 +2318,28 @@ class TestMaterialComparison:
         right_val = y[np.argmin(np.abs(x - (440 + fwhm)))]
         peak_val = np.max(y)
         # Lorentzian at ±1×FWHM is at 20% of peak; Gaussian would be ~4%
-        assert left_val / peak_val > 0.1, f"Left tail {left_val/peak_val:.3f} too low for Lorentzian"
-        assert right_val / peak_val > 0.1, f"Right tail {right_val/peak_val:.3f} too low for Lorentzian"
+        assert left_val / peak_val > 0.1, (
+            f"Left tail {left_val / peak_val:.3f} too low for Lorentzian"
+        )
+        assert right_val / peak_val > 0.1, (
+            f"Right tail {right_val / peak_val:.3f} too low for Lorentzian"
+        )
 
         plt.close(fig)  # type: ignore[arg-type]
 
     def test_plot_spectra_overlay_title_includes_materials(self):
         """Test that the plot title lists material names."""
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
         from photonics_helper.raman import RamanSpec
 
         comp = self._make_comparison(
-            materials=[RamanSpec.from_database("Silica"), RamanSpec.from_database("CdS")]
+            materials=[
+                RamanSpec.from_database("Silica"),
+                RamanSpec.from_database("CdS"),
+            ]
         )
         fig = comp.plot_spectra_overlay(backend="matplotlib")
 
@@ -2246,6 +2351,7 @@ class TestMaterialComparison:
     def test_materials_order_preserved(self):
         """Test that material order is preserved in overlay plots."""
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
         from photonics_helper.raman import RamanSpec
@@ -2272,11 +2378,13 @@ class TestDashApp:
     def _make_app(self):
         """Helper to create the Dash app."""
         from photonics_helper.raman import app as make_app
+
         return make_app()
 
     def test_app_returns_dash_app(self):
         """Test that app() returns a Dash application object."""
         from dash import Dash
+
         app = self._make_app()
         assert isinstance(app, Dash), f"Expected Dash, got {type(app)}"
 
@@ -2302,14 +2410,23 @@ class TestDashApp:
         app = self._make_app()
         layout_str = str(app.layout)
         # Should reference layer tabs
-        assert "layer" in layout_str.lower() or "tab" in layout_str.lower() or "Layer" in layout_str or "Tab" in layout_str
+        assert (
+            "layer" in layout_str.lower()
+            or "tab" in layout_str.lower()
+            or "Layer" in layout_str
+            or "Tab" in layout_str
+        )
 
     def test_app_has_output_div(self):
         """Test that the layout contains an output container div."""
         app = self._make_app()
         layout_str = str(app.layout)
         # Look for an output div id pattern
-        assert "output" in layout_str.lower() or "Output" in layout_str or "main-content" in layout_str
+        assert (
+            "output" in layout_str.lower()
+            or "Output" in layout_str
+            or "main-content" in layout_str
+        )
 
     def test_app_callbacks_registered(self):
         """Test that the app has callbacks registered."""
@@ -2319,6 +2436,7 @@ class TestDashApp:
     def test_app_has_material_selector_callback(self):
         """Test that a callback exists for material selector changes."""
         from photonics_helper.raman import app as make_app
+
         app = make_app()
         input_ids = set()
         for cb in app.callback_map.values():
@@ -2330,6 +2448,7 @@ class TestDashApp:
     def test_app_has_fr_slider_callback(self):
         """Test that a callback exists for fR slider."""
         from photonics_helper.raman import app as make_app
+
         app = make_app()
         input_ids = set()
         for cb in app.callback_map.values():
@@ -2341,6 +2460,7 @@ class TestDashApp:
     def test_app_has_pump_wavelength_callback(self):
         """Test that a callback exists for pump wavelength slider."""
         from photonics_helper.raman import app as make_app
+
         app = make_app()
         input_ids = set()
         for cb in app.callback_map.values():
@@ -2351,10 +2471,7 @@ class TestDashApp:
 
     def test_app_smoke_test(self):
         """Test that the app can be served without error."""
-        try:
-            import dash
-        except ImportError:
-            pytest.skip("dash not fully installed")
+        pytest.importorskip("dash")
 
         app = self._make_app()
         # Verify the app has a server and can serve its layout
@@ -2372,11 +2489,13 @@ class TestDashApp:
     def test_app_components_importable(self):
         """Test that the app function is importable from raman module."""
         from photonics_helper.raman import app
+
         assert callable(app)
 
     def test_app_default_material_silica(self):
         """Test that the default material is Silica."""
         from photonics_helper.raman import app as make_app
+
         app = make_app()
         # Check that the layout references Silica as default
         layout_str = str(app.layout)
@@ -2386,4 +2505,8 @@ class TestDashApp:
         """Test that the app has an 'add to compare' button."""
         app = self._make_app()
         layout_str = str(app.layout)
-        assert "compare" in layout_str.lower() or "Compare" in layout_str or "add" in layout_str.lower()
+        assert (
+            "compare" in layout_str.lower()
+            or "Compare" in layout_str
+            or "add" in layout_str.lower()
+        )

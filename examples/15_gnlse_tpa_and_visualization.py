@@ -62,10 +62,10 @@ def main():
     gamma = n2 * omega0 / (299792458.0 * A_eff.as_m2)
 
     print("Fiber with TPA:")
-    print(f"  γ = {gamma*1e3:.3f} 1/(W·km)")
+    print(f"  γ = {gamma * 1e3:.3f} 1/(W·km)")
     print("  β₂ = -2.0 ps²/km")
     print(f"  σ_TPA = {sigma_tpa:.1e} m²/W (enhanced for visualization)")
-    print(f"  τ_c = {tau_c.as_s*1e9:.0f} ns")
+    print(f"  τ_c = {tau_c.as_s * 1e9:.0f} ns")
 
     # ── Case 1: No TPA ──────────────────────────────────────────────────────
 
@@ -129,7 +129,9 @@ def main():
 
     fig_spec = plot_spectrum_vs_distance(solver_tpa, dB=True)
     fig_spec.savefig(
-        "examples/images/15_gnlse_spectrum_vs_distance.png", dpi=150, bbox_inches="tight"
+        "examples/images/15_gnlse_spectrum_vs_distance.png",
+        dpi=150,
+        bbox_inches="tight",
     )
     print("Saved: examples/images/15_gnlse_spectrum_vs_distance.png")
     plt.close(fig_spec)
@@ -175,7 +177,9 @@ def main():
     axes[1].plot(
         z_mm_no_tpa, E_no_tpa / E_no_tpa[0] * 100, "b-", linewidth=1.5, label="No TPA"
     )
-    axes[1].plot(z_mm_tpa, E_tpa / E_tpa[0] * 100, "r-", linewidth=1.5, label="With TPA")
+    axes[1].plot(
+        z_mm_tpa, E_tpa / E_tpa[0] * 100, "r-", linewidth=1.5, label="With TPA"
+    )
     axes[1].set_xlabel("Propagation distance (mm)")
     axes[1].set_ylabel("Energy (% of input)")
     axes[1].set_title("TPA causes exponential-like energy decay")
@@ -183,7 +187,9 @@ def main():
     axes[1].legend()
 
     plt.tight_layout()
-    plt.savefig("examples/images/15_gnlse_tpa_comparison.png", dpi=150, bbox_inches="tight")
+    plt.savefig(
+        "examples/images/15_gnlse_tpa_comparison.png", dpi=150, bbox_inches="tight"
+    )
     print("Saved: examples/images/15_gnlse_tpa_comparison.png")
     plt.close()
 
@@ -195,10 +201,12 @@ def main():
 
     print("\n— Energy summary —")
     print(f"Input energy:        {E0:.4e} W·s")
-    print(f"Final (no TPA):      {E_final_no_tpa:.4e}  ({E_final_no_tpa/E0*100:.2f}%)")
-    print(f"Final (with TPA):    {E_final_tpa:.4e}  ({E_final_tpa/E0*100:.2f}%)")
     print(
-        f"Energy lost to TPA:  {E0 - E_final_tpa:.4e}  ({(1-E_final_tpa/E0)*100:.1f}%)"
+        f"Final (no TPA):      {E_final_no_tpa:.4e}  ({E_final_no_tpa / E0 * 100:.2f}%)"
+    )
+    print(f"Final (with TPA):    {E_final_tpa:.4e}  ({E_final_tpa / E0 * 100:.2f}%)")
+    print(
+        f"Energy lost to TPA:  {E0 - E_final_tpa:.4e}  ({(1 - E_final_tpa / E0) * 100:.1f}%)"
     )
 
 

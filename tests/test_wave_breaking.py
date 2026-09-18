@@ -80,7 +80,9 @@ def test_wavebreaking_analyze_with_gnlse():
     """Steepening onset appears near z_WB; oscillations follow a few sqrt(L_D L_NL)."""
     wb = WaveBreaking(beta2=_BETA2, gamma=_GAMMA, P0=_P0, T0=_T0)
     grid = TemporalGrid(N=2048, Tmax=Time(140e-12, "s"))
-    env = Envelope(shape="gaussian", peak_amplitude=np.sqrt(_P0), pulse_width=Time(_T0, "s"))
+    env = Envelope(
+        shape="gaussian", peak_amplitude=np.sqrt(_P0), pulse_width=Time(_T0, "s")
+    )
     pulse = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(1060, "nm"))
     fiber = FiberProfile.from_gamma(
         gamma=_GAMMA,

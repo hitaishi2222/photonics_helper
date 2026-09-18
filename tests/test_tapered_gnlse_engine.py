@@ -1,8 +1,14 @@
 """Tests for TaperedGNLSESolver and z-dependent SplitStepEngine."""
+
 import numpy as np
 import pytest
 
-from photonics_helper.gnlse import FiberProfile, GNLSESolver, SplitStepEngine, TaperedGNLSESolver
+from photonics_helper.gnlse import (
+    FiberProfile,
+    GNLSESolver,
+    SplitStepEngine,
+    TaperedGNLSESolver,
+)
 from photonics_helper.pulse import Wave, Envelope, TemporalGrid
 from photonics_helper.base import Wavelength, Time, Length, Area
 from photonics_helper.fiber import ZDependentDispersion
@@ -17,7 +23,9 @@ def _make_tapered_setup():
         envelope=env,
         central_wavelength=Wavelength(1550, "nm"),
     )
-    fiber = FiberProfile(n2=1e-19, alpha=1e-5, A_eff=Area(5e-11, "m^2"), length=Length(1e-3, "m"))
+    fiber = FiberProfile(
+        n2=1e-19, alpha=1e-5, A_eff=Area(5e-11, "m^2"), length=Length(1e-3, "m")
+    )
     return pulse, fiber
 
 
@@ -147,7 +155,9 @@ class TestTaperedGNLSESolver:
         pulse, fiber = _make_tapered_setup()
         disp = _make_uniform_beta_table(pulse)
         solver = TaperedGNLSESolver(
-            pulse=pulse, fiber=fiber, dispersion_profile=disp,
+            pulse=pulse,
+            fiber=fiber,
+            dispersion_profile=disp,
             include_raman=False,
         )
         solver.propagate(num_steps=5)
@@ -161,7 +171,9 @@ class TestTaperedGNLSESolver:
         pulse, fiber = _make_tapered_setup()
         disp = _make_uniform_beta_table(pulse)
         solver = TaperedGNLSESolver(
-            pulse=pulse, fiber=fiber, dispersion_profile=disp,
+            pulse=pulse,
+            fiber=fiber,
+            dispersion_profile=disp,
             include_raman=False,
         )
         solver.propagate(num_steps=10)
@@ -177,7 +189,9 @@ class TestTaperedGNLSESolver:
         pulse, fiber = _make_tapered_setup()
         disp = _make_uniform_beta_table(pulse)
         solver = TaperedGNLSESolver(
-            pulse=pulse, fiber=fiber, dispersion_profile=disp,
+            pulse=pulse,
+            fiber=fiber,
+            dispersion_profile=disp,
         )
         with pytest.raises(RuntimeError, match="Call propagate"):
             _ = solver.spectra_vs_z
@@ -187,13 +201,19 @@ class TestTaperedGNLSESolver:
         pulse, fiber = _make_tapered_setup()
         # Use a fiber with zero loss for energy conservation test
         fiber_no_loss = FiberProfile(
-            n2=1e-19, alpha=0.0, A_eff=Area(5e-11, "m^2"),
+            n2=1e-19,
+            alpha=0.0,
+            A_eff=Area(5e-11, "m^2"),
             length=Length(1e-3, "m"),
         )
         disp = _make_uniform_beta_table(pulse, fiber_length=1e-3)
         solver = TaperedGNLSESolver(
-            pulse=pulse, fiber=fiber_no_loss, dispersion_profile=disp,
-            include_raman=False, include_self_steepening=False, include_tpa=False,
+            pulse=pulse,
+            fiber=fiber_no_loss,
+            dispersion_profile=disp,
+            include_raman=False,
+            include_self_steepening=False,
+            include_tpa=False,
         )
         solver.propagate(num_steps=50)
 
@@ -213,8 +233,12 @@ class TestTaperedGNLSESolver:
 
         # Tapered solver with uniform profile
         tapered_solver = TaperedGNLSESolver(
-            pulse=pulse, fiber=fiber, dispersion_profile=disp,
-            include_raman=False, include_self_steepening=False, include_tpa=False,
+            pulse=pulse,
+            fiber=fiber,
+            dispersion_profile=disp,
+            include_raman=False,
+            include_self_steepening=False,
+            include_tpa=False,
         )
         # Set step_size on the engine after creation
         tapered_solver.propagate(num_steps=100)
@@ -233,8 +257,12 @@ class TestTaperedGNLSESolver:
         betas_ps2m = beta2 * 1e24
 
         uniform_solver = GNLSESolver(
-            pulse=pulse, fiber=fiber, betas=np.array([betas_ps2m]),
-            include_raman=False, include_self_steepening=False, include_tpa=False,
+            pulse=pulse,
+            fiber=fiber,
+            betas=np.array([betas_ps2m]),
+            include_raman=False,
+            include_self_steepening=False,
+            include_tpa=False,
         )
         uniform_solver.propagate(num_steps=100)
 
@@ -253,34 +281,48 @@ class TestTaperedGNLSESolver:
         # They should have similar shape (not identical due to frame convention)
         # Use correlation as a shape measure
         correlation = np.corrcoef(tapered_norm, uniform_norm)[0, 1]
-        assert correlation > 0.95, f"Spectral shape correlation {correlation:.4f} < 0.95"
+        assert correlation > 0.95, (
+            f"Spectral shape correlation {correlation:.4f} < 0.95"
+        )
 
     def test_zdw_migration(self):
         """ZDW migration produces different output than fixed-dispersion case."""
         # Use more extreme parameters to ensure ZDW migration effect is visible
         grid = TemporalGrid(N=256, Tmax=Time(20e-12, "s"))
-        env = Envelope(shape="gaussian", peak_amplitude=1000.0, pulse_width=Time(0.5, "ps"))
+        env = Envelope(
+            shape="gaussian", peak_amplitude=1000.0, pulse_width=Time(0.5, "ps")
+        )
         pulse = Wave(
             grid=grid,
             envelope=env,
             central_wavelength=Wavelength(1550, "nm"),
         )
-        fiber = FiberProfile(n2=1e-19, alpha=1e-5, A_eff=Area(5e-11, "m^2"), length=Length(1e-3, "m"))
-        
+        fiber = FiberProfile(
+            n2=1e-19, alpha=1e-5, A_eff=Area(5e-11, "m^2"), length=Length(1e-3, "m")
+        )
+
         fiber_length = 20e-3
         disp_uniform = _make_uniform_beta_table(pulse, fiber_length=fiber_length)
         disp_migrating = _make_zdw_migrating_profile(pulse, fiber_length=fiber_length)
 
         # Use higher amplitude to ensure nonlinear spectral broadening
         solver_uniform = TaperedGNLSESolver(
-            pulse=pulse, fiber=fiber, dispersion_profile=disp_uniform,
-            include_raman=False, include_self_steepening=False, include_tpa=False,
+            pulse=pulse,
+            fiber=fiber,
+            dispersion_profile=disp_uniform,
+            include_raman=False,
+            include_self_steepening=False,
+            include_tpa=False,
         )
         solver_uniform.propagate(num_steps=400)
 
         solver_migrating = TaperedGNLSESolver(
-            pulse=pulse, fiber=fiber, dispersion_profile=disp_migrating,
-            include_raman=False, include_self_steepening=False, include_tpa=False,
+            pulse=pulse,
+            fiber=fiber,
+            dispersion_profile=disp_migrating,
+            include_raman=False,
+            include_self_steepening=False,
+            include_tpa=False,
         )
         solver_migrating.propagate(num_steps=400)
 
@@ -303,20 +345,28 @@ class TestTaperedGNLSESolver:
         """z-dependent γ (via a_eff_fn) affects propagation."""
         # Use more extreme parameters to ensure gamma effect is visible
         grid = TemporalGrid(N=256, Tmax=Time(20e-12, "s"))
-        env = Envelope(shape="gaussian", peak_amplitude=500.0, pulse_width=Time(0.5, "ps"))
+        env = Envelope(
+            shape="gaussian", peak_amplitude=500.0, pulse_width=Time(0.5, "ps")
+        )
         pulse = Wave(
             grid=grid,
             envelope=env,
             central_wavelength=Wavelength(1550, "nm"),
         )
-        fiber = FiberProfile(n2=1e-19, alpha=1e-5, A_eff=Area(5e-11, "m^2"), length=Length(5e-3, "m"))
-        
+        fiber = FiberProfile(
+            n2=1e-19, alpha=1e-5, A_eff=Area(5e-11, "m^2"), length=Length(5e-3, "m")
+        )
+
         disp = _make_uniform_beta_table(pulse, fiber_length=5e-3)
 
         # Constant A_eff (default)
         solver_const = TaperedGNLSESolver(
-            pulse=pulse, fiber=fiber, dispersion_profile=disp,
-            include_raman=False, include_self_steepening=False, include_tpa=False,
+            pulse=pulse,
+            fiber=fiber,
+            dispersion_profile=disp,
+            include_raman=False,
+            include_self_steepening=False,
+            include_tpa=False,
         )
         solver_const.propagate(num_steps=100)
 
@@ -328,9 +378,13 @@ class TestTaperedGNLSESolver:
             return fiber.A_eff.as_m2 * (1 - 0.7 * np.sin(np.pi * t))
 
         solver_tapered = TaperedGNLSESolver(
-            pulse=pulse, fiber=fiber, dispersion_profile=disp,
+            pulse=pulse,
+            fiber=fiber,
+            dispersion_profile=disp,
             a_eff_fn=a_eff_fn,
-            include_raman=False, include_self_steepening=False, include_tpa=False,
+            include_raman=False,
+            include_self_steepening=False,
+            include_tpa=False,
         )
         solver_tapered.propagate(num_steps=100)
 
@@ -354,8 +408,12 @@ class TestTaperedGNLSESolver:
 
         # Constant alpha
         solver_const = TaperedGNLSESolver(
-            pulse=pulse, fiber=fiber, dispersion_profile=disp,
-            include_raman=False, include_self_steepening=False, include_tpa=False,
+            pulse=pulse,
+            fiber=fiber,
+            dispersion_profile=disp,
+            include_raman=False,
+            include_self_steepening=False,
+            include_tpa=False,
         )
         solver_const.propagate(num_steps=50)
 
@@ -366,9 +424,13 @@ class TestTaperedGNLSESolver:
             return fiber.alpha * (1 + 10 * np.sin(np.pi * t))
 
         solver_varied = TaperedGNLSESolver(
-            pulse=pulse, fiber=fiber, dispersion_profile=disp,
+            pulse=pulse,
+            fiber=fiber,
+            dispersion_profile=disp,
             alpha_fn=alpha_fn,
-            include_raman=False, include_self_steepening=False, include_tpa=False,
+            include_raman=False,
+            include_self_steepening=False,
+            include_tpa=False,
         )
         solver_varied.propagate(num_steps=50)
 
@@ -398,7 +460,9 @@ class TestSplitStepEngineZDependent:
 
         dummy_betas = np.array([0.0])
         engine = SplitStepEngine(
-            pulse=pulse, fiber=fiber, betas=dummy_betas,
+            pulse=pulse,
+            fiber=fiber,
+            betas=dummy_betas,
             dispersion_profile=disp,
             a_eff_fn=a_eff_fn,
             alpha_fn=alpha_fn,
@@ -411,7 +475,9 @@ class TestSplitStepEngineZDependent:
         dummy_betas = np.array([0.02])  # ps²/m
 
         engine = SplitStepEngine(
-            pulse=pulse, fiber=fiber, betas=dummy_betas,
+            pulse=pulse,
+            fiber=fiber,
+            betas=dummy_betas,
         )
         assert engine._is_z_dependent is False
         # Should propagate without error

@@ -19,6 +19,7 @@ wrong pulse.
 """
 
 import matplotlib
+
 matplotlib.use("Agg")
 import numpy as np
 import matplotlib.pyplot as plt
@@ -71,8 +72,10 @@ print("Beta-unit contract demo")
 print("=" * 60)
 print(f"  solver_ps.betas (native ps^k/m)                : {solver_ps.betas}")
 print(f"  solver_si.betas (converted internally)         : {solver_si.betas}")
-print(f"  → classes hold identical values: "
-      f"{np.allclose(solver_ps.betas, solver_si.betas)}")
+print(
+    f"  → classes hold identical values: "
+    f"{np.allclose(solver_ps.betas, solver_si.betas)}"
+)
 
 # Normalized spectra must agree to float precision
 spec_ps = np.fft.fftshift(solver_ps.evolution[-1].spectrum)
@@ -96,8 +99,11 @@ omega, spectra = solver_ps.spectra_vs_z
 wl = 2 * np.pi * 299792458.0 / (omega + solver_ps.omega0) * 1e9
 o = np.argsort(wl)
 axes[0].pcolormesh(
-    wl[o], solver_ps.z_array * 1e3,
-    10 * np.log10(spectra[:, o] + 1e-30), shading="auto", cmap="hot",
+    wl[o],
+    solver_ps.z_array * 1e3,
+    10 * np.log10(spectra[:, o] + 1e-30),
+    shading="auto",
+    cmap="hot",
 )
 axes[0].set_xlabel("Wavelength (nm)")
 axes[0].set_ylabel("Distance (mm)")
@@ -105,8 +111,11 @@ axes[0].set_title("betas in ps^k/m (default)")
 
 _, spectra2 = solver_si.spectra_vs_z
 axes[1].pcolormesh(
-    wl[o], solver_si.z_array * 1e3,
-    10 * np.log10(spectra2[:, o] + 1e-30), shading="auto", cmap="hot",
+    wl[o],
+    solver_si.z_array * 1e3,
+    10 * np.log10(spectra2[:, o] + 1e-30),
+    shading="auto",
+    cmap="hot",
 )
 axes[1].set_xlabel("Wavelength (nm)")
 axes[1].set_title('betas in s^k/m with betas_unit="s^k/m"')

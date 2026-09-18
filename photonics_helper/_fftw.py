@@ -4,7 +4,12 @@ Every FFT hotspot in :mod:`photonics_helper.gnlse` and :mod:`photonics_helper.ra
 routes through this module. The best available backend is picked automatically
 so the package works everywhere:
 
-1. **FFTW3** (``pyfftw``) — fastest; cached plans (one per grid size, reused
+0. **cupy** (optional, opt-in) — GPU FFTs via :mod:`cupy`. Never selected
+automatically; enable with ``PHOTONICS_FFT_BACKEND=cupy``. The solver stack is
+NumPy-native, so each call copies to the device, transforms, and copies back;
+the transfer is amortized only for very large grids. When cupy is missing (or
+no GPU is visible) the chain falls back to the CPU backends with a warning.
+1. **FFTW3** (``pyfftw``) — fastest CPU backend; cached plans (one per grid size, reused
    across every split-step iteration) and optional multi-threading. Requires
    the optional ``pyfftw`` package (installable via the ``fftw`` extra).
 2. **scipy.fft** — pocketfft with multi-threading; ships with the package's
@@ -29,8 +34,9 @@ is intentionally **not** applied here, keeping this a pure FFT layer.
 
 Configuration
 -------------
-``PHOTONICS_FFT_BACKEND`` — force a backend: ``fftw``, ``scipy`` or ``numpy``
-(default: auto). If the forced backend is unavailable the next one in the
+``PHOTONICS_FFT_BACKEND`` — force a backend: ``cupy``, ``fftw``, ``scipy`` or
+``numpy`` (default: auto). ``cupy`` is opt-in only and is never chosen by the
+automatic selection. If the forced backend is unavailable the next one in the
 chain is used and a warning is emitted.
 
 ``PHOTONICS_FFTW_PLANNER`` — FFTW planner effort, default ``FFTW_ESTIMATE``.
@@ -44,12 +50,17 @@ very large grids.
 
 from __future__ import annotations
 
+import importlib.util
 import os
 import threading
 import warnings
 from typing import Any
 
 import numpy as np
+
+# cupy is detected lazily: find_spec does not import it (no CUDA init cost),
+# and _CupyBackend imports it only when that backend is actually selected.
+_HAS_CUPY = importlib.util.find_spec("cupy") is not None
 
 try:
     import pyfftw
@@ -265,11 +276,65 @@ class _FftwBackend:
             return np.asarray(np.array(out, copy=True) / n)
 
 
+class _CupyBackend:
+    """cupy GPU backend — FFTs run on the device, arrays stay on the host.
+
+    The rest of the library is NumPy-native, so each call copies the input to
+    the GPU, transforms, and copies the result back (host↔device transfers are
+    amortized only for large grids). This keeps the numerical conventions
+    identical to the CPU backends. ``cupy`` is imported lazily on first use.
+    """
+
+    name = "cupy"
+
+    def __init__(self) -> None:
+        import cupy as cp  # lazy: the CUDA runtime is initialised only here
+
+        self._cp = cp
+        # Touch the device so a broken/missing GPU fails here (and triggers the
+        # CPU fallback in set_backend) rather than on the first transform.
+        cp.cuda.runtime.getDeviceCount()
+
+    def fft(self, A) -> np.ndarray:
+        cp = self._cp
+        x = cp.asarray(A)
+        out = cp.fft.fftshift(cp.fft.fft(cp.fft.ifftshift(x)))
+        return np.asarray(cp.asnumpy(out))
+
+    def ifft(self, A_w) -> np.ndarray:
+        cp = self._cp
+        x = cp.asarray(A_w)
+        out = cp.fft.fftshift(cp.fft.ifft(cp.fft.ifftshift(x)))
+        return np.asarray(cp.asnumpy(out))
+
+    def convolve_full(self, a, b) -> np.ndarray:
+        cp = self._cp
+        a = np.asarray(a)
+        b = np.asarray(b)
+        n = a.shape[-1] + b.shape[-1] - 1
+        try:
+            from cupyx.scipy.signal import fftconvolve as _cp_conv
+
+            out = _cp_conv(cp.asarray(a), cp.asarray(b), mode="full")
+        except ImportError:  # pragma: no cover - cupyx ships with cupy
+            nfft = _next_fast_len(n)
+            a_pad = cp.zeros(nfft, dtype=cp.complex128)
+            b_pad = cp.zeros(nfft, dtype=cp.complex128)
+            a_pad[: a.shape[-1]] = cp.asarray(a)
+            b_pad[: b.shape[-1]] = cp.asarray(b)
+            out = cp.fft.ifft(cp.fft.fft(a_pad) * cp.fft.fft(b_pad))
+        result = np.asarray(cp.asnumpy(out))[:n]
+        if np.iscomplexobj(a) or np.iscomplexobj(b):
+            return result
+        return result.real
+
+
 # ---------------------------------------------------------------------------
 # Backend selection
 # ---------------------------------------------------------------------------
 
 _BACKEND_CLASSES = {
+    "cupy": _CupyBackend,
     "fftw": _FftwBackend,
     "scipy": _ScipyBackend,
     "numpy": _NumpyBackend,
@@ -280,7 +345,12 @@ _active_name: str | None = None
 
 
 def _available_backends() -> list[str]:
-    """Backends that can be instantiated, best first."""
+    """CPU backends that can be instantiated, best first.
+
+    ``cupy`` is deliberately excluded: GPU execution is opt-in via
+    ``PHOTONICS_FFT_BACKEND=cupy`` so that small grids never pay the host↔device
+    transfer cost by accident.
+    """
     order = ["fftw", "scipy", "numpy"]
     if not _HAS_PYFFTW:
         order.remove("fftw")
@@ -295,9 +365,10 @@ def set_backend(name: str | None = None) -> str:
     Parameters
     ----------
     name : str, optional
-        One of ``"fftw"``, ``"scipy"``, ``"numpy"``, or ``None`` for automatic
-        selection (best available). An unavailable forced backend falls back
-        to the next best with a warning.
+        One of ``"cupy"``, ``"fftw"``, ``"scipy"``, ``"numpy"``, or ``None``
+        for automatic selection (best available CPU backend; ``cupy`` is never
+        auto-selected). An unavailable forced backend falls back to the next
+        best with a warning.
 
     Returns
     -------
@@ -314,7 +385,11 @@ def set_backend(name: str | None = None) -> str:
             raise ValueError(
                 f"Unknown FFT backend {name!r}. Choose from {list(_BACKEND_CLASSES)}."
             )
-        candidates = [key] + [b for b in available if b != key]
+        if key == "cupy":
+            # GPU is opt-in: try it first, then fall back to the CPU chain.
+            candidates = ["cupy"] + available
+        else:
+            candidates = [key] + [b for b in available if b != key]
 
     for cand in candidates:
         try:
@@ -333,9 +408,11 @@ def set_backend(name: str | None = None) -> str:
 
 def _maybe_warn_on_use() -> None:
     """One informational warning per process when FFTW3 is not in use."""
-    if _active_name == "fftw":
+    if _active_name in ("cupy", "fftw"):
         return
-    if _user_forced or os.environ.get("PHOTONICS_FFT_BACKEND"):  # explicit choice — no nag
+    if _user_forced or os.environ.get(
+        "PHOTONICS_FFT_BACKEND"
+    ):  # explicit choice — no nag
         return
     _warn_once(
         "fallback-use",
@@ -345,12 +422,14 @@ def _maybe_warn_on_use() -> None:
 
 
 def available() -> bool:
-    """True when an accelerated backend (FFTW3 or scipy) is active."""
-    return _active_name in ("fftw", "scipy")
+    """True when an accelerated backend (cupy, FFTW3 or scipy) is active."""
+    return _active_name in ("cupy", "fftw", "scipy")
 
 
 def backend_name() -> str:
     """Human-readable name of the active backend."""
+    if _active_name == "cupy":
+        return "cupy (GPU)"
     if _active_name == "fftw":
         return f"FFTW3 via pyfftw {pyfftw.__version__}"
     if _active_name == "scipy":

@@ -654,12 +654,12 @@ class Power:
         """
         if base_length is None:
             base_length = Wavelength(1.0, "um")
-        return cls(value * H_PLANCK * C_MS ** 2 / base_length.as_m ** 2, "W")
+        return cls(value * H_PLANCK * C_MS**2 / base_length.as_m**2, "W")
 
     @cached_property
     def as_meep(self) -> float:
         """Convert to MEEP units: P_meep = P·a²/(h·c²) for a = 1 μm."""
-        return self.as_W * 1e-12 / (H_PLANCK * C_MS ** 2)
+        return self.as_W * 1e-12 / (H_PLANCK * C_MS**2)
 
 
 @dataclass(config={"arbitrary_types_allowed": True})
@@ -721,11 +721,62 @@ class Area:
     def from_meep(cls, value: float, base_length: Wavelength | None = None) -> Self:
         if base_length is None:
             base_length = Wavelength(1.0, "um")
-        return cls(value * base_length.as_m ** 2, "m^2")
+        return cls(value * base_length.as_m**2, "m^2")
 
     @cached_property
     def as_meep(self) -> float:
         return self.as_m2 / 1e-12
+
+
+@dataclass(config={"arbitrary_types_allowed": True})
+class PeakPower(Power):
+    """Peak power of a pulse, tying normalized envelopes to physical watts.
+
+    A thin :class:`Power` subclass. The conversion from a normalized envelope
+    amplitude ``A`` (in V/m, or any consistent field unit) to a physical peak
+    power follows from the plane-wave intensity relation
+
+    .. math::
+
+        I = \\tfrac{1}{2} n \\, c \\, \\varepsilon_0 \\, |A|^2
+        \\qquad\\Longrightarrow\\qquad
+        P_\\mathrm{peak} = I_\\mathrm{peak} \\, A_\\mathrm{eff}
+        = \\tfrac{1}{2} n \\, c \\, \\varepsilon_0 \\, A_\\mathrm{eff} \\, |A|^2.
+
+    ``Wave.peak_power()`` uses the same relation; this class exposes it for
+    one-shot conversions where only the envelope amplitude is at hand.
+    """
+
+    @classmethod
+    def from_envelope(
+        cls,
+        A: NDArray | float,
+        A_eff: Area,
+        n: float = 1.0,
+        lambda0: Wavelength | None = None,
+    ) -> "PeakPower":
+        """Convert a normalized envelope amplitude to a physical peak power.
+
+        Parameters
+        ----------
+        A : complex envelope amplitude (array or scalar) in field units.
+        A_eff : effective mode area.
+        n : refractive index at the carrier wavelength (default 1.0).
+        lambda0 : optional vacuum carrier wavelength. Retained so call sites
+            record the wavelength the refractive index refers to; validated
+            when supplied.
+
+        Returns
+        -------
+        PeakPower — the peak power in watts (a :class:`Power`).
+        """
+        if n <= 0:
+            raise ValueError(f"refractive index must be positive, got {n}")
+        if lambda0 is not None and lambda0.as_m <= 0:
+            raise ValueError(f"carrier wavelength must be positive, got {lambda0}")
+        factor = 0.5 * n * C_MS * EPS_0 * A_eff.as_m2
+        peak_intensity = float(np.max(np.abs(np.asarray(A)) ** 2))
+        return cls(factor * peak_intensity, "W")
 
 
 @dataclass(config={"arbitrary_types_allowed": True})

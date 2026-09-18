@@ -28,9 +28,13 @@ class TestPhononMode:
 
     def test_all_fields(self):
         mode = PhononMode(
-            shift_cm=254, linewidth_cm=14, symmetry="A₁g",
-            relative_strength=0.8, lo_phonon_cm=260, to_phonon_cm=250,
-            note="Test mode"
+            shift_cm=254,
+            linewidth_cm=14,
+            symmetry="A₁g",
+            relative_strength=0.8,
+            lo_phonon_cm=260,
+            to_phonon_cm=250,
+            note="Test mode",
         )
         assert mode.relative_strength == 0.8
         assert mode.lo_phonon_cm.as_1_cm == 260
@@ -66,6 +70,7 @@ class TestPhononResponse:
         result = response.frequency_domain(w)
 
         from scipy.signal import find_peaks
+
         peaks, _ = find_peaks(result, distance=50)
         assert len(peaks) == 2
 
@@ -120,22 +125,35 @@ class TestPhononResponse:
         assert not np.allclose(result, 0)
 
     def test_demo(self):
-        response = PhononResponse([
-            PhononMode(shift_cm=200, linewidth_cm=10),
-            PhononMode(shift_cm=400, linewidth_cm=20),
-        ])
+        response = PhononResponse(
+            [
+                PhononMode(shift_cm=200, linewidth_cm=10),
+                PhononMode(shift_cm=400, linewidth_cm=20),
+            ]
+        )
         results = response.demo()
-        assert results['empty_freq']
-        assert results['single_peak']
-        assert results['multi_peaks']
-        assert results['normalized']
+        assert results["empty_freq"]
+        assert results["single_peak"]
+        assert results["multi_peaks"]
+        assert results["normalized"]
 
 
 class TestPHONON_MATERIALS:
     """Tests for seeded phonon data."""
 
     def test_all_materials_present(self):
-        expected = ["LiNbO3", "LiTaO3", "BaTiO3", "YAG", "Al2O3", "KTP", "GaN", "AlN", "SiC_4H", "YLF"]
+        expected = [
+            "LiNbO3",
+            "LiTaO3",
+            "BaTiO3",
+            "YAG",
+            "Al2O3",
+            "KTP",
+            "GaN",
+            "AlN",
+            "SiC_4H",
+            "YLF",
+        ]
         for mat in expected:
             assert mat in PHONON_MATERIALS, f"Missing material: {mat}"
 
@@ -143,7 +161,9 @@ class TestPHONON_MATERIALS:
         for mat, modes in PHONON_MATERIALS.items():
             for mode in modes:
                 assert mode.shift_cm.as_1_cm > 0, f"{mat}: shift_cm must be positive"
-                assert mode.linewidth_cm.as_1_cm > 0, f"{mat}: linewidth_cm must be positive"
+                assert mode.linewidth_cm.as_1_cm > 0, (
+                    f"{mat}: linewidth_cm must be positive"
+                )
 
     def test_li_nbo3_has_7_modes(self):
         assert len(PHONON_MATERIALS["LiNbO3"]) == 7
@@ -169,7 +189,9 @@ class TestRamanSpecPhononIntegration:
 
     def test_phonon_response_with_modes(self):
         modes = [PhononMode(shift_cm=254, linewidth_cm=14)]
-        spec = RamanSpec(name="Test", raman_shift_cm=254, raman_linewidth_cm=14, phonon_modes=modes)
+        spec = RamanSpec(
+            name="Test", raman_shift_cm=254, raman_linewidth_cm=14, phonon_modes=modes
+        )
         response = spec.phonon_response
         assert response is not None
         assert isinstance(response, PhononResponse)
@@ -179,7 +201,9 @@ class TestRamanSpecPhononIntegration:
             PhononMode(shift_cm=200, linewidth_cm=10),
             PhononMode(shift_cm=400, linewidth_cm=20),
         ]
-        spec = RamanSpec(name="Test", raman_shift_cm=254, raman_linewidth_cm=14, phonon_modes=modes)
+        spec = RamanSpec(
+            name="Test", raman_shift_cm=254, raman_linewidth_cm=14, phonon_modes=modes
+        )
         pump = Wavelength(1064, "nm")
         stokes = spec.multi_stokes_wavelengths(pump)
         assert len(stokes) == 2
@@ -195,7 +219,9 @@ class TestRamanSpecPhononIntegration:
 
     def test_summary_mentions_multimode(self):
         modes = [PhononMode(shift_cm=254, linewidth_cm=14)]
-        spec = RamanSpec(name="Test", raman_shift_cm=254, raman_linewidth_cm=14, phonon_modes=modes)
+        spec = RamanSpec(
+            name="Test", raman_shift_cm=254, raman_linewidth_cm=14, phonon_modes=modes
+        )
         summary = spec.summary()
         assert "Multi-mode: 1 phonon modes" in summary
 
@@ -216,9 +242,12 @@ class TestRamanDatabasePhonon:
     def test_phonon_modes_table_created(self):
         # Table should exist after init
         import sqlite3
+
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='phonon_modes'")
+        cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='phonon_modes'"
+        )
         table = cursor.fetchone()
         conn.close()
         assert table is not None

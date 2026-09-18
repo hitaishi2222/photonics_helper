@@ -8,7 +8,6 @@ report silently reported ``N_sol = 0`` / ``L_D = inf``.
 import warnings
 
 import numpy as np
-import pytest
 
 from photonics_helper.base import Area, Length, Time, Wavelength, WavelengthArray
 from photonics_helper.fiber import Dispersion, PropagationConstant
@@ -30,7 +29,9 @@ def _setup():
     grid = TemporalGrid(N=256, Tmax=Time(20e-12, "s"))
     pulse = Wave(
         grid=grid,
-        envelope=Envelope(shape="sech", peak_amplitude=1.0, pulse_width=Time(100e-15, "s")),
+        envelope=Envelope(
+            shape="sech", peak_amplitude=1.0, pulse_width=Time(100e-15, "s")
+        ),
         central_wavelength=Wavelength(1550, "nm"),
     )
     fiber = FiberProfile(
@@ -57,7 +58,11 @@ def _propagation_constant(pulse):
     wl = WavelengthArray(np.linspace(800, 2500, 200), "nm")
     om = wl.to_omega()
     om0 = float(pulse.central_frequency)
-    beta = 1e7 + 1e-29 * (om.as_rad_s - om0) + 0.5 * BETA2_EXPECTED * (om.as_rad_s - om0) ** 2
+    beta = (
+        1e7
+        + 1e-29 * (om.as_rad_s - om0)
+        + 0.5 * BETA2_EXPECTED * (om.as_rad_s - om0) ** 2
+    )
     return PropagationConstant(values=beta, x_values=om)
 
 
@@ -96,7 +101,11 @@ def test_readiness_propagation_constant_populated():
 
 def test_dw_root_finder_failure_warns(monkeypatch):
     pulse, fiber = _setup()
-    monkeypatch.setattr(pm, "dispersive_wave_roots", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("forced")))
+    monkeypatch.setattr(
+        pm,
+        "dispersive_wave_roots",
+        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("forced")),
+    )
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         pm.assess_simulation_readiness(pulse, fiber, _dispersion())

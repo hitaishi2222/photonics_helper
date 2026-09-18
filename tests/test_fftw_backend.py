@@ -87,7 +87,10 @@ def test_backend_reports_fftw_when_installed():
         assert "FFTW3" in backend_name()
     except ImportError:
         assert available() is True
-        assert backend_name() in ("scipy.fft (pocketfft)", "scipy.fft (pocketfft, workers=1)")
+        assert backend_name() in (
+            "scipy.fft (pocketfft)",
+            "scipy.fft (pocketfft, workers=1)",
+        )
 
 
 def _parity(name: str):
@@ -95,8 +98,12 @@ def _parity(name: str):
     set_backend(name)
     for n in [64, 127, 255]:
         A = _random_complex(n)
-        assert np.allclose(fft(A), np.fft.fftshift(np.fft.fft(np.fft.ifftshift(A))), atol=1e-12)
-        assert np.allclose(ifft(A), np.fft.fftshift(np.fft.ifft(np.fft.ifftshift(A))), atol=1e-12)
+        assert np.allclose(
+            fft(A), np.fft.fftshift(np.fft.fft(np.fft.ifftshift(A))), atol=1e-12
+        )
+        assert np.allclose(
+            ifft(A), np.fft.fftshift(np.fft.ifft(np.fft.ifftshift(A))), atol=1e-12
+        )
         assert np.max(np.abs(ifft(fft(A)) - A)) < 1e-11
 
 
@@ -159,7 +166,9 @@ def test_env_override(monkeypatch):
         "print(f.backend_name()); "
         "assert 'numpy' in f.backend_name()"
     )
-    result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+    result = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True
+    )
     assert result.returncode == 0, result.stderr
     assert "numpy" in result.stdout
 
@@ -217,3 +226,63 @@ def test_gnlse_matches_numpy_path():
     # over 200 steps × 2 linear + Raman FFTs. 2e-8 is generous but still proves
     # the solver follows the same trajectory.
     assert err / np.max(np.abs(numpy_result)) < 2e-8
+
+
+# ---------------------------------------------------------------------------
+# Optional cupy (GPU) backend — opt-in, with transparent CPU fallback
+# ---------------------------------------------------------------------------
+
+
+def test_cupy_is_registered_but_not_auto_selected():
+    """cupy exists in the chain but automatic selection never picks it."""
+    assert "cupy" in _fftw._BACKEND_CLASSES
+    assert "cupy" not in _fftw._available_backends()
+    set_backend(None)
+    try:
+        assert backend_name() != "cupy (GPU)"
+    finally:
+        set_backend(None)
+
+
+@pytest.mark.skipif(_fftw._HAS_CUPY, reason="cupy is installed on this machine")
+def test_cupy_forced_falls_back_to_cpu():
+    """Forcing cupy without it installed warns and keeps a CPU backend."""
+    _fftw._warned.discard("backend:cupy")
+    with pytest.warns(UserWarning, match="cupy"):
+        name = set_backend("cupy")
+    try:
+        assert name != "cupy"
+        assert "cupy" not in backend_name()
+    finally:
+        set_backend(None)
+
+
+@pytest.mark.skipif(_fftw._HAS_CUPY, reason="cupy is installed on this machine")
+def test_cupy_env_var_import_falls_back_with_warning():
+    """Spec scenario: PHOTONICS_FFT_BACKEND=cupy + no cupy → import + warning."""
+    import os
+    import subprocess
+    import sys
+
+    code = (
+        "import warnings\n"
+        "warnings.simplefilter('always')\n"
+        "with warnings.catch_warnings(record=True) as rec:\n"
+        "    import photonics_helper._fftw as f\n"
+        "print('BACKEND:' + f.backend_name())\n"
+        "print('WARNINGS:' + '|'.join(str(w.message) for w in rec))\n"
+    )
+    env = {**os.environ, "PHOTONICS_FFT_BACKEND": "cupy"}
+    result = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, env=env
+    )
+    assert result.returncode == 0, result.stderr
+    lines = {
+        key: value
+        for key, _, value in (
+            line.partition(":") for line in result.stdout.splitlines()
+        )
+        if key
+    }
+    assert "cupy" not in lines["BACKEND"]
+    assert "cupy" in lines["WARNINGS"]

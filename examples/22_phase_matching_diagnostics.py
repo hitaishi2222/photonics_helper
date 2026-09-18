@@ -11,6 +11,9 @@ Demonstrates:
 Run with: python examples/22_phase_matching_diagnostics.py
 """
 
+# The sys.path bootstrap below intentionally precedes the library imports.
+# ruff: noqa: E402
+
 import sys
 from pathlib import Path
 
@@ -21,10 +24,19 @@ if str(_ROOT) not in sys.path:
 
 import numpy as np
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from photonics_helper.base import C_MS, PI, Wavelength, WavelengthArray, Area, Length, Time
+from photonics_helper.base import (
+    C_MS,
+    PI,
+    Wavelength,
+    WavelengthArray,
+    Area,
+    Length,
+    Time,
+)
 from photonics_helper.pulse import Envelope, Wave, TemporalGrid
 from photonics_helper.gnlse import GNLSESolver, FiberProfile
 from photonics_helper.fiber import Dispersion
@@ -41,13 +53,14 @@ from photonics_helper.phase_matching import (
 )
 
 
-def make_gaussian_pulse(central_wl_nm: float, T0_ps: float, power_W: float,
-                        N: int = 2048) -> Wave:
+def make_gaussian_pulse(
+    central_wl_nm: float, T0_ps: float, power_W: float, N: int = 2048
+) -> Wave:
     """Create a Gaussian pulse for GNLSE simulations."""
     t0 = T0_ps * 1e-12  # seconds
     dt = 4 * t0 / N
     t = np.arange(-N // 2, N // 2) * dt  # plain numpy array in seconds
-    envelope_field = np.exp(-t**2 / (2 * t0**2)) * np.sqrt(power_W)
+    envelope_field = np.exp(-(t**2) / (2 * t0**2)) * np.sqrt(power_W)
 
     Tmax = Time(4 * t0, "s")
     grid = TemporalGrid(N=N, Tmax=Tmax)
@@ -55,7 +68,9 @@ def make_gaussian_pulse(central_wl_nm: float, T0_ps: float, power_W: float,
     central_wl = Wavelength(central_wl_nm, "nm")
     pulse = Wave(
         grid=grid,
-        envelope=Envelope(shape="gaussian", peak_amplitude=1.0, pulse_width=Time(T0_ps, "ps")),
+        envelope=Envelope(
+            shape="gaussian", peak_amplitude=1.0, pulse_width=Time(T0_ps, "ps")
+        ),
         central_wavelength=central_wl,
     )
     pulse._pulse_train_field = envelope_field
@@ -71,7 +86,7 @@ def main():
 
     # Fiber with anomalous dispersion (SCG regime)
     beta2_ps2_per_m = -100.0  # ps²/m at 1550 nm
-    gamma = 10.0              # 1/(W·m)
+    gamma = 10.0  # 1/(W·m)
 
     # Create a Dispersion object from known D(λ) values
     wl_nm = np.linspace(1400, 1700, 61)
@@ -87,7 +102,9 @@ def main():
     )
 
     # Get Taylor betas in ps^k/m
-    betas = dispersion.get_betas(polyOrder=3, wavelength=Wavelength(central_wl_nm, "nm"))
+    betas = dispersion.get_betas(
+        polyOrder=3, wavelength=Wavelength(central_wl_nm, "nm")
+    )
 
     print("=" * 60)
     print("Phase-Matching Diagnostics Example")
@@ -107,14 +124,14 @@ def main():
     signal_wl_nm = np.linspace(1450, 1650, 201)
     omega_signal = 2 * PI * C_MS / (signal_wl_nm * 1e-9)
 
-    fwm_result = scan_fwm_detuning(
-        adaptor, omega0, omega_signal, P_pump, gamma, L=L
-    )
+    fwm_result = scan_fwm_detuning(adaptor, omega0, omega_signal, P_pump, gamma, L=L)
 
     print(f"Pump wavelength: {central_wl_nm} nm")
     print(f"Signal range: {signal_wl_nm[0]:.1f} – {signal_wl_nm[-1]:.1f} nm")
-    print(f"Δβ = 0 near signal wavelength: "
-          f"{signal_wl_nm[np.argmin(np.abs(fwm_result.delta_beta))]:.1f} nm")
+    print(
+        f"Δβ = 0 near signal wavelength: "
+        f"{signal_wl_nm[np.argmin(np.abs(fwm_result.delta_beta))]:.1f} nm"
+    )
 
     # Plot FWM
     fig_fwm = plot_fwm_efficiency(fwm_result)
@@ -132,7 +149,9 @@ def main():
 
     # Find peak
     peak_idx = np.argmax(np.abs(gain))
-    print(f"Peak MI gain: {np.max(gain):.2f} 1/m at Ω = {omega_m[peak_idx]/1e12:.2f} THz")
+    print(
+        f"Peak MI gain: {np.max(gain):.2f} 1/m at Ω = {omega_m[peak_idx] / 1e12:.2f} THz"
+    )
 
     # Sideband frequencies
     sidebands = mi_sideband_frequencies(beta2_si, gamma, P_pump)
@@ -156,7 +175,8 @@ def main():
     # ========================================================================
     print("\n--- Dispersive Wave Root Finder ---")
     dw_result = dispersive_wave_roots(
-        adaptor, omega0,
+        adaptor,
+        omega0,
         wl_range=(Wavelength(1000, "nm"), Wavelength(2500, "nm")),
         n_brackets=200,
     )
@@ -165,9 +185,11 @@ def main():
         print(f"Found {len(dw_result.wavelengths)} DW root(s):")
         for i, wl in enumerate(dw_result.wavelengths):
             delta_wl = abs(wl.as_nm - central_wl_nm)
-            print(f"  DW{i+1}: {wl.as_nm:.1f} nm (Δλ = {delta_wl:.1f} nm from pump)")
+            print(f"  DW{i + 1}: {wl.as_nm:.1f} nm (Δλ = {delta_wl:.1f} nm from pump)")
     else:
-        print("No DW roots found in search range (DispersionAdaptor may not capture higher-order dispersion).")
+        print(
+            "No DW roots found in search range (DispersionAdaptor may not capture higher-order dispersion)."
+        )
 
     # β₂/β₃ analytic estimate for comparison
     if len(betas) > 1 and abs(betas[1]) > 1e-15:
@@ -205,9 +227,13 @@ def main():
     print(f"Nonlinear length L_NL: {report.nonlinear_length:.6f} m")
     print(f"Fission length L_fiss: {report.fission_length:.4f} m")
     print(f"Dispersion covers grid: {report.dispersion_covers_grid}")
-    print(f"Predicted processes: {', '.join(report.predicted_processes) if report.predicted_processes else 'None'}")
+    print(
+        f"Predicted processes: {', '.join(report.predicted_processes) if report.predicted_processes else 'None'}"
+    )
     if report.dw_predictions:
-        print(f"Predicted DW wavelengths: {[f'{w:.1f}' for w in report.dw_predictions]} nm")
+        print(
+            f"Predicted DW wavelengths: {[f'{w:.1f}' for w in report.dw_predictions]} nm"
+        )
 
     # Plot readiness
     fig_readiness = plot_readiness_report(report)
@@ -250,8 +276,10 @@ def main():
     # 7. Energy Conservation Check
     # ========================================================================
     print("\n--- Energy Conservation ---")
-    initial_energy = np.trapezoid(np.abs(pulse.envelope_field)**2, pulse.grid.t)
-    final_energy = np.trapezoid(np.abs(solver.evolution[-1].envelope_field)**2, pulse.grid.t)
+    initial_energy = np.trapezoid(np.abs(pulse.envelope_field) ** 2, pulse.grid.t)
+    final_energy = np.trapezoid(
+        np.abs(solver.evolution[-1].envelope_field) ** 2, pulse.grid.t
+    )
     if abs(initial_energy) > 1e-40:
         energy_drift = abs(final_energy - initial_energy) / abs(initial_energy) * 100
     else:

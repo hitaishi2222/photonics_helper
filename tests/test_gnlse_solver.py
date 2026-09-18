@@ -18,7 +18,9 @@ def setup():
         envelope=env,
         central_wavelength=Wavelength(1550, "nm"),
     )
-    fiber = FiberProfile(n2=1e-19, alpha=1e-5, A_eff=Area(5e-11, "m^2"), length=Length(1e-3, "m"))
+    fiber = FiberProfile(
+        n2=1e-19, alpha=1e-5, A_eff=Area(5e-11, "m^2"), length=Length(1e-3, "m")
+    )
     betas = np.array([0.02])  # normal dispersion, 20 ps²/km
     return pulse, fiber, betas
 
@@ -38,7 +40,9 @@ def test_solver_construction_with_flags(setup):
     """Solver accepts effect flags."""
     pulse, fiber, betas = setup
     solver = GNLSESolver(
-        pulse=pulse, fiber=fiber, betas=betas,
+        pulse=pulse,
+        fiber=fiber,
+        betas=betas,
         include_raman=False,
         include_self_steepening=True,
         include_tpa=True,
@@ -78,8 +82,12 @@ def test_solver_energy_conservation(setup):
     """Pure Kerr solver conserves energy."""
     pulse, fiber, betas = setup
     solver = GNLSESolver(
-        pulse=pulse, fiber=fiber, betas=betas,
-        include_raman=False, include_self_steepening=False, include_tpa=False,
+        pulse=pulse,
+        fiber=fiber,
+        betas=betas,
+        include_raman=False,
+        include_self_steepening=False,
+        include_tpa=False,
     )
     initial_energy = np.sum(np.abs(pulse.envelope_field) ** 2) * pulse.grid.dt
     solver.propagate(num_steps=20)

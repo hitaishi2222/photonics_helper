@@ -24,6 +24,7 @@ For Silica (the most common fiber material):
 
 import numpy as np
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
@@ -45,15 +46,25 @@ def main():
         grid = TemporalGrid(N=2**14, Tmax=Time(max(10e-12, 20 * tau2), "s"))
         resp = RamanResponse(spec=spec, grid=grid)
         responses[name] = resp
-        print(f"{name}: τ1={resp.tau1*1e15:.2f} fs, τ2={resp.tau2*1e15:.2f} fs, fR={resp.fR}")
+        print(
+            f"{name}: τ1={resp.tau1 * 1e15:.2f} fs, τ2={resp.tau2 * 1e15:.2f} fs, fR={resp.fR}"
+        )
 
     # ── Plot 1: Compare delayed response for all materials ──────────────────
 
     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-    fig.suptitle("Raman Delayed Response h_R(t) — Material Comparison",
-                 fontsize=14, fontweight="bold")
+    fig.suptitle(
+        "Raman Delayed Response h_R(t) — Material Comparison",
+        fontsize=14,
+        fontweight="bold",
+    )
 
-    colors = {"Silica": "#00d4ff", "CdS": "#a78bfa", "Diamond": "#34d399", "As2Se3": "#fbbf24"}
+    colors = {
+        "Silica": "#00d4ff",
+        "CdS": "#a78bfa",
+        "Diamond": "#34d399",
+        "As2Se3": "#fbbf24",
+    }
 
     for idx, name in enumerate(materials):
         row, col = divmod(idx, 2)
@@ -65,15 +76,21 @@ def main():
         delayed = resp.delayed_response()
         # Zoom to first few picoseconds where oscillation is visible
         mask = (t_ps >= 0) & (t_ps <= 5)
-        ax.plot(t_ps[mask], delayed[mask], color=colors[name], linewidth=1.5, label=name)
+        ax.plot(
+            t_ps[mask], delayed[mask], color=colors[name], linewidth=1.5, label=name
+        )
         ax.set_xlabel("Time (ps)")
         ax.set_ylabel("h_R(t) (arb.)")
-        ax.set_title(f"{name}  (shift={resp.spec.raman_shift_cm} cm⁻¹, fwhm={resp.spec.raman_linewidth_cm} cm⁻¹)")
+        ax.set_title(
+            f"{name}  (shift={resp.spec.raman_shift_cm} cm⁻¹, fwhm={resp.spec.raman_linewidth_cm} cm⁻¹)"
+        )
         ax.grid(True, alpha=0.3)
         ax.legend()
 
     plt.tight_layout()
-    plt.savefig("examples/images/05_raman_response_comparison.png", dpi=150, bbox_inches="tight")
+    plt.savefig(
+        "examples/images/05_raman_response_comparison.png", dpi=150, bbox_inches="tight"
+    )
     print("Saved: examples/05_raman_response_comparison.png")
     plt.close()
 
@@ -85,15 +102,18 @@ def main():
     fig, axes = plt.subplots(3, 1, figsize=(12, 9), sharex=True)
     fig.suptitle(
         f"Silica Raman Response  "
-        f"(fR={silica.fR:.2f}, τ₁={silica.tau1*1e15:.2f} fs, τ₂={silica.tau2*1e15:.2f} fs)",
-        fontsize=13, fontweight="bold",
+        f"(fR={silica.fR:.2f}, τ₁={silica.tau1 * 1e15:.2f} fs, τ₂={silica.tau2 * 1e15:.2f} fs)",
+        fontsize=13,
+        fontweight="bold",
     )
 
     # Panel 1: Instantaneous (Kerr) response
     inst = silica.instantaneous_response()
     axes[0].plot(t_ps, inst, color="#00d4ff", linewidth=1.5)
     axes[0].set_ylabel("Amplitude (arb.)", fontsize=10)
-    axes[0].set_title("Instantaneous Response (1-fR)·δ(t) — Electronic Kerr", fontsize=11)
+    axes[0].set_title(
+        "Instantaneous Response (1-fR)·δ(t) — Electronic Kerr", fontsize=11
+    )
     axes[0].grid(True, alpha=0.3)
     axes[0].axhline(0, color="k", linewidth=0.5)
 
@@ -119,15 +139,20 @@ def main():
     axes[2].legend()
 
     plt.tight_layout()
-    plt.savefig("examples/images/05_raman_response_silica.png", dpi=150, bbox_inches="tight")
+    plt.savefig(
+        "examples/images/05_raman_response_silica.png", dpi=150, bbox_inches="tight"
+    )
     print("Saved: examples/05_raman_response_silica.png")
     plt.close()
 
     # ── Plot 3: Effect of varying fR ────────────────────────────────────────
 
     fig, axes = plt.subplots(2, 2, figsize=(12, 10))
-    fig.suptitle("Effect of Raman Fraction fR on Response Function",
-                 fontsize=14, fontweight="bold")
+    fig.suptitle(
+        "Effect of Raman Fraction fR on Response Function",
+        fontsize=14,
+        fontweight="bold",
+    )
 
     fr_values = [0.0, 0.05, 0.18, 1.0]
     fr_labels = ["Pure Kerr", "Weak Raman", "Silica (default)", "Pure Raman"]
@@ -145,8 +170,12 @@ def main():
         delayed = resp.delayed_response()
         combined = resp.combined_response()
 
-        ax.plot(t_ps, inst, color="#00d4ff", linewidth=1.0, alpha=0.7, label="(1-fR)δ(t)")
-        ax.plot(t_ps, delayed, color="#a78bfa", linewidth=1.0, alpha=0.7, label="fR·h_R(t)")
+        ax.plot(
+            t_ps, inst, color="#00d4ff", linewidth=1.0, alpha=0.7, label="(1-fR)δ(t)"
+        )
+        ax.plot(
+            t_ps, delayed, color="#a78bfa", linewidth=1.0, alpha=0.7, label="fR·h_R(t)"
+        )
         ax.plot(t_ps, combined, color="#34d399", linewidth=1.5, label="R(t)")
         ax.set_xlabel("Time (ps)")
         ax.set_ylabel("Amplitude (arb.)")
@@ -156,7 +185,9 @@ def main():
         ax.legend(fontsize=8, loc="upper right")
 
     plt.tight_layout()
-    plt.savefig("examples/images/05_raman_response_fr_effect.png", dpi=150, bbox_inches="tight")
+    plt.savefig(
+        "examples/images/05_raman_response_fr_effect.png", dpi=150, bbox_inches="tight"
+    )
     print("Saved: examples/05_raman_response_fr_effect.png")
     plt.close()
 

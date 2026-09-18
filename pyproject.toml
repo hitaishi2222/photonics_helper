@@ -30,11 +30,15 @@ plotting = ["plotly>=5.0"]
 webapp = ["dash>=2.18.0"]
 examples = ["tqdm>=4.66"]
 extras = ["imageio>=2.33"]
-xy = ["xy>=0.0.7"]
 # FFTW3 backend for the GNLSE / Raman FFTs (pyfftw ships cp311–cp313 wheels;
 # the solver falls back to numpy.fft automatically when this is absent)
 fftw = ["pyfftw>=0.15.1"]
-all = ["plotly>=5.0", "dash>=2.18.0", "tqdm>=4.66", "pyfftw>=0.15.1", "imageio>=2.33", "xy>=0.0.7"]
+# Eigenmode solvers used by examples/generate_waveguide_mode_data.py to produce
+# real n_eff(λ) exports (femwell = FEM, tidy3d = local mode solver).
+mode-export = ["femwell>=0.1.12", "tidy3d>=2.12"]
+# API documentation (mkdocs + mkdocstrings) built by .github/workflows/docs.yml.
+docs = ["mkdocs-material>=9.5", "mkdocstrings[python]>=0.26"]
+all = ["plotly>=5.0", "dash>=2.18.0", "tqdm>=4.66", "pyfftw>=0.15.1", "imageio>=2.33"]
 
 [build-system]
 requires = ["setuptools>=61.0.0", "wheel"]

@@ -130,7 +130,10 @@ def _plot(evo, result: dict) -> None:
     axes[0].set_ylabel("Normalised intensity")
     axes[0].set_title("(a) Output temporal profile")
     axes[0].grid(True, alpha=0.3)
-    for label, tau in [("DW", result["dw_delay_ps"]), ("soliton", result["soliton_delay_ps"])]:
+    for label, tau in [
+        ("DW", result["dw_delay_ps"]),
+        ("soliton", result["soliton_delay_ps"]),
+    ]:
         axes[0].axvline(tau, color="C3", ls=":", lw=1.0)
         axes[0].text(tau, 0.5, f" {label}", color="C3", fontsize=9)
 

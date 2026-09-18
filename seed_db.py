@@ -195,7 +195,7 @@ SELLMEIER_MATERIALS = {
         "form": "standard",
         "a0": 1.0,
         "coefficients": [2.8939],
-        "wavelengths": [0.139670 ** 2],  # B = lambda_res^2 (um^2)
+        "wavelengths": [0.139670**2],  # B = lambda_res^2 (um^2)
         "valid_from_um": 0.21,
         "valid_to_um": 1.24,
         "source": (
@@ -207,7 +207,7 @@ SELLMEIER_MATERIALS = {
         "form": "standard",
         "a0": 1.0,
         "coefficients": [3.0249, 40314.0],
-        "wavelengths": [0.1353406 ** 2, 1239.842 ** 2],  # B = lambda_res^2 (um^2)
+        "wavelengths": [0.1353406**2, 1239.842**2],  # B = lambda_res^2 (um^2)
         "valid_from_um": 0.31,
         "valid_to_um": 5.504,
         "source": (
@@ -420,7 +420,12 @@ def validate_sellmeier_vs_tabulated(db: RamanDatabase, tol: float = 0.02) -> lis
                 continue
             sample = np.linspace(lo, hi, 9)
             n_sell = np.array(
-                [_sellmeier_n(sell["a0"], sell["coefficients"], sell["wavelengths"], w) for w in sample]
+                [
+                    _sellmeier_n(
+                        sell["a0"], sell["coefficients"], sell["wavelengths"], w
+                    )
+                    for w in sample
+                ]
             )
             n_ref = np.interp(sample, wl_tab, n_tab)
             mask = np.isfinite(n_sell)
@@ -471,9 +476,7 @@ def seed_tabulated_nk(db: RamanDatabase, manifest_path: Path = MANIFEST_PATH) ->
             print(f"  Skip {entry.get('source', '?')}: {'; '.join(errors)}")
             skipped += 1
             continue
-        for wl, n, k in zip(
-            entry["wavelengths"], entry["n"], entry["k"]
-        ):
+        for wl, n, k in zip(entry["wavelengths"], entry["n"], entry["k"]):
             db.add_nk_data(
                 material=entry["material"],
                 wl_um=wl,
@@ -487,12 +490,16 @@ def seed_tabulated_nk(db: RamanDatabase, manifest_path: Path = MANIFEST_PATH) ->
     for entry in entries:
         if validate_nk_dataset(entry) == []:
             total_rows += len(entry["wavelengths"])
-    print(f"Done. {seeded} datasets, {total_rows} tabulated rows seeded; {skipped} skipped.")
+    print(
+        f"Done. {seeded} datasets, {total_rows} tabulated rows seeded; {skipped} skipped."
+    )
 
 
 def main():
     parser = argparse.ArgumentParser(description="Seed materials.db")
-    parser.add_argument("--nk", action="store_true", help="Also seed nk_data + sellmeier tables")
+    parser.add_argument(
+        "--nk", action="store_true", help="Also seed nk_data + sellmeier tables"
+    )
     args = parser.parse_args()
 
     db = RamanDatabase(db_path=DB_PATH)

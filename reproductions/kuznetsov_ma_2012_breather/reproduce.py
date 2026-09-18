@@ -116,16 +116,22 @@ class KMParameters:
     def psi_min(self, tau: NDArray | float) -> NDArray | complex:
         """Minimum-intensity profile, paper Eq. (4)."""
         a, D = self.a, self.Delta
-        return 1.0 + 2 * (2 * a - 1) / (np.sqrt(2 * a) * np.cosh(np.asarray(tau) / D) + 1)
+        return 1.0 + 2 * (2 * a - 1) / (
+            np.sqrt(2 * a) * np.cosh(np.asarray(tau) / D) + 1
+        )
 
     def psi_max(self, tau: NDArray | float) -> NDArray | complex:
         """Maximum-compression profile, paper Eq. (5)."""
         a, D = self.a, self.Delta
-        return 1.0 - 2 * (2 * a - 1) / (np.sqrt(2 * a) * np.cosh(np.asarray(tau) / D) - 1)
+        return 1.0 - 2 * (2 * a - 1) / (
+            np.sqrt(2 * a) * np.cosh(np.asarray(tau) / D) - 1
+        )
 
     def center_power_W(self, z: float) -> float:
         """Analytic intensity at T = 0, ``P0 |psi(xi, 0)|^2``."""
-        return float(self.P0 * abs(self._km_psi((z - self.period_m / 2) / self.LNL_m, 0.0)) ** 2)
+        return float(
+            self.P0 * abs(self._km_psi((z - self.period_m / 2) / self.LNL_m, 0.0)) ** 2
+        )
 
 
 def derive(params: dict) -> KMParameters:
@@ -165,7 +171,9 @@ def derive(params: dict) -> KMParameters:
 
 
 def build_grid(params: dict) -> TemporalGrid:
-    return TemporalGrid(N=int(params["grid_N"]), Tmax=Time(float(params["grid_Tmax_ps"]) * 1e-12, "s"))
+    return TemporalGrid(
+        N=int(params["grid_N"]), Tmax=Time(float(params["grid_Tmax_ps"]) * 1e-12, "s")
+    )
 
 
 def build_pulse(params: dict, km: KMParameters, grid: TemporalGrid) -> Wave:
@@ -183,7 +191,9 @@ def build_pulse(params: dict, km: KMParameters, grid: TemporalGrid) -> Wave:
     return Wave(
         grid=grid,
         envelope=env,
-        central_wavelength=Wavelength(float(params["central_wavelength_nm"]) * 1e-9, "m"),
+        central_wavelength=Wavelength(
+            float(params["central_wavelength_nm"]) * 1e-9, "m"
+        ),
     )
 
 
@@ -241,7 +251,9 @@ def validate(
     km = derive(params)
     grid = build_grid(params)
 
-    z, evolution = propagate(params, km, grid, num_steps=num_steps, lossy=False, nsaves=41)
+    z, evolution = propagate(
+        params, km, grid, num_steps=num_steps, lossy=False, nsaves=41
+    )
 
     mid = grid.N // 2
     center_num = np.array([abs(w.envelope_field[mid]) ** 2 for w in evolution])
@@ -253,7 +265,9 @@ def validate(
         A = w.envelope_field
         Aa = km.psi(zi, grid.t) * np.sqrt(km.P0)
         inten, inten_an = np.abs(A) ** 2, np.abs(Aa) ** 2
-        intensity_rel_l2.append(float(np.linalg.norm(inten - inten_an) / np.linalg.norm(inten_an)))
+        intensity_rel_l2.append(
+            float(np.linalg.norm(inten - inten_an) / np.linalg.norm(inten_an))
+        )
     intensity_rel_l2 = np.array(intensity_rel_l2)
 
     # Spectral comparison at maximum compression (DC background removed).
@@ -268,7 +282,9 @@ def validate(
     peak_an = float(center_an[i_max])
 
     # Lossy run with the paper's SMF-28 loss (qualitative experiment comparison).
-    z_lossy, ev_lossy = propagate(params, km, grid, num_steps=num_steps, lossy=True, nsaves=41)
+    z_lossy, ev_lossy = propagate(
+        params, km, grid, num_steps=num_steps, lossy=True, nsaves=41
+    )
     lossy_center = np.array([abs(w.envelope_field[mid]) ** 2 for w in ev_lossy])
     i_lossy_max = int(np.argmin(np.abs(z_lossy - km.period_m / 2)))
     lossy_peak = float(lossy_center[i_lossy_max])
@@ -291,18 +307,30 @@ def validate(
     }
 
     if make_plot:
-        _plot(km, grid, z, evolution, center_num, center_an, z_lossy, lossy_center, result)
+        _plot(
+            km, grid, z, evolution, center_num, center_an, z_lossy, lossy_center, result
+        )
 
     tol = params["tolerances"]
-    assert abs(result["T0_ps"] - params["derived_reference"]["T0_ps"]) < tol["T0_abs_ps"]
-    assert abs(result["period_km"] - params["derived_reference"]["period_km"]) / params[
-        "derived_reference"
-    ]["period_km"] < tol["period_rel"]
+    assert (
+        abs(result["T0_ps"] - params["derived_reference"]["T0_ps"]) < tol["T0_abs_ps"]
+    )
+    assert (
+        abs(result["period_km"] - params["derived_reference"]["period_km"])
+        / params["derived_reference"]["period_km"]
+        < tol["period_rel"]
+    )
     assert result["peak_rel_err"] < tol["peak_rel"], result["peak_rel_err"]
-    assert result["center_max_abs_err_W"] < tol["center_abs_W"], result["center_max_abs_err_W"]
-    assert result["intensity_rel_l2_max"] < tol["intensity_rel_l2"], result["intensity_rel_l2_max"]
+    assert result["center_max_abs_err_W"] < tol["center_abs_W"], result[
+        "center_max_abs_err_W"
+    ]
+    assert result["intensity_rel_l2_max"] < tol["intensity_rel_l2"], result[
+        "intensity_rel_l2_max"
+    ]
     assert result["spectrum_rel_l2"] < tol["spectrum_rel_l2"], result["spectrum_rel_l2"]
-    assert result["lossy_peak_W"] < result["peak_analytic_W"], "loss must reduce the compression peak"
+    assert result["lossy_peak_W"] < result["peak_analytic_W"], (
+        "loss must reduce the compression peak"
+    )
 
     print("Kuznetsov-Ma validation passed:")
     print(
@@ -329,7 +357,9 @@ def validate(
 # ---------------------------------------------------------------------------
 
 
-def _plot(km, grid, z, evolution, center_num, center_an, z_lossy, lossy_center, result) -> None:
+def _plot(
+    km, grid, z, evolution, center_num, center_an, z_lossy, lossy_center, result
+) -> None:
     import matplotlib
 
     matplotlib.use("Agg")
@@ -341,7 +371,14 @@ def _plot(km, grid, z, evolution, center_num, center_an, z_lossy, lossy_center, 
     t_ps = grid.t * 1e12
     profiles = np.array([np.abs(w.envelope_field) ** 2 for w in evolution])
     extent = [t_ps[0], t_ps[-1], z[-1] * 1e-3, 0.0]
-    im = axes[0].imshow(profiles, aspect="auto", extent=extent, cmap="magma", vmin=0, vmax=profiles.max())
+    im = axes[0].imshow(
+        profiles,
+        aspect="auto",
+        extent=extent,
+        cmap="magma",
+        vmin=0,
+        vmax=profiles.max(),
+    )
     axes[0].set_xlim(-15, 15)
     axes[0].set_xlabel("time $T$ (ps)")
     axes[0].set_ylabel("distance $z$ (km)")
@@ -351,7 +388,13 @@ def _plot(km, grid, z, evolution, center_num, center_an, z_lossy, lossy_center, 
     # (b) Centre power vs distance: numerical vs analytic.
     axes[1].plot(z * 1e-3, center_an, "k-", lw=2, label="analytic KM, Eq. (3)")
     axes[1].plot(z * 1e-3, center_num, "r--", lw=1.5, label="GNLSE (lossless)")
-    axes[1].plot(z_lossy * 1e-3, lossy_center, "b:", lw=1.5, label="GNLSE, SMF-28 + 0.2 dB/km loss")
+    axes[1].plot(
+        z_lossy * 1e-3,
+        lossy_center,
+        "b:",
+        lw=1.5,
+        label="GNLSE, SMF-28 + 0.2 dB/km loss",
+    )
     axes[1].set_xlabel("distance $z$ (km)")
     axes[1].set_ylabel("centre power $|A(T{=}0)|^2$ (W)")
     axes[1].set_title("(b) Breathing of the central lobe")
@@ -360,7 +403,9 @@ def _plot(km, grid, z, evolution, center_num, center_an, z_lossy, lossy_center, 
     # (c) Profiles at minimum / maximum compression.
     z_half = km.period_m / 2
     i_half = int(np.argmin(np.abs(z - z_half)))
-    axes[2].plot(t_ps, np.abs(evolution[0].envelope_field) ** 2, "b-", label="GNLSE, $z=0$ (min)")
+    axes[2].plot(
+        t_ps, np.abs(evolution[0].envelope_field) ** 2, "b-", label="GNLSE, $z=0$ (min)"
+    )
     axes[2].plot(
         t_ps,
         np.abs(km.psi(0.0, grid.t) * np.sqrt(km.P0)) ** 2,
@@ -418,7 +463,9 @@ def make_contact_sheet() -> None:
         ax.axis("off")
     for ax in axes[len(pages) :]:
         ax.axis("off")
-    fig.suptitle("Kibler et al., Sci. Rep. 2, 463 (2012) — Kuznetsov-Ma soliton", fontsize=11)
+    fig.suptitle(
+        "Kibler et al., Sci. Rep. 2, 463 (2012) — Kuznetsov-Ma soliton", fontsize=11
+    )
     fig.tight_layout()
     out = HERE / "paper_pages" / "contact_sheet.png"
     fig.savefig(out, dpi=100)

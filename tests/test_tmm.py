@@ -72,9 +72,7 @@ def test_fresnel_reflection_normal_incidence(simple_pattern: Pattern):
     r_computed = tmm._reflection_coefficient(wl)
 
     r_expected = -0.6
-    np.testing.assert_allclose(
-        np.real(r_computed), r_expected, rtol=1e-10, atol=1e-10
-    )
+    np.testing.assert_allclose(np.real(r_computed), r_expected, rtol=1e-10, atol=1e-10)
 
 
 def test_transfer_matrix_consistency(simple_pattern: Pattern):

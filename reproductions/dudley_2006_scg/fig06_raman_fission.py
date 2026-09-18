@@ -79,7 +79,9 @@ def validate(fast: bool = False, make_plot: bool = True) -> dict:
 
     # 1. Fission length estimate (paper Sec. V.B.1).
     assert abs(scales.N - 3.0) < 0.15, f"N={scales.N:.3f}"
-    assert abs(scales.L_fiss - 0.0223) / 0.0223 < 0.02, f"L_fiss={scales.L_fiss*100:.3f} cm"
+    assert abs(scales.L_fiss - 0.0223) / 0.0223 < 0.02, (
+        f"L_fiss={scales.L_fiss * 100:.3f} cm"
+    )
 
     # 2. Ejected fundamental solitons at the output.
     intensity = evo.intensity[-1]
@@ -91,10 +93,12 @@ def validate(fast: bool = False, make_plot: bool = True) -> dict:
     fwhm_meas = common.measure_peak_fwhm(evo.t, intensity, strongest) * 1e15
     p_err = abs(p_meas - kh1["P_W"]) / kh1["P_W"]
     fwhm_err = abs(fwhm_meas - kh1["fwhm_fs"]) / kh1["fwhm_fs"]
-    assert p_err < 0.15, f"ejected P={p_meas:.0f} W vs KH {kh1['P_W']:.0f} W ({p_err*100:.1f}%)"
+    assert p_err < 0.15, (
+        f"ejected P={p_meas:.0f} W vs KH {kh1['P_W']:.0f} W ({p_err * 100:.1f}%)"
+    )
     assert fwhm_err < 0.20, (
         f"ejected FWHM={fwhm_meas:.2f} fs vs KH {kh1['fwhm_fs']:.2f} fs "
-        f"({fwhm_err*100:.1f}%)"
+        f"({fwhm_err * 100:.1f}%)"
     )
 
     # 3. Raman self-frequency shift: mean wavelength grows with z.

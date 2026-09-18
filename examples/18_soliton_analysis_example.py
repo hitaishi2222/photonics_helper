@@ -10,6 +10,7 @@ Demonstrates:
 
 import numpy as np
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
@@ -51,7 +52,8 @@ def main():
     geasse_spec = RamanSpec.from_database("GeAsSe")
     raman_grid = TemporalGrid(N=2**14, Tmax=Time(50e-12, "s"))
     raman_response = RamanResponse(
-        spec=geasse_spec, grid=raman_grid,
+        spec=geasse_spec,
+        grid=raman_grid,
         response_type="time_domain",
     )
     fiber.raman_response = raman_response
@@ -137,8 +139,15 @@ def main():
     # Raman shift
     ax = axes[1, 0]
     rate = analyzer.raman_shift_rate()
-    ax.text(0.5, 0.5, f"RSFS Rate: {rate:.4f} nm/mm",
-            ha="center", va="center", transform=ax.transAxes, fontsize=14)
+    ax.text(
+        0.5,
+        0.5,
+        f"RSFS Rate: {rate:.4f} nm/mm",
+        ha="center",
+        va="center",
+        transform=ax.transAxes,
+        fontsize=14,
+    )
     ax.set_xlabel("Distance (mm)")
     ax.set_ylabel("Peak wavelength (nm)")
     ax.set_title("Raman Self-Frequency Shift")

@@ -89,8 +89,8 @@ def main():
     gamma = n2 * omega0 / (299792458.0 * A_eff.as_m2)
     beta2_ps2_m = -2.0 * 1e-3  # -2 ps²/km = -0.002 ps²/m (engine units)
 
-    print(f"γ = {gamma*1000:.3f} 1/(W·km)")
-    print(f"β₂ = {beta2_ps2_m*1e3:.1f} ps²/km ({beta2_ps2_m} ps²/m)")
+    print(f"γ = {gamma * 1000:.3f} 1/(W·km)")
+    print(f"β₂ = {beta2_ps2_m * 1e3:.1f} ps²/km ({beta2_ps2_m} ps²/m)")
 
     # ── Case 1: Fundamental soliton (N=1) ──────────────────────────────────
 
@@ -156,7 +156,7 @@ def main():
             np.abs(wave.envelope_field),
             color=colors[idx],
             linewidth=1.5,
-            label=f"z={z_steps_N1[di]*1e3:.2f} mm",
+            label=f"z={z_steps_N1[di] * 1e3:.2f} mm",
         )
     axes[0].set_xlabel("Time (ps)")
     axes[0].set_ylabel("Field amplitude")
@@ -209,7 +209,7 @@ def main():
             np.abs(wave.envelope_field),
             color=colors[idx],
             linewidth=1.5,
-            label=f"z={z_steps_N3[di]*1e3:.2f} mm",
+            label=f"z={z_steps_N3[di] * 1e3:.2f} mm",
         )
     axes[0].set_xlabel("Time (ps)")
     axes[0].set_ylabel("Field amplitude")
@@ -252,8 +252,8 @@ def main():
     # ── Summary ─────────────────────────────────────────────────────────────
 
     print("\n— Soliton parameters —")
-    print(f"Dispersion length L_D = T₀²/|β₂| = {L_D.as_m*1e3:.1f} mm")
-    print(f"Nonlinear length L_NL = 1/(γ·P₀) = {1/(gamma*P0_N1)*1e3:.1f} mm")
+    print(f"Dispersion length L_D = T₀²/|β₂| = {L_D.as_m * 1e3:.1f} mm")
+    print(f"Nonlinear length L_NL = 1/(γ·P₀) = {1 / (gamma * P0_N1) * 1e3:.1f} mm")
     N1 = compute_soliton_order(beta2_si, gamma, T0.as_s, P0_N1)
     N3 = compute_soliton_order(beta2_si, gamma, T0.as_s, P0_N3)
     print(f"Soliton order N=1: confirmed ({N1:.2f})")
