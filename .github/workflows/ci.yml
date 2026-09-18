@@ -33,9 +33,10 @@ jobs:
       - name: Install package + tooling
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ".[dev,plotting,webapp,examples]"
           if [ "${{ matrix.pyfftw }}" = "with-pyfftw" ]; then
-            python -m pip install "pyfftw>=0.15.1"
+            python -m pip install -e ".[dev,plotting,webapp,examples,fftw]"
+          else
+            python -m pip install -e ".[dev,plotting,webapp,examples]"
           fi
 
       - name: Lint (ruff)
@@ -46,3 +47,8 @@ jobs:
 
       - name: Test (pytest)
         run: pytest -q
+
+      - name: Build package
+        run: |
+          python -m pip install build
+          python -m build
