@@ -41,3 +41,6 @@ reproductions/**/*.pdf
 **/paper_pages/
 
 nk_datasets/yaml/
+
+# Generated mkdocs site (built/deployed by .github/workflows/docs.yml)
+site/

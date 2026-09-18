@@ -1,0 +1,18 @@
+{
+  "reference": "R. W. Boyd, Nonlinear Optics (3rd ed.), Ch. 2 (SHG coupled-wave equations); M. M. Fejer, G. A. Magel, D. H. Jundt & R. L. Byer, IEEE J. Quantum Electron. 28, 2631 (1992) (quasi-phase-matching)",
+  "doi": "10.1109/3.159513",
+  "description": "Textbook SHG: conversion efficiency eta = tanh^2(kappa L) with kappa = sigma sqrt(P0), plus first-order QPM recovery of a deliberately mismatched interaction.",
+  "wavelength_nm": 1550.0,
+  "d_eff_pm_per_V": 10.0,
+  "n": 2.0,
+  "A_eff_um2": 1.0,
+  "P0_mW": 100.0,
+  "kappaL_values": [0.25, 0.5, 1.0, 1.5, 2.0],
+  "n_steps": 4000,
+  "efficiency_tolerance": 0.01,
+  "qpm": {
+    "period_um": 100.0,
+    "kappaL": 1.0,
+    "off_efficiency_max": 0.01
+  }
+}

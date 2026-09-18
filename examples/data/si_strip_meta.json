@@ -1,0 +1,47 @@
+{
+  "geometry": {
+    "type": "silicon strip on oxide",
+    "core_width_um": 0.5,
+    "core_height_um": 0.22,
+    "n_Si": 3.4777,
+    "n_SiO2": 1.444
+  },
+  "wavelengths_um": [
+    1.5,
+    1.505,
+    1.51,
+    1.5150000000000001,
+    1.52,
+    1.525,
+    1.53,
+    1.5350000000000001,
+    1.54,
+    1.545,
+    1.55,
+    1.5550000000000002,
+    1.56,
+    1.565,
+    1.57,
+    1.5750000000000002,
+    1.58,
+    1.585,
+    1.59,
+    1.5950000000000002,
+    1.6
+  ],
+  "solvers": {
+    "femwell": {
+      "mode": 0,
+      "ng_source": "numerical d n_eff/d\u03bb"
+    },
+    "tidy3d": {
+      "mode": 0,
+      "ng_source": "group_index_step"
+    }
+  },
+  "n_eff_1550nm": {
+    "femwell": 2.439656227484011,
+    "tidy3d": 2.423449280416652
+  },
+  "max_relative_deviation": 0.0075569667889208636
+}
