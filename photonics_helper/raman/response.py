@@ -391,7 +391,7 @@ class RamanFrequencyResponse:
     @property
     def H_phase(self) -> NDArray:
         """Phase ∠H(Ω)."""
-        return np.angle(self.H)
+        return np.asarray(np.angle(self.H))
 
     @property
     def resonance_frequency_THz(self) -> float:

@@ -339,4 +339,5 @@ def coherence_g12(runs: NDArray) -> NDArray:
     mean_auto = np.mean(np.abs(arr) ** 2, axis=0)
     with np.errstate(divide="ignore", invalid="ignore"):
         g12 = np.where(mean_auto > 0.0, np.abs(mean_cross) / mean_auto, 0.0)
-    return np.clip(np.asarray(g12, dtype=float), 0.0, None)
+    clipped = np.clip(np.asarray(g12, dtype=float), 0.0, None)
+    return np.asarray(clipped, dtype=float)

@@ -240,6 +240,11 @@ class Envelope:
             case _:
                 raise ValueError(f"Unknown shape: {self.shape}")
 
+        # Normalise integer/bool dtypes to float64, keep complex dtypes intact
+        amp = np.asarray(amp)
+        if not np.issubdtype(amp.dtype, np.complexfloating):
+            amp = np.asarray(amp, dtype=np.result_type(amp.dtype, np.float64))
+
         # Apply phase
         if self.shape == "parabolic":
             # Parabolic chirp: phase = chirp * (t/T0)^2, active only where amp != 0

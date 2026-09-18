@@ -1049,7 +1049,7 @@ class MaterialComparison:
         integral = np.trapezoid(raw_h, t[mask])
         if integral > 0:
             raw_h /= integral
-        delayed[mask] = spec.fR * raw_h
+        delayed[mask] = float(spec.fR or 0.0) * raw_h
         return delayed
 
     def _plot_response_matplotlib(
