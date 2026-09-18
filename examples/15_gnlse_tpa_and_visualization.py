@@ -13,21 +13,21 @@ provided by the GNLSE module:
   plots, and intensity-metrics plots for analyzing propagation results.
 """
 
-import numpy as np
 import matplotlib
+import numpy as np
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+from photonics_helper.base import Area, Length, Time, Wavelength
 from photonics_helper.gnlse import (
     FiberProfile,
     GNLSESolver,
-    plot_waterfall,
-    plot_spectrum_vs_distance,
     plot_intensity_metrics,
+    plot_spectrum_vs_distance,
+    plot_waterfall,
 )
-from photonics_helper.pulse import Envelope, Wave, TemporalGrid
-from photonics_helper.base import Wavelength, Time, Length, Area
+from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
 
 def make_pulse(wavelength_nm=1550, T0_fs=200, peak_power_W=1e6):

@@ -9,7 +9,7 @@ import sys
 import textwrap
 
 import photonics_helper
-import photonics_helper.raman as raman
+from photonics_helper import raman
 
 
 def test_all_names_resolve():
@@ -23,15 +23,15 @@ def test_legacy_import_paths():
     """The documented import paths still resolve."""
     from photonics_helper.raman import (  # noqa: F401
         COMMON_COMPARISONS,
+        RAMAN_MATERIALS,
+        THORLABS_SUBSTRATE_MATERIALS,
         MaterialComparison,
         PumpWavelengthExplorer,
-        RAMAN_MATERIALS,
         RamanDatabase,
         RamanFrequencyResponse,
         RamanPulseInteraction,
         RamanResponse,
         RamanSpec,
-        THORLABS_SUBSTRATE_MATERIALS,
         app,
     )
 

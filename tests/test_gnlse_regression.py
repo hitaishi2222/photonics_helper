@@ -10,9 +10,9 @@ Tests for:
 import numpy as np
 import pytest
 
+from photonics_helper.base import Area, Length, Time, Wavelength
 from photonics_helper.gnlse import FiberProfile, GNLSESolver, SplitStepEngine
-from photonics_helper.pulse import Wave, Envelope, TemporalGrid
-from photonics_helper.base import Wavelength, Time, Length, Area
+from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
 
 @pytest.fixture
@@ -203,8 +203,8 @@ class TestRamanFullResponse:
 
     def test_raman_produces_different_spectrum(self):
         """Raman scattering modifies the field compared to Kerr-only."""
-        from photonics_helper.raman import RamanResponse, RamanSpec
         from photonics_helper.gnlse import SplitStepEngine
+        from photonics_helper.raman import RamanResponse, RamanSpec
 
         grid = TemporalGrid(N=512, Tmax=Time(40e-12, "s"))
         env = Envelope(

@@ -1020,7 +1020,7 @@ class MaterialComparison:
         return self._plot_response_matplotlib(grid, figsize, t_range_ps)
 
     @staticmethod
-    def _compute_h_R(spec: "RamanSpec", t: NDArray) -> NDArray:
+    def _compute_h_R(spec: RamanSpec, t: NDArray) -> NDArray:
         """Compute delayed Raman response fR·h_R(t) for a single material.
 
         Standard Agrawal exponential-damped form:

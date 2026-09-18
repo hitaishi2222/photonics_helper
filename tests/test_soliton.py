@@ -1,22 +1,22 @@
 """Tests for SolitonAnalyzer class."""
 
+import matplotlib
 import numpy as np
 import pytest
-import matplotlib
 
 matplotlib.use("Agg")  # Non-interactive backend for tests
 import matplotlib.pyplot as plt
 
+from photonics_helper.base import C_MS, PI, Area, Length, Time, Wavelength
+from photonics_helper.gnlse import FiberProfile
+from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 from photonics_helper.soliton import (
     SolitonAnalyzer,
-    plot_soliton_trajectories,
+    plot_dispersion_wave,
     plot_fission_dynamics,
     plot_raman_shift,
-    plot_dispersion_wave,
+    plot_soliton_trajectories,
 )
-from photonics_helper.pulse import Wave, Envelope, TemporalGrid
-from photonics_helper.gnlse import FiberProfile
-from photonics_helper.base import Wavelength, Time, Area, Length, C_MS, PI
 
 
 def _make_analyzer_manual(
@@ -386,6 +386,7 @@ def test_count_solitons_matches_trajectory_peak_set():
 def test_raman_shift_rate_excludes_post_fission_points():
     """Post-fission spikes must not bias the fitted RSFS slope."""
     import pytest
+
     from photonics_helper.base import Length
 
     analyzer = _make_analyzer_manual(
@@ -425,6 +426,7 @@ def test_raman_shift_rate_falls_back_when_fission_length_missing():
 def test_plot_raman_shift_rate_matches_api():
     """The annotated/drawn slope equals SolitonAnalyzer.raman_shift_rate()."""
     import pytest
+
     from photonics_helper.soliton import SolitonAnalyzer
 
     solver = _make_solver()

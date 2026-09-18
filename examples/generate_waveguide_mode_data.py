@@ -24,7 +24,6 @@ Run with: python examples/generate_waveguide_mode_data.py
 """
 
 # The sys.path bootstrap below intentionally precedes the library imports.
-# ruff: noqa: E402
 
 import json
 import sys
@@ -75,10 +74,9 @@ def _write_export(stem: str, wl_um: np.ndarray, neff: np.ndarray, ng: np.ndarray
 
 def run_femwell() -> tuple[np.ndarray, np.ndarray]:
     """Solve the strip with femwell (scikit-fem + Gmsh), mode 0 per λ."""
-    from skfem import Basis, ElementTriP0, Mesh
-
     from femwell.maxwell.waveguide import compute_modes
     from femwell.waveguide import mesh_waveguide
+    from skfem import Basis, ElementTriP0, Mesh
 
     warnings.filterwarnings("ignore", category=np.exceptions.ComplexWarning)
 

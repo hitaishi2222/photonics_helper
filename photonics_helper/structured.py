@@ -47,12 +47,12 @@ ComplexArray = NDArray[np.complex128]
 __all__ = [
     "LaguerreGaussianMode",
     "StructuredField",
-    "overlap",
-    "rayleigh_range",
     "beam_waist",
-    "radius_of_curvature",
     "gouy_phase",
+    "overlap",
     "plot_transverse_profile",
+    "radius_of_curvature",
+    "rayleigh_range",
 ]
 
 
@@ -263,7 +263,7 @@ class LaguerreGaussianMode:
     """
 
     p: int
-    l: int  # noqa: E741 - standard azimuthal index notation
+    l: int
     w0: float
     wavelength: float | None = None
 
@@ -331,7 +331,7 @@ class LaguerreGaussianMode:
     def _evaluate(
         self, x_grid: FloatArray, y_grid: FloatArray, z: float
     ) -> ComplexArray:
-        p, l = int(self.p), int(self.l)  # noqa: E741 - azimuthal index
+        p, l = int(self.p), int(self.l)
         w = self.waist(z)
         r2 = x_grid * x_grid + y_grid * y_grid
         rho2 = 2.0 * r2 / (w * w)

@@ -18,15 +18,15 @@ The convolution naturally produces a polarization that:
 - Oscillates and decays after the pulse exits (Raman scattering)
 """
 
-import numpy as np
 import matplotlib
+import numpy as np
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from photonics_helper.raman import RamanSpec, RamanResponse, RamanPulseInteraction
-from photonics_helper.pulse import Wave, Envelope, TemporalGrid
-from photonics_helper.base import Wavelength, Time
+from photonics_helper.base import Time, Wavelength
+from photonics_helper.pulse import Envelope, TemporalGrid, Wave
+from photonics_helper.raman import RamanPulseInteraction, RamanResponse, RamanSpec
 
 
 def main():

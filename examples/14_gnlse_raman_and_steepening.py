@@ -17,16 +17,16 @@ powers or for ultrashort pulses:
 This example compares propagation with and without these effects.
 """
 
-import numpy as np
 import matplotlib
+import numpy as np
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+from photonics_helper.base import Area, Length, Time, Wavelength
 from photonics_helper.gnlse import FiberProfile, GNLSESolver
-from photonics_helper.pulse import Envelope, Wave, TemporalGrid
+from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 from photonics_helper.raman import RamanResponse, RamanSpec
-from photonics_helper.base import Wavelength, Time, Length, Area
 
 
 def make_pulse(wavelength_nm=1064, T0_fs=50):

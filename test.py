@@ -7,7 +7,7 @@
 
 import matplotlib.pyplot as plt
 
-from photonics_helper.base import Wavelength, Time
+from photonics_helper.base import Time, Wavelength
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
 

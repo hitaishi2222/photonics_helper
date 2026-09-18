@@ -21,13 +21,12 @@ wrong pulse.
 import matplotlib
 
 matplotlib.use("Agg")
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 
 from photonics_helper.base import Area, Length, Time, Wavelength
 from photonics_helper.gnlse import FiberProfile, GNLSESolver
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
-
 
 # ── 1. The same physical fiber, expressed two ways ───────────────────────
 # beta2 = -2.0 ps^2/m  = -2.0e-24 s^2/m

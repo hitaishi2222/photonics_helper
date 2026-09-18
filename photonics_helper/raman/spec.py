@@ -94,7 +94,7 @@ class RamanSpec:
         return dict(values)
 
     @model_validator(mode="after")
-    def _validate(self) -> "RamanSpec":
+    def _validate(self) -> RamanSpec:
         """Validate that essential Raman parameters are present.
 
         Note: raman_shift_cm and raman_linewidth_cm are optional in the
@@ -487,7 +487,7 @@ class RamanSpec:
     @classmethod
     def from_database(
         cls, name: str, fallback: dict | None = None, db_path: Path | None = None
-    ) -> "RamanSpec":
+    ) -> RamanSpec:
         """Create RamanSpec from SQLite database or fallback.
 
         Queries materials.db first, then falls back to the hardcoded

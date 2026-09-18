@@ -45,12 +45,12 @@ if TYPE_CHECKING:
     from .pulse import TemporalGrid, Wave
 
 __all__ = [
-    "complex_gaussian_noise",
+    "add_ase_noise",
     "add_noise",
     "ase_noise_field",
-    "add_ase_noise",
-    "raman_noise_field",
     "coherence_g12",
+    "complex_gaussian_noise",
+    "raman_noise_field",
 ]
 
 
@@ -63,7 +63,7 @@ def _make_rng(rng: np.random.Generator | None, seed: int | None) -> np.random.Ge
 
 
 def complex_gaussian_noise(
-    grid: "TemporalGrid",
+    grid: TemporalGrid,
     rms: float,
     *,
     rng: np.random.Generator | None = None,
@@ -99,13 +99,13 @@ def complex_gaussian_noise(
 
 
 def add_noise(
-    wave: "Wave",
+    wave: Wave,
     rms_relative: float,
     *,
     rng: np.random.Generator | None = None,
     seed: int | None = None,
     remove_mean: bool = True,
-) -> "Wave":
+) -> Wave:
     """Return a copy of ``wave`` with additive complex-Gaussian noise.
 
     The noise RMS is ``rms_relative * sqrt(peak_power)``, i.e. ``rms_relative``
@@ -140,7 +140,7 @@ def add_noise(
 
 
 def ase_noise_field(
-    grid: "TemporalGrid",
+    grid: TemporalGrid,
     reference_power: float,
     level_dB: float,
     *,
@@ -179,13 +179,13 @@ def ase_noise_field(
 
 
 def add_ase_noise(
-    wave: "Wave",
+    wave: Wave,
     level_dB: float,
     *,
     reference_power: float | None = None,
     rng: np.random.Generator | None = None,
     seed: int | None = None,
-) -> "Wave":
+) -> Wave:
     """Return a copy of ``wave`` with an ASE background added.
 
     Parameters
@@ -221,7 +221,7 @@ def add_ase_noise(
 
 
 def raman_noise_field(
-    grid: "TemporalGrid",
+    grid: TemporalGrid,
     h_R_fft: NDArray,
     seed: int | None = None,
     *,
@@ -268,7 +268,8 @@ def raman_noise_field(
     -------
     ndarray — complex time-domain noise field, shape ``(grid.N,)``.
     """
-    from scipy.constants import hbar, k as k_B
+    from scipy.constants import hbar
+    from scipy.constants import k as k_B
 
     generator = _make_rng(rng, seed)
     h_R = np.asarray(h_R_fft, dtype=complex)

@@ -109,7 +109,7 @@ def validate(fast: bool = False, make_plot: bool = True) -> dict:
 
     result = {
         "L_fiss_cm": scales.L_fiss * 100,
-        "n_ejected": int(len(peaks)),
+        "n_ejected": len(peaks),
         "ejected_power_W": p_meas,
         "ejected_power_kh_W": kh1["P_W"],
         "ejected_fwhm_fs": fwhm_meas,

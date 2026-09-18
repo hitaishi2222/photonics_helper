@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import warnings
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -24,8 +24,6 @@ try:
 except ImportError:
     HAS_PLOTLY = False
 
-if TYPE_CHECKING:
-    pass
 
 from .spec import RamanSpec
 
@@ -64,7 +62,7 @@ class RamanResponse:
     grid: TemporalGrid | None = None
 
     @model_validator(mode="after")
-    def _derive_tau(self) -> "RamanResponse":
+    def _derive_tau(self) -> RamanResponse:
         """Auto-derive τ1, τ2 from Raman shift + linewidth if not provided."""
         if self.fR is None:
             self.fR = self.spec.fR or 0.0
@@ -360,7 +358,7 @@ class RamanFrequencyResponse:
     grid: TemporalGrid | None = None
 
     @model_validator(mode="after")
-    def _ensure_grid(self) -> "RamanFrequencyResponse":
+    def _ensure_grid(self) -> RamanFrequencyResponse:
         if self.grid is None:
             self.grid = self.response.grid
         return self
@@ -575,7 +573,7 @@ class RamanFrequencyResponse:
         )
         return fig
 
-    def _plot_all_matplotlib(self, figsize: tuple[float, float] | None) -> "plt.Figure":
+    def _plot_all_matplotlib(self, figsize: tuple[float, float] | None) -> plt.Figure:
         """4-panel matplotlib plot: Re, Im, |H|, phase."""
         import matplotlib.pyplot as plt
 
@@ -616,7 +614,7 @@ class RamanFrequencyResponse:
         plt.tight_layout()
         return fig
 
-    def _plot_all_plotly(self, figsize: tuple[float, float] | None) -> "go.Figure":
+    def _plot_all_plotly(self, figsize: tuple[float, float] | None) -> go.Figure:
         """4-panel plotly plot: Re, Im, |H|, phase."""
         import plotly.graph_objects as go
         from plotly.subplots import make_subplots
@@ -693,7 +691,7 @@ class RamanPulseInteraction:
     grid: TemporalGrid | None = None
 
     @model_validator(mode="after")
-    def _ensure_defaults(self) -> "RamanPulseInteraction":
+    def _ensure_defaults(self) -> RamanPulseInteraction:
         if self.grid is None:
             self.grid = self.pulse.grid
         if self.n2 is None:
@@ -980,8 +978,8 @@ class RamanPulseInteraction:
         figsize: tuple[float, float] | None,
     ):
         """Matplotlib animation."""
-        import matplotlib.animation as animation
         import matplotlib.pyplot as plt
+        from matplotlib import animation
 
         t = self.grid.t  # type: ignore
         t_ps = t * 1e12

@@ -18,14 +18,14 @@ This example:
   4. Compares with a constant-n material (no dispersion → n_g = n)
 """
 
-import numpy as np
 import matplotlib
+import numpy as np
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from photonics_helper.materials import RefractiveIndex
 from photonics_helper.base import WavelengthArray
+from photonics_helper.materials import RefractiveIndex
 
 
 def main():

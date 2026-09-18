@@ -17,11 +17,10 @@ import pytest
 from photonics_helper.base import (
     C_MS,
     PI,
+    AngularFrequencyArray,
     Wavelength,
     WavelengthArray,
-    AngularFrequencyArray,
 )
-
 
 # ============================================================================
 # Helpers
@@ -120,8 +119,8 @@ class TestDispersionAdaptor:
 
     def test_adaptor_is_callable(self, omega0):
         """DispersionAdaptor should be callable."""
-        from photonics_helper.phase_matching import DispersionAdaptor
         from photonics_helper.fiber import Dispersion
+        from photonics_helper.phase_matching import DispersionAdaptor
 
         wl = np.linspace(1500, 1600, 51)
         D_vals = np.full(51, -100.0)  # constant D in ps/(nm·km)
@@ -387,8 +386,8 @@ class TestDispersiveWave:
 
     def test_dw_matches_beta2_beta3_limit(self, omega0, beta2, beta3):
         """DW root matches Δω = −2β₂/β₃ in β₂/β₃ limiting case."""
-        from photonics_helper.phase_matching import dispersive_wave_roots
         from photonics_helper.base import Wavelength
+        from photonics_helper.phase_matching import dispersive_wave_roots
 
         beta_fn = make_beta23(beta2, beta3, omega0)
         result = dispersive_wave_roots(
@@ -409,8 +408,8 @@ class TestDispersiveWave:
 
     def test_dw_no_root_when_no_crossing(self, omega0):
         """DW finder returns empty when β is purely quadratic (no root)."""
-        from photonics_helper.phase_matching import dispersive_wave_roots
         from photonics_helper.base import Wavelength
+        from photonics_helper.phase_matching import dispersive_wave_roots
 
         # Pure β₂ (no β₃) → β(ω) is quadratic, the line β(ωₛ)+β₁(ω−ωₛ) is tangent
         # so there may be no crossing for q_sol=0
@@ -429,8 +428,8 @@ class TestDispersiveWave:
 
     def test_dw_q_sol_parameter(self, omega0, beta2, beta3):
         """q_sol parameter shifts the DW root."""
-        from photonics_helper.phase_matching import dispersive_wave_roots
         from photonics_helper.base import Wavelength
+        from photonics_helper.phase_matching import dispersive_wave_roots
 
         beta_fn = make_beta23(beta2, beta3, omega0)
         result0 = dispersive_wave_roots(
@@ -468,8 +467,8 @@ class TestSimulationReadiness:
 
     def _make_pulse(self, omega0, T0_ps=1.0, power_W=100):
         """Create a simple pulse for testing."""
-        from photonics_helper.pulse import Envelope, Wave, TemporalGrid
-        from photonics_helper.base import Wavelength, Time
+        from photonics_helper.base import Time, Wavelength
+        from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
         t0 = T0_ps * 1e-12
         N = 2048
@@ -491,9 +490,9 @@ class TestSimulationReadiness:
 
     def test_readiness_coverage_check_passes(self, omega0, beta2, gamma):
         """Coverage check passes when grid is within dispersion bounds."""
-        from photonics_helper.phase_matching import assess_simulation_readiness
+        from photonics_helper.base import Area, Length
         from photonics_helper.gnlse import FiberProfile
-        from photonics_helper.base import Length, Area
+        from photonics_helper.phase_matching import assess_simulation_readiness
 
         pulse = self._make_pulse(omega0, T0_ps=1.0, power_W=100)
         fiber = FiberProfile(
@@ -514,9 +513,9 @@ class TestSimulationReadiness:
 
     def test_soliton_order_matches_analytic(self, omega0, beta2):
         """Soliton order matches analytic N = √(γ·P·T₀²/|β₂|)."""
-        from photonics_helper.phase_matching import assess_simulation_readiness
+        from photonics_helper.base import Area, Length
         from photonics_helper.gnlse import FiberProfile, _gamma
-        from photonics_helper.base import Length, Area
+        from photonics_helper.phase_matching import assess_simulation_readiness
 
         T0_ps = 1.0
         P_peak = 1000.0
@@ -538,10 +537,10 @@ class TestSimulationReadiness:
 
     def test_readiness_with_dispersion_object(self, omega0, beta2):
         """assess_simulation_readiness works with a Dispersion table (not just Taylor betas)."""
-        from photonics_helper.phase_matching import assess_simulation_readiness
-        from photonics_helper.gnlse import FiberProfile
+        from photonics_helper.base import AngularFrequencyArray, Area, Length
         from photonics_helper.fiber import PropagationConstant
-        from photonics_helper.base import Length, Area, AngularFrequencyArray
+        from photonics_helper.gnlse import FiberProfile
+        from photonics_helper.phase_matching import assess_simulation_readiness
 
         pulse = self._make_pulse(omega0, T0_ps=1.0, power_W=100)
         fiber = FiberProfile(
@@ -568,10 +567,10 @@ class TestSimulationReadiness:
     def test_dw_root_finder_failure_warns(self, omega0, monkeypatch):
         """A forced DW root-finder failure surfaces a warning (regression guard)."""
         import photonics_helper.phase_matching as pm
-        from photonics_helper.phase_matching import assess_simulation_readiness
-        from photonics_helper.gnlse import FiberProfile
+        from photonics_helper.base import AngularFrequencyArray, Area, Length
         from photonics_helper.fiber import PropagationConstant
-        from photonics_helper.base import Length, Area, AngularFrequencyArray
+        from photonics_helper.gnlse import FiberProfile
+        from photonics_helper.phase_matching import assess_simulation_readiness
 
         pulse = self._make_pulse(omega0, T0_ps=1.0, power_W=100)
         fiber = FiberProfile(
@@ -603,10 +602,10 @@ class TestSimulationReadiness:
 
     def test_coverage_fails_when_grid_exceeds_table(self, omega0):
         """Coverage check fails when pulse grid exceeds narrow dispersion table."""
-        from photonics_helper.phase_matching import assess_simulation_readiness
-        from photonics_helper.gnlse import FiberProfile
+        from photonics_helper.base import Area, Length
         from photonics_helper.fiber import Dispersion
-        from photonics_helper.base import Length, Area
+        from photonics_helper.gnlse import FiberProfile
+        from photonics_helper.phase_matching import assess_simulation_readiness
 
         pulse = self._make_pulse(omega0, T0_ps=0.05, power_W=100)
         fiber = FiberProfile(
@@ -639,9 +638,9 @@ class TestSolverIntegration:
 
     def test_preflight_report_none_when_disabled(self, omega0):
         """preflight_report is None when check_phase_matching=False."""
-        from photonics_helper.gnlse import GNLSESolver, FiberProfile
-        from photonics_helper.pulse import Envelope, Wave, TemporalGrid
-        from photonics_helper.base import Wavelength, Area, Length, Time
+        from photonics_helper.base import Area, Length, Time, Wavelength
+        from photonics_helper.gnlse import FiberProfile, GNLSESolver
+        from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
         t0 = 1e-12
         N = 1024
@@ -673,9 +672,9 @@ class TestSolverIntegration:
 
     def test_preflight_report_when_enabled(self, omega0):
         """preflight_report builds when check_phase_matching=True."""
-        from photonics_helper.gnlse import GNLSESolver, FiberProfile
-        from photonics_helper.pulse import Envelope, Wave, TemporalGrid
-        from photonics_helper.base import Wavelength, Area, Length, Time
+        from photonics_helper.base import Area, Length, Time, Wavelength
+        from photonics_helper.gnlse import FiberProfile, GNLSESolver
+        from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
         t0 = 1e-12
         N = 1024
@@ -710,10 +709,11 @@ class TestSolverIntegration:
     def test_propagate_emits_preflight_warnings(self, omega0):
         """propagate() emits UserWarning when check_phase_matching=True and coverage fails."""
         import warnings
-        from photonics_helper.gnlse import GNLSESolver, FiberProfile
-        from photonics_helper.pulse import Envelope, Wave, TemporalGrid
+
+        from photonics_helper.base import Area, Length, Time, Wavelength
         from photonics_helper.fiber import Dispersion
-        from photonics_helper.base import Wavelength, Area, Length, Time
+        from photonics_helper.gnlse import FiberProfile, GNLSESolver
+        from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
         t0 = 0.05e-12
         N = 1024
@@ -766,9 +766,10 @@ class TestSolverIntegration:
     def test_warning_emitted_on_clip(self, omega0):
         """UserWarning emitted when grid frequencies are clipped."""
         import warnings
-        from photonics_helper.gnlse import TaperedGNLSESolver, FiberProfile
-        from photonics_helper.pulse import Envelope, Wave, TemporalGrid
-        from photonics_helper.base import Wavelength, Area, Length, Time
+
+        from photonics_helper.base import Area, Length, Time, Wavelength
+        from photonics_helper.gnlse import FiberProfile, TaperedGNLSESolver
+        from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
         t0 = 0.1e-12  # Very short pulse → wide spectrum
         N = 512
@@ -823,9 +824,9 @@ class TestSolverIntegration:
 
     def test_strict_mode_raises_on_clip(self, omega0):
         """strict=True raises ValueError on excessive clipping."""
-        from photonics_helper.gnlse import TaperedGNLSESolver, FiberProfile
-        from photonics_helper.pulse import Envelope, Wave, TemporalGrid
-        from photonics_helper.base import Wavelength, Area, Length, Time
+        from photonics_helper.base import Area, Length, Time, Wavelength
+        from photonics_helper.gnlse import FiberProfile, TaperedGNLSESolver
+        from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
         t0 = 0.1e-12
         N = 512
@@ -878,9 +879,9 @@ class TestPostFlightValidation:
 
     def _make_solver_with_spectrum(self, omega0, has_peak_at=0.0):
         """Create a mock solver with a known spectrum containing a peak."""
-        from photonics_helper.gnlse import GNLSESolver, FiberProfile
-        from photonics_helper.pulse import Envelope, Wave, TemporalGrid
-        from photonics_helper.base import Wavelength, Area, Length, Time
+        from photonics_helper.base import Area, Length, Time, Wavelength
+        from photonics_helper.gnlse import FiberProfile, GNLSESolver
+        from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
         t0 = 1e-12
         N = 1024
@@ -930,8 +931,8 @@ class TestPostFlightValidation:
     def test_validation_passes_with_peak(self, omega0):
         """Validation passes when peak near predicted DW."""
         from photonics_helper.phase_matching import (
-            compare_spectrum_to_phase_matching,
             SimulationReadinessReport,
+            compare_spectrum_to_phase_matching,
         )
 
         solver = self._make_solver_with_spectrum(omega0, has_peak_at=50.0)
@@ -963,11 +964,11 @@ class TestPostFlightValidation:
 
     def test_validation_reports_mismatch(self, omega0):
         """Validation reports mismatch when no peak near prediction."""
+        from photonics_helper.base import AngularFrequency, Wavelength
         from photonics_helper.phase_matching import (
-            compare_spectrum_to_phase_matching,
             SimulationReadinessReport,
+            compare_spectrum_to_phase_matching,
         )
-        from photonics_helper.base import Wavelength, AngularFrequency
 
         solver = self._make_solver_with_spectrum(omega0, has_peak_at=0.0)
 
@@ -1010,8 +1011,8 @@ class TestVisualization:
         matplotlib.use("Agg")
 
         from photonics_helper.phase_matching import (
-            scan_fwm_detuning,
             plot_fwm_efficiency,
+            scan_fwm_detuning,
         )
 
         beta_fn = make_beta2_only(beta2, omega0)
@@ -1050,12 +1051,11 @@ class TestVisualization:
 
         matplotlib.use("Agg")
 
-        from photonics_helper.phase_matching import (
-            plot_readiness_report,
-            SimulationReadinessReport,
-        )
-
         from photonics_helper.base import AngularFrequency
+        from photonics_helper.phase_matching import (
+            SimulationReadinessReport,
+            plot_readiness_report,
+        )
 
         report = SimulationReadinessReport(
             dispersion_covers_grid=True,
@@ -1082,15 +1082,15 @@ class TestVisualization:
 
         matplotlib.use("Agg")
 
-        from photonics_helper.phase_matching import (
-            plot_spectrum_with_pm_overlay,
-            SimulationReadinessReport,
-        )
+        from photonics_helper.base import Area, Length, Time, Wavelength
 
         # Create a mock solver
-        from photonics_helper.gnlse import GNLSESolver, FiberProfile
-        from photonics_helper.pulse import Envelope, Wave, TemporalGrid
-        from photonics_helper.base import Wavelength, Area, Length, Time
+        from photonics_helper.gnlse import FiberProfile, GNLSESolver
+        from photonics_helper.phase_matching import (
+            SimulationReadinessReport,
+            plot_spectrum_with_pm_overlay,
+        )
+        from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
         t0 = 1e-12
         N = 1024
@@ -1120,7 +1120,7 @@ class TestVisualization:
         solver = GNLSESolver(pulse, fiber, betas)
         solver._spectra_vs_z = (grid.w, np.array([np.abs(envelope_field) ** 2]))
 
-        from photonics_helper.base import AngularFrequency, WavelengthArray, Wavelength
+        from photonics_helper.base import AngularFrequency, Wavelength, WavelengthArray
 
         report = SimulationReadinessReport(
             dispersion_covers_grid=True,

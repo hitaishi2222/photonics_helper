@@ -12,16 +12,21 @@ import numpy as np
 import pytest
 
 from photonics_helper.base import (
-    Wavelength,
-    Frequency,
-    Time,
-    Area,
-    Power,
-    PeakPower,
     C_MS,
     EPS_0,
+    Area,
+    Frequency,
+    PeakPower,
+    Power,
+    Time,
+    Wavelength,
 )
-from photonics_helper.pulse import SHAPE_FACTORS, Envelope, TemporalGrid, Wave  # type: ignore[import-not-found]
+from photonics_helper.pulse import (  # type: ignore[import-not-found]
+    SHAPE_FACTORS,
+    Envelope,
+    TemporalGrid,
+    Wave,
+)
 
 
 @pytest.fixture
@@ -985,7 +990,7 @@ def test_all_shapes_have_valid_field_and_intensity():
 
 def test_gaussian_fwhm_siegman():
     """FWHM/T₀ = 2√(ln 2) = 1.6651… — Siegman §3.3."""
-    from math import sqrt, log
+    from math import log, sqrt
 
     expected = 2 * sqrt(log(2))
     assert pytest.approx(SHAPE_FACTORS["gaussian"], rel=1e-12) == expected

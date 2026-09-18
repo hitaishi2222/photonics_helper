@@ -1,12 +1,12 @@
 """Distributed Bragg Reflector (DBR) design and transfer-matrix simulation."""
 
 from copy import deepcopy
-from typing import Dict, List, Literal, Optional, Tuple
+from dataclasses import field
+from typing import Literal
 
 import matplotlib.pyplot as plt
 import numpy as np
 from numpy.typing import NDArray
-from dataclasses import field
 from pydantic.dataclasses import dataclass
 
 from photonics_helper.base import PI, Length, Wavelength, WavelengthArray
@@ -42,8 +42,8 @@ class Block:
 
     length: Length  # width of single block
     material: Material  # its Material property
-    colour: Optional[str] = None  # colour (Optional) for visualisation
-    _position: Optional[Tuple[float, float]] = None
+    colour: str | None = None  # colour (Optional) for visualisation
+    _position: tuple[float, float] | None = None
 
     def __post_init__(self) -> None:
         del self.position
@@ -52,11 +52,11 @@ class Block:
         return f"Block:\n  length={self.length.as_m}m, material={self.material.name}, colour={self.colour} \n  position={self.position})"
 
     @property
-    def position(self) -> Tuple[float, float] | None:
+    def position(self) -> tuple[float, float] | None:
         return self._position
 
     @position.setter
-    def position(self, value: Tuple[float, float]) -> None:
+    def position(self, value: tuple[float, float]) -> None:
         if abs((value[1] - value[0]) - self.length.as_m) > 1e-12:
             raise ValueError("Your position is not compatable with the length of Block")
         else:
@@ -81,16 +81,16 @@ class Pattern:
     """
 
     style: str  # Block style Ex: "ABAB" / "ABCABC" / "AB_AB"
-    mapping: Dict[str, Block]  # Ex {"A": SiO2, "B": Si}
+    mapping: dict[str, Block]  # Ex {"A": SiO2, "B": Si}
     central_wavelength: Wavelength  # central wavelength for DBR
     _length: float = 0  # length of DBR
-    _out: List[Block] = field(default_factory=list)  # Pattern out
+    _out: list[Block] = field(default_factory=list)  # Pattern out
 
     def __post_init__(self) -> None:
         self.make_pattern()
 
     @property
-    def out(self) -> List[Block]:
+    def out(self) -> list[Block]:
         return self._out
 
     @out.deleter
@@ -130,7 +130,7 @@ class Pattern:
         self._out = []
         self.make_pattern()
 
-    def get_index(self, wl_micron: float) -> Tuple[List[float], List[float]]:
+    def get_index(self, wl_micron: float) -> tuple[list[float], list[float]]:
         """Return [n, k] arrays for all blocks at the given wavelength (μm)."""
         n = []
         k = []
@@ -139,19 +139,19 @@ class Pattern:
             k.append(block.material.k_func(wl_micron))
         return n, k
 
-    def _get_lengths(self) -> List[float]:
+    def _get_lengths(self) -> list[float]:
         """Return layer thicknesses."""
         return [block.length.as_m for block in self.out]
 
-    def _get_positions(self) -> List[Tuple[float, float] | None]:
+    def _get_positions(self) -> list[tuple[float, float] | None]:
         """Return layer start/end positions."""
         return [block.position for block in self.out]
 
-    def _get_colours(self) -> List[str | None]:
+    def _get_colours(self) -> list[str | None]:
         """Return layer colours."""
         return [block.colour for block in self.out]
 
-    def _get_names(self, type=1) -> List[str]:
+    def _get_names(self, type=1) -> list[str]:
         """Return layer material names (type=2 deduplicates for legends)."""
         names = [block.material.name for block in self.out]
         if type == 2:
@@ -427,8 +427,8 @@ class TMM:
         E_cur: complex = 1.0 + r_total
         H_cur: complex = eta0 * (1.0 - r_total)
 
-        field_vals: List[float] = []
-        positions: List[Length] = []
+        field_vals: list[float] = []
+        positions: list[Length] = []
         layer_positions = self.pattern._get_positions()
 
         for idx, letter in enumerate(self.pattern.style):

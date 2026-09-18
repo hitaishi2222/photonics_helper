@@ -28,10 +28,10 @@ and treat the shock-time refinement as a documented limitation.
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from math import factorial, pi
 from pathlib import Path
-from typing import Callable, Optional, Tuple
 
 import numpy as np
 from numpy.typing import NDArray
@@ -116,7 +116,7 @@ def soliton_scales(
     T0_fs: float = T0_FS,
     gamma: float = GAMMA,
     P0: float = PARAMS["peak_power_W"],
-    beta2_si_value: Optional[float] = None,
+    beta2_si_value: float | None = None,
 ) -> SolitonScales:
     """Return the soliton length scales for the given pulse/fiber parameters."""
     return SolitonScales(
@@ -383,7 +383,7 @@ def spectrogram(
     omega: np.ndarray,
     *,
     n_delays: int = 161,
-    delay_span_ps: Optional[float] = None,
+    delay_span_ps: float | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Cross-correlation spectrogram (paper Eq. 4).
 
@@ -459,7 +459,7 @@ def temporal_peaks(
 
 
 def taylor_beta_fn(
-    omega0: Optional[float] = None, betas: NDArray = BETAS
+    omega0: float | None = None, betas: NDArray = BETAS
 ) -> Callable[[NDArray], NDArray]:
     """Return β(ω) (1/m) reconstructed from the Table I Taylor series.
 
@@ -500,7 +500,7 @@ def dispersive_wave_wavelength_nm(
     fR: float = FR,
     gamma: float = GAMMA,
     betas: np.ndarray = BETAS,
-    omega0: Optional[float] = None,
+    omega0: float | None = None,
     wl0_nm: float = WL0_NM,
     nonlinear: bool = True,
 ) -> float:
@@ -622,7 +622,7 @@ def density_clip(psd: np.ndarray, dynamic_range_db: float = 40.0) -> np.ndarray:
 
 
 #: Default wavelength plotting window, as fractions of the carrier wavelength.
-WL_BOUNDS_FRACTION: Tuple[float, float] = (0.5, 1.6)
+WL_BOUNDS_FRACTION: tuple[float, float] = (0.5, 1.6)
 
 #: Delay (ps) beyond which a cell is labelled DW-like / soliton-like on hover.
 TEMPORAL_FEATURE_DELAY_PS: float = 0.5
@@ -633,8 +633,8 @@ SPECTRAL_FEATURE_OFFSET_NM: float = 80.0
 
 def default_wl_bounds(
     wl0_nm: float = WL0_NM,
-    fraction: Tuple[float, float] = WL_BOUNDS_FRACTION,
-) -> Tuple[float, float]:
+    fraction: tuple[float, float] = WL_BOUNDS_FRACTION,
+) -> tuple[float, float]:
     """Default spectral plotting window around the carrier wavelength.
 
     Returns ``(fraction[0]·λ0, fraction[1]·λ0)`` in nm.  The default
@@ -657,10 +657,10 @@ def carrier_wavelength_nm(evo: Evolution) -> float:
 
 def _resolve_wl_bounds(
     evo: Evolution,
-    wl_bounds: Optional[Tuple[float, float]],
-    wl_min: Optional[float],
-    wl_max: Optional[float],
-) -> Tuple[float, float]:
+    wl_bounds: tuple[float, float] | None,
+    wl_min: float | None,
+    wl_max: float | None,
+) -> tuple[float, float]:
     """Resolve the plotted wavelength window from explicit bounds or limits."""
     if wl_bounds is not None:
         bounds = (float(wl_bounds[0]), float(wl_bounds[1]))
@@ -675,7 +675,7 @@ def _resolve_wl_bounds(
     return bounds
 
 
-def _z_axis(evo: Evolution, z_scale: str) -> Tuple[NDArray, str]:
+def _z_axis(evo: Evolution, z_scale: str) -> tuple[NDArray, str]:
     """Return propagation distance in the requested unit and its axis label."""
     try:
         factor, label = {
@@ -729,9 +729,9 @@ def classify_temporal_features(
 
 def spectral_evolution_data(
     evo: Evolution,
-    wl_bounds: Tuple[float, float],
+    wl_bounds: tuple[float, float],
     n_points: int = 500,
-) -> Tuple[NDArray, NDArray]:
+) -> tuple[NDArray, NDArray]:
     """Resample stored spectra onto a uniform wavelength grid (nm)."""
     wl, psd = evo.spectrum_on_wavelength()
     return interpolate_on_wavelength(wl, psd, wl_bounds[0], wl_bounds[1], n_points)
@@ -741,7 +741,7 @@ def temporal_evolution_data(
     evo: Evolution,
     *,
     time_reversal: bool = True,
-) -> Tuple[NDArray, NDArray]:
+) -> tuple[NDArray, NDArray]:
     """Return (time_ps, intensity) in the literature comoving convention.
 
     The library's internal time grid runs opposite to the standard Agrawal /
@@ -765,7 +765,7 @@ def temporal_feature_labels(
     *,
     time_reversal: bool = True,
     n_bands: int = 24,
-    wl_range: Tuple[float, float] = (400.0, 1400.0),
+    wl_range: tuple[float, float] = (400.0, 1400.0),
     floor_db: float = 40.0,
 ) -> NDArray:
     """Per-cell feature labels for the temporal-evolution hover text.
@@ -911,9 +911,9 @@ def plot_spectral_evolution(
     evo: Evolution,
     ax=None,
     *,
-    wl_bounds: Optional[Tuple[float, float]] = None,
-    wl_min: Optional[float] = None,
-    wl_max: Optional[float] = None,
+    wl_bounds: tuple[float, float] | None = None,
+    wl_min: float | None = None,
+    wl_max: float | None = None,
     n_points: int = 500,
     dynamic_range_db: float = 40.0,
     cmap: str = "jet",
@@ -997,9 +997,9 @@ def plot_temporal_evolution(
     evo: Evolution,
     ax=None,
     *,
-    t_bounds: Optional[Tuple[float, float]] = None,
-    t_min: Optional[float] = None,
-    t_max: Optional[float] = None,
+    t_bounds: tuple[float, float] | None = None,
+    t_min: float | None = None,
+    t_max: float | None = None,
     dynamic_range_db: float = 40.0,
     cmap: str = "jet",
     z_scale: str = "cm",

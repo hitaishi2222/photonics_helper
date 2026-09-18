@@ -24,8 +24,8 @@ classical result under a Taylor expansion of β(ω).
 import matplotlib
 
 matplotlib.use("Agg")
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 
 from photonics_helper.phase_matching import (
     mi_gain_spectrum,

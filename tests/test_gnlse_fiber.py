@@ -1,7 +1,7 @@
 """Tests for photonics_helper.gnlse.fiber."""
 
-from photonics_helper.gnlse import FiberProfile
 from photonics_helper.base import Area, Length, Time
+from photonics_helper.gnlse import FiberProfile
 
 
 def test_fiber_profile_construction():

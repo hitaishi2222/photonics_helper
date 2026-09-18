@@ -8,7 +8,7 @@ import pytest
 
 dash = pytest.importorskip("dash")
 
-from photonics_helper.dashboard import (  # noqa: E402
+from photonics_helper.dashboard import (
     _run_gnlse,
     app,
     build_layout,

@@ -30,6 +30,8 @@ if TYPE_CHECKING:
 
 from .raman.dashboard import (
     build_layout as build_raman_layout,
+)
+from .raman.dashboard import (
     register_callbacks as register_raman_callbacks,
 )
 
@@ -263,7 +265,7 @@ def register_gnlse_callbacks(dash_app, *, dcc, html, Input, Output, State):
         return dcc.Graph(figure=fig)
 
 
-def app() -> "dash.Dash":  # type: ignore[valid-type]
+def app() -> dash.Dash:  # type: ignore[valid-type]
     """Build the unified dashboard Dash application.
 
     Returns

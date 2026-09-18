@@ -22,15 +22,15 @@ For Silica (the most common fiber material):
   - fR (Raman fraction) = 0.18
 """
 
-import numpy as np
 import matplotlib
+import numpy as np
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from photonics_helper.raman import RamanSpec, RamanResponse
-from photonics_helper.pulse import TemporalGrid
 from photonics_helper.base import Time
+from photonics_helper.pulse import TemporalGrid
+from photonics_helper.raman import RamanResponse, RamanSpec
 
 
 def main():

@@ -3,9 +3,9 @@
 import numpy as np
 import pytest
 
+from photonics_helper.base import Area, Length, Time, Wavelength
 from photonics_helper.gnlse import FiberProfile, GNLSESolver
-from photonics_helper.pulse import Wave, Envelope, TemporalGrid
-from photonics_helper.base import Wavelength, Time, Length, Area
+from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
 
 @pytest.fixture

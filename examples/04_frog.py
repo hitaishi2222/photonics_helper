@@ -7,9 +7,10 @@ Shows how to generate a FROG trace from a pulse, retrieve the field,
 and assess retrieval quality.
 """
 
-import numpy as np
-from photonics_helper.pulse import generate_trace, retrieve, fidelity
 import matplotlib
+import numpy as np
+
+from photonics_helper.pulse import fidelity, generate_trace, retrieve
 
 matplotlib.use("Agg")  # Non-interactive backend for PNG export
 import matplotlib.pyplot as plt

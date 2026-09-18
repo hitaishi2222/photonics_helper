@@ -6,10 +6,11 @@ Demonstrates mode-locked laser pulse trains with repetition rate.
 Shows how pulses repeat at the cavity round-trip frequency.
 """
 
-import numpy as np
-from photonics_helper.pulse import Envelope, Wave, TemporalGrid
-from photonics_helper.base import Wavelength, Frequency, Time
 import matplotlib
+import numpy as np
+
+from photonics_helper.base import Frequency, Time, Wavelength
+from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt

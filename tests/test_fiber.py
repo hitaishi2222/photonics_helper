@@ -180,4 +180,4 @@ def test_propagation_constant_from_neff_omega_error_handling():
     from photonics_helper.base import C_MS
 
     expected = omega.as_rad_s * neff / C_MS
-    np.testing.assert_allclose(getattr(pc, "values"), expected, rtol=1e-12)
+    np.testing.assert_allclose(pc.values, expected, rtol=1e-12)

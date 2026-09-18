@@ -7,9 +7,10 @@ supporting Kerr, Raman, self-steepening, and two-photon absorption effects.
 from __future__ import annotations
 
 import warnings
+from collections.abc import Callable
 from dataclasses import dataclass
 from math import factorial
-from typing import TYPE_CHECKING, Any, Literal, Optional, Tuple, TypeAlias, Callable
+from typing import TYPE_CHECKING, Any, Literal, TypeAlias
 
 import numpy as np
 from numpy.typing import NDArray
@@ -69,12 +70,15 @@ def _normalize_betas(betas, betas_unit: BetasUnit = "ps^k/m") -> NDArray:
 
 
 if TYPE_CHECKING:
-    from photonics_helper.pulse import Wave, TemporalGrid
-    from photonics_helper.fiber import ZDependentDispersion
+    from pathlib import Path
+
     from matplotlib import pyplot as plt
     from matplotlib.figure import Figure as MplFigure
     from plotly.graph_objects import Figure as PlotlyFigure
-    from pathlib import Path
+
+    from photonics_helper.fiber import ZDependentDispersion
+    from photonics_helper.pulse import TemporalGrid, Wave
+
     from .phase_matching import SimulationReadinessReport
 
     # Plotting helpers return a matplotlib figure by default and a plotly figure
@@ -86,19 +90,19 @@ __all__ = [
     "GNLSESolver",
     "SplitStepEngine",
     "TaperedGNLSESolver",
-    "spectral_evolution_on_wavelength_grid",
-    "spectral_evolution_on_frequency_grid",
-    "temporal_evolution_intensity",
-    "plot_waterfall",
-    "plot_spectrum_vs_distance",
-    "plot_spectral_evolution",
-    "plot_temporal_evolution",
-    "plot_spectral_temporal_summary",
-    "plot_scg_dashboard",
-    "save_summary_html",
-    "plot_intensity_metrics",
     "gnlse_spectrogram",
+    "plot_intensity_metrics",
+    "plot_scg_dashboard",
+    "plot_spectral_evolution",
+    "plot_spectral_temporal_summary",
     "plot_spectrogram",
+    "plot_spectrum_vs_distance",
+    "plot_temporal_evolution",
+    "plot_waterfall",
+    "save_summary_html",
+    "spectral_evolution_on_frequency_grid",
+    "spectral_evolution_on_wavelength_grid",
+    "temporal_evolution_intensity",
 ]
 
 
@@ -128,8 +132,8 @@ class FiberProfile:
     length: Length
     confinement_factor: float = 1.0
     sigma_tpa: float = 0.0
-    carrier_lifetime: Optional[Time] = None
-    raman_response: Optional[object] = None
+    carrier_lifetime: Time | None = None
+    raman_response: object | None = None
 
     @classmethod
     def from_gamma(
@@ -141,9 +145,9 @@ class FiberProfile:
         length: Length = Length(1.0, "m"),
         confinement_factor: float = 1.0,
         sigma_tpa: float = 0.0,
-        carrier_lifetime: Optional[Time] = None,
-        raman_response: Optional[object] = None,
-    ) -> "FiberProfile":
+        carrier_lifetime: Time | None = None,
+        raman_response: object | None = None,
+    ) -> FiberProfile:
         """Create a FiberProfile from a target nonlinear coefficient γ.
 
         Convenience constructor that mirrors laserfun's API where γ is
@@ -206,8 +210,8 @@ def _gamma(
 
 def kerr_step(
     A: NDArray,
-    fiber: "FiberProfile",
-    grid: "TemporalGrid",
+    fiber: FiberProfile,
+    grid: TemporalGrid,
     dz: float,
     omega0: float,
 ) -> NDArray:
@@ -233,7 +237,7 @@ def kerr_step(
 def _raman_polarization(
     intensity: NDArray,
     fR: float,
-    grid: "TemporalGrid",
+    grid: TemporalGrid,
     h_R_fft: NDArray | None,
 ) -> NDArray:
     """Compute Raman nonlinear polarization P_NL = (1-fR)|A|² + fR·(h_R ⊗ |A|²).
@@ -268,8 +272,8 @@ def _raman_polarization(
 
 def raman_step(
     A: NDArray,
-    fiber: "FiberProfile",
-    grid: "TemporalGrid",
+    fiber: FiberProfile,
+    grid: TemporalGrid,
     dz: float,
     include_raman: bool,
     omega0: float = 0.0,
@@ -325,13 +329,13 @@ def raman_step(
 
 def tpa_step(
     A: NDArray,
-    fiber: "FiberProfile",
-    grid: "TemporalGrid",
+    fiber: FiberProfile,
+    grid: TemporalGrid,
     dz: float,
     include_tpa: bool,
     U: float = 0.0,
     omega0: float = 0.0,
-) -> Tuple[NDArray, float]:
+) -> tuple[NDArray, float]:
     """Apply two-photon absorption with carrier dynamics.
 
     dA/dz = -σ·U·A
@@ -455,15 +459,15 @@ class SplitStepEngine:
 
     def __init__(
         self,
-        pulse: "Wave",
-        fiber: "FiberProfile",
+        pulse: Wave,
+        fiber: FiberProfile,
         betas: NDArray,
         include_raman: bool = False,
         include_self_steepening: bool = False,
         include_tpa: bool = False,
         tau_shock: float | None = None,
         step_size: Length | None = None,
-        dispersion_profile: "ZDependentDispersion | Callable[[NDArray, float], NDArray] | None" = None,
+        dispersion_profile: ZDependentDispersion | Callable[[NDArray, float], NDArray] | None = None,
         a_eff_fn: Callable[[float], float] | None = None,
         alpha_fn: Callable[[float], float] | None = None,
         gamma_fn: Callable[[float], float] | None = None,
@@ -503,10 +507,10 @@ class SplitStepEngine:
         self.grid: TemporalGrid = pulse.grid
         self.omega0 = pulse.central_frequency
         self.A = np.array(pulse.envelope_field, dtype=complex)
-        self.evolution: list["Wave"] = []
+        self.evolution: list[Wave] = []
         self._z_positions: list[float] = [0.0]
         self._current_z: float = 0.0
-        self._spectra_vs_z: Tuple[NDArray, NDArray] | None = None
+        self._spectra_vs_z: tuple[NDArray, NDArray] | None = None
         self._energy_vs_z: list[float] | None = None
         self._U = 0.0  # carrier density for TPA
 
@@ -658,7 +662,7 @@ class SplitStepEngine:
             self._h_R_fft_cache = self.grid.fft(h_R)
         return self._h_R_fft_cache
 
-    def _nonlinear_step(self, A: NDArray, dz: float) -> Tuple[NDArray, float]:
+    def _nonlinear_step(self, A: NDArray, dz: float) -> tuple[NDArray, float]:
         """Apply nonlinear effects.
 
         Kerr/Raman phase rotation is an exact exponential (unitary). With
@@ -1129,7 +1133,7 @@ class SplitStepEngine:
             )
 
     @property
-    def spectra_vs_z(self) -> Tuple[NDArray, NDArray]:
+    def spectra_vs_z(self) -> tuple[NDArray, NDArray]:
         """Tuple of (frequency array, spectra at each step)."""
         if self._spectra_vs_z is None:
             raise RuntimeError("Call propagate() first.")
@@ -1186,8 +1190,8 @@ class GNLSESolver:
 
     def __init__(
         self,
-        pulse: "Wave",
-        fiber: "FiberProfile",
+        pulse: Wave,
+        fiber: FiberProfile,
         betas: NDArray,
         include_raman: bool = True,
         include_self_steepening: bool = False,
@@ -1212,11 +1216,11 @@ class GNLSESolver:
                 f"tau_shock must be positive (seconds, SI), got {tau_shock!r}"
             )
         self.tau_shock = float(tau_shock) if tau_shock is not None else None
-        self._evolution: list["Wave"] = []
+        self._evolution: list[Wave] = []
         self._z_positions: NDArray | None = None
-        self._spectra_vs_z: Tuple[NDArray, NDArray] | None = None
+        self._spectra_vs_z: tuple[NDArray, NDArray] | None = None
         self._energy_vs_z: NDArray | None = None
-        self._preflight_report: "SimulationReadinessReport | None" = None
+        self._preflight_report: SimulationReadinessReport | None = None
 
     def propagate(
         self,
@@ -1260,8 +1264,8 @@ class GNLSESolver:
     @classmethod
     def estimate_num_steps(
         cls,
-        pulse: "Wave",
-        fiber: "FiberProfile",
+        pulse: Wave,
+        fiber: FiberProfile,
         betas: NDArray,
         *,
         include_self_steepening: bool = False,
@@ -1306,7 +1310,7 @@ class GNLSESolver:
         n_wl: int,
         *,
         step_index: int = -1,
-    ) -> Tuple[NDArray, NDArray]:
+    ) -> tuple[NDArray, NDArray]:
         """Return spectrum (dB) on a uniform wavelength grid (nm).
 
         Uses absolute angular frequency ``omega0 + grid.w`` before converting
@@ -1341,7 +1345,7 @@ class GNLSESolver:
         return wl_grid, spec_db
 
     @property
-    def evolution(self) -> list["Wave"]:
+    def evolution(self) -> list[Wave]:
         """List of Wave objects at each propagation step."""
         return self._evolution
 
@@ -1358,7 +1362,7 @@ class GNLSESolver:
         return self.pulse.central_frequency
 
     @property
-    def spectra_vs_z(self) -> Tuple[NDArray, NDArray]:
+    def spectra_vs_z(self) -> tuple[NDArray, NDArray]:
         """Tuple of (frequency array, spectra at each step)."""
         if self._spectra_vs_z is None:
             raise RuntimeError("Call propagate() first.")
@@ -1372,7 +1376,7 @@ class GNLSESolver:
         return self._energy_vs_z
 
     @property
-    def preflight_report(self) -> "SimulationReadinessReport | None":
+    def preflight_report(self) -> SimulationReadinessReport | None:
         """Lazy preflight report from phase-matching assessment.
 
         Builds and caches the report on first access when
@@ -1441,9 +1445,9 @@ class TaperedGNLSESolver:
 
     def __init__(
         self,
-        pulse: "Wave",
-        fiber: "FiberProfile",
-        dispersion_profile: "ZDependentDispersion | Callable[[NDArray, float], NDArray]",
+        pulse: Wave,
+        fiber: FiberProfile,
+        dispersion_profile: ZDependentDispersion | Callable[[NDArray, float], NDArray],
         a_eff_fn: Callable[[float], float] | None = None,
         alpha_fn: Callable[[float], float] | None = None,
         gamma_fn: Callable[[float], float] | None = None,
@@ -1475,11 +1479,11 @@ class TaperedGNLSESolver:
             )
         self.tau_shock = float(tau_shock) if tau_shock is not None else None
         self._engine: SplitStepEngine | None = None
-        self._evolution: list["Wave"] = []
+        self._evolution: list[Wave] = []
         self._z_positions: NDArray | None = None
-        self._spectra_vs_z: Tuple[NDArray, NDArray] | None = None
+        self._spectra_vs_z: tuple[NDArray, NDArray] | None = None
         self._energy_vs_z: NDArray | None = None
-        self._preflight_report: "SimulationReadinessReport | None" = None
+        self._preflight_report: SimulationReadinessReport | None = None
         self._strict_mode = False
 
     def propagate(
@@ -1559,7 +1563,7 @@ class TaperedGNLSESolver:
         self._energy_vs_z = self._engine.energy_vs_z
 
     @property
-    def evolution(self) -> list["Wave"]:
+    def evolution(self) -> list[Wave]:
         """List of Wave objects at each propagation step."""
         return self._evolution
 
@@ -1576,7 +1580,7 @@ class TaperedGNLSESolver:
         return self.pulse.central_frequency
 
     @property
-    def spectra_vs_z(self) -> Tuple[NDArray, NDArray]:
+    def spectra_vs_z(self) -> tuple[NDArray, NDArray]:
         """Tuple of (frequency array, spectra at each step)."""
         if self._spectra_vs_z is None:
             raise RuntimeError("Call propagate() first.")
@@ -1590,7 +1594,7 @@ class TaperedGNLSESolver:
         return self._energy_vs_z
 
     @property
-    def preflight_report(self) -> "SimulationReadinessReport | None":
+    def preflight_report(self) -> SimulationReadinessReport | None:
         """Lazy preflight report from phase-matching assessment.
 
         Builds and caches the report on first access when
@@ -1616,11 +1620,11 @@ class TaperedGNLSESolver:
 
 
 def spectral_evolution_on_wavelength_grid(
-    solver: "GNLSESolver",
+    solver: GNLSESolver,
     wl_min: float,
     wl_max: float,
     n_wl: int,
-) -> Tuple[NDArray, NDArray, NDArray]:
+) -> tuple[NDArray, NDArray, NDArray]:
     """Interpolate stored spectra onto a uniform wavelength grid (nm).
 
     Uses absolute angular frequency ``omega0 + grid.w`` before converting to
@@ -1661,11 +1665,11 @@ def spectral_evolution_on_wavelength_grid(
 
 
 def spectral_evolution_on_frequency_grid(
-    solver: "GNLSESolver",
+    solver: GNLSESolver,
     f_min_THz: float,
     f_max_THz: float,
     n_f: int,
-) -> Tuple[NDArray, NDArray, NDArray]:
+) -> tuple[NDArray, NDArray, NDArray]:
     """Interpolate stored spectra onto a uniform absolute-frequency grid (THz).
 
     Returns
@@ -1691,8 +1695,8 @@ def spectral_evolution_on_frequency_grid(
 
 
 def temporal_evolution_intensity(
-    solver: "GNLSESolver",
-) -> Tuple[NDArray, NDArray, NDArray]:
+    solver: GNLSESolver,
+) -> tuple[NDArray, NDArray, NDArray]:
     """Build |A(t)|² at each stored propagation step.
 
     Returns
@@ -1709,8 +1713,8 @@ def temporal_evolution_intensity(
 
 
 def plot_waterfall(
-    solver: "GNLSESolver", ax=None, dB: bool = True, offset_scale: float = 1.0
-) -> "plt.Figure":
+    solver: GNLSESolver, ax=None, dB: bool = True, offset_scale: float = 1.0
+) -> plt.Figure:
     """Pulse envelope waterfall plot (envelope vs propagation distance).
 
     Each saved trace ``i`` is drawn as ``y_norm + i * offset_scale`` where
@@ -1783,8 +1787,8 @@ def plot_waterfall(
 
 
 def plot_spectrum_vs_distance(
-    solver: "GNLSESolver", ax=None, dB: bool = True
-) -> "plt.Figure":
+    solver: GNLSESolver, ax=None, dB: bool = True
+) -> plt.Figure:
     """Spectrum vs propagation distance contour (legacy wrapper).
 
     See :func:`plot_spectral_evolution` for wavelength range and dynamic-range
@@ -1795,7 +1799,7 @@ def plot_spectrum_vs_distance(
 
 
 def plot_spectral_evolution(
-    solver: "GNLSESolver",
+    solver: GNLSESolver,
     ax=None,
     *,
     wl_min: float | None = None,
@@ -1808,7 +1812,7 @@ def plot_spectral_evolution(
     cmap: str = "viridis",
     z_scale: str = "m",
     use_imshow: bool = True,
-) -> "plt.Figure":
+) -> plt.Figure:
     """Spectral evolution contour: wavelength or frequency vs propagation distance.
 
     Parameters
@@ -1900,7 +1904,7 @@ def plot_spectral_evolution(
 
 
 def plot_temporal_evolution(
-    solver: "GNLSESolver",
+    solver: GNLSESolver,
     ax=None,
     *,
     t_min: float | None = None,
@@ -1910,7 +1914,7 @@ def plot_temporal_evolution(
     z_scale: str = "m",
     use_imshow: bool = True,
     time_reversal: bool = True,
-) -> "plt.Figure":
+) -> plt.Figure:
     """Temporal evolution contour: time vs propagation distance.
 
     Parameters
@@ -1991,8 +1995,8 @@ def plot_temporal_evolution(
 
 
 def _default_wl_bounds(
-    solver: "GNLSESolver", fraction: float = 0.5
-) -> Tuple[float, float]:
+    solver: GNLSESolver, fraction: float = 0.5
+) -> tuple[float, float]:
     """Default wavelength window (nm) around the carrier: ``(1-f)·λ0, (1+f)·λ0``."""
     pump_nm = float(solver.pulse.central_wavelength.as_nm)
     return (pump_nm * (1.0 - fraction), pump_nm * (1.0 + fraction))
@@ -2022,7 +2026,7 @@ def _field_feature_labels(
     *,
     time_reversal: bool = True,
     n_bands: int = 24,
-    wl_range: Tuple[float, float] = (400.0, 1400.0),
+    wl_range: tuple[float, float] = (400.0, 1400.0),
     floor_db: float = 40.0,
 ) -> NDArray:
     """Coarse filter-bank feature labels for each ``(z, time)`` cell.
@@ -2104,13 +2108,13 @@ def plot_scg_dashboard(
     t_labels: NDArray,
     title: str = "",
     z_label: str = "Distance (m)",
-    wl_bounds: Tuple[float, float] | None = None,
-    t_bounds: Tuple[float, float] | None = None,
+    wl_bounds: tuple[float, float] | None = None,
+    t_bounds: tuple[float, float] | None = None,
     dynamic_range_db: float = 40.0,
     colorscale: str = "Jet",
     annotate_features: bool = True,
     height: int = 850,
-) -> "FigureLike":
+) -> FigureLike:
     """Interactive four-panel Plotly SCG dashboard with feature hover labels.
 
     Layout: output line profiles ``(a) intensity (dB) vs wavelength`` and
@@ -2328,23 +2332,23 @@ def plot_scg_dashboard(
 
 
 def plot_spectral_temporal_summary(
-    solver: "GNLSESolver",
+    solver: GNLSESolver,
     *,
-    wl_bounds: Tuple[float, float] | None = None,
+    wl_bounds: tuple[float, float] | None = None,
     wl_min: float | None = None,
     wl_max: float | None = None,
-    t_bounds: Tuple[float, float] | None = None,
+    t_bounds: tuple[float, float] | None = None,
     t_min: float | None = None,
     t_max: float | None = None,
     dynamic_range_db: float = 40.0,
     cmap: str = "jet",
     z_scale: str = "m",
     time_reversal: bool = True,
-    height_ratios: Tuple[float, float] = (1.0, 1.7),
-    figsize: Tuple[float, float] = (11.0, 9.0),
+    height_ratios: tuple[float, float] = (1.0, 1.7),
+    figsize: tuple[float, float] = (11.0, 9.0),
     n_points: int = 500,
     plotly: bool = False,
-) -> "FigureLike":
+) -> FigureLike:
     """Four-panel GNLSE summary with line profiles on top and dense plots below.
 
     Layout
@@ -2530,10 +2534,10 @@ def plot_spectral_temporal_summary(
 
 
 def save_summary_html(
-    solver: "GNLSESolver",
+    solver: GNLSESolver,
     path,
     **kwargs,
-) -> "Path":
+) -> Path:
     """Render the interactive summary and write a standalone HTML file.
 
     Builds :func:`plot_spectral_temporal_summary` with ``plotly=True`` and
@@ -2567,16 +2571,16 @@ def save_summary_html(
 
 
 def gnlse_spectrogram(
-    solver: "GNLSESolver",
+    solver: GNLSESolver,
     *,
     gate: NDArray | None = None,
     n_delays: int = 161,
     delay_span_ps: float | None = None,
     snapshot: int = -1,
-    wl_bounds: Tuple[float, float] | None = None,
+    wl_bounds: tuple[float, float] | None = None,
     n_wavelength: int = 500,
     time_reversal: bool = True,
-) -> Tuple[NDArray, NDArray, NDArray]:
+) -> tuple[NDArray, NDArray, NDArray]:
     """Cross-correlation spectrogram of a propagated field (GNLSE Eq. 4).
 
     Computes
@@ -2674,7 +2678,7 @@ def gnlse_spectrogram(
 
 
 def _plotly_spectrogram(
-    solver: "GNLSESolver",
+    solver: GNLSESolver,
     delay_ps: NDArray,
     wavelength_nm: NDArray,
     trace_dB: NDArray,
@@ -2682,7 +2686,7 @@ def _plotly_spectrogram(
     t_min: float | None,
     t_max: float | None,
     annotate: bool,
-) -> "PlotlyFigure":
+) -> PlotlyFigure:
     """Interactive Plotly heatmap with feature-labelled hover text."""
     import plotly.graph_objects as go
 
@@ -2747,14 +2751,14 @@ def _plotly_spectrogram(
 
 
 def plot_spectrogram(
-    solver: "GNLSESolver",
+    solver: GNLSESolver,
     ax=None,
     *,
     gate: NDArray | None = None,
     n_delays: int = 161,
     delay_span_ps: float | None = None,
     snapshot: int = -1,
-    wl_bounds: Tuple[float, float] | None = None,
+    wl_bounds: tuple[float, float] | None = None,
     dynamic_range_db: float = 40.0,
     cmap: str = "jet",
     with_projections: bool = False,
@@ -2763,7 +2767,7 @@ def plot_spectrogram(
     time_reversal: bool = True,
     plotly: bool = False,
     annotate_features: bool = True,
-) -> "FigureLike":
+) -> FigureLike:
     """Plot the supercontinuum spectrogram (Dudley et al. Fig. 10 style).
 
     Parameters
@@ -2894,7 +2898,7 @@ def plot_spectrogram(
     return fig
 
 
-def plot_intensity_metrics(solver: "GNLSESolver", ax=None) -> "plt.Figure":
+def plot_intensity_metrics(solver: GNLSESolver, ax=None) -> plt.Figure:
     """Peak power and pulse width vs propagation distance.
 
     Parameters

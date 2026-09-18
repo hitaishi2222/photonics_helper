@@ -3,9 +3,9 @@
 import numpy as np
 import pytest
 
+from photonics_helper.base import Area, Length, Time
 from photonics_helper.gnlse import FiberProfile, kerr_step, raman_step, tpa_step
 from photonics_helper.pulse import TemporalGrid
-from photonics_helper.base import Area, Length, Time
 
 
 @pytest.fixture

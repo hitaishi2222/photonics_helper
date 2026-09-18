@@ -104,7 +104,7 @@ def validate(fast: bool = False, make_plot: bool = True) -> dict:
         "dw_relative_power": dw_rel,
         "soliton_peak_nm": sol_nm,
         "soliton_relative_power": sol_rel,
-        "n_temporal_peaks": int(len(t_peaks)),
+        "n_temporal_peaks": len(t_peaks),
         "dw_delay_ps": tau_dw,
         "soliton_delay_ps": tau_sol,
     }

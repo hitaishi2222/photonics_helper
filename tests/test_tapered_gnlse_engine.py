@@ -3,15 +3,15 @@
 import numpy as np
 import pytest
 
+from photonics_helper.base import Area, Length, Time, Wavelength
+from photonics_helper.fiber import ZDependentDispersion
 from photonics_helper.gnlse import (
     FiberProfile,
     GNLSESolver,
     SplitStepEngine,
     TaperedGNLSESolver,
 )
-from photonics_helper.pulse import Wave, Envelope, TemporalGrid
-from photonics_helper.base import Wavelength, Time, Length, Area
-from photonics_helper.fiber import ZDependentDispersion
+from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
 
 def _make_tapered_setup():

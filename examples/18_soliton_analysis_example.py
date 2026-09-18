@@ -8,17 +8,17 @@ Demonstrates:
 - Using confinement_factor for waveguide simulations
 """
 
-import numpy as np
 import matplotlib
+import numpy as np
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from photonics_helper.pulse import Wave, Envelope, TemporalGrid
+from photonics_helper.base import C_MS, PI, Area, Length, Time, Wavelength
 from photonics_helper.gnlse import FiberProfile, GNLSESolver
-from photonics_helper.soliton import SolitonAnalyzer
+from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 from photonics_helper.raman import RamanResponse, RamanSpec
-from photonics_helper.base import Wavelength, Time, Area, Length, C_MS, PI
+from photonics_helper.soliton import SolitonAnalyzer
 
 
 def main():

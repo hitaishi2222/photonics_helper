@@ -102,7 +102,7 @@ def validate(params: dict | None = None, make_plot: bool = True) -> dict:
         results.append(
             {
                 "phi_max_over_pi": float(phi_pi),
-                "n_peaks": int(len(peaks)),
+                "n_peaks": len(peaks),
                 "n_peaks_expected": expected,
                 "max_abs_spectrum_diff": max_diff,
             }

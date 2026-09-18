@@ -240,7 +240,7 @@ class RamanDatabase:
         conn.close()
         return [row[0] for row in rows]
 
-    def add_phonon_mode(self, material: str, mode: "PhononMode") -> None:
+    def add_phonon_mode(self, material: str, mode: PhononMode) -> None:
         """Insert a phonon mode for a material.
 
         Parameters
@@ -280,7 +280,7 @@ class RamanDatabase:
         conn.commit()
         conn.close()
 
-    def get_phonon_modes(self, material: str) -> list["PhononMode"]:
+    def get_phonon_modes(self, material: str) -> list[PhononMode]:
         """Get all phonon modes for a material.
 
         Parameters
@@ -371,7 +371,7 @@ class RamanDatabase:
         cursor = conn.cursor()
 
         # Build UPDATE query dynamically
-        columns = ", ".join(f"{k} = ?" for k in kwargs.keys())
+        columns = ", ".join(f"{k} = ?" for k in kwargs)
         values = list(kwargs.values()) + [name]
 
         cursor.execute(f"UPDATE raman_specs SET {columns} WHERE name = ?", values)

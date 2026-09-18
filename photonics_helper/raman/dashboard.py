@@ -570,7 +570,7 @@ def register_callbacks(dash_app, *, dcc, html, Input, Output, State):
 
 
 
-def app() -> "dash.Dash":  # type: ignore[valid-type]
+def app() -> dash.Dash:  # type: ignore[valid-type]
     """Build the standalone Raman Explorer Dash app.
 
     Returns

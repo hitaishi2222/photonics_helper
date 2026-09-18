@@ -1,14 +1,15 @@
-import pytest
 import numpy as np
+import pytest
+
 from photonics_helper import (
-    Wavelength,
-    Frequency,
-    AngularFrequency,
-    WavelengthArray,
-    FrequencyArray,
-    AngularFrequencyArray,
     C_MS,
     PI,
+    AngularFrequency,
+    AngularFrequencyArray,
+    Frequency,
+    FrequencyArray,
+    Wavelength,
+    WavelengthArray,
 )
 
 

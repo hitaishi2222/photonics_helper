@@ -3,7 +3,12 @@
 import numpy as np
 import pytest
 
-from photonics_helper.pulse import FROGTrace, generate_trace, retrieve, fidelity  # type: ignore[import-not-found]
+from photonics_helper.pulse import (  # type: ignore[import-not-found]
+    FROGTrace,
+    fidelity,
+    generate_trace,
+    retrieve,
+)
 
 
 class TestGenerateTrace:

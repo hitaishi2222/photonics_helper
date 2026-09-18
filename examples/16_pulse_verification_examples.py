@@ -13,8 +13,8 @@ References:
     - Reid et al., Opt. Commun. 181, 73 (2000)
 """
 
-import numpy as np
 import matplotlib
+import numpy as np
 
 matplotlib.use("Agg")  # Non-interactive backend for CI compatibility
 import matplotlib.pyplot as plt
@@ -25,9 +25,9 @@ from photonics_helper.pulse import (
     Envelope,
     TemporalGrid,
     Wave,
+    fidelity,
     generate_trace,
     retrieve,
-    fidelity,
 )
 
 

@@ -67,14 +67,14 @@ if TYPE_CHECKING:
     from .pulse import TemporalGrid, Wave
 
 __all__ = [
-    "peregrine_soliton",
-    "general_sfb",
+    "SolitonOnBackground",
     "akhmediev_breather",
+    "general_sfb",
     "kuznetsov_ma",
+    "peregrine_soliton",
     "sfb_peak_ratio",
     "sfb_spatial_period",
     "sfb_temporal_period",
-    "SolitonOnBackground",
 ]
 
 _PERE = 1e-9  # tolerance on a for the Peregrine limit
@@ -232,11 +232,11 @@ class SolitonOnBackground:
 
     def initial_wave(
         self,
-        grid: "TemporalGrid",
+        grid: TemporalGrid,
         a: float,
         z0: float = 0.0,
         wavelength: Wavelength | None = None,
-    ) -> "Wave":
+    ) -> Wave:
         """Build a :class:`~photonics_helper.pulse.Wave` with the exact SFB field at ``z0``.
 
         Parameters

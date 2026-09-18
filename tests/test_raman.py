@@ -1,19 +1,19 @@
 """Tests for Raman module — Layer 1: RamanSpec and RamanDatabase."""
 
-import pytest
-import numpy as np
-from numpy.testing import assert_almost_equal, assert_array_almost_equal
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+import numpy as np
+import pytest
+from numpy.testing import assert_almost_equal, assert_array_almost_equal
+
+from photonics_helper.base import C_MS, Energy, Time, Wavelength
 from photonics_helper.raman import (
-    RamanSpec,
-    RamanDatabase,
     RAMAN_MATERIALS,
     THORLABS_SUBSTRATE_MATERIALS,
+    RamanDatabase,
+    RamanSpec,
 )
-from photonics_helper.base import Wavelength, C_MS, Energy, Time
-
 
 # ─── RamanSpec Tests ──────────────────────────────────────────────────────────
 
@@ -708,8 +708,8 @@ class TestRamanFrequencyResponse:
 
     def _make_freq_resp(self, material="Silica", **overrides):
         """Helper to create a RamanFrequencyResponse."""
-        from photonics_helper.raman import RamanFrequencyResponse, RamanResponse
         from photonics_helper.pulse import TemporalGrid
+        from photonics_helper.raman import RamanFrequencyResponse, RamanResponse
 
         spec = RamanSpec.from_database(material)
         grid = TemporalGrid(N=2**14, Tmax=Time(10e-12, "s"))
@@ -885,7 +885,7 @@ class TestRamanFrequencyResponse:
         )
 
         from photonics_helper.pulse import TemporalGrid
-        from photonics_helper.raman import RamanResponse, RamanFrequencyResponse
+        from photonics_helper.raman import RamanFrequencyResponse, RamanResponse
 
         grid = TemporalGrid(N=2**14, Tmax=Time(10e-12, "s"))
         resp_narrow = RamanResponse(spec=spec_narrow, grid=grid)
@@ -906,8 +906,8 @@ class TestRamanResponse:
 
     def _make_response(self, **overrides):
         """Helper to create a RamanResponse with Silica defaults."""
-        from photonics_helper.raman import RamanResponse
         from photonics_helper.pulse import TemporalGrid
+        from photonics_helper.raman import RamanResponse
 
         spec = RamanSpec.from_database("Silica")
         grid = TemporalGrid(N=2**14, Tmax=Time(10e-12, "s"))
@@ -1100,8 +1100,8 @@ class TestRamanResponse:
 
     def test_different_materials_different_tau(self):
         """Test that different materials produce different τ1, τ2."""
-        from photonics_helper.raman import RamanResponse
         from photonics_helper.pulse import TemporalGrid
+        from photonics_helper.raman import RamanResponse
 
         cds = RamanSpec.from_database("CdS")
         dia = RamanSpec.from_database("Diamond")
@@ -1143,9 +1143,9 @@ class TestRamanPulseInteraction:
 
     def _make_interaction(self, material="Silica", **overrides):
         """Helper to create a RamanPulseInteraction with Silica defaults."""
+        from photonics_helper.base import Time, Wavelength
+        from photonics_helper.pulse import Envelope, TemporalGrid, Wave
         from photonics_helper.raman import RamanPulseInteraction, RamanResponse
-        from photonics_helper.pulse import Wave, Envelope, TemporalGrid
-        from photonics_helper.base import Wavelength, Time
 
         spec = RamanSpec.from_database(material)
         grid = TemporalGrid(N=2**14, Tmax=Time(20e-12, "s"))
@@ -1253,9 +1253,9 @@ class TestRamanPulseInteraction:
 
     def test_different_pulse_shapes(self):
         """Test interaction with different pulse shapes."""
-        from photonics_helper.pulse import Wave, Envelope, TemporalGrid
-        from photonics_helper.base import Wavelength, Time
-        from photonics_helper.raman import RamanResponse, RamanPulseInteraction
+        from photonics_helper.base import Time, Wavelength
+        from photonics_helper.pulse import Envelope, TemporalGrid, Wave
+        from photonics_helper.raman import RamanPulseInteraction, RamanResponse
 
         spec = RamanSpec.from_database("Silica")
         grid = TemporalGrid(N=2**14, Tmax=Time(20e-12, "s"))
@@ -1800,6 +1800,7 @@ class TestMaterialComparison:
 
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
+
         from photonics_helper.raman import RamanSpec
 
         comp = self._make_comparison(materials=[RamanSpec.from_database("Silica")])
@@ -1818,6 +1819,7 @@ class TestMaterialComparison:
 
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
+
         from photonics_helper.raman import RamanSpec
 
         comp = self._make_comparison(
@@ -1845,6 +1847,7 @@ class TestMaterialComparison:
 
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
+
         from photonics_helper.raman import RamanSpec
 
         comp = self._make_comparison(
@@ -1889,8 +1892,9 @@ class TestMaterialComparison:
 
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
-        from photonics_helper.raman import RamanSpec
+
         from photonics_helper.pulse import TemporalGrid
+        from photonics_helper.raman import RamanSpec
 
         spec = RamanSpec.from_database("Silica")
         grid = TemporalGrid(N=2**14, Tmax=Time(10e-12, "s"))
@@ -1909,8 +1913,9 @@ class TestMaterialComparison:
 
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
-        from photonics_helper.raman import RamanSpec
+
         from photonics_helper.pulse import TemporalGrid
+        from photonics_helper.raman import RamanSpec
 
         comp = self._make_comparison(
             materials=[
@@ -1947,8 +1952,9 @@ class TestMaterialComparison:
 
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
-        from photonics_helper.raman import RamanSpec
+
         from photonics_helper.pulse import TemporalGrid
+        from photonics_helper.raman import RamanSpec
 
         spec = RamanSpec.from_database("Silica")
         grid = TemporalGrid(N=2**14, Tmax=Time(10e-12, "s"))
@@ -1967,8 +1973,9 @@ class TestMaterialComparison:
 
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
-        from photonics_helper.raman import RamanSpec
+
         from photonics_helper.pulse import TemporalGrid
+        from photonics_helper.raman import RamanSpec
 
         comp = self._make_comparison(
             materials=[
@@ -1998,8 +2005,9 @@ class TestMaterialComparison:
 
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
-        from photonics_helper.raman import RamanSpec
+
         from photonics_helper.pulse import TemporalGrid
+        from photonics_helper.raman import RamanSpec
 
         comp = self._make_comparison(materials=[RamanSpec.from_database("Silica")])
         grid = TemporalGrid(N=2**14, Tmax=Time(10e-12, "s"))
@@ -2058,8 +2066,9 @@ class TestMaterialComparison:
 
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
-        from photonics_helper.raman import RamanSpec
+
         from photonics_helper.pulse import TemporalGrid
+        from photonics_helper.raman import RamanSpec
 
         spec = RamanSpec.from_database("Silica")
         grid = TemporalGrid(N=2**14, Tmax=Time(10e-12, "s"))
@@ -2077,8 +2086,9 @@ class TestMaterialComparison:
 
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
-        from photonics_helper.raman import RamanSpec
+
         from photonics_helper.pulse import TemporalGrid
+        from photonics_helper.raman import RamanSpec
 
         comp = self._make_comparison(
             materials=[
@@ -2257,8 +2267,8 @@ class TestMaterialComparison:
         """Test response overlay with plotly backend."""
         pytest.importorskip("plotly")
 
-        from photonics_helper.raman import RamanSpec
         from photonics_helper.pulse import TemporalGrid
+        from photonics_helper.raman import RamanSpec
 
         comp = self._make_comparison(materials=[RamanSpec.from_database("Silica")])
         grid = TemporalGrid(N=2**14, Tmax=Time(10e-12, "s"))
@@ -2269,8 +2279,8 @@ class TestMaterialComparison:
         """Test frequency overlay with plotly backend."""
         pytest.importorskip("plotly")
 
-        from photonics_helper.raman import RamanSpec
         from photonics_helper.pulse import TemporalGrid
+        from photonics_helper.raman import RamanSpec
 
         comp = self._make_comparison(materials=[RamanSpec.from_database("Silica")])
         grid = TemporalGrid(N=2**14, Tmax=Time(10e-12, "s"))
@@ -2281,8 +2291,8 @@ class TestMaterialComparison:
         """Test plot_all with plotly backend."""
         pytest.importorskip("plotly")
 
-        from photonics_helper.raman import RamanSpec
         from photonics_helper.pulse import TemporalGrid
+        from photonics_helper.raman import RamanSpec
 
         comp = self._make_comparison(materials=[RamanSpec.from_database("Silica")])
         grid = TemporalGrid(N=2**14, Tmax=Time(10e-12, "s"))
@@ -2295,6 +2305,7 @@ class TestMaterialComparison:
 
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
+
         from photonics_helper.raman import RamanSpec
 
         # Use a wide enough range to capture Silica's peak at 440 cm⁻¹
@@ -2333,6 +2344,7 @@ class TestMaterialComparison:
 
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
+
         from photonics_helper.raman import RamanSpec
 
         comp = self._make_comparison(
@@ -2354,6 +2366,7 @@ class TestMaterialComparison:
 
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
+
         from photonics_helper.raman import RamanSpec
 
         comp = self._make_comparison()

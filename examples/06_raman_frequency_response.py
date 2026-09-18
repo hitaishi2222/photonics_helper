@@ -18,15 +18,15 @@ Key observations:
 - Q factor = f_resonance / FWHM
 """
 
-import numpy as np
 import matplotlib
+import numpy as np
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from photonics_helper.raman import RamanSpec, RamanResponse, RamanFrequencyResponse
-from photonics_helper.pulse import TemporalGrid
 from photonics_helper.base import Time
+from photonics_helper.pulse import TemporalGrid
+from photonics_helper.raman import RamanFrequencyResponse, RamanResponse, RamanSpec
 
 
 def main():

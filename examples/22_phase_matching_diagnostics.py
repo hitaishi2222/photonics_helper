@@ -12,7 +12,6 @@ Run with: python examples/22_phase_matching_diagnostics.py
 """
 
 # The sys.path bootstrap below intentionally precedes the library imports.
-# ruff: noqa: E402
 
 import sys
 from pathlib import Path
@@ -22,8 +21,8 @@ _ROOT = Path(__file__).resolve().parents[1]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-import numpy as np
 import matplotlib
+import numpy as np
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -31,26 +30,26 @@ import matplotlib.pyplot as plt
 from photonics_helper.base import (
     C_MS,
     PI,
-    Wavelength,
-    WavelengthArray,
     Area,
     Length,
     Time,
+    Wavelength,
+    WavelengthArray,
 )
-from photonics_helper.pulse import Envelope, Wave, TemporalGrid
-from photonics_helper.gnlse import GNLSESolver, FiberProfile
 from photonics_helper.fiber import Dispersion
+from photonics_helper.gnlse import FiberProfile, GNLSESolver
 from photonics_helper.phase_matching import (
     DispersionAdaptor,
-    scan_fwm_detuning,
+    assess_simulation_readiness,
+    dispersive_wave_roots,
     mi_gain_spectrum,
     mi_sideband_frequencies,
-    dispersive_wave_roots,
-    assess_simulation_readiness,
     plot_fwm_efficiency,
     plot_readiness_report,
     plot_spectrum_with_pm_overlay,
+    scan_fwm_detuning,
 )
+from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
 
 def make_gaussian_pulse(

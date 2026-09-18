@@ -3,7 +3,8 @@ Tests for the ``photonics_helper.looks`` module (console helpers).
 """
 
 from unittest.mock import patch
-from photonics_helper.looks import c_info, c_error
+
+from photonics_helper.looks import c_error, c_info
 
 
 def test_c_info_prints_message():

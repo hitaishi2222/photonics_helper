@@ -1,12 +1,12 @@
 """Extra utility functions for photonics_helper."""
 
 from pathlib import Path
-from typing import List
+
 import imageio.v2 as io
 
 
 def create_mode_animation(
-    export_name: str, export_dir: str | Path, image_list: List[str | Path]
+    export_name: str, export_dir: str | Path, image_list: list[str | Path]
 ):
     """Save a list of images as an animated GIF.
 

@@ -54,6 +54,22 @@ Documentation = "https://github.com/hitaishi2222/photonics_helper#readme"
 [tool.setuptools.package-data]
 photonics_helper = ["py.typed", "materials.db"]
 
+# Pin the rule set explicitly so lint results stay stable across ruff releases
+# (ruff 0.16 expanded the default select; we keep the classic default set).
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+
+[tool.ruff.lint.per-file-ignores]
+# sys.path bootstrap scripts intentionally import after the path hack
+"benchmarks/*" = ["E402"]
+"examples/*" = ["E402"]
+# `l` is the standard Laguerre–Gaussian azimuthal index in physics notation
+"photonics_helper/structured.py" = ["E741"]
+"examples/28_structured_light.py" = ["E741"]
+"tests/test_structured.py" = ["E741"]
+"tests/test_breathers.py" = ["E731"]
+"tests/test_dashboard.py" = ["E402"]
+
 [tool.pyrefly]
 project-includes = [
     "**/*.py*",

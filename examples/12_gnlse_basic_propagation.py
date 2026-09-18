@@ -16,15 +16,15 @@ This example propagates a 100-fs Gaussian pulse through 1 mm of silica fiber,
 comparing pure dispersion, pure Kerr, and their combination.
 """
 
-import numpy as np
 import matplotlib
+import numpy as np
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+from photonics_helper.base import Area, Length, Time, Wavelength
 from photonics_helper.gnlse import FiberProfile, GNLSESolver
-from photonics_helper.pulse import Envelope, Wave, TemporalGrid
-from photonics_helper.base import Wavelength, Time, Length, Area
+from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
 
 def make_pulse(wavelength_nm=1550, T0_fs=100, peak_power_W=5000):

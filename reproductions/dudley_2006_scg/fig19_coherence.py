@@ -28,8 +28,9 @@ from pathlib import Path
 
 import numpy as np
 
-from . import common
 from photonics_helper.noise import coherence_g12
+
+from . import common
 
 HERE = Path(__file__).resolve().parent
 

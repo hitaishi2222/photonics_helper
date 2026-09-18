@@ -1,10 +1,11 @@
 """Tests for ZDependentDispersion dataclass."""
 
 import math
+import os
+import tempfile
+
 import numpy as np
 import pytest
-import tempfile
-import os
 
 from photonics_helper.fiber import ZDependentDispersion
 

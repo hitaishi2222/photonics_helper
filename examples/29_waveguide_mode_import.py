@@ -24,7 +24,6 @@ Run with: python examples/29_waveguide_mode_import.py
 """
 
 # The sys.path bootstrap below intentionally precedes the library imports.
-# ruff: noqa: E402
 
 import sys
 import tempfile
@@ -34,8 +33,8 @@ _ROOT = Path(__file__).resolve().parents[1]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-import numpy as np
 import matplotlib
+import numpy as np
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt

@@ -39,7 +39,7 @@ Z_R = rayleigh_range(W0, WAVELENGTH)
 MODES = [(0, 0), (0, 1), (1, 0), (0, 2), (1, 1), (2, 0)]
 
 
-def lg(p: int, l: int) -> LaguerreGaussianMode:  # noqa: E741
+def lg(p: int, l: int) -> LaguerreGaussianMode:
     return LaguerreGaussianMode(p, l, W0, WAVELENGTH)
 
 
@@ -52,16 +52,16 @@ print(
 
 # ── 1. Orthonormality of the modes ─────────────────────────────────────
 print("\n  Overlap matrix  <LG(p,l) | LG(p',l')>")
-header = "        " + "".join(f"{f'({p},{l})':>10}" for p, l in MODES)  # noqa: E741
+header = "        " + "".join(f"{f'({p},{l})':>10}" for p, l in MODES)
 print(header)
-for p, l in MODES:  # noqa: E741
+for p, l in MODES:
     row = "".join(f"{overlap(lg(p, l), lg(p2, l2)).real:10.4f}" for p2, l2 in MODES)
     print(f"  ({p},{l}) {row}")
 
 # ── 2. OAM phase winding around the axis ───────────────────────────────
 print("\n  OAM phase winding on a closed loop (r = 2 w0)")
 phi = np.linspace(0.0, 2.0 * np.pi, 2881)
-for l in (1, 2, 3, -1):  # noqa: E741
+for l in (1, 2, 3, -1):
     values = lg(0, l).evaluate(2 * W0 * np.cos(phi), 2 * W0 * np.sin(phi))
     winding = float(np.unwrap(np.angle(values))[-1] - np.unwrap(np.angle(values))[0])
     print(
@@ -86,7 +86,7 @@ plt.close(fig_lg)
 
 # ── 5. Montage of mode intensities at the waist ────────────────────────
 fig, axes = plt.subplots(2, 3, figsize=(11, 7), layout="constrained")
-for ax, (p, l) in zip(axes.ravel(), MODES):  # noqa: E741
+for ax, (p, l) in zip(axes.ravel(), MODES):
     field = lg(p, l).structured()
     extent_um = tuple(v * 1e6 for v in field.extent)
     im = ax.imshow(

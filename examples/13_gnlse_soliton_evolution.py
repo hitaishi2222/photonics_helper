@@ -20,15 +20,15 @@ This example shows:
   - N=3: soliton fission — higher-order pulse splits into N fundamental solitons
 """
 
-import numpy as np
 import matplotlib
+import numpy as np
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+from photonics_helper.base import Area, Length, Time, Wavelength
 from photonics_helper.gnlse import FiberProfile, GNLSESolver
-from photonics_helper.pulse import Envelope, Wave, TemporalGrid
-from photonics_helper.base import Wavelength, Time, Length, Area
+from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
 
 def make_soliton_pulse(wavelength_nm=1064, T0_fs=200, peak_power_W=1000):

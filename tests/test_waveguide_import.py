@@ -5,10 +5,10 @@ end-to-end check that a loaded table yields a ``PropagationConstant`` whose
 ``beta2`` matches the analytic second derivative.
 """
 
+from pathlib import Path
+
 import numpy as np
 import pytest
-
-from pathlib import Path
 
 from photonics_helper import WaveguideMode
 from photonics_helper.base import Wavelength, WavelengthArray

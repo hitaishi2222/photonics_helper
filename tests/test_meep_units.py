@@ -11,9 +11,9 @@ import pytest
 
 from photonics_helper.base import (
     C_MS,
-    Area,
     AngularFrequency,
     AngularFrequencyArray,
+    Area,
     Energy,
     Frequency,
     FrequencyArray,
@@ -25,7 +25,6 @@ from photonics_helper.base import (
     Wavenumber,
     WavenumberArray,
 )
-
 
 SCALARS = [
     Wavelength(1550, "nm"),

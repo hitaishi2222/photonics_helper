@@ -34,21 +34,21 @@ import argparse
 import sys
 import time
 
-import numpy as np
 import matplotlib
+import numpy as np
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+from photonics_helper.base import Length, Time, Wavelength
 from photonics_helper.gnlse import (
     FiberProfile,
     GNLSESolver,
     SplitStepEngine,
     plot_spectral_temporal_summary,
 )
-from photonics_helper.pulse import Envelope, Wave, TemporalGrid
+from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 from photonics_helper.raman import RamanResponse, RamanSpec
-from photonics_helper.base import Wavelength, Time, Length
 
 # ── Dudley / laserfun NLSE_dudley parameters ────────────────────────────────
 

@@ -20,11 +20,11 @@ Key physics shown:
 import matplotlib
 
 matplotlib.use("Agg")
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 
 from photonics_helper.base import Length, Wavelength, WavelengthArray
-from photonics_helper.dbr import Block, Material, Pattern, TMM
+from photonics_helper.dbr import TMM, Block, Material, Pattern
 
 wl_array = WavelengthArray(np.linspace(1300, 1800, 401), "nm")
 lam0_nm = 1550.0

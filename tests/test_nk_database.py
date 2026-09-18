@@ -16,9 +16,8 @@ import json
 
 import pytest
 
-from photonics_helper.raman import RamanDatabase, RamanSpec
 from photonics_helper.materials import RefractiveIndex, validate_nk_dataset
-
+from photonics_helper.raman import RamanDatabase, RamanSpec
 
 # ─── Validation (task 4.1) ────────────────────────────────────────────────────
 
@@ -203,7 +202,7 @@ def test_seed_skips_invalid_datasets(tmp_path):
 
 def test_seed_does_not_touch_sellmeier(tmp_path):
     """Tabulated seeding leaves the sellmeier table intact."""
-    from seed_db import seed_tabulated_nk, seed_nk_data
+    from seed_db import seed_nk_data, seed_tabulated_nk
 
     db_path = tmp_path / "m.db"
     db = RamanDatabase(db_path=db_path)

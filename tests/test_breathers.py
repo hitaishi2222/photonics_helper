@@ -35,14 +35,14 @@ def test_peregrine_peak_ratio_is_nine():
 
 
 def test_peregrine_solves_nlse():
-    f = lambda x, t: peregrine_soliton(x, t)  # noqa: E731
+    f = lambda x, t: peregrine_soliton(x, t)
     worst = max(_residual(f, x, t) for x in (-2.0, 0.0, 1.3) for t in (0.0, 0.5, 2.0))
     assert worst < 1e-5
 
 
 @pytest.mark.parametrize("a", [0.25, 0.66])
 def test_general_sfb_solves_nlse(a):
-    f = lambda x, t: general_sfb(x, t, a)  # noqa: E731
+    f = lambda x, t: general_sfb(x, t, a)
     worst = max(_residual(f, x, t) for x in (0.1, 0.8, 1.9) for t in (0.0, 0.5, 1.5))
     assert worst < 1e-5
 

@@ -1,8 +1,9 @@
-import pytest
 import numpy as np
+import pytest
 from numpy.testing import assert_array_almost_equal
-from photonics_helper.materials import RefractiveIndex
+
 from photonics_helper.base import WavelengthArray
+from photonics_helper.materials import RefractiveIndex
 
 
 @pytest.fixture

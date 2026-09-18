@@ -8,7 +8,6 @@ behaviour.
 
 import numpy as np
 import pytest
-
 from pydantic import ValidationError
 
 from photonics_helper.base import (
@@ -16,12 +15,12 @@ from photonics_helper.base import (
     EPS_0,
     MU_0,
     PI,
-    Permiability,
-    Permittivity,
     AngularFrequency,
     AngularFrequencyArray,
     Frequency,
     FrequencyArray,
+    Permiability,
+    Permittivity,
     Wavelength,
     WavelengthArray,
     Wavenumber,

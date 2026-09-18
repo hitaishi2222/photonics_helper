@@ -8,6 +8,7 @@ from photonics_helper.base import (
     H_PLANCK,
     HBAR,
     PI,
+    AngularFrequency,
     Area,
     Energy,
     Frequency,
@@ -16,7 +17,6 @@ from photonics_helper.base import (
     Time,
     Wavelength,
     Wavenumber,
-    AngularFrequency,
 )
 
 

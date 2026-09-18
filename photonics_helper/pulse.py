@@ -14,25 +14,30 @@ value as normalized. With an effective area ``A_eff`` the library uses
 """
 
 from __future__ import annotations
-from pydantic.dataclasses import dataclass
-from math import sqrt, log, acosh, pi
-from typing import Any, Callable, Dict, Literal, Self
-from functools import cached_property, lru_cache
+
 import copy
 import logging
 import warnings
+from collections.abc import Callable
+from functools import cached_property, lru_cache
+from math import acosh, log, pi, sqrt
+from typing import Any, Literal, Self
+
+import matplotlib.pyplot as plt
+import numpy as np
 from matplotlib import gridspec
 from numpy.typing import NDArray
-from photonics_helper.base import Wavelength, Frequency, Time, C_MS, EPS_0, Area
-from photonics_helper._fftw import fft as _fft_backend, ifft as _ifft_backend
+from pydantic.dataclasses import dataclass
+from scipy.special import airy
+from scipy.special import hermite as hermite_poly
 
-import numpy as np
-import matplotlib.pyplot as plt
-from scipy.special import airy, hermite as hermite_poly
+from photonics_helper._fftw import fft as _fft_backend
+from photonics_helper._fftw import ifft as _ifft_backend
+from photonics_helper.base import C_MS, EPS_0, Area, Frequency, Time, Wavelength
 
 logger = logging.getLogger(__name__)
 
-SHAPE_FACTORS: Dict[str, float] = {
+SHAPE_FACTORS: dict[str, float] = {
     "gaussian": 2 * sqrt(log(2)),
     "sech": 2 * acosh(sqrt(2)),
     "lorentzian": 2 * sqrt(sqrt(2) - 1),
@@ -278,7 +283,7 @@ class Envelope:
         TOD: float = 0.0,
         FOD: float = 0.0,
         N: int = 2**12,
-    ) -> "Envelope":
+    ) -> Envelope:
         """Apply group-delay dispersion (GDD), TOD, FOD in the frequency domain.
 
         Multiplies the spectral amplitude by ``exp(−i·φ(ω))`` where
@@ -1462,7 +1467,7 @@ class FROGTrace:
         E_field: NDArray,
         dt: float,
         normalize: bool = True,
-    ) -> "FROGTrace":
+    ) -> FROGTrace:
         """Generate a FROG trace from a complex electric field E(t).
 
         Parameters
@@ -1516,7 +1521,7 @@ class FROGTrace:
 
     def visualize(
         self,
-        retrieved: "FROGTrace | None" = None,
+        retrieved: FROGTrace | None = None,
         figsize: tuple[float, float] | None = None,
         save_path: str | None = None,
     ):

@@ -8,9 +8,9 @@ from __future__ import annotations
 
 from typing import Literal
 
+import matplotlib.pyplot as plt
 import numpy as np
 from numpy.typing import NDArray
-import matplotlib.pyplot as plt
 from pydantic import model_validator
 from pydantic.dataclasses import dataclass
 from pydantic_core import ArgsKwargs

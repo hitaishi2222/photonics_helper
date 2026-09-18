@@ -43,33 +43,31 @@ plot_spectrum_with_pm_overlay — spectrum + PM vertical lines
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass, field
 from math import factorial
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
-import warnings
-
+import matplotlib.pyplot as plt
 import numpy as np
 from numpy.typing import NDArray
+from scipy.integrate import cumulative_trapezoid
 from scipy.optimize import root_scalar
 from scipy.signal import find_peaks
-from scipy.integrate import cumulative_trapezoid
-
-import matplotlib.pyplot as plt
 
 from .base import (
     C_MS,
     PI,
+    AngularFrequency,
+    AngularFrequencyArray,
     Length,
     Wavelength,
     WavelengthArray,
-    AngularFrequency,
-    AngularFrequencyArray,
 )
 
 if TYPE_CHECKING:
     from .fiber import Dispersion, PropagationConstant, ZDependentDispersion
-    from .gnlse import GNLSESolver, FiberProfile
+    from .gnlse import FiberProfile, GNLSESolver
     from .pulse import Wave
 
 
@@ -122,7 +120,7 @@ class DispersionAdaptor:
     The adaptor is callable: ``adaptor(omega)`` returns β(ω).
     """
 
-    def __init__(self, dispersion: "Dispersion", omega0: float | None = None) -> None:
+    def __init__(self, dispersion: Dispersion, omega0: float | None = None) -> None:
         self._disp = dispersion
         if omega0 is None:
             omega0 = 2 * PI * C_MS / dispersion.central_wavelength.as_m
@@ -185,7 +183,7 @@ class PropagationConstantAdaptor:
     The adaptor is callable: ``adaptor(omega)`` returns β(ω).
     """
 
-    def __init__(self, pc: "PropagationConstant") -> None:
+    def __init__(self, pc: PropagationConstant) -> None:
         from scipy.interpolate import InterpolatedUnivariateSpline
 
         if isinstance(pc.x_values, WavelengthArray):
@@ -230,7 +228,7 @@ class ZDependentDispersionAdaptor:
     The adaptor is callable: ``adaptor(omega)`` returns β(ω, z_fixed).
     """
 
-    def __init__(self, zd_disp: "ZDependentDispersion", z: float) -> None:
+    def __init__(self, zd_disp: ZDependentDispersion, z: float) -> None:
         self._zd = zd_disp
         self._z = z
         # Pre-evaluate β at all omega values for this z
@@ -976,7 +974,7 @@ def _make_dispersion_adaptor(
 
 
 def _taylor_phase_max_error(
-    pulse: "Wave",
+    pulse: Wave,
     betas: NDArray,
     adaptor: DispersionAdaptor
     | PropagationConstantAdaptor
@@ -1018,8 +1016,8 @@ def emit_readiness_warnings(report: SimulationReadinessReport) -> None:
 
 
 def assess_simulation_readiness(
-    pulse: "Wave",
-    fiber: "FiberProfile",
+    pulse: Wave,
+    fiber: FiberProfile,
     dispersion,
     betas: NDArray | None = None,
     length: Length | None = None,
@@ -1337,7 +1335,7 @@ def _estimate_beta2(dispersion, omega0: float | AngularFrequency) -> float | Non
 
 
 def compare_spectrum_to_phase_matching(
-    solver: "GNLSESolver",
+    solver: GNLSESolver,
     report: SimulationReadinessReport,
     tolerance: Wavelength | float = 2.0,
     tolerance_frac: float = 0.01,
@@ -1515,7 +1513,7 @@ def _compute_spectrum_fwhm(wavelength_nm: NDArray, spectrum: NDArray) -> float:
 # ============================================================================
 
 
-def plot_fwm_efficiency(fwm_result: PhaseMatchResult, ax=None) -> "plt.Figure":
+def plot_fwm_efficiency(fwm_result: PhaseMatchResult, ax=None) -> plt.Figure:
     """Plot FWM Δβ and efficiency curves for degenerate FWM.
 
     Parameters
@@ -1569,7 +1567,7 @@ def plot_fwm_efficiency(fwm_result: PhaseMatchResult, ax=None) -> "plt.Figure":
     return fig
 
 
-def plot_mi_gain(mi_result, ax=None) -> "plt.Figure":
+def plot_mi_gain(mi_result, ax=None) -> plt.Figure:
     """Plot MI gain spectrum g(Ω) vs modulation frequency.
 
     Parameters
@@ -1632,7 +1630,7 @@ def plot_mi_gain(mi_result, ax=None) -> "plt.Figure":
     return fig
 
 
-def plot_readiness_report(report: SimulationReadinessReport, ax=None) -> "plt.Figure":
+def plot_readiness_report(report: SimulationReadinessReport, ax=None) -> plt.Figure:
     """Plot readiness panel showing grid vs dispersion extent.
 
     Parameters
@@ -1710,7 +1708,7 @@ def plot_readiness_report(report: SimulationReadinessReport, ax=None) -> "plt.Fi
 
 def plot_spectrum_with_pm_overlay(
     solver, report: SimulationReadinessReport, ax=None
-) -> "plt.Figure":
+) -> plt.Figure:
     """Plot final spectrum with vertical lines at PM-predicted frequencies.
 
     Parameters

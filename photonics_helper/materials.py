@@ -1,18 +1,17 @@
 """Refractive index data with spline interpolation and Sellmeier models."""
 
-from scipy.interpolate import BSpline
 import warnings
-from .base import PI, WavelengthArray
-
-from typing import TYPE_CHECKING, Any, cast, List, Literal, Self, Tuple
-from numpy.typing import ArrayLike, NDArray
 from functools import cached_property
-from pydantic.dataclasses import dataclass
-from pydantic import model_validator
+from typing import TYPE_CHECKING, Any, Literal, Self, cast
 
-import numpy as np
 import matplotlib.pyplot as plt
-from scipy.interpolate import make_splrep
+import numpy as np
+from numpy.typing import ArrayLike, NDArray
+from pydantic import model_validator
+from pydantic.dataclasses import dataclass
+from scipy.interpolate import BSpline, make_splrep
+
+from .base import PI, WavelengthArray
 
 # ``RamanDatabase`` is imported lazily inside methods to avoid a circular
 # import (``raman`` imports ``materials`` at runtime). It is only referenced
@@ -344,10 +343,10 @@ class RefractiveIndex:
     @classmethod
     def from_sellmeier(
         cls,
-        A0: int | float,
-        A: List[float],
-        B: List[float],
-        wl_from_to_in_um: Tuple[float, float],
+        A0: float,
+        A: list[float],
+        B: list[float],
+        wl_from_to_in_um: tuple[float, float],
         n_points=200,
     ) -> Self:
         """Construct from a Sellmeier equation: n² = A₀ + Σ Aᵢλ²/(λ² - Bᵢ).
@@ -383,10 +382,10 @@ class RefractiveIndex:
     @classmethod
     def from_alt_sellmeier(
         cls,
-        A0: int | float,
-        A: List[float],
-        B: List[float],
-        wl_from_to_in_um: Tuple[float, float],
+        A0: float,
+        A: list[float],
+        B: list[float],
+        wl_from_to_in_um: tuple[float, float],
         n_points=200,
     ) -> Self:
         """Construct from an alternative Sellmeier form: n² = A₀ + Σ Aᵢ/(λ² - Bᵢ²).

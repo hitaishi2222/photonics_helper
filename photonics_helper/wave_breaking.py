@@ -40,21 +40,21 @@ References
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Sequence
 
 import numpy as np
 from numpy.typing import NDArray
 
 __all__ = [
+    "WaveBreaking",
+    "detect_oscillation_onset",
+    "detect_steepening_onset",
     "dispersion_length",
-    "nonlinear_length",
-    "wave_breaking_distance",
     "edge_steepness",
     "gaussian_edge_steepness",
-    "detect_steepening_onset",
-    "detect_oscillation_onset",
-    "WaveBreaking",
+    "nonlinear_length",
+    "wave_breaking_distance",
 ]
 
 #: Peak dimensionless edge steepness of a transform-limited Gaussian profile.

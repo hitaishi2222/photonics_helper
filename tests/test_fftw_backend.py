@@ -180,9 +180,9 @@ def test_gnlse_matches_numpy_path():
     except ImportError:
         pytest.skip("pyfftw not installed")
 
+    from photonics_helper.base import Area, Length, Time, Wavelength
     from photonics_helper.gnlse import FiberProfile, GNLSESolver
-    from photonics_helper.pulse import Envelope, Wave, TemporalGrid
-    from photonics_helper.base import Wavelength, Time, Length, Area
+    from photonics_helper.pulse import Envelope, TemporalGrid, Wave
     from photonics_helper.raman import RamanResponse, RamanSpec
 
     grid = TemporalGrid(N=2**11, Tmax=Time(10e-12, "s"))

@@ -446,8 +446,8 @@ def make_contact_sheet() -> None:
     import matplotlib
 
     matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
     import matplotlib.image as mpimg
+    import matplotlib.pyplot as plt
 
     pages = sorted((HERE / "paper_pages").glob("page*.png"))
     if not pages:

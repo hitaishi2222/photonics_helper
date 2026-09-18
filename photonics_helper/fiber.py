@@ -1,6 +1,18 @@
 """Fiber dispersion and propagation constant calculations."""
 
-from scipy.interpolate import BSpline, RegularGridInterpolator
+import warnings
+from functools import cached_property
+from math import factorial
+from pathlib import Path
+from typing import Any, Literal, Self
+
+import matplotlib.pyplot as plt
+import numpy as np
+from numpy.typing import NDArray
+from pydantic import model_validator
+from pydantic.dataclasses import dataclass
+from scipy.interpolate import BSpline, RegularGridInterpolator, make_splrep
+
 from photonics_helper.base import (
     C_MS,
     PI,
@@ -8,19 +20,6 @@ from photonics_helper.base import (
     Wavelength,
     WavelengthArray,
 )
-
-from functools import cached_property
-from numpy.typing import NDArray
-from pathlib import Path
-from typing import Any, Literal, Self
-from pydantic.dataclasses import dataclass
-from pydantic import model_validator
-
-import warnings
-import numpy as np
-import matplotlib.pyplot as plt
-from math import factorial
-from scipy.interpolate import make_splrep
 
 
 @dataclass(config={"arbitrary_types_allowed": True})

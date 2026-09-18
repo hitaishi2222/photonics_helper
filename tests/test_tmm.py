@@ -8,7 +8,7 @@ spectral response (reflectance and transmittance) and the electric‑field profi
 import numpy as np
 import pytest
 
-from photonics_helper.base import Wavelength, WavelengthArray, Length
+from photonics_helper.base import Length, Wavelength, WavelengthArray
 from photonics_helper.dbr import TMM, Block, Material, Pattern
 
 

@@ -8,15 +8,7 @@ against an analytic/closed-form reference.
 import numpy as np
 import pytest
 
-from reproductions.macleod_quarter_wave_dbr.reproduce import validate as validate_dbr
-from reproductions.stolen_lin_1978_spm.reproduce import validate as validate_spm
-from reproductions.gordon_1986_ssfs.reproduce import validate as validate_gordon
 from reproductions.dudley_2006_cherenkov_dw.reproduce import validate as validate_dw
-from reproductions.kuznetsov_ma_2012_breather.reproduce import validate as validate_km
-from reproductions.narhi_2016_mi_breathers.reproduce import validate as validate_narhi
-from reproductions.tomlinson_1985_wave_breaking.reproduce import validate as validate_wb
-from reproductions.shg_textbook.reproduce import validate as validate_shg
-
 from reproductions.dudley_2006_scg.fig03_basic_scg import validate as validate_fig03
 from reproductions.dudley_2006_scg.fig04_output_features import (
     validate as validate_fig04,
@@ -33,6 +25,13 @@ from reproductions.dudley_2006_scg.fig08_dispersive_wave import (
 )
 from reproductions.dudley_2006_scg.fig10_spectrogram import validate as validate_fig10
 from reproductions.dudley_2006_scg.fig23_mi_gain import validate as validate_fig23
+from reproductions.gordon_1986_ssfs.reproduce import validate as validate_gordon
+from reproductions.kuznetsov_ma_2012_breather.reproduce import validate as validate_km
+from reproductions.macleod_quarter_wave_dbr.reproduce import validate as validate_dbr
+from reproductions.narhi_2016_mi_breathers.reproduce import validate as validate_narhi
+from reproductions.shg_textbook.reproduce import validate as validate_shg
+from reproductions.stolen_lin_1978_spm.reproduce import validate as validate_spm
+from reproductions.tomlinson_1985_wave_breaking.reproduce import validate as validate_wb
 
 
 def test_stolen_lin_1978_spm():

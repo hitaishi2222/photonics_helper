@@ -1,12 +1,14 @@
 """Physical units and constants for photonics calculations."""
 
 from __future__ import annotations
-from typing import Iterator, Literal, Self
-from numpy.typing import NDArray
+
+from collections.abc import Iterator
 from functools import cached_property
+from typing import Literal, Self
 
 import numpy as np
 import scipy.constants as const
+from numpy.typing import NDArray
 from pydantic.dataclasses import dataclass
 
 # Constants
@@ -754,7 +756,7 @@ class PeakPower(Power):
         A_eff: Area,
         n: float = 1.0,
         lambda0: Wavelength | None = None,
-    ) -> "PeakPower":
+    ) -> PeakPower:
         """Convert a normalized envelope amplitude to a physical peak power.
 
         Parameters

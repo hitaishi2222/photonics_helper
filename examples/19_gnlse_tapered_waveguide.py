@@ -25,20 +25,20 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
-from shapely.geometry import Polygon
 
 # ── femwell imports ──────────────────────────────────────────────────
 from femwell.maxwell.waveguide import compute_modes
 from femwell.mesh import mesh_from_OrderedDict
+from shapely.geometry import Polygon
 from skfem import Basis, ElementTriP0
 from skfem.io.meshio import from_meshio
 
 # ── photonics_helper imports ─────────────────────────────────────────
 from photonics_helper.base import (
-    Area,
     C_MS,
-    Length,
     PI,
+    Area,
+    Length,
     Time,
     Wavelength,
 )

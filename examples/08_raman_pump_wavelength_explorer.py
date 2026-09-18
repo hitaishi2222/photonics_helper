@@ -18,17 +18,17 @@ Key observations:
 Material: Silica (440 cm⁻¹ Raman shift)
 """
 
-import numpy as np
 import matplotlib
+import numpy as np
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from photonics_helper.raman import (
-    RamanSpec,
-    PumpWavelengthExplorer,
-)
 from photonics_helper.base import Wavelength
+from photonics_helper.raman import (
+    PumpWavelengthExplorer,
+    RamanSpec,
+)
 
 
 def main():

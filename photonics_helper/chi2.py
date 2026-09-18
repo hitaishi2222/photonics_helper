@@ -71,15 +71,14 @@ solve_dfg          — difference-frequency generation wrapper
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from math import pi
-from typing import Callable
 
 import numpy as np
 from numpy.typing import NDArray
 
 from .base import C_MS, EPS_0, Area, Wavelength
-
 
 # ============================================================================
 # Phase matching / QPM helpers

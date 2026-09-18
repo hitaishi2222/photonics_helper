@@ -1,12 +1,13 @@
 """Tests for photonics_helper.gnlse.visualize."""
 
+import matplotlib
 import numpy as np
 import pytest
-import matplotlib
 
 matplotlib.use("Agg")  # non-interactive backend
 import matplotlib.pyplot as plt
 
+from photonics_helper.base import Area, Length, Time, Wavelength
 from photonics_helper.gnlse import (
     FiberProfile,
     GNLSESolver,
@@ -14,8 +15,7 @@ from photonics_helper.gnlse import (
     plot_spectrum_vs_distance,
     plot_waterfall,
 )
-from photonics_helper.pulse import Wave, Envelope, TemporalGrid
-from photonics_helper.base import Wavelength, Time, Length, Area
+from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
 
 @pytest.fixture

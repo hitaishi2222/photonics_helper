@@ -15,20 +15,20 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import numpy as np
 import matplotlib
+import numpy as np
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+from photonics_helper.base import Length, Time, Wavelength
 from photonics_helper.gnlse import (
     FiberProfile,
     GNLSESolver,
     plot_spectral_evolution,
     plot_temporal_evolution,
 )
-from photonics_helper.pulse import Envelope, Wave, TemporalGrid
-from photonics_helper.base import Wavelength, Time, Length
+from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
 # ── Parameters (match laserfun NLSE_simple) ───────────────────────────────────
 

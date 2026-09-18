@@ -45,17 +45,19 @@ import numpy as np
 from numpy.typing import NDArray
 
 from photonics_helper.base import C_MS, Length, Time, Wavelength
-from photonics_helper.gnlse import FiberProfile, GNLSESolver, SplitStepEngine
-from photonics_helper.phase_matching import mi_gain_spectrum
-from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
 # The exact breather solutions and the stochastic seed now live in the library;
 # this reproduction validates the solver against them.
 from photonics_helper.breathers import (
     akhmediev_breather as akhmediev,
+)
+from photonics_helper.breathers import (
     peregrine_soliton as peregrine,
 )
+from photonics_helper.gnlse import FiberProfile, GNLSESolver, SplitStepEngine
 from photonics_helper.noise import add_noise
+from photonics_helper.phase_matching import mi_gain_spectrum
+from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
 HERE = Path(__file__).resolve().parent
 PARAMETERS = HERE / "parameters.json"
@@ -561,8 +563,8 @@ def make_contact_sheet() -> None:
     import matplotlib
 
     matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
     import matplotlib.image as mpimg
+    import matplotlib.pyplot as plt
 
     pages = sorted((HERE / "paper_pages").glob("page*.png"))
     if not pages:

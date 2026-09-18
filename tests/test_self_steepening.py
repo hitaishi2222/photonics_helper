@@ -8,9 +8,9 @@ thousands of steps) are intentionally not exercised here.
 import numpy as np
 import pytest
 
+from photonics_helper.base import Area, Length, Time, Wavelength
 from photonics_helper.gnlse import FiberProfile, GNLSESolver, SplitStepEngine
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
-from photonics_helper.base import Area, Length, Time, Wavelength
 
 
 @pytest.fixture

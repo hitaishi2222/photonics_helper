@@ -16,14 +16,14 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from photonics_helper.raman import (
-    RamanSpec,
-    RamanResponse,
-    MaterialComparison,
-    COMMON_COMPARISONS,
-)
-from photonics_helper.pulse import TemporalGrid
 from photonics_helper.base import Time
+from photonics_helper.pulse import TemporalGrid
+from photonics_helper.raman import (
+    COMMON_COMPARISONS,
+    MaterialComparison,
+    RamanResponse,
+    RamanSpec,
+)
 
 
 def print_table(materials, title="Material Properties"):

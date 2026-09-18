@@ -33,7 +33,7 @@ W0 = 1e-3  # 1 mm waist
 WAVELENGTH = 1064e-9  # 1064 nm
 
 
-def lg(p: int, l: int, **kwargs) -> LaguerreGaussianMode:  # noqa: E741
+def lg(p: int, l: int, **kwargs) -> LaguerreGaussianMode:
     """Shorthand for a mode at the default 1 mm / 1064 nm test geometry."""
     return LaguerreGaussianMode(p, l, W0, WAVELENGTH, **kwargs)
 
@@ -92,7 +92,7 @@ def test_overlap_rejects_grid_mismatch():
 # OAM phase winding
 # ---------------------------------------------------------------------------
 @pytest.mark.parametrize("l", [1, 2, 3, -1, -2])
-def test_oam_phase_winding(l):  # noqa: E741
+def test_oam_phase_winding(l):
     """Phase accumulated around a closed loop enclosing the axis is ``2 pi l``."""
     mode = lg(0, l)  # p=0 keeps the radial factor strictly positive
     phi = np.linspace(0.0, 2.0 * np.pi, 2881)
@@ -187,7 +187,7 @@ def test_structured_field_geometry_and_centroid():
     xmin, xmax, ymin, ymax = field.extent
     assert xmin == pytest.approx(-5 * W0 - field.dx / 2.0)
     assert xmax == pytest.approx(5 * W0 + field.dx / 2.0)
-    assert (xmax - xmin) == pytest.approx((ymax - ymin))
+    assert (xmax - xmin) == pytest.approx(ymax - ymin)
 
 
 def test_structured_field_defaults_dy_to_dx():

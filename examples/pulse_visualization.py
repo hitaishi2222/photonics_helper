@@ -10,13 +10,14 @@ Usage:
 """
 
 from __future__ import annotations
+
 import asyncio
 import webbrowser
 from pathlib import Path
 from typing import Literal, cast
 
 import plotly.graph_objects as go
-from fastapi import FastAPI, Request, Form
+from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 

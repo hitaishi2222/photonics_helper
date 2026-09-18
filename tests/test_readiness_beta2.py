@@ -9,6 +9,7 @@ import warnings
 
 import numpy as np
 
+import photonics_helper.phase_matching as pm
 from photonics_helper.base import Area, Length, Time, Wavelength, WavelengthArray
 from photonics_helper.fiber import Dispersion, PropagationConstant
 from photonics_helper.gnlse import FiberProfile
@@ -17,9 +18,6 @@ from photonics_helper.phase_matching import (
     assess_simulation_readiness,
 )
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
-
-import photonics_helper.phase_matching as pm
-
 
 LAM = 1550e-9
 BETA2_EXPECTED = 2.5508963989899877e-26  # -D λ²/(2πc) for D = -20 ps/(nm·km)

@@ -11,16 +11,15 @@ Provides diagnostics for soliton propagation simulations:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional, cast
-
 import warnings
+from typing import TYPE_CHECKING, cast
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 from numpy.typing import NDArray
 from scipy.signal import find_peaks
 
-from .base import C_MS, AngularFrequency, Length, Wavelength, AngularFrequencyArray
+from .base import C_MS, AngularFrequency, AngularFrequencyArray, Length, Wavelength
 
 if TYPE_CHECKING:
     from photonics_helper.gnlse import FiberProfile, GNLSESolver
@@ -28,10 +27,10 @@ if TYPE_CHECKING:
 
 __all__ = [
     "SolitonAnalyzer",
-    "plot_soliton_trajectories",
+    "plot_dispersion_wave",
     "plot_fission_dynamics",
     "plot_raman_shift",
-    "plot_dispersion_wave",
+    "plot_soliton_trajectories",
 ]
 
 
@@ -90,8 +89,8 @@ class SolitonAnalyzer:
 
     def __init__(
         self,
-        pulse: "Wave",
-        fiber: "FiberProfile",
+        pulse: Wave,
+        fiber: FiberProfile,
         betas: NDArray,
         z_array: NDArray,
         spectra_vs_z: tuple,
@@ -269,7 +268,7 @@ class SolitonAnalyzer:
             raise ValueError("DW frequency would be non-positive.")
         return AngularFrequency(omega_dw, "rad/s").to_wl()
 
-    def count_solitons(self, spectrum: Optional[NDArray] = None) -> int:
+    def count_solitons(self, spectrum: NDArray | None = None) -> int:
         """Count solitons in output spectrum using peak detection.
 
         Parameters
@@ -412,7 +411,7 @@ class SolitonAnalyzer:
 # ---------------------------------------------------------------------------
 
 
-def plot_soliton_trajectories(solver: "GNLSESolver", ax=None) -> "plt.Figure":
+def plot_soliton_trajectories(solver: GNLSESolver, ax=None) -> plt.Figure:
     """Plot individual soliton peak wavelengths vs propagation distance.
 
     Parameters
@@ -455,8 +454,8 @@ def plot_soliton_trajectories(solver: "GNLSESolver", ax=None) -> "plt.Figure":
 
 
 def plot_fission_dynamics(
-    solver: "GNLSESolver", N: float, L_D: Length, ax=None
-) -> "plt.Figure":
+    solver: GNLSESolver, N: float, L_D: Length, ax=None
+) -> plt.Figure:
     """Plot soliton fission process: spectrum evolution with fission length marker.
 
     Parameters
@@ -516,7 +515,7 @@ def plot_fission_dynamics(
     return fig
 
 
-def plot_raman_shift(solver: "GNLSESolver", ax=None) -> "plt.Figure":
+def plot_raman_shift(solver: GNLSESolver, ax=None) -> plt.Figure:
     """Plot soliton peak wavelength drift due to Raman self-frequency shift.
 
     Parameters
@@ -576,7 +575,7 @@ def plot_raman_shift(solver: "GNLSESolver", ax=None) -> "plt.Figure":
     return fig
 
 
-def plot_dispersion_wave(solver: "GNLSESolver", ax=None) -> "plt.Figure":
+def plot_dispersion_wave(solver: GNLSESolver, ax=None) -> plt.Figure:
     """Plot final spectrum with dispersive wave wavelength marked.
 
     Parameters
