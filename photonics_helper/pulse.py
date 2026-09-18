@@ -202,6 +202,7 @@ class Envelope:
         T0 = self.pulse_width.as_s
         A0 = self.peak_amplitude
 
+        amp: Any  # dtype varies by shape (bool/int/float/complex)
         match self.shape:
             case "gaussian":
                 amp = A0 * np.exp(-(t**2) / (2 * T0**2))
