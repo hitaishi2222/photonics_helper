@@ -38,6 +38,8 @@ fftw = ["pyfftw>=0.15.1"]
 mode-export = ["femwell>=0.1.12", "tidy3d>=2.12"]
 # API documentation (mkdocs + mkdocstrings) built by .github/workflows/docs.yml.
 docs = ["mkdocs-material>=9.5", "mkdocstrings[python]>=0.26"]
+# CI tooling (ruff + mypy gates and the test suite) — used by .github/workflows/ci.yml
+dev = ["pytest>=8.0", "ruff>=0.8", "mypy>=1.13"]
 all = ["plotly>=5.0", "dash>=2.18.0", "tqdm>=4.66", "pyfftw>=0.15.1", "imageio>=2.33"]
 
 [build-system]
