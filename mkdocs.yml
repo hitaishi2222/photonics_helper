@@ -7,6 +7,8 @@ edit_uri: edit/main/docs/
 
 theme:
   name: material
+  logo: img/icon.png
+  favicon: img/icon.png
   features:
     - navigation.sections
     - navigation.top

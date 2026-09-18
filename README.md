@@ -1,5 +1,9 @@
 # Photonics Helper
 
+<p align="center">
+  <img src="docs/img/icon.png" width="160" alt="Photonics Helper logo" />
+</p>
+
 > ⚠️ **Disclaimer**: This library is under active development. APIs, interfaces, and internals may change between versions without notice. It is intended as a learning resource and research aid — not a production-grade simulation tool. If you rely on it for published results, please verify all outputs independently and cite the underlying physical models rather than this library.
 
 A comprehensive helper library for photonics and optics calculations, providing easy-to-use tools for wavelength, frequency, and angular frequency conversions.

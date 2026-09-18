@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f172a"/>
+      <stop offset="1" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="beam" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#f59e0b" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#ef4444" stop-opacity="0.9"/>
+    </linearGradient>
+    <linearGradient id="spec1" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#22d3ee"/>
+      <stop offset="1" stop-color="#3b82f6"/>
+    </linearGradient>
+    <linearGradient id="spec2" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#4ade80"/>
+      <stop offset="1" stop-color="#22d3ee"/>
+    </linearGradient>
+    <linearGradient id="spec3" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#a78bfa"/>
+      <stop offset="1" stop-color="#ec4899"/>
+    </linearGradient>
+  </defs>
+
+  <!-- rounded-square background -->
+  <rect x="8" y="8" width="240" height="240" rx="52" fill="url(#bg)"/>
+  <rect x="8" y="8" width="240" height="240" rx="52" fill="none" stroke="#38bdf8" stroke-opacity="0.35" stroke-width="4"/>
+
+  <!-- incoming beam -->
+  <rect x="28" y="120" width="92" height="16" rx="8" fill="url(#beam)"/>
+
+  <!-- prism -->
+  <path d="M128 72 L172 184 L84 184 Z" fill="#38bdf8" fill-opacity="0.16" stroke="#7dd3fc" stroke-width="5" stroke-linejoin="round"/>
+
+  <!-- dispersed spectrum -->
+  <rect x="150" y="86"  width="80" height="12" rx="6" fill="url(#spec3)" transform="rotate(8 150 92)"/>
+  <rect x="158" y="116" width="80" height="12" rx="6" fill="url(#spec2)" transform="rotate(-2 158 122)"/>
+  <rect x="152" y="150" width="80" height="12" rx="6" fill="url(#spec1)" transform="rotate(14 152 156)"/>
+
+  <!-- wave packet on the beam -->
+  <path d="M36 128 q10 -14 20 0 t20 0 t20 0 t20 0" fill="none" stroke="#0f172a" stroke-width="3" stroke-linecap="round" opacity="0.55"/>
+</svg>
