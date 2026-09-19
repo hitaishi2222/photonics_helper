@@ -287,7 +287,7 @@ class Chi2Result:
 
 
 # ============================================================================
-# RK4IP integrator
+# Cascaded χ⁽²⁾+χ⁽³⁾ coupled-wave solver
 # ============================================================================
 
 
@@ -541,8 +541,129 @@ def solve_dfg(
 
 
 # ============================================================================
-# Mode-overlap coupling (Wang et al., Opt. Express 25(6), 6963 (2017))
+# Cascaded χ⁽²⁾–χ⁽³⁾ coupled-wave solver (SHG + Kerr SPM/XPM)
 # ============================================================================
+
+def solve_cascaded_shg(
+    *,
+    length: float,
+    P0: float,
+    sigma: float,
+    gamma_f: float,
+    gamma_sh: float | None = None,
+    gamma_cross: float | None = None,
+    n_steps: int = 2000,
+    delta_k: float = 0.0,
+    qpm_period: float | None = None,
+    qpm_duty_cycle: float = 0.5,
+    loss_db_per_cm: tuple[float, float] | None = None,
+) -> Chi2Result:
+    """Integrate degenerate SHG **plus the bulk χ⁽³⁾ Kerr effects**.
+
+    The two coupled equations (fundamental ω, second harmonic 2ω) in the
+    interacting-frame convention of :func:`solve_shg`:
+
+    ::
+
+        dA_f/dz  = i σ A_SH A_f* + iγ_f |A_f|² A_f + iγ_cross |A_SH|² A_f
+                   − (α_f/2) A_f
+        dA_SH/dz = i σ A_f² − iΔk A_SH + iγ_sh |A_SH|² A_SH
+                   + iγ_cross |A_f|² A_SH − (α_sh/2) A_SH
+
+    i.e. the second-order (quadratic) coupling of :func:`solve_shg`
+    combined with the cubic Kerr self-/cross-phase modulation. At large
+    phase mismatch (|Δk| ≫ σ√P₀) the quadratic coupling acts on the
+    fundamental like an *effective* Kerr coefficient ``γ_φ = σ²P₀/Δk`` —
+    the cascaded-Kerr limit (Epstein; Saltiel et al.; Agrawal §10.5) —
+    validated in the test suite as the large-mismatch limit of this exact
+    integrator.
+
+    Parameters
+    ----------
+    length : float — interaction length L in metres.
+    P0 : float — input fundamental power in watts (``|A_f(0)|²``).
+    sigma : float — quadratic coupling ``σ`` in ``1/(√W·m)``
+        (:func:`shg_coupling`). Set ``sigma=0`` for a pure-Kerr run.
+    gamma_f : float — Kerr SPM coefficient on the fundamental (W⁻¹m⁻¹,
+        ``dφ/dz = γ_f |A_f|²``).
+    gamma_sh : float or None — Kerr SPM coefficient on the SH. ``None``
+        (default) uses ``gamma_f`` (equal-mode-overlap assumption).
+    gamma_cross : float or None — Kerr XPM coefficient between the two
+        waves. ``None`` (default) uses ``2/3 · gamma_f`` — the degenerate
+        linearly-polarized mode-pair factor used elsewhere in the library
+        (:mod:`photonics_helper.vector_gnlse`); non-degenerate geometries
+        should pass the mode overlap explicitly.
+    n_steps, delta_k, qpm_period, qpm_duty_cycle, loss_db_per_cm — as in
+        :func:`solve_shg` (the Kerr terms are unaffected by the poling).
+
+    Returns
+    -------
+    Chi2Result — fields labelled ``("fundamental", "sh")``.
+
+    Limit contracts (regression-tested)
+    -----------------------------------
+    * ``gamma_f = 0`` (pure quadratic) equals :func:`solve_shg` exactly;
+    * ``sigma = 0`` (pure Kerr): the fundamental solves the scalar SPM
+      equation with the SH held empty — analytic ``exp(iγ_f P₀ L)`` phase;
+    * large-Δk cascaded limit: fundamental nonlinear phase ≈
+      ``(γ_f + σ²P₀/Δk) · P₀ · L`` within the undepleted-pump
+      approximation.
+    """
+    if P0 <= 0:
+        raise ValueError(f"P0 must be positive, got {P0}")
+    gamma_sh_f = float(gamma_sh) if gamma_sh is not None else float(gamma_f)
+    gamma_cross_f = (
+        float(gamma_cross)
+        if gamma_cross is not None
+        else (2.0 / 3.0) * float(gamma_f)
+    )
+    if loss_db_per_cm is not None:
+        if len(loss_db_per_cm) != 2:
+            raise ValueError(
+                "loss_db_per_cm must be a (pump, sh) pair, got "
+                f"{loss_db_per_cm!r}"
+            )
+        alpha_f = np.log(10.0) / 10.0 * 100.0 * float(loss_db_per_cm[0])
+        alpha_sh = np.log(10.0) / 10.0 * 100.0 * float(loss_db_per_cm[1])
+    else:
+        alpha_f = alpha_sh = 0.0
+
+    def rhs(z: float, y: NDArray) -> NDArray:
+        a_f, a_sh = y
+        s = sigma * _grating_sign(z, qpm_period, qpm_duty_cycle)
+        da_f = 1j * s * a_sh * np.conj(a_f)
+        da_sh = 1j * s * a_f * a_f - 1j * delta_k * a_sh
+        # χ³: SPM + XPM (coupled-mode form)
+        da_f = da_f + 1j * gamma_f * (np.abs(a_f) ** 2) * a_f
+        da_f = da_f + 1j * gamma_cross_f * (np.abs(a_sh) ** 2) * a_f
+        da_sh = da_sh + 1j * gamma_sh_f * (np.abs(a_sh) ** 2) * a_sh
+        da_sh = da_sh + 1j * gamma_cross_f * (np.abs(a_f) ** 2) * a_sh
+        if alpha_f != 0.0:
+            da_f -= 0.5 * alpha_f * a_f
+        if alpha_sh != 0.0:
+            da_sh -= 0.5 * alpha_sh * a_sh
+        return np.array([da_f, da_sh])
+
+    def to_physical(z: float, y: NDArray) -> NDArray:
+        return np.array([y[0], y[1] * np.exp(1j * delta_k * z)])
+
+    z, A = _integrate(
+        rhs,
+        np.array([np.sqrt(P0) + 0j, 0j]),
+        length,
+        n_steps,
+        to_physical=to_physical,
+    )
+    return Chi2Result(
+        z=z,
+        A=A,
+        labels=("fundamental", "sh"),
+        sigma=sigma,
+        delta_k=delta_k,
+        qpm_period=qpm_period,
+        loss_alpha=(alpha_f, alpha_sh),
+    )
+
 
 
 def shg_coupling_overlap(

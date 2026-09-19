@@ -38,6 +38,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   nonlinear channels complete the Phase 4 item 2 group ("structured.py
   stops being a linear-only portrait"). Docs: `docs/multimode-gnlse.md` +
   API page. Regression: `tests/test_multimode_gnlse.py` (11 tests).
+- **Cascaded χ⁽²⁾–χ⁽³⁾** (`chi2.solve_cascaded_shg`): degenerate SHG
+  integrator extended with the bulk Kerr SPM/XPM terms; all χ⁽²⁾
+  reproductions unaffected (pure-quadratic limit = `solve_shg` exactly).
+  Limit contracts regression-tested: pure-Kerr = the analytic SPM phase
+  `exp(iγ P₀ L)` exactly; the cascaded-Kerr limit at large phase mismatch
+  recovers the effective coefficient `γ_φ = σ²P₀/Δk` (Epstein / Saltiel /
+  Agrawal §10.5) within 5%. XPM defaults to the 2/3 degenerate
+  linearly-polarized mode-pair factor consistent with the vector GNLSE.
+  Regression: `tests/test_cascaded_chi23.py` (4 tests).
+- **Inverse-design layer (Phase 4 item 5, v1)**
+  (`photonics_helper.inverse_design`): `fit_two_wave` identifies the
+  well-posed invariants (κ = σ√P₀, Δk) of a χ⁽²⁾ run from measured η(z)
+  data via multi-start least squares over the exact forward solver —
+  validated to recover κ and |Δk| exactly; the (σ, P₀) degeneracy inside
+  κ is documented as non-identifiable from η(z). `design_efficiency`
+  recovers the analytic tanh²(κL) design length exactly and fails loudly
+  for unreachable targets. Regression: `tests/test_inverse_design.py`
+  (5 tests). PINN/differentiable training is declared future work.
 
 ## [0.1.9] - 2026-09-19
 

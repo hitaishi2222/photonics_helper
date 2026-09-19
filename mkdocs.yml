@@ -72,6 +72,7 @@ nav:
   - GNLSE physics: gnlse-physics.md
   - Vector / polarization-coupled GNLSE: vector-gnlse.md
   - Multimode (few-mode) GNLSE: multimode-gnlse.md
+  - Cascaded χ⁽²⁾–χ⁽³⁾ & inverse design: cascaded-chi23.md
   - API Reference:
       - api/index.md
       - Foundation core (units/grids/materials): api/core.md

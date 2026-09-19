@@ -623,6 +623,18 @@ opt-in pump-driven inter-modal FWM (`include_fwm=True`) gated by the
 angular-momentum rule `ℓ_m = 2ℓ_n − ℓ_q` when OAM indices are supplied —
 so `structured.py`'s LG/OAM portraits become a genuinely nonlinear
 modal-propagation layer. Details: `docs/multimode-gnlse.md`.
+so `structured.py`'s LG/OAM portraits become a genuinely nonlinear
+modal-propagation layer. Details: `docs/multimode-gnlse.md`.
+
+**Phase 4 items 4–5** — `chi2.solve_cascaded_shg` couples the χ⁽³⁾ Kerr
+terms into the degenerate SHG three-wave integrator (limit contracts:
+pure-quadratic = `solve_shg` exactly; pure-Kerr = analytic SPM phase;
+cascaded-Kerr limit `γ_φ = σ²P₀/Δk` recovered <5%), and
+`inverse_design.fit_two_wave` / `design_efficiency` provide the
+least-squares parameter-identification / device-design layer on the exact
+forward solvers (identifiable invariants κ = σ√P₀ and |Δk| recovered
+exactly; tanh²(κL) design length analytic; loud failures on unreachable
+targets / degenerate directions). Details: `docs/cascaded-chi23.md`.
 
 # Solver physics hardening
 

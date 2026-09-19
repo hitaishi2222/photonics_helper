@@ -173,6 +173,8 @@ if TYPE_CHECKING:  # pragma: no cover - static analyzers/IDEs only
         nonlinear_length,
         wave_breaking_distance,
     )
+    from .inverse_design import FitResult, design_efficiency, fit_two_wave
+
 
 __all__ = [
     "COMMON_COMPARISONS",
@@ -200,6 +202,7 @@ __all__ = [
     "Envelope",
     "FROGTrace",
     "FiberProfile",
+    "FitResult",
     "Frequency",
     "FrequencyArray",
     "GNLSESolver",
@@ -267,12 +270,14 @@ __all__ = [
     "convergence_study",
     "dashboard_app",
     "delta_k_shg",
+    "design_efficiency",
     "detect_oscillation_onset",
     "detect_steepening_onset",
     "dispersion_length",
     "dispersive_wave_roots",
     "edge_steepness",
     "fidelity",
+    "fit_two_wave",
     "fwm_delta_beta_degenerate",
     "fwm_delta_beta_general",
     "fwm_efficiency",
@@ -308,6 +313,7 @@ __all__ = [
     "sfb_spatial_period",
     "sfb_temporal_period",
     "shg_coupling",
+    "solve_cascaded_shg",
     "solve_dfg",
     "solve_sfg",
     "solve_shg",
@@ -335,7 +341,12 @@ _LAZY_MODULES: dict[str, str] = {
     # .chi2
     **{n: ".chi2" for n in (
         "Chi2Result", "Lambda_qpm", "delta_k_shg", "qpm_grating",
-        "shg_coupling", "solve_dfg", "solve_sfg", "solve_shg", "solve_three_wave",
+        "shg_coupling", "solve_cascaded_shg", "solve_dfg", "solve_sfg",
+        "solve_shg", "solve_three_wave",
+    )},
+    # .inverse_design — Phase 4 item 5 (inverse-design layer)
+    **{n: ".inverse_design" for n in (
+        "FitResult", "design_efficiency", "fit_two_wave",
     )},
     "dashboard_app": ".dashboard",
     # .dbr

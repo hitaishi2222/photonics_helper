@@ -91,8 +91,16 @@ the stable contract.
     `VectorSplitStepEngine` (machine precision), FWM vs dense RK4 <5%,
     forbidden triplets unmixed to machine precision. Mode-specific overlap
     tensors and pump depletion are future work.
-  - *Pending*: own-work chalcogenide mid-IR SCG reproductions, cascaded
-    χ⁽²⁾–χ⁽³⁾, PINN / inverse-design layer.
+  - *Cascaded χ⁽²⁾–χ⁽³⁾* ✅ (this release): `chi2.solve_cascaded_shg`
+    (three-wave + Kerr SPM/XPM integrator; limit contracts: pure quadratic
+    = `solve_shg` exactly, pure Kerr = analytic SPM exactly, large-Δk
+    cascaded effective-γ = `σ²P₀/Δk` <5%).
+  - *Inverse-design layer (v1)* ✅ (this release):
+    `inverse_design.fit_two_wave` (identifiable κ/|Δk| recovery, exact on
+    synthetic data; the (σ, P₀) degeneracy documented) and
+    `design_efficiency` (exact against the analytic tanh²(κL) design
+    formula). PINN/autodiff training is declared future work.
+  - *Pending*: own-work chalcogenide mid-IR SCG reproductions.
 
 ## Pending — author action
 
