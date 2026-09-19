@@ -38,6 +38,7 @@ class OpticalMaterial(Protocol):
 
     name: str
     source: str | None
+    license: str | None
     wl: WavelengthArray
     n: NDArray
     k: NDArray
@@ -60,11 +61,13 @@ class Material:
     name : material name (as looked up in the database).
     index : the underlying tabulated/interpolated refractive index.
     source : provenance string (citation/author key) when known, else ``None``.
+    license : licence identifier/sentinel for the data when known, else ``None``.
     """
 
     name: str
     index: RefractiveIndex
     source: str | None = None
+    license: str | None = None
 
     @property
     def wl(self) -> WavelengthArray:
@@ -103,32 +106,59 @@ class Material:
         return self.index.group_index(wavelength)
 
 
-def _lookup_source(name: str, axis: str | None) -> str | None:
-    """Best-effort provenance lookup in the bundled database.
+def _lookup_metadata(
+    name: str, axis: str | None
+) -> tuple[str | None, str | None]:
+    """Best-effort ``(source, license)`` lookup in the bundled database.
 
-    Returns ``None`` when no row (or no source string) is found; provenance is
-    metadata, so a lookup miss must not break ``material()``.
+    Returns ``(None, None)`` when no row (or no provenance string) is found;
+    provenance is metadata, so a lookup miss must not break ``material()``.
     """
     try:
         from ..raman import RamanDatabase
 
         db = RamanDatabase()
+
+        # A tabulated key ("material-author") is itself a provenance source
+        # key, so look it up directly first.
+        direct = db.get_provenance(name)
+        direct_source = str(direct["citation"]) if direct and direct.get("citation") else None
+        direct_license = str(direct["license"]) if direct and direct.get("license") else None
+
         candidates = [name]
         if axis is not None:
             suffix = "_or" if axis.lower() in ("ordinary", "o") else "_er"
             candidates.insert(0, f"{name}{suffix}")
 
+        source: str | None = direct_source
+        license_id: str | None = direct_license
         for candidate in candidates:
             row = db.get_sellmeier(candidate)  # type: ignore[arg-type]
-            if row and row.get("source"):
-                return str(row["source"])
+            if row:
+                if source is None and row.get("source"):
+                    source = str(row["source"])
+                if license_id is None and row.get("license"):
+                    license_id = str(row["license"])
 
         spec = db.get_material(name)
-        if spec and spec.get("references"):
-            return str(spec["references"])
+        if spec:
+            if source is None and spec.get("references"):
+                source = str(spec["references"])
+            if license_id is None and spec.get("license"):
+                license_id = str(spec["license"])
+
+        if license_id is None:
+            for source_key in db.list_nk_sources(name):  # type: ignore[arg-type]
+                prov = db.get_provenance(source_key)
+                if prov and prov.get("license"):
+                    license_id = str(prov["license"])
+                    if source is None and prov.get("citation"):
+                        source = str(prov["citation"])
+                    break
+
+        return source, license_id
     except (sqlite3.Error, ValueError, KeyError, TypeError, OSError):
-        return None
-    return None
+        return None, None
 
 
 def material(
@@ -149,4 +179,5 @@ def material(
         A concrete :class:`OpticalMaterial`.
     """
     index = RefractiveIndex.from_material_database(name, n_points=n_points, axis=axis)
-    return Material(name=name, index=index, source=_lookup_source(name, axis))
+    source, license_id = _lookup_metadata(name, axis)
+    return Material(name=name, index=index, source=source, license=license_id)

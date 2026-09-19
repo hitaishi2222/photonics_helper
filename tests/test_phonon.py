@@ -241,7 +241,8 @@ class TestRamanDatabasePhonon:
         self.db = RamanDatabase(db_path=self.db_path)
 
     def test_phonon_modes_table_created(self):
-        # Table should exist after init
+        # Schema is created on first use (lazy initialisation).
+        self.db.list_phonon_materials()
         import sqlite3
 
         conn = sqlite3.connect(self.db_path)

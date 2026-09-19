@@ -119,6 +119,46 @@ class PhononResponse:
         if self.fR is not None and not (0.0 <= self.fR <= 1.0):
             raise ValueError(f"fR must be a fraction in [0, 1], got {self.fR!r}")
 
+    @classmethod
+    def from_material(
+        cls, name: str, db: "object | None" = None
+    ) -> "PhononResponse":
+        """Build a response for a material, database-first.
+
+        Resolution order:
+
+        1. ``RamanDatabase.get_phonon_modes(name)`` — the shipped database,
+           the same interface used for n/k data.
+        2. The canonical :data:`PHONON_MATERIALS` table (offline / empty DB).
+
+        Parameters
+        ----------
+        name : material name (e.g. ``"LiNbO3"``).
+        db : optional existing ``RamanDatabase`` instance to reuse.
+
+        Raises
+        ------
+        KeyError
+            If neither the database nor the canonical table has modes for the
+            material; the message lists the available material names.
+        """
+        if db is None:
+            # Imported lazily so `import photonics_helper.phonon` does not pull
+            # in the database module (and its sqlite/materials dependencies).
+            from .raman.db import RamanDatabase
+
+            db = RamanDatabase()
+
+        modes = db.get_phonon_modes(name)  # type: ignore[attr-defined]
+        if not modes:
+            modes = list(PHONON_MATERIALS.get(name, []))
+        if not modes:
+            available = ", ".join(sorted(PHONON_MATERIALS))
+            raise KeyError(
+                f"No phonon modes for {name!r}. Available materials: {available}"
+            )
+        return cls(modes)
+
     def _lorentzian(self, shift_cm: float, gamma_cm: float, w_cm: NDArray) -> NDArray:
         """Single Lorentzian lineshape.
 

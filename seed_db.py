@@ -513,6 +513,17 @@ def seed_tabulated_nk(db: RamanDatabase, manifest_path: Path = MANIFEST_PATH) ->
     )
 
 
+def seed_phonon_modes(db: RamanDatabase) -> None:
+    """Seed multi-mode phonon data into the phonon_modes table.
+
+    The canonical source is :data:`photonics_helper.phonon.PHONON_MATERIALS`;
+    this wraps :meth:`RamanDatabase.seed_phonon_data` with progress output.
+    """
+    print("\nSeeding phonon modes...")
+    count = db.seed_phonon_data()
+    print(f"Done. {count} phonon modes seeded.")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Seed materials.db")
     parser.add_argument(
@@ -532,6 +543,8 @@ def main():
     for name, data in THORLABS_SUBSTRATE_MATERIALS.items():
         db.add_material(data)
         print(f"  Added: {name}")
+
+    seed_phonon_modes(db)
 
     count = len(db.list_materials())
     print(f"\nDone. {count} materials in {DB_PATH}")

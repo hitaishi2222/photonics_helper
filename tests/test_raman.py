@@ -257,18 +257,22 @@ class TestRamanDatabase:
     """Tests for RamanDatabase class."""
 
     def test_init_default_path(self):
-        """Test initialization with default path."""
+        """Construction resolves the path but does not touch the filesystem."""
         with TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "test.db"
             db = RamanDatabase(db_path=db_path)
             assert db.db_path == db_path
+            # Lazy initialisation: nothing is created until first use.
+            assert not db_path.exists()
+            db.list_materials()
             assert db_path.exists()
 
     def test_init_creates_tables(self):
-        """Test that initialization creates tables."""
+        """The schema is created on first use (lazy initialisation)."""
         with TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "test.db"
-            RamanDatabase(db_path=db_path)
+            db = RamanDatabase(db_path=db_path)
+            db.list_materials()  # first use triggers schema creation
 
             import sqlite3
 
@@ -280,6 +284,7 @@ class TestRamanDatabase:
 
             assert "raman_specs" in tables
             assert "nk_data" in tables
+            assert "provenance" in tables
 
     def test_add_and_get_material(self):
         """Test adding and retrieving a material."""

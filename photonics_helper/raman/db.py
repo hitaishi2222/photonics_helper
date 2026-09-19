@@ -17,6 +17,17 @@ if TYPE_CHECKING:
 
 from .reference import RAMAN_MATERIALS, THORLABS_SUBSTRATE_MATERIALS
 
+# Default/sentinel licences per data table. The sentinels point at the row's
+# citation column rather than asserting a blanket licence for literature data;
+# see docs/data-schema.md. Concrete identifiers (e.g. "CC0-1.0") are only used
+# where the source genuinely declares them.
+_LICENSE_DEFAULTS: dict[str, str] = {
+    "nk_data": "CC0-1.0",
+    "sellmeier": "see-source-publication",
+    "raman_specs": "see-references",
+    "phonon_modes": "see-note",
+}
+
 # ─── RamanDatabase ────────────────────────────────────────────────────────────
 
 
@@ -60,11 +71,13 @@ class RamanDatabase:
             if bundled.exists():
                 object.__setattr__(self, "db_path", bundled)
             else:
-                # Create new DB in user's home directory
-                home_db = Path.home() / ".photonics_helper" / "materials.db"
-                home_db.parent.mkdir(parents=True, exist_ok=True)
-                object.__setattr__(self, "db_path", home_db)
-        self._init_db()
+                # Fall back to a user-home database (created on first use)
+                object.__setattr__(
+                    self,
+                    "db_path",
+                    Path.home() / ".photonics_helper" / "materials.db",
+                )
+        # NOTE: no connection/schema work here — see _ensure_initialized().
 
     @property
     def _path(self) -> Path:
@@ -72,8 +85,23 @@ class RamanDatabase:
         assert self.db_path is not None
         return self.db_path
 
+    def _ensure_initialized(self) -> None:
+        """Create/migrate the schema once, on first use."""
+        if getattr(self, "_initialized", False):
+            return
+        # Set the flag before _init_db: the seeding path queries the database,
+        # and must not recurse back into this method.
+        object.__setattr__(self, "_initialized", True)
+        self._init_db()
+
+    def _connect(self) -> sqlite3.Connection:
+        """Open the database, initialising the schema on first use."""
+        self._ensure_initialized()
+        return sqlite3.connect(self._path)
+
     def _init_db(self):
-        """Create tables if they don't exist."""
+        """Create tables if they don't exist (idempotent migration)."""
+        self._path.parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(self._path)
         cursor = conn.cursor()
 
@@ -143,6 +171,42 @@ class RamanDatabase:
         if "citation" not in cols:
             cursor.execute("ALTER TABLE nk_data ADD COLUMN citation TEXT")
 
+        # Licence column on every data table, backfilled with a documented
+        # default/sentinel (see docs/data-schema.md).
+        for table, default_license in _LICENSE_DEFAULTS.items():
+            cursor.execute(f"PRAGMA table_info({table})")
+            table_cols = [r[1] for r in cursor.fetchall()]
+            if "license" not in table_cols:
+                cursor.execute(f"ALTER TABLE {table} ADD COLUMN license TEXT")
+            cursor.execute(
+                f"UPDATE {table} SET license = ? WHERE license IS NULL",
+                (default_license,),
+            )
+
+        # Provenance registry, backfilled from the existing nk_data so that an
+        # already-shipped database upgrades without the external manifest
+        # (nk_datasets/ is not in the repository).
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS provenance (
+                source_key TEXT PRIMARY KEY,
+                kind       TEXT,
+                citation   TEXT,
+                doi        TEXT,
+                url        TEXT,
+                license    TEXT
+            )
+        """)
+        cursor.execute(
+            """
+            INSERT OR IGNORE INTO provenance (source_key, kind, citation, license)
+            SELECT source, 'nk', MAX(citation), ?
+            FROM nk_data
+            WHERE source IS NOT NULL
+            GROUP BY source
+            """,
+            (_LICENSE_DEFAULTS["nk_data"],),
+        )
+
         conn.commit()
         conn.close()
         self._seed_if_empty()
@@ -162,6 +226,9 @@ class RamanDatabase:
             self.add_material(data)
         for data in THORLABS_SUBSTRATE_MATERIALS.values():
             self.add_material(data)
+        # Phonon modes live in the same database, so seed them for the
+        # empty-home-DB fallback path too.
+        self.seed_phonon_data()
 
     def add_material(self, spec: dict) -> None:
         """INSERT or REPLACE a material entry.
@@ -170,15 +237,16 @@ class RamanDatabase:
         ----------
         spec : dict with material properties
         """
-        conn = sqlite3.connect(self._path)
+        conn = self._connect()
         cursor = conn.cursor()
 
         cursor.execute(
             """
             INSERT OR REPLACE INTO raman_specs
             (name, crystal, bandgap_eV, n2, raman_shift_cm, raman_linewidth_cm,
-             fR, gain_coeff, tau1, tau2, lo_phonon_cm, to_phonon_cm, "references")
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             fR, gain_coeff, tau1, tau2, lo_phonon_cm, to_phonon_cm, "references",
+             license)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
             (
                 spec.get("name"),
@@ -194,6 +262,7 @@ class RamanDatabase:
                 spec.get("lo_phonon_cm"),
                 spec.get("to_phonon_cm"),
                 spec.get("references"),
+                spec.get("license", _LICENSE_DEFAULTS["raman_specs"]),
             ),
         )
 
@@ -211,7 +280,7 @@ class RamanDatabase:
         -------
         dict with material properties, or None if not found
         """
-        conn = sqlite3.connect(self._path)
+        conn = self._connect()
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
@@ -231,7 +300,7 @@ class RamanDatabase:
         -------
         list of material names
         """
-        conn = sqlite3.connect(self._path)
+        conn = self._connect()
         cursor = conn.cursor()
 
         cursor.execute("SELECT name FROM raman_specs ORDER BY name")
@@ -240,7 +309,42 @@ class RamanDatabase:
         conn.close()
         return [row[0] for row in rows]
 
-    def add_phonon_mode(self, material: str, mode: PhononMode) -> None:
+    def get_provenance(self, source_key: str) -> dict | None:
+        """Fetch the provenance record for a source key.
+
+        Parameters
+        ----------
+        source_key : the ``source`` key used by ``nk_data`` rows
+            (e.g. ``"si-green"``).
+
+        Returns
+        -------
+        dict | None
+            The provenance record, or ``None`` when the key is unknown.
+        """
+        conn = self._connect()
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT * FROM provenance WHERE source_key = ?", (source_key,)
+        )
+        row = cursor.fetchone()
+        conn.close()
+        return dict(row) if row is not None else None
+
+    def list_provenance(self) -> list[dict]:
+        """List every provenance record, ordered by source key."""
+        conn = self._connect()
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM provenance ORDER BY source_key")
+        rows = [dict(r) for r in cursor.fetchall()]
+        conn.close()
+        return rows
+
+    def add_phonon_mode(
+        self, material: str, mode: PhononMode, license: str | None = None
+    ) -> None:
         """Insert a phonon mode for a material.
 
         Parameters
@@ -249,21 +353,24 @@ class RamanDatabase:
             Material name.
         mode : PhononMode
             Phonon mode to add.
+        license : str | None
+            Optional licence; defaults to the documented ``phonon_modes``
+            sentinel (``see-note``).
         """
         from ..phonon import PhononMode
 
         if not isinstance(mode, PhononMode):
             raise TypeError("mode must be a PhononMode instance")
 
-        conn = sqlite3.connect(self._path)
+        conn = self._connect()
         cursor = conn.cursor()
 
         cursor.execute(
             """
             INSERT OR REPLACE INTO phonon_modes
             (material, shift_cm, linewidth_cm, symmetry, relative_strength,
-             lo_phonon_cm, to_phonon_cm, note)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+             lo_phonon_cm, to_phonon_cm, note, license)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
             (
                 material,
@@ -274,6 +381,7 @@ class RamanDatabase:
                 mode.lo_phonon_cm.as_1_cm if mode.lo_phonon_cm is not None else None,
                 mode.to_phonon_cm.as_1_cm if mode.to_phonon_cm is not None else None,
                 mode.note,
+                license or _LICENSE_DEFAULTS["phonon_modes"],
             ),
         )
 
@@ -295,7 +403,7 @@ class RamanDatabase:
         """
         from ..phonon import PhononMode
 
-        conn = sqlite3.connect(self._path)
+        conn = self._connect()
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
@@ -330,7 +438,7 @@ class RamanDatabase:
         list[str]
             Material names that have phonon_modes entries.
         """
-        conn = sqlite3.connect(self._path)
+        conn = self._connect()
         cursor = conn.cursor()
 
         cursor.execute("SELECT DISTINCT material FROM phonon_modes ORDER BY material")
@@ -367,7 +475,7 @@ class RamanDatabase:
         if not kwargs:
             return
 
-        conn = sqlite3.connect(self._path)
+        conn = self._connect()
         cursor = conn.cursor()
 
         # Build UPDATE query dynamically
@@ -386,7 +494,7 @@ class RamanDatabase:
         ----------
         name : Material name
         """
-        conn = sqlite3.connect(self._path)
+        conn = self._connect()
         cursor = conn.cursor()
 
         cursor.execute("DELETE FROM raman_specs WHERE name = ?", (name,))
@@ -403,6 +511,7 @@ class RamanDatabase:
         k: float,
         source: str | None = None,
         citation: str | None = None,
+        license: str | None = None,
     ) -> None:
         """INSERT nk data point.
 
@@ -416,16 +525,27 @@ class RamanDatabase:
             (e.g. ``"si-green"``). When omitted the row is unattributed.
         citation : Optional full reference the (n, k) values were taken from.
             Stored for traceability; when omitted the row has no citation.
+        license : Optional licence identifier; defaults to the documented
+            ``nk_data`` licence (``CC0-1.0`` from refractiveindex.info).
         """
-        conn = sqlite3.connect(self._path)
+        conn = self._connect()
         cursor = conn.cursor()
 
         cursor.execute(
             """
-            INSERT INTO nk_data (material, wavelength_um, n, k, source, citation)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO nk_data
+            (material, wavelength_um, n, k, source, citation, license)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
-            (material, wl_um, n, k, source, citation),
+            (
+                material,
+                wl_um,
+                n,
+                k,
+                source,
+                citation,
+                license or _LICENSE_DEFAULTS["nk_data"],
+            ),
         )
 
         conn.commit()
@@ -457,7 +577,7 @@ class RamanDatabase:
         -------
         (wavelength_um, n, k) or (wavelength_um, n, k, source) as numpy arrays
         """
-        conn = sqlite3.connect(self._path)
+        conn = self._connect()
         cursor = conn.cursor()
 
         cols = "wavelength_um, n, k"
@@ -497,7 +617,7 @@ class RamanDatabase:
         -------
         sorted list of distinct source keys (may include None values)
         """
-        conn = sqlite3.connect(self._path)
+        conn = self._connect()
         cursor = conn.cursor()
 
         cursor.execute(
@@ -521,7 +641,7 @@ class RamanDatabase:
         -------
         dict mapping each ``source`` key to its full citation text
         """
-        conn = sqlite3.connect(self._path)
+        conn = self._connect()
         cursor = conn.cursor()
 
         cursor.execute(
@@ -548,7 +668,7 @@ class RamanDatabase:
         -------
         Number of rows removed.
         """
-        conn = sqlite3.connect(self._path)
+        conn = self._connect()
         cursor = conn.cursor()
         cursor.execute("DELETE FROM nk_data WHERE source IS NOT NULL")
         removed = cursor.rowcount
@@ -594,7 +714,7 @@ class RamanDatabase:
         ``n_central``, ``k_central`` and ``central_wl_um``. Central-wavelength
         n/k is obtained by linear interpolation onto a fine grid.
         """
-        conn = sqlite3.connect(self._path)
+        conn = self._connect()
         rows = conn.execute(
             """
             SELECT material, source,
@@ -650,6 +770,7 @@ class RamanDatabase:
         valid_from_um: float,
         valid_to_um: float,
         source: str,
+        license: str | None = None,
     ) -> None:
         """INSERT Sellmeier coefficients.
 
@@ -663,16 +784,18 @@ class RamanDatabase:
         valid_from_um : Valid range start (μm)
         valid_to_um : Valid range end (μm)
         source : Citation
+        license : Optional licence; defaults to the documented ``sellmeier``
+            sentinel (``see-source-publication``).
         """
         import json
 
-        conn = sqlite3.connect(self._path)
+        conn = self._connect()
         cursor = conn.cursor()
 
         cursor.execute(
             """
-            INSERT OR REPLACE INTO sellmeier (material, form, a0, coefficients, wavelengths, valid_from_um, valid_to_um, source)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT OR REPLACE INTO sellmeier (material, form, a0, coefficients, wavelengths, valid_from_um, valid_to_um, source, license)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
             (
                 material,
@@ -683,6 +806,7 @@ class RamanDatabase:
                 valid_from_um,
                 valid_to_um,
                 source,
+                license or _LICENSE_DEFAULTS["sellmeier"],
             ),
         )
 
@@ -703,7 +827,7 @@ class RamanDatabase:
         """
         import json
 
-        conn = sqlite3.connect(self._path)
+        conn = self._connect()
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
@@ -732,7 +856,7 @@ class RamanDatabase:
         -------
         list of matching materials
         """
-        conn = sqlite3.connect(self._path)
+        conn = self._connect()
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
@@ -757,7 +881,7 @@ class RamanDatabase:
         -------
         dict mapping material names to property dicts
         """
-        conn = sqlite3.connect(self._path)
+        conn = self._connect()
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
@@ -774,7 +898,7 @@ class RamanDatabase:
         ----------
         data : dict mapping material names to property dicts
         """
-        conn = sqlite3.connect(self._path)
+        conn = self._connect()
         cursor = conn.cursor()
 
         for name, spec in data.items():
