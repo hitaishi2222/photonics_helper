@@ -1,6 +1,6 @@
 [project]
 name = "photonics-helper"
-version = "0.1.0"
+version = "0.1.1"
 description = "A comprehensive helper library for photonics and optics calculations"
 readme = "README.md"
 requires-python = ">=3.12"
