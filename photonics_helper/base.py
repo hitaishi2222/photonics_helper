@@ -1164,7 +1164,7 @@ class Permittivity(float):
 
 
 @dataclass(config={"arbitrary_types_allowed": True})
-class Permiability(float):
+class Permeability(float):
     """Magnetic permeability (H/m). Wraps ``float`` with a convenience constructor."""
 
     value: float

@@ -19,7 +19,7 @@ from photonics_helper.base import (
     AngularFrequencyArray,
     Frequency,
     FrequencyArray,
-    Permiability,
+    Permeability,
     Permittivity,
     Wavelength,
     WavelengthArray,
@@ -202,7 +202,7 @@ def test_wavenumber_array_equally_spaced():
     assert eq[-1] == wn.as_1_m.max()
 
 
-# ─── Permittivity / Permiability ────────────────────────────────────
+# ─── Permittivity / Permeability ────────────────────────────────────
 
 
 def test_permittivity_from_relative():
@@ -211,9 +211,9 @@ def test_permittivity_from_relative():
     assert pytest.approx(p) == EPS_0
 
 
-def test_permiability_from_relative():
+def test_permeability_from_relative():
 
-    p = Permiability.from_relative(1.0)
+    p = Permeability.from_relative(1.0)
     assert pytest.approx(p) == MU_0
 
 
