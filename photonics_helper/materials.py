@@ -1,5 +1,7 @@
 """Refractive index data with spline interpolation and Sellmeier models."""
 
+import difflib
+import sqlite3
 import warnings
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, Literal, Self, cast
@@ -428,7 +430,11 @@ class RefractiveIndex:
 
     @classmethod
     def from_material_database(
-        cls, material: str, n_points: int = 200, axis: str | None = None
+        cls,
+        material: str,
+        n_points: int = 200,
+        axis: str | None = None,
+        db: "RamanDatabase | None" = None,
     ) -> Self:
         """Build a RefractiveIndex from materials.db.
 
@@ -441,6 +447,10 @@ class RefractiveIndex:
         2. Otherwise (no author requested) fall back to Sellmeier dispersion,
            preserving the original behavior.
 
+        Parameters
+        ----------
+        material : canonical material name, or a ``material-author`` key.
+        n_points : number of samples when interpolating a Sellmeier equation.
         axis : str | None — for birefringent crystals (e.g. LiNbO₃) the
             Sellmeier-table sub-row to load: ``"extraordinary"`` (or ``"e"``)
             and ``"ordinary"`` (or ``"o"``) select ``<material>_er`` /
@@ -448,10 +458,42 @@ class RefractiveIndex:
             not seeded). The no-axis canonical row of an axis-bearing material
             is the *extraordinary* index by convention (d33-active for x-cut
             LiNbO₃ χ⁽²⁾ work).
+        db : optional existing ``RamanDatabase`` instance to reuse (mainly for
+            tests and for callers that already hold a handle).
+
+        Raises
+        ------
+        ValueError
+            With an actionable message when the material is unknown, the axis
+            is unknown or unavailable, or the database is missing/empty/corrupt.
         """
         from .raman import RamanDatabase
 
-        db = RamanDatabase()
+        if not isinstance(material, str) or not material.strip():
+            raise ValueError(
+                "material name must be a non-empty string, e.g. 'Silica' or "
+                f"'si-aspnes'; got {material!r}"
+            )
+
+        if db is None:
+            db = RamanDatabase()
+
+        try:
+            available = db.list_materials()
+        except sqlite3.Error as exc:
+            raise ValueError(
+                f"could not read the material database at {db.db_path}: {exc}. "
+                "If the file is missing or corrupt, reinstall photonics-helper "
+                "or regenerate it with `python seed_db.py` from a source "
+                "checkout."
+            ) from exc
+        if not available:
+            raise ValueError(
+                f"the material database at {db.db_path} contains no materials. "
+                "The bundled database ships with photonics-helper; if it is "
+                "missing, reinstall the package, or run `python seed_db.py` "
+                "from a source checkout to seed one."
+            )
 
         # A full string that is itself a known material (e.g. "N-BK7", whose
         # name contains a hyphen) is treated as a canonical name, not a
@@ -494,13 +536,31 @@ class RefractiveIndex:
                 )
             sellmeier = db.get_sellmeier(f"{material}{suffix}")  # type: ignore[arg-type]
             if sellmeier is None:
+                birefringent = [
+                    name
+                    for name in available
+                    if db.get_sellmeier(f"{name}_or") is not None  # type: ignore[arg-type]
+                    or db.get_sellmeier(f"{name}_er") is not None  # type: ignore[arg-type]
+                ]
                 raise ValueError(
-                    f"No Sellmeier axis row '{material}{suffix}' in materials.db"
+                    f"No {ax} Sellmeier row '{material}{suffix}' in "
+                    f"materials.db. {material!r} has no ordinary/extraordinary "
+                    "rows; birefringent materials in the database are: "
+                    f"{', '.join(birefringent) if birefringent else 'none'}."
                 )
         else:
             sellmeier = db.get_sellmeier(cast(NKMaterial, material))
         if sellmeier is None:
-            raise ValueError(f"No Sellmeier data for {material} in materials.db")
+            suggestions = difflib.get_close_matches(
+                material, available, n=3, cutoff=0.5
+            )
+            hint = f" Did you mean: {', '.join(suggestions)}?" if suggestions else ""
+            raise ValueError(
+                f"No Sellmeier data for {material!r} in materials.db.{hint} "
+                "Available materials: RamanDatabase().list_materials(); a "
+                "specific tabulated dataset is loaded with the "
+                "'material-author' key (e.g. 'si-aspnes')."
+            )
 
         wl_range = (sellmeier["valid_from_um"], sellmeier["valid_to_um"])
         kwargs = dict(
@@ -540,3 +600,155 @@ class RefractiveIndex:
             )
         alpha = 4 * PI * self.k / self.wl.as_m  # 1/m (intensity attenuation)
         return np.asarray(10 * np.log10(np.e) * alpha, dtype=float)  # dB/m
+
+
+# ─── Material catalogue ──────────────────────────────────────────────────────
+
+
+@dataclass
+class MaterialDataset:
+    """One dataset available for a material.
+
+    A material may have several: tabulated ``n``/``k`` spectra (one per
+    literature source) and/or a Sellmeier equation.
+    """
+
+    material: str
+    kind: Literal["tabulated", "sellmeier"]
+    axis: Literal["extraordinary", "ordinary"] | None = None
+    source: str | None = None
+    source_key: str | None = None
+    wl_min_um: float | None = None
+    wl_max_um: float | None = None
+    n_points: int | None = None
+    doi: str | None = None
+    citation: str | None = None
+    license: str | None = None
+
+    @property
+    def wavelength_range_um(self) -> tuple[float, float] | None:
+        """``(min, max)`` wavelength in µm, or ``None`` when unknown."""
+        if self.wl_min_um is None or self.wl_max_um is None:
+            return None
+        return (self.wl_min_um, self.wl_max_um)
+
+
+def material_catalog(name: str | None = None) -> list[MaterialDataset]:
+    """List every dataset available in the bundled material database.
+
+    Covers both tabulated ``n``/``k`` spectra and Sellmeier equations, so it is
+    the single place to discover what material data the library ships.
+
+    Parameters
+    ----------
+    name : optional case-insensitive substring filter on the material name
+        (``"sil"`` matches ``Silica``; ``"sin"`` matches ``Si3N4``). ``None``
+        returns everything.
+
+    Returns
+    -------
+    list[MaterialDataset]
+        One entry per tabulated dataset and per Sellmeier equation, sorted by
+        material name then kind. Each entry carries the wavelength range, the
+        source/citation, a DOI when the citation provides one, and the licence.
+
+    Examples
+    --------
+    >>> [d.material for d in material_catalog("Silica")]
+    ['Silica', 'Silica']  # a Sellmeier equation and (if seeded) spectra
+    """
+    from ._provenance import extract_doi
+    from .raman import RamanDatabase
+
+    db = RamanDatabase()
+    provenance = {rec["source_key"]: rec for rec in db.list_provenance()}
+    needle = name.strip().lower() if name else None
+
+    datasets: list[MaterialDataset] = []
+
+    for summary in db.list_nk_dataset_summaries():
+        record = provenance.get(summary["source"], {})
+        citation = record.get("citation")
+        datasets.append(
+            MaterialDataset(
+                material=summary["material"],
+                kind="tabulated",
+                source=summary["source"],
+                source_key=summary["source"],
+                wl_min_um=summary["wl_min_um"],
+                wl_max_um=summary["wl_max_um"],
+                n_points=summary["n_points"],
+                doi=record.get("doi") or extract_doi(citation),
+                citation=citation,
+                license=record.get("license"),
+            )
+        )
+
+    for entry in db.list_sellmeier_datasets():
+        stored = entry["material"]
+        material = stored
+        axis: Literal["extraordinary", "ordinary"] | None = None
+        if stored.endswith("_er"):
+            material, axis = stored[:-3], "extraordinary"
+        elif stored.endswith("_or"):
+            material, axis = stored[:-3], "ordinary"
+        datasets.append(
+            MaterialDataset(
+                material=material,
+                kind="sellmeier",
+                axis=axis,
+                source=entry.get("source"),
+                wl_min_um=entry.get("valid_from_um"),
+                wl_max_um=entry.get("valid_to_um"),
+                doi=extract_doi(entry.get("source")),
+                citation=entry.get("source"),
+                license=entry.get("license"),
+            )
+        )
+
+    if needle:
+        datasets = [d for d in datasets if needle in d.material.lower()]
+
+    return sorted(datasets, key=lambda d: (d.material.lower(), d.kind, d.source or ""))
+
+
+def print_material_catalog(name: str | None = None) -> None:
+    """Print :func:`material_catalog` as a rich table.
+
+    Parameters
+    ----------
+    name : optional case-insensitive substring filter on the material name.
+
+    Examples
+    --------
+    >>> print_material_catalog("sil")   # doctest: +SKIP
+    """
+    from rich.console import Console
+    from rich.table import Table
+
+    rows = material_catalog(name)
+    title = "Available material datasets"
+    if name:
+        title += f" matching {name!r}"
+
+    table = Table(title=title, header_style="bold")
+    table.add_column("Material", style="cyan", no_wrap=True)
+    table.add_column("Type")
+    table.add_column("Wavelength (\u00b5m)", justify="right")
+    table.add_column("DOI")
+    table.add_column("Licence")
+
+    for dataset in rows:
+        wl_range = dataset.wavelength_range_um
+        wavelength = f"{wl_range[0]:.3f}\u2013{wl_range[1]:.3f}" if wl_range else "\u2014"
+        table.add_row(
+            dataset.material,
+            f"{dataset.kind} ({dataset.axis})" if dataset.axis else dataset.kind,
+            wavelength,
+            dataset.doi or "\u2014",
+            dataset.license or "\u2014",
+        )
+
+    console = Console()
+    console.print(table)
+    console.print(f"{len(rows)} dataset(s)")

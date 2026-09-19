@@ -177,6 +177,12 @@ def material(
     -------
     Material
         A concrete :class:`OpticalMaterial`.
+
+    Raises
+    ------
+    ValueError
+        With an actionable message when the material is unknown, the axis is
+        unknown/unavailable, or the database is missing, empty or corrupt.
     """
     index = RefractiveIndex.from_material_database(name, n_points=n_points, axis=axis)
     source, license_id = _lookup_metadata(name, axis)

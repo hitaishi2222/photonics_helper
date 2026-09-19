@@ -59,6 +59,12 @@ with importlib.resources.as_file(
   `photonics_helper.phonon.PHONON_MATERIALS` (per-mode literature notes).
 - **`provenance`** — a registry table joining on `nk_data.source`, backfilled
   from the tabulated data so the database is auditable without external files.
+  Its `doi` column is populated by extracting the identifier from each
+  citation, so consumers do not have to parse citation strings.
+
+To list everything that ships (with wavelength range, DOI and licence), use
+`material_catalog()` / `print_material_catalog()` — see the
+[database schema](data-schema.md#discovering-the-data) page.
 
 ## Licensing caveat
 

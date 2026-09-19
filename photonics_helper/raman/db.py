@@ -207,6 +207,22 @@ class RamanDatabase:
             (_LICENSE_DEFAULTS["nk_data"],),
         )
 
+        # Backfill DOIs from the citation text, so consumers do not have to
+        # parse citations themselves. Idempotent: only NULL DOIs are touched.
+        from .._provenance import extract_doi
+
+        rows = cursor.execute(
+            "SELECT source_key, citation FROM provenance "
+            "WHERE doi IS NULL AND citation IS NOT NULL"
+        ).fetchall()
+        for source_key, citation in rows:
+            doi = extract_doi(citation)
+            if doi:
+                cursor.execute(
+                    "UPDATE provenance SET doi = ? WHERE source_key = ?",
+                    (doi, source_key),
+                )
+
         conn.commit()
         conn.close()
         self._seed_if_empty()
@@ -812,6 +828,28 @@ class RamanDatabase:
 
         conn.commit()
         conn.close()
+
+    def list_sellmeier_datasets(self) -> list[dict]:
+        """Return every Sellmeier entry as a summary dict.
+
+        Unlike iterating ``list_materials()``, this includes rows whose material
+        has no ``raman_specs`` entry — e.g. the axis sub-rows ``LiNbO3_er`` /
+        ``LiNbO3_or`` and optical materials such as Silicon or Sapphire — so a
+        catalogue built from it is complete.
+
+        Keys: ``material``, ``form``, ``valid_from_um``, ``valid_to_um``,
+        ``source``, ``license``.
+        """
+        conn = self._connect()
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT material, form, valid_from_um, valid_to_um, source, license "
+            "FROM sellmeier ORDER BY material"
+        )
+        rows = [dict(r) for r in cursor.fetchall()]
+        conn.close()
+        return rows
 
     def get_sellmeier(self, material: NKMaterial) -> dict | None:
         """SELECT Sellmeier coefficients for a material.

@@ -426,6 +426,25 @@ anti = silica.anti_stokes_wavelength(pump)
 print(f"Stokes: {stokes.as_nm:.1f} nm, Anti-Stokes: {anti.as_nm:.1f} nm")
 ```
 
+## What data ships (catalogue)
+
+List every dataset the library bundles — tabulated `n`/`k` spectra and
+Sellmeier equations — with its wavelength range, DOI and licence:
+
+```python
+from photonics_helper import material_catalog, print_material_catalog
+
+print_material_catalog("sil")       # rich table, case-insensitive name filter
+
+rows = material_catalog("LiNbO3")   # programmatic: MaterialDataset objects
+for d in rows:
+    print(d.material, d.kind, d.axis, d.wavelength_range_um, d.doi, d.license)
+```
+
+`material_catalog()` with no argument returns everything (69 datasets across 44
+Raman materials, 39 Sellmeier equations and 30 tabulated datasets; 28 with a
+DOI). The `axis` field labels the LiNbO₃ ordinary/extraordinary sub-rows.
+
 # Soliton Analysis
 
 Analyze soliton dynamics from GNLSE simulation results:

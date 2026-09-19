@@ -184,6 +184,7 @@ __all__ = [
     "Length",
     "Material",
     "MaterialComparison",
+    "MaterialDataset",
     "Pattern",
     "PeakPower",
     "Permeability",
@@ -245,6 +246,7 @@ __all__ = [
     "generate_trace",
     "gouy_phase",
     "kuznetsov_ma",
+    "material_catalog",
     "mi_gain_spectrum",
     "mi_gain_spectrum_extended",
     "mi_sideband_frequencies",
@@ -258,6 +260,7 @@ __all__ = [
     "plot_readiness_report",
     "plot_spectrum_with_pm_overlay",
     "plot_transverse_profile",
+    "print_material_catalog",
     "qpm_grating",
     "radius_of_curvature",
     "rayleigh_range",
@@ -310,6 +313,9 @@ _LAZY_MODULES: dict[str, str] = {
         "FiberProfile", "GNLSESolver", "SplitStepEngine", "TaperedGNLSESolver",
     )},
     "RefractiveIndex": ".materials",
+    "MaterialDataset": ".materials",
+    "material_catalog": ".materials",
+    "print_material_catalog": ".materials",
     # .noise
     **{n: ".noise" for n in (
         "add_ase_noise", "add_noise", "ase_noise_field", "complex_gaussian_noise",

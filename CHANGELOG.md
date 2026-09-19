@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-09-19
+
+### Fixed
+
+- **Actionable errors when material data cannot be retrieved** (the stable core
+  surface is unchanged; only the messages are):
+  - a missing, empty or corrupt database now names the path it tried, the
+    underlying SQLite error, and the remedy (reinstall, or `python seed_db.py`);
+  - an unknown material suggests close matches (`Did you mean: Silica?`) and
+    points at `RamanDatabase().list_materials()` and the `material-author`
+    tabulated keys;
+  - requesting `axis=` on a material with no ordinary/extraordinary rows now
+    explains that and lists the birefringent materials the database does have;
+  - blank or non-string material names are rejected up front instead of
+    producing a confusing “No Sellmeier data for  in materials.db”.
+- `RefractiveIndex.from_material_database` accepts an optional existing
+  `RamanDatabase` handle (`db=`), which makes the failure paths testable. This
+  is a compatible addition to a provisional module; no stable-core signature
+  changed (the API-surface snapshot is unchanged).
+
+### Added
+
+- **`material_catalog(name=None)` / `print_material_catalog(name=None)`** —
+  discover every dataset in the bundled database as a rich table (material,
+  kind, wavelength range, DOI, licence), with a case-insensitive name filter.
+  Exported at top level. The catalogue is complete: it includes Sellmeier rows
+  with no Raman spec (Silicon, Sapphire, Germanium, the LiNbO₃ ordinary /
+  extraordinary sub-rows) and tabulated datasets without a Raman spec (GaP).
+- **`RamanDatabase.list_sellmeier_datasets()`** — every Sellmeier entry as a
+  summary (fixes the omission of rows without a `raman_specs` entry).
+- `provenance.doi` is now backfilled from the citation text, so DOIs no longer
+  have to be parsed out of citations by consumers.
+- `tests/test_material_errors.py` (error-message contract) and
+  `tests/test_material_catalog.py`.
+
 ## [0.1.7] - 2026-09-19
 
 ### Added
@@ -196,7 +231,8 @@ Publishing.
 - CI runner pinned to `ubuntu-24.04` (clears the ubuntu-latest → Ubuntu 26
   migration warning).
 
-[Unreleased]: https://github.com/hitaishi2222/photonics_helper/compare/v0.1.7...HEAD
+[Unreleased]: https://github.com/hitaishi2222/photonics_helper/compare/v0.1.8...HEAD
+[0.1.8]: https://github.com/hitaishi2222/photonics_helper/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/hitaishi2222/photonics_helper/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/hitaishi2222/photonics_helper/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/hitaishi2222/photonics_helper/compare/v0.1.1...v0.1.5

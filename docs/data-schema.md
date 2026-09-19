@@ -88,6 +88,31 @@ db = RamanDatabase()          # no filesystem access
 db.list_provenance()          # first use: schema ensured, then the query
 ```
 
+## Discovering the data
+
+The catalogue lists every dataset the database ships — tabulated n/k spectra and
+Sellmeier equations together — with the columns you need to choose one:
+
+```python
+from photonics_helper import material_catalog, print_material_catalog
+
+print_material_catalog()          # rich table: material, type, λ range, DOI, licence
+print_material_catalog("sil")     # case-insensitive name filter
+
+rows = material_catalog()         # programmatic: list[MaterialDataset]
+```
+
+Each `MaterialDataset` carries `material`, `kind` (`"tabulated"` or
+`"sellmeier"`), `axis` (for birefringent sub-rows), `source`, `wl_min_um` /
+`wl_max_um`, `n_points`, `doi`, `citation` and `license`.
+
+Under the hood it reads `RamanDatabase.list_nk_dataset_summaries()` (tabulated)
+and `RamanDatabase.list_sellmeier_datasets()` (Sellmeier). The latter exists
+because Sellmeier rows are **not** all present in `raman_specs`: Silicon,
+Sapphire, Germanium and the `LiNbO3_er` / `LiNbO3_or` sub-rows have no Raman
+spec, so building a catalogue from `list_materials()` alone would silently drop
+them.
+
 ## Regenerating the database
 
 From the repository root:

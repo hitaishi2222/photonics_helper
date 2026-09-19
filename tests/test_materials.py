@@ -202,7 +202,8 @@ def test_linbo3_birefringence_at_pump():
 def test_linbo3_axis_validation():
     with pytest.raises(ValueError, match="Unknown axis"):
         RefractiveIndex.from_material_database("LiNbO3", axis="ray")
-    with pytest.raises(ValueError, match="No Sellmeier axis row"):
+    # A non-birefringent material explains itself and names the birefringent ones.
+    with pytest.raises(ValueError, match="has no ordinary/extraordinary rows"):
         RefractiveIndex.from_material_database("Silica", axis="extraordinary")
 
 

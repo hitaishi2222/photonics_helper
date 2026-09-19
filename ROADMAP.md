@@ -54,3 +54,41 @@ originally planned and now delivered.
 - **Structured Light** ✅ — Laguerre–Gaussian / OAM modes, Gaussian-beam propagation helpers, modal overlap integrals and transverse-profile plotting (`structured.py`)
 - ~~Add methods for bandwidth calculations~~
 - ~~Add methods for power/intensity conversions~~ (physical scaling via `Wave.with_effective_area` / `PeakPower.from_envelope`)
+
+---
+
+## Foundation backbone
+
+The strategy is to make the library a **foundation other photonics projects
+build on**, with `photonics_helper.core` (units, constants, grids, materials) as
+the stable contract.
+
+- **Phase 0 — hygiene** ✅ — `LICENSE` + data `NOTICE`, PEP 639 metadata, wheel
+  smoke tests, import-budget guards.
+- **Phase 1 — core namespace** ✅ — `photonics_helper.core`, lazy package import
+  (PEP 562), `TemporalGrid` extraction, `OpticalMaterial` protocol.
+- **Phase 2 — data layer** ✅ — populated phonon modes, provenance registry +
+  per-row licences, lazy database access, drift + golden tests.
+- **Phase 3 — stability contract** ✅ — published policy, deprecation machinery,
+  core API-surface guard, build-on-core example, contribution/citation/paper
+  artefacts.
+- **Phase 4 — capability growth** (planned, satellites): physics hardening
+  (self-steepening unitarity, temporally-resolved TPA, multi-phonon Raman),
+  vector / multimode OAM GNLSE, reproducing our own chalcogenide mid-IR SCG
+  papers, cascaded χ⁽²⁾–χ⁽³⁾, and a PINN / inverse-design layer.
+
+## Pending — author action
+
+- [ ] **JOSS software-paper submission.** The prerequisites are in place
+  (`paper/paper.md` + `paper/paper.bib` in JOSS format, `CITATION.cff`,
+  `CONTRIBUTING.md`, the stability contract and provenance docs the JOSS bot
+  pre-check looks for). What remains is author-side: mint a **Zenodo DOI** for
+  the release (link the GitHub repo to Zenodo and cut a release), then open the
+  submission issue at `openjournals/joss-reviews` with the repo URL, version and
+  DOI. To be done once the project reaches a suitable milestone.
+- [ ] Mint the Zenodo DOI and add it to `CITATION.cff` (`identifiers:`) and the
+  README once the archive exists.
+- [ ] `core.materials.material()` loads the bundled database through the
+  `raman` subpackage's SQLite backend. Harmless today (lazy import, import
+  budget intact) but conceptually the material database should not live under a
+  satellite; a future `core.data` module would fix it.
