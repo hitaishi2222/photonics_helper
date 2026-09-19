@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+_Nothing yet — next release planned as 0.1.1._
+
+## [0.1.0] - 2026-09-19
+
+First release to PyPI (`photonics-helper` 0.1.0) via GitHub Actions Trusted
+Publishing.
+
 ### Added
 
 - **GPU FFT backend** — optional `cupy` path in the FFT chain
@@ -48,16 +55,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   paper reproductions).
 - MI gain convention (`Ω_c² = 4γP/|β₂|`, `g_max = 2γP`).
 - FROG PCGPA retrieval for chirped pulses (seeded principal-component projection).
-
-## [0.1.0] - 2025-06-01
-
-### Added
-
-- Initial alpha release: unit classes (`Wavelength`, `Frequency`, `Time`,
-  `Energy`, `Power`, `Area`, …), materials and the n/k database, fiber
-  dispersion and propagation constants, pulse envelopes and pulse trains, FROG,
-  Raman response and material database, GNLSE solver (dispersion, Kerr, Raman,
-  self-steepening, TPA), soliton analysis, DBR/TMM, and paper reproductions.
+- CI on NumPy ≥ 2.4: scalar-conversion errors in `phase_matching.py` (`float()`
+  on size-1 arrays); graceful FFTW-backend fallback when `pyfftw` is absent;
+  `laserfun`-dependent test now skips when the package is not installed.
+- CI runner pinned to `ubuntu-24.04` (clears the ubuntu-latest → Ubuntu 26
+  migration warning).
 
 [Unreleased]: https://github.com/hitaishi2222/photonics_helper/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/hitaishi2222/photonics_helper/releases/tag/v0.1.0

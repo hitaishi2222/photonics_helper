@@ -1,26 +1,18 @@
 # Photonics Helper
 
-<p align="center">
-  <img src="docs/img/icon.png" width="160" alt="Photonics Helper logo" />
-</p>
-
-> ⚠️ **Disclaimer**: This library is under active development. APIs, interfaces, and internals may change between versions without notice. It is intended as a learning resource and research aid — not a production-grade simulation tool. If you rely on it for published results, please verify all outputs independently and cite the underlying physical models rather than this library.
-
 A comprehensive helper library for photonics and optics calculations, providing easy-to-use tools for wavelength, frequency, and angular frequency conversions.
 
 # Installation
 
-The package is not yet on PyPI. Install from the repository:
-
 ```bash
-pip install git+https://github.com/hitaishi2222/photonics_helper
+pip install photonics-helper
 ```
 
 For the **FFTW3-accelerated GNLSE / Raman solver** (recommended for large grids
 and long propagation runs):
 
 ```bash
-pip install "photonics-helper[fftw] @ git+https://github.com/hitaishi2222/photonics_helper"
+pip install "photonics-helper[fftw]"
 ```
 
 When `pyfftw` is present, every FFT in `gnlse.py` and `raman.py` executes on
@@ -657,5 +649,3 @@ pip install -e .
 - **Structured Light** ✅ — Laguerre–Gaussian / OAM modes, Gaussian-beam propagation helpers, modal overlap integrals and transverse-profile plotting (`structured.py`)
 - ~~Add methods for bandwidth calculations~~
 - ~~Add methods for power/intensity conversions~~ (physical scaling via `Wave.with_effective_area` / `PeakPower.from_envelope`)
-
-> ⚠️ **Note**: The TMM / DBR module (`dbr.py`) is still under active development. The API and internals may change.
