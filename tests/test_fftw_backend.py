@@ -5,6 +5,8 @@ trips through :class:`TemporalGrid`, (c) reproduces scipy's fftconvolve, and
 (d) produces bit-comparable GNLSE results to the pure-numpy path.
 """
 
+import importlib.util
+
 import numpy as np
 import pytest
 
@@ -21,6 +23,18 @@ from photonics_helper.base import Time
 from photonics_helper.pulse import TemporalGrid
 
 SIZES = [64, 127, 128, 255, 256, 512]
+
+_HAS_PYFFTW = importlib.util.find_spec("pyfftw") is not None
+_BACKEND_PARAMS = [
+    pytest.param(
+        "fftw",
+        marks=pytest.mark.skipif(
+            not _HAS_PYFFTW, reason="pyfftw not installed"
+        ),
+    ),
+    "scipy",
+    "numpy",
+]
 
 
 def _random_complex(n: int) -> np.ndarray:
@@ -107,7 +121,7 @@ def _parity(name: str):
         assert np.max(np.abs(ifft(fft(A)) - A)) < 1e-11
 
 
-@pytest.mark.parametrize("name", ["fftw", "scipy", "numpy"])
+@pytest.mark.parametrize("name", _BACKEND_PARAMS)
 def test_backend_selection_parity(name: str):
     """Every selectable backend honours the same shifted conventions."""
     try:
@@ -116,7 +130,7 @@ def test_backend_selection_parity(name: str):
         set_backend(None)  # restore auto-selection
 
 
-@pytest.mark.parametrize("name", ["fftw", "scipy", "numpy"])
+@pytest.mark.parametrize("name", _BACKEND_PARAMS)
 def test_backend_convolve_parity(name: str):
     """Every backend's full convolution matches scipy.signal.fftconvolve."""
     scipy_signal = pytest.importorskip("scipy.signal")

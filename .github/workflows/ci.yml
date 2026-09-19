@@ -16,7 +16,7 @@ concurrency:
 jobs:
   test:
     name: py${{ matrix.python-version }} · ${{ matrix.pyfftw }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:

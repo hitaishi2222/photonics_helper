@@ -269,7 +269,7 @@ class TestSelfSteepeningConservation:
 
     def test_steepening_energy_conserved_with_dispersion(self):
         """NLSE_simple-style case: |ΔE| < 0.1% with frequency-domain RK4 shock."""
-        import laserfun as lf
+        lf = pytest.importorskip("laserfun")
 
         wl = 1550.0
         length_m = 0.01

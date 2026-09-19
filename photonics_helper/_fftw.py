@@ -159,6 +159,8 @@ class _FftwBackend:
     name = "fftw"
 
     def __init__(self) -> None:
+        if not _HAS_PYFFTW:
+            raise RuntimeError("pyfftw is not installed")
         self._plans: dict[tuple, Any] = {}
         self._plans_lock = threading.Lock()
         self._exec_lock = threading.Lock()  # shared buffers: serialize execute()

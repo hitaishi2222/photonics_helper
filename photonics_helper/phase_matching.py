@@ -371,6 +371,19 @@ class ValidationReport:
 # ============================================================================
 
 
+def _as_scalar(x: object) -> float:
+    """Coerce a scalar-query result to a Python float.
+
+    Some β(ω) callables return a length-1 array even for scalar input.
+    NumPy ≥ 2.4 forbids ``float()`` on arrays with ``ndim > 0``, so flatten
+    explicitly instead of relying on the legacy conversion.
+    """
+    arr = np.asarray(x, dtype=float)
+    if arr.size != 1:
+        raise ValueError(f"expected a scalar-like value, got array of size {arr.size}")
+    return float(arr.reshape(-1)[0])
+
+
 def fwm_delta_beta_degenerate(
     beta_fn,
     omega_p: float,
@@ -394,7 +407,7 @@ def fwm_delta_beta_degenerate(
     beta_s = beta_fn(omega_s)
     omega_i = 2 * omega_p - omega_s
     beta_i = beta_fn(omega_i)
-    return float(2 * beta_p - beta_s - beta_i)
+    return _as_scalar(2 * beta_p - beta_s - beta_i)
 
 
 def fwm_delta_beta_general(
@@ -418,7 +431,7 @@ def fwm_delta_beta_general(
     -------
     delta_beta : float — phase mismatch (1/m).
     """
-    return float(
+    return _as_scalar(
         beta_fn(omega_1) + beta_fn(omega_2) - beta_fn(omega_3) - beta_fn(omega_4)
     )
 
@@ -725,9 +738,14 @@ def mi_gain_spectrum_extended(
         # Auto-generate grid using classical estimate for scale
         # Classical cutoff: Ω_c² = 4γP/|β₂|
         domega = 1e12
-        beta2_est = (
-            beta_fn(omega0 + domega) - 2 * beta_fn(omega0) + beta_fn(omega0 - domega)
-        ) / domega**2
+        beta2_est = _as_scalar(
+            (
+                beta_fn(omega0 + domega)
+                - 2 * beta_fn(omega0)
+                + beta_fn(omega0 - domega)
+            )
+            / domega**2
+        )
         if beta2_est < 0:
             Omega_classical = np.sqrt(max(4 * gamma * P / abs(beta2_est), 1e12))
         else:
@@ -814,23 +832,23 @@ def dispersive_wave_roots(
         omega_sol.as_rad_s if isinstance(omega_sol, AngularFrequency) else omega_sol
     )
 
-    beta_sol = beta_fn(omega_sol)
+    beta_sol = _as_scalar(beta_fn(omega_sol))
     # Get beta1 = dβ/dω
     try:
         if hasattr(beta_fn, "beta1"):
-            beta1_sol = float(beta_fn.beta1(omega_sol))
+            beta1_sol = _as_scalar(beta_fn.beta1(omega_sol))
         else:
             # Finite difference fallback
             domega = 1e6
             beta_plus = beta_fn(omega_sol_val + domega)
             beta_minus = beta_fn(omega_sol_val - domega)
-            beta1_sol = (beta_plus - beta_minus) / (2 * domega)
+            beta1_sol = _as_scalar((beta_plus - beta_minus) / (2 * domega))
     except (ValueError, TypeError, RuntimeError, ZeroDivisionError):
         # Last resort: finite difference with larger offset
         domega = 1e12
         beta_plus = beta_fn(omega_sol_val + domega)
         beta_minus = beta_fn(omega_sol_val - domega)
-        beta1_sol = (beta_plus - beta_minus) / (2 * domega)
+        beta1_sol = _as_scalar((beta_plus - beta_minus) / (2 * domega))
 
     # Define the RHS: β(ωₛ) + β₁(ωₛ)(ω − ωₛ) + q_sol
     rhs = beta_sol + beta1_sol * (omega_grid - omega_sol) + q_sol
@@ -849,7 +867,8 @@ def dispersive_wave_roots(
         try:
             res = root_scalar(
                 lambda w, bs=beta_sol, b1=beta1_sol, qs=q_sol: (
-                    beta_fn(w) - (bs + b1 * (w - omega_sol) + qs)
+                    _as_scalar(beta_fn(w))
+                    - (bs + b1 * (w - omega_sol) + qs)
                 ),
                 bracket=[w_lo, w_hi],
                 method="brentq",
@@ -876,7 +895,8 @@ def dispersive_wave_roots(
                     )
                     res = root_scalar(
                         lambda w, bs=beta_sol, b1=beta1_sol, qs=q_sol: (
-                            beta_fn(w) - (bs + b1 * (w - omega_sol) + qs)
+                            _as_scalar(beta_fn(w))
+                            - (bs + b1 * (w - omega_sol) + qs)
                         ),
                         x0=w_start,
                         method="newton",
@@ -919,7 +939,7 @@ def _beta1_fd(beta_fn, omega: float, domega: float = 1e6) -> float:
     """Finite-difference approximation of β₁ = dβ/dω."""
     beta_plus = beta_fn(omega + domega)
     beta_minus = beta_fn(omega - domega)
-    return float((beta_plus - beta_minus) / (2 * domega))
+    return _as_scalar((beta_plus - beta_minus) / (2 * domega))
 
 
 # ============================================================================
