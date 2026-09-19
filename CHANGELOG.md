@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-09-19
+
+### Added
+
+- **Published stability contract** (`docs/stability.md`): the stable surface
+  (`photonics_helper.core` + the database schema) vs the provisional satellites,
+  the versioning rules, the deprecation lifecycle, the support window and the
+  data-migration rule.
+- **Deprecation machinery** (`photonics_helper._deprecation`):
+  `deprecated(...)` (functions and classes) and `warn_deprecated(...)`, emitting
+  a once-per-process `DeprecationWarning` that names the replacement and the
+  removal release, without changing signatures or behaviour.
+- **Core API-surface guard**: `scripts/update_api_snapshot.py` +
+  `tests/core_api_snapshot.json` + `tests/test_core_api_surface.py` pin every
+  stable module's symbol set and public signature shape; removals, renames and
+  new required parameters fail CI, optional additions are allowed.
+- **Build-on-core guide** (`docs/building-on-core.md`) and a runnable example
+  (`examples/33_build_on_core.py`): a dispersive-broadening calculator written
+  against the core only, validated to ~1e-15 against the closed-form
+  `sqrt(1 + (z/L_D)^2)`, with a test asserting no satellite module is imported.
+- **Governance artefacts**: `CONTRIBUTING.md`, `CITATION.cff`, and a JOSS-format
+  software-paper draft (`paper/paper.md`, `paper/paper.bib`).
+
+### Changed
+
+- `pyyaml` added to the `dev` extra (governance tests parse `CITATION.cff`).
+
+### Notes
+
+- Nothing is deprecated yet; the machinery exists so the first rename follows
+  the published policy instead of breaking callers.
+- The JOSS submission itself is an author action (needs a Zenodo DOI and the
+  JOSS bot); this release prepares the draft.
+
 ## [0.1.6] - 2026-09-19
 
 ### Added
@@ -162,7 +196,8 @@ Publishing.
 - CI runner pinned to `ubuntu-24.04` (clears the ubuntu-latest → Ubuntu 26
   migration warning).
 
-[Unreleased]: https://github.com/hitaishi2222/photonics_helper/compare/v0.1.6...HEAD
+[Unreleased]: https://github.com/hitaishi2222/photonics_helper/compare/v0.1.7...HEAD
+[0.1.7]: https://github.com/hitaishi2222/photonics_helper/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/hitaishi2222/photonics_helper/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/hitaishi2222/photonics_helper/compare/v0.1.1...v0.1.5
 [0.1.1]: https://github.com/hitaishi2222/photonics_helper/releases/tag/v0.1.1

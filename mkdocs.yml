@@ -67,6 +67,8 @@ nav:
   - Installation: install.md
   - Quick start: quickstart.md
   - Foundation core: core.md
+  - Stability contract: stability.md
+  - Building on the core: building-on-core.md
   - API Reference:
       - api/index.md
       - Foundation core (units/grids/materials): api/core.md

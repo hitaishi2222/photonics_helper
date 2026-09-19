@@ -134,6 +134,13 @@ Every existing import path is preserved: `photonics_helper.base`,
 `photonics_helper.pulse.TemporalGrid` and friends still work and refer to the
 same objects. See the [foundation core docs](https://hitaishi2222.github.io/photonics_helper/core/).
 
+What's frozen and what can change is spelled out in the
+[stability contract](https://hitaishi2222.github.io/photonics_helper/stability/):
+`core` is the stable surface, the solvers are provisional, and stable symbols
+are only removed after a deprecation cycle. A worked external tool built on the
+core alone is in the
+[building on the core guide](https://hitaishi2222.github.io/photonics_helper/building-on-core/).
+
 # Quick Start
 
 To get started, import the library and use its functions:
