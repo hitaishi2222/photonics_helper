@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-09-19
+
+### Added
+
+- **Material provenance registry** — a `provenance` table
+  (`source_key`, `kind`, `citation`, `doi`, `url`, `license`) joinable via
+  `nk_data.source`, plus `RamanDatabase.get_provenance()` /
+  `list_provenance()`.
+- **Per-row licence** on `nk_data`, `sellmeier`, `raman_specs` and
+  `phonon_modes`, backfilled by an idempotent schema migration (documented
+  sentinels where a source declares no blanket licence).
+- **`PhononResponse.from_material(name)`** — resolves phonon modes through the
+  database first, falling back to the canonical `PHONON_MATERIALS` table.
+- **`Material.license`** on `photonics_helper.core.materials`, populated from
+  the provenance registry.
+- **`docs/data-schema.md`** documenting every table, the licence model and the
+  regeneration procedure.
+- Golden-value regression tests (`tests/test_material_data_golden.py`) pinning
+  `n(λ)`/`k(λ)`, Raman shift/linewidth/`f_R` and phonon modes.
+
+### Changed
+
+- **Populated `phonon_modes`** (0 → 52 modes for 10 crystals); `seed_db.py` now
+  seeds phonon data, and the empty-home-database fallback does too.
+- **Lazy database initialisation** — constructing a `RamanDatabase` no longer
+  opens, creates, migrates or seeds the file; that happens on first use.
+- **Drift guards** — the shipped `materials.db` is now asserted to match the
+  canonical Python seed tables (`raman_specs`, `phonon_modes`).
+
+### Data
+
+- `materials.db` migrated in place: `nk_data` preserved (24 767 rows), licence
+  columns and provenance rows added. No `nk_data` or `sellmeier` value changed.
+
 ## [0.1.5] - 2026-09-19
 
 ### Added
@@ -128,7 +162,8 @@ Publishing.
 - CI runner pinned to `ubuntu-24.04` (clears the ubuntu-latest → Ubuntu 26
   migration warning).
 
-[Unreleased]: https://github.com/hitaishi2222/photonics_helper/compare/v0.1.5...HEAD
+[Unreleased]: https://github.com/hitaishi2222/photonics_helper/compare/v0.1.6...HEAD
+[0.1.6]: https://github.com/hitaishi2222/photonics_helper/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/hitaishi2222/photonics_helper/compare/v0.1.1...v0.1.5
 [0.1.1]: https://github.com/hitaishi2222/photonics_helper/releases/tag/v0.1.1
 [0.1.0]: https://github.com/hitaishi2222/photonics_helper/releases/tag/v0.1.0

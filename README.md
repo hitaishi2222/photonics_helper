@@ -648,6 +648,8 @@ The source code is released under the **MIT License** (see [`LICENSE`](LICENSE))
 The bundled material database (`photonics_helper/materials.db`) is a
 compilation of numerical data from the published literature and from
 [refractiveindex.info](https://refractiveindex.info/) (CC0). Every row carries
-its own `source`/`citation`/`references` provenance; see [`NOTICE`](NOTICE) and
+its own `source`/`citation`/`references` provenance **and a `license` column**;
+the `provenance` registry joins nk datasets to their citation. See [`NOTICE`](NOTICE),
 the [data provenance](https://hitaishi2222.github.io/photonics_helper/data-provenance/)
-page for the full audit.
+page, and the [database schema](https://hitaishi2222.github.io/photonics_helper/data-schema/)
+for the full audit.

@@ -17,10 +17,17 @@ in the repository.
 
 | Table | Rows | Contents | Provenance |
 |---|---|---|---|
-| `nk_data` | 24 767 | tabulated `n`, `k` vs λ (µm) for 12 materials | `source`, `citation` (24 760 / 24 767 populated) |
-| `sellmeier` | 39 | Sellmeier coefficients + validity window | `source` (39 / 39) |
-| `raman_specs` | 44 | Raman shift, linewidth, `f_R`, `n₂`, gain | `references` (44 / 44) |
-| `phonon_modes` | 0 | multi-phonon modes | empty (roadmap Phase 2) |
+| `nk_data` | 24 767 | tabulated `n`, `k` vs λ (µm) for 12 materials | `source`, `citation` (24 760 / 24 767 populated), `license` |
+| `sellmeier` | 39 | Sellmeier coefficients + validity window | `source` (39 / 39), `license` |
+| `raman_specs` | 44 | Raman shift, linewidth, `f_R`, `n₂`, gain | `references` (44 / 44), `license` |
+| `phonon_modes` | 52 | multi-mode phonon data for 10 crystals | `note`, `license` |
+| `provenance` | 30 | central registry joinable via `nk_data.source` | `source_key`, `citation`, `doi`, `url`, `license` |
+
+Every data row also carries a `license`. Concrete identifiers are used only
+where a source declares one (`nk_data` is `CC0-1.0`); elsewhere the value is a
+documented sentinel (`see-source-publication`, `see-references`, `see-note`)
+pointing at the row's citation. See the [database schema](data-schema.md) for the
+full model.
 
 Inspect any row directly:
 
@@ -48,6 +55,10 @@ with importlib.resources.as_file(
   carries the attribution.
 - **`raman_specs`** — a literature compilation original to this project, with
   per-row `references` to the underlying paper or textbook.
+- **`phonon_modes`** — multi-mode phonon data whose canonical source is
+  `photonics_helper.phonon.PHONON_MATERIALS` (per-mode literature notes).
+- **`provenance`** — a registry table joining on `nk_data.source`, backfilled
+  from the tabulated data so the database is auditable without external files.
 
 ## Licensing caveat
 
@@ -57,8 +68,22 @@ original source. The `citation` column exists so a redistributor can verify
 each one. If you believe an entry cannot be redistributed, open an issue and it
 will be corrected or removed.
 
-## Roadmap
+## Status
 
-Data-layer consolidation (single material contract, populated `phonon_modes`,
-removal of the duplicated `RAMAN_MATERIALS` dict, explicit per-row licence) is
-Phase 2 of the Foundation Backbone roadmap; see `REPORT.md`.
+The data-layer consolidation (Phase 2) is complete:
+
+- `phonon_modes` is populated and reachable through `RamanDatabase` and
+  `PhononResponse.from_material()` — the same interface as n/k data.
+- Every row in every data table carries a `license`; the `provenance` registry
+  is populated and queryable (`RamanDatabase.get_provenance()`).
+- The shipped database is verified against the canonical Python tables by
+  drift tests, and key values are pinned by golden tests.
+
+SQLite access is lazy: constructing a `RamanDatabase` has no filesystem side
+effects; the schema/seed step runs on first use.
+
+Splitting the data into a separate distribution or a download-on-demand extra
+remains a future option; the database stays bundled for now.
+
+`REPORT.md` (git-ignored local notes) tracks the wider "Foundation Backbone"
+roadmap.

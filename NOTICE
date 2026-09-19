@@ -11,12 +11,20 @@ so that users, institutions and downstream packagers can audit those terms.
 
 ## What is bundled
 
-| Table | Rows | What it holds | Per-row provenance |
+| Table | Rows | What it holds | Provenance |
 |---|---|---|---|
-| `nk_data` | 24 767 | tabulated `n`, `k` vs wavelength (µm) for 12 materials | `source` + `citation` columns (24 760 / 24 767 populated) |
-| `sellmeier` | 39 | Sellmeier coefficients per material + validity window | `source` column (39 / 39 populated) |
-| `raman_specs` | 44 | Raman shift, linewidth, f_R, n₂, gain, references | `references` column (44 / 44 populated) |
-| `phonon_modes` | 0 | multi-phonon mode table | currently empty (see *Known gaps*) |
+| `nk_data` | 24 767 | tabulated `n`, `k` vs wavelength (µm) for 12 materials | `source` + `citation` columns (24 760 / 24 767 populated), `license` |
+| `sellmeier` | 39 | Sellmeier coefficients per material + validity window | `source` column (39 / 39 populated), `license` |
+| `raman_specs` | 44 | Raman shift, linewidth, f_R, n₂, gain, references | `references` column (44 / 44 populated), `license` |
+| `phonon_modes` | 52 | multi-mode phonon data for 10 crystals | `note` column, `license` |
+| `provenance` | 30 | central registry joinable via `nk_data.source` | `source_key`, `citation`, `doi`, `url`, `license` |
+
+Every data row carries a `license`. Concrete identifiers are used only where a
+source declares one — `nk_data` is `CC0-1.0` (refractiveindex.info). Elsewhere
+the value is a documented sentinel (`see-source-publication`, `see-references`,
+`see-note`) that points at the row's citation column; sentinels are not valid
+SPDX identifiers and must not be read as a blanket licence grant. See
+`docs/data-schema.md` for the full schema and licence model.
 
 Every populated provenance string names the original publication, with a DOI
 or URL where one exists. The rows can be inspected directly:
@@ -71,17 +79,20 @@ papers. The extracted paper text (`*.txt`) and PDFs (`*.pdf`) are **not**
 redistributed in the sdist/wheel and are git-ignored; the scripts describe the
 input parameters so the figures can be regenerated.
 
-## Known gaps (roadmap Phase 2)
+## Status
 
-- `phonon_modes` is empty although `photonics_helper/phonon.py` ships a
-  hard-coded `PHONON_MATERIALS` reference table — the two are not yet unified.
-- `raman/reference.py` duplicates a `RAMAN_MATERIALS` dict that overlaps the
-  `raman_specs` table; there is no single source of truth yet.
-- No per-row licence column exists; licence is currently inferred from the
-  `source`/`citation` string.
+The data layer is consolidated and auditable:
 
-These are scheduled for the data-layer consolidation phase of the
-"Foundation Backbone" roadmap (`REPORT.md`).
+- `phonon_modes` is populated from the canonical `PHONON_MATERIALS` table
+  (`photonics_helper/phonon.py`) and is reachable through `RamanDatabase`.
+- Every row in every data table carries a `license`, and the `provenance`
+  registry is populated so `nk_data` rows join to their citation/licence.
+- The shipped database is verified against the canonical Python seed tables by
+  drift tests, and key values are pinned by golden regression tests.
+
+The database remains bundled rather than shipped as a separate distribution;
+SQLite access is lazy, so constructing a database handle does not touch the
+file until data is requested.
 
 ## Reporting a provenance problem
 

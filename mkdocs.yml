@@ -89,3 +89,4 @@ nav:
       - Unified dashboard: api/dashboard.md
   - Reproductions: reproductions.md
   - Data provenance: data-provenance.md
+  - Database schema: data-schema.md
