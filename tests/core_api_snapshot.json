@@ -1,0 +1,1552 @@
+{
+  "photonics_helper.core.constants": {
+    "all": [
+      "C_MS",
+      "EPS_0",
+      "HBAR",
+      "H_PLANCK",
+      "MU_0",
+      "PI",
+      "Z0"
+    ],
+    "symbols": {
+      "C_MS": {
+        "kind": "value"
+      },
+      "EPS_0": {
+        "kind": "value"
+      },
+      "HBAR": {
+        "kind": "value"
+      },
+      "H_PLANCK": {
+        "kind": "value"
+      },
+      "MU_0": {
+        "kind": "value"
+      },
+      "PI": {
+        "kind": "value"
+      },
+      "Z0": {
+        "kind": "value"
+      }
+    }
+  },
+  "photonics_helper.core.grids": {
+    "all": [
+      "TemporalGrid"
+    ],
+    "symbols": {
+      "TemporalGrid": {
+        "kind": "class",
+        "members": {
+          "dt": {
+            "kind": "property"
+          },
+          "dw": {
+            "kind": "property"
+          },
+          "fft": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ],
+              [
+                "A_t",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          },
+          "for_pulse_train": {
+            "kind": "callable",
+            "params": [
+              [
+                "repetition_rate",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ],
+              [
+                "n_pulses",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ],
+              [
+                "pulse_width",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ],
+              [
+                "N",
+                "POSITIONAL_OR_KEYWORD",
+                true
+              ]
+            ]
+          },
+          "ifft": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ],
+              [
+                "A_w",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          },
+          "omega_max": {
+            "kind": "property"
+          },
+          "t": {
+            "kind": "property"
+          },
+          "time_window": {
+            "kind": "property"
+          },
+          "w": {
+            "kind": "property"
+          }
+        },
+        "params": [
+          [
+            "N",
+            "POSITIONAL_OR_KEYWORD",
+            false
+          ],
+          [
+            "Tmax",
+            "POSITIONAL_OR_KEYWORD",
+            false
+          ]
+        ]
+      }
+    }
+  },
+  "photonics_helper.core.materials": {
+    "all": [
+      "Material",
+      "OpticalMaterial",
+      "material"
+    ],
+    "symbols": {
+      "Material": {
+        "kind": "class",
+        "members": {
+          "group_index": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ],
+              [
+                "wavelength",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          },
+          "k": {
+            "kind": "property"
+          },
+          "k_func": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ],
+              [
+                "wavelength",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          },
+          "license": {
+            "kind": "value"
+          },
+          "n": {
+            "kind": "property"
+          },
+          "n_func": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ],
+              [
+                "wavelength",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          },
+          "nk": {
+            "kind": "property"
+          },
+          "nk_func": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ],
+              [
+                "wavelength",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          },
+          "source": {
+            "kind": "value"
+          },
+          "wl": {
+            "kind": "property"
+          }
+        },
+        "params": [
+          [
+            "name",
+            "POSITIONAL_OR_KEYWORD",
+            false
+          ],
+          [
+            "index",
+            "POSITIONAL_OR_KEYWORD",
+            false
+          ],
+          [
+            "source",
+            "POSITIONAL_OR_KEYWORD",
+            true
+          ],
+          [
+            "license",
+            "POSITIONAL_OR_KEYWORD",
+            true
+          ]
+        ]
+      },
+      "OpticalMaterial": {
+        "kind": "class",
+        "members": {
+          "k_func": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ],
+              [
+                "wavelength",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          },
+          "n_func": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ],
+              [
+                "wavelength",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          }
+        },
+        "params": [
+          [
+            "args",
+            "VAR_POSITIONAL",
+            false
+          ],
+          [
+            "kwargs",
+            "VAR_KEYWORD",
+            false
+          ]
+        ]
+      },
+      "material": {
+        "kind": "function",
+        "params": [
+          [
+            "name",
+            "POSITIONAL_OR_KEYWORD",
+            false
+          ],
+          [
+            "axis",
+            "KEYWORD_ONLY",
+            true
+          ],
+          [
+            "n_points",
+            "KEYWORD_ONLY",
+            true
+          ]
+        ]
+      }
+    }
+  },
+  "photonics_helper.core.units": {
+    "all": [
+      "AngularFrequency",
+      "AngularFrequencyArray",
+      "Area",
+      "Energy",
+      "Frequency",
+      "FrequencyArray",
+      "Length",
+      "PeakPower",
+      "Permeability",
+      "Permittivity",
+      "Power",
+      "Time",
+      "Wavelength",
+      "WavelengthArray",
+      "Wavenumber",
+      "WavenumberArray"
+    ],
+    "symbols": {
+      "AngularFrequency": {
+        "kind": "class",
+        "members": {
+          "as_meep": {
+            "kind": "property"
+          },
+          "as_rad_ps": {
+            "kind": "property"
+          },
+          "as_rad_s": {
+            "kind": "property"
+          },
+          "from_meep": {
+            "kind": "callable",
+            "params": [
+              [
+                "value",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ],
+              [
+                "base_length",
+                "POSITIONAL_OR_KEYWORD",
+                true
+              ]
+            ]
+          },
+          "to_energy": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          },
+          "to_freq": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          },
+          "to_time": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          },
+          "to_wl": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          },
+          "to_wn": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          }
+        },
+        "params": [
+          [
+            "value",
+            "POSITIONAL_OR_KEYWORD",
+            false
+          ],
+          [
+            "unit",
+            "POSITIONAL_OR_KEYWORD",
+            false
+          ]
+        ]
+      },
+      "AngularFrequencyArray": {
+        "kind": "class",
+        "members": {
+          "as_meep": {
+            "kind": "property"
+          },
+          "as_rad_ps": {
+            "kind": "property"
+          },
+          "as_rad_s": {
+            "kind": "property"
+          },
+          "from_meep": {
+            "kind": "callable",
+            "params": [
+              [
+                "value",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ],
+              [
+                "base_length",
+                "POSITIONAL_OR_KEYWORD",
+                true
+              ]
+            ]
+          },
+          "to_equally_spaced": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ],
+              [
+                "points",
+                "POSITIONAL_OR_KEYWORD",
+                true
+              ]
+            ]
+          },
+          "to_freq": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          },
+          "to_wl": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          },
+          "to_wn": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          }
+        },
+        "params": [
+          [
+            "value",
+            "POSITIONAL_OR_KEYWORD",
+            false
+          ],
+          [
+            "unit",
+            "POSITIONAL_OR_KEYWORD",
+            false
+          ]
+        ]
+      },
+      "Area": {
+        "kind": "class",
+        "members": {
+          "as_cm2": {
+            "kind": "property"
+          },
+          "as_m2": {
+            "kind": "property"
+          },
+          "as_meep": {
+            "kind": "property"
+          },
+          "as_mm2": {
+            "kind": "property"
+          },
+          "as_nm2": {
+            "kind": "property"
+          },
+          "as_um2": {
+            "kind": "property"
+          },
+          "from_meep": {
+            "kind": "callable",
+            "params": [
+              [
+                "value",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ],
+              [
+                "base_length",
+                "POSITIONAL_OR_KEYWORD",
+                true
+              ]
+            ]
+          }
+        },
+        "params": [
+          [
+            "value",
+            "POSITIONAL_OR_KEYWORD",
+            false
+          ],
+          [
+            "unit",
+            "POSITIONAL_OR_KEYWORD",
+            false
+          ]
+        ]
+      },
+      "Energy": {
+        "kind": "class",
+        "members": {
+          "as_J": {
+            "kind": "property"
+          },
+          "as_eV": {
+            "kind": "property"
+          },
+          "as_mJ": {
+            "kind": "property"
+          },
+          "as_meV": {
+            "kind": "property"
+          },
+          "as_meep": {
+            "kind": "property"
+          },
+          "as_nJ": {
+            "kind": "property"
+          },
+          "as_pJ": {
+            "kind": "property"
+          },
+          "as_uJ": {
+            "kind": "property"
+          },
+          "from_freq": {
+            "kind": "callable",
+            "params": [
+              [
+                "freq",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          },
+          "from_meep": {
+            "kind": "callable",
+            "params": [
+              [
+                "value",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ],
+              [
+                "base_length",
+                "POSITIONAL_OR_KEYWORD",
+                true
+              ]
+            ]
+          },
+          "from_omega": {
+            "kind": "callable",
+            "params": [
+              [
+                "omega",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          },
+          "from_wl": {
+            "kind": "callable",
+            "params": [
+              [
+                "wl",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          },
+          "from_wn": {
+            "kind": "callable",
+            "params": [
+              [
+                "wn",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          },
+          "to_freq": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          },
+          "to_omega": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          },
+          "to_wl": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          },
+          "to_wn": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          }
+        },
+        "params": [
+          [
+            "value",
+            "POSITIONAL_OR_KEYWORD",
+            false
+          ],
+          [
+            "unit",
+            "POSITIONAL_OR_KEYWORD",
+            false
+          ]
+        ]
+      },
+      "Frequency": {
+        "kind": "class",
+        "members": {
+          "as_GHz": {
+            "kind": "property"
+          },
+          "as_Hz": {
+            "kind": "property"
+          },
+          "as_MHz": {
+            "kind": "property"
+          },
+          "as_THz": {
+            "kind": "property"
+          },
+          "as_meep": {
+            "kind": "property"
+          },
+          "from_meep": {
+            "kind": "callable",
+            "params": [
+              [
+                "value",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ],
+              [
+                "base_length",
+                "POSITIONAL_OR_KEYWORD",
+                true
+              ]
+            ]
+          },
+          "to_energy": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          },
+          "to_omega": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          },
+          "to_time": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          },
+          "to_wl": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          },
+          "to_wn": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          }
+        },
+        "params": [
+          [
+            "value",
+            "POSITIONAL_OR_KEYWORD",
+            false
+          ],
+          [
+            "unit",
+            "POSITIONAL_OR_KEYWORD",
+            false
+          ]
+        ]
+      },
+      "FrequencyArray": {
+        "kind": "class",
+        "members": {
+          "as_GHz": {
+            "kind": "property"
+          },
+          "as_Hz": {
+            "kind": "property"
+          },
+          "as_MHz": {
+            "kind": "property"
+          },
+          "as_THz": {
+            "kind": "property"
+          },
+          "as_meep": {
+            "kind": "property"
+          },
+          "from_meep": {
+            "kind": "callable",
+            "params": [
+              [
+                "value",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ],
+              [
+                "base_length",
+                "POSITIONAL_OR_KEYWORD",
+                true
+              ]
+            ]
+          },
+          "to_equally_spaced": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ],
+              [
+                "points",
+                "POSITIONAL_OR_KEYWORD",
+                true
+              ]
+            ]
+          },
+          "to_omega": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          },
+          "to_wl": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          },
+          "to_wn": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          }
+        },
+        "params": [
+          [
+            "value",
+            "POSITIONAL_OR_KEYWORD",
+            false
+          ],
+          [
+            "unit",
+            "POSITIONAL_OR_KEYWORD",
+            false
+          ]
+        ]
+      },
+      "Length": {
+        "kind": "class",
+        "members": {
+          "as_cm": {
+            "kind": "property"
+          },
+          "as_km": {
+            "kind": "property"
+          },
+          "as_m": {
+            "kind": "property"
+          },
+          "as_meep": {
+            "kind": "property"
+          },
+          "as_mm": {
+            "kind": "property"
+          },
+          "as_nm": {
+            "kind": "property"
+          },
+          "as_pm": {
+            "kind": "property"
+          },
+          "as_um": {
+            "kind": "property"
+          },
+          "from_meep": {
+            "kind": "callable",
+            "params": [
+              [
+                "value",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ],
+              [
+                "base_length",
+                "POSITIONAL_OR_KEYWORD",
+                true
+              ]
+            ]
+          },
+          "from_wl": {
+            "kind": "callable",
+            "params": [
+              [
+                "wl",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          },
+          "to_wl": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          }
+        },
+        "params": [
+          [
+            "value",
+            "POSITIONAL_OR_KEYWORD",
+            false
+          ],
+          [
+            "unit",
+            "POSITIONAL_OR_KEYWORD",
+            false
+          ]
+        ]
+      },
+      "PeakPower": {
+        "kind": "class",
+        "members": {
+          "from_envelope": {
+            "kind": "callable",
+            "params": [
+              [
+                "A",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ],
+              [
+                "A_eff",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ],
+              [
+                "n",
+                "POSITIONAL_OR_KEYWORD",
+                true
+              ],
+              [
+                "lambda0",
+                "POSITIONAL_OR_KEYWORD",
+                true
+              ]
+            ]
+          }
+        },
+        "params": [
+          [
+            "value",
+            "POSITIONAL_OR_KEYWORD",
+            false
+          ],
+          [
+            "unit",
+            "POSITIONAL_OR_KEYWORD",
+            false
+          ]
+        ]
+      },
+      "Permeability": {
+        "kind": "class",
+        "members": {
+          "from_relative": {
+            "kind": "callable",
+            "params": [
+              [
+                "relative_value",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          }
+        },
+        "params": [
+          [
+            "value",
+            "POSITIONAL_OR_KEYWORD",
+            false
+          ]
+        ]
+      },
+      "Permittivity": {
+        "kind": "class",
+        "members": {
+          "from_relative": {
+            "kind": "callable",
+            "params": [
+              [
+                "relative_value",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          }
+        },
+        "params": [
+          [
+            "value",
+            "POSITIONAL_OR_KEYWORD",
+            false
+          ]
+        ]
+      },
+      "Power": {
+        "kind": "class",
+        "members": {
+          "as_W": {
+            "kind": "property"
+          },
+          "as_kW": {
+            "kind": "property"
+          },
+          "as_mW": {
+            "kind": "property"
+          },
+          "as_meep": {
+            "kind": "property"
+          },
+          "as_nW": {
+            "kind": "property"
+          },
+          "as_uW": {
+            "kind": "property"
+          },
+          "from_meep": {
+            "kind": "callable",
+            "params": [
+              [
+                "value",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ],
+              [
+                "base_length",
+                "POSITIONAL_OR_KEYWORD",
+                true
+              ]
+            ]
+          }
+        },
+        "params": [
+          [
+            "value",
+            "POSITIONAL_OR_KEYWORD",
+            false
+          ],
+          [
+            "unit",
+            "POSITIONAL_OR_KEYWORD",
+            false
+          ]
+        ]
+      },
+      "Time": {
+        "kind": "class",
+        "members": {
+          "as_as": {
+            "kind": "property"
+          },
+          "as_fs": {
+            "kind": "property"
+          },
+          "as_meep": {
+            "kind": "property"
+          },
+          "as_ms": {
+            "kind": "property"
+          },
+          "as_ns": {
+            "kind": "property"
+          },
+          "as_ps": {
+            "kind": "property"
+          },
+          "as_s": {
+            "kind": "property"
+          },
+          "as_us": {
+            "kind": "property"
+          },
+          "from_freq": {
+            "kind": "callable",
+            "params": [
+              [
+                "freq",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          },
+          "from_meep": {
+            "kind": "callable",
+            "params": [
+              [
+                "value",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ],
+              [
+                "base_length",
+                "POSITIONAL_OR_KEYWORD",
+                true
+              ]
+            ]
+          },
+          "from_omega": {
+            "kind": "callable",
+            "params": [
+              [
+                "omega",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          },
+          "to_freq": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          },
+          "to_omega": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          }
+        },
+        "params": [
+          [
+            "value",
+            "POSITIONAL_OR_KEYWORD",
+            false
+          ],
+          [
+            "unit",
+            "POSITIONAL_OR_KEYWORD",
+            false
+          ]
+        ]
+      },
+      "Wavelength": {
+        "kind": "class",
+        "members": {
+          "as_m": {
+            "kind": "property"
+          },
+          "as_meep": {
+            "kind": "property"
+          },
+          "as_nm": {
+            "kind": "property"
+          },
+          "as_um": {
+            "kind": "property"
+          },
+          "from_meep": {
+            "kind": "callable",
+            "params": [
+              [
+                "value",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ],
+              [
+                "base_length",
+                "POSITIONAL_OR_KEYWORD",
+                true
+              ]
+            ]
+          },
+          "to_energy": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          },
+          "to_freq": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          },
+          "to_omega": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          },
+          "to_wn": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          }
+        },
+        "params": [
+          [
+            "value",
+            "POSITIONAL_OR_KEYWORD",
+            false
+          ],
+          [
+            "unit",
+            "POSITIONAL_OR_KEYWORD",
+            false
+          ]
+        ]
+      },
+      "WavelengthArray": {
+        "kind": "class",
+        "members": {
+          "as_m": {
+            "kind": "property"
+          },
+          "as_meep": {
+            "kind": "property"
+          },
+          "as_nm": {
+            "kind": "property"
+          },
+          "as_um": {
+            "kind": "property"
+          },
+          "from_meep": {
+            "kind": "callable",
+            "params": [
+              [
+                "value",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ],
+              [
+                "base_length",
+                "POSITIONAL_OR_KEYWORD",
+                true
+              ]
+            ]
+          },
+          "from_wavelengths": {
+            "kind": "callable",
+            "params": [
+              [
+                "wavelengths",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          },
+          "to_equally_spaced": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ],
+              [
+                "points",
+                "POSITIONAL_OR_KEYWORD",
+                true
+              ]
+            ]
+          },
+          "to_freq": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          },
+          "to_omega": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          },
+          "to_wn": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          }
+        },
+        "params": [
+          [
+            "value",
+            "POSITIONAL_OR_KEYWORD",
+            false
+          ],
+          [
+            "unit",
+            "POSITIONAL_OR_KEYWORD",
+            false
+          ]
+        ]
+      },
+      "Wavenumber": {
+        "kind": "class",
+        "members": {
+          "as_1_cm": {
+            "kind": "property"
+          },
+          "as_1_m": {
+            "kind": "property"
+          },
+          "as_angular": {
+            "kind": "property"
+          },
+          "as_meep": {
+            "kind": "property"
+          },
+          "from_meep": {
+            "kind": "callable",
+            "params": [
+              [
+                "value",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ],
+              [
+                "base_length",
+                "POSITIONAL_OR_KEYWORD",
+                true
+              ]
+            ]
+          },
+          "to_energy": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          },
+          "to_freq": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          },
+          "to_omega": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          },
+          "to_wl": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          }
+        },
+        "params": [
+          [
+            "value",
+            "POSITIONAL_OR_KEYWORD",
+            false
+          ],
+          [
+            "unit",
+            "POSITIONAL_OR_KEYWORD",
+            false
+          ]
+        ]
+      },
+      "WavenumberArray": {
+        "kind": "class",
+        "members": {
+          "as_1_cm": {
+            "kind": "property"
+          },
+          "as_1_m": {
+            "kind": "property"
+          },
+          "as_angular": {
+            "kind": "property"
+          },
+          "as_meep": {
+            "kind": "property"
+          },
+          "from_meep": {
+            "kind": "callable",
+            "params": [
+              [
+                "value",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ],
+              [
+                "base_length",
+                "POSITIONAL_OR_KEYWORD",
+                true
+              ]
+            ]
+          },
+          "to_equally_spaced": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ],
+              [
+                "points",
+                "POSITIONAL_OR_KEYWORD",
+                true
+              ]
+            ]
+          },
+          "to_freq": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          },
+          "to_omega": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          },
+          "to_wl": {
+            "kind": "callable",
+            "params": [
+              [
+                "self",
+                "POSITIONAL_OR_KEYWORD",
+                false
+              ]
+            ]
+          }
+        },
+        "params": [
+          [
+            "value",
+            "POSITIONAL_OR_KEYWORD",
+            false
+          ],
+          [
+            "unit",
+            "POSITIONAL_OR_KEYWORD",
+            false
+          ]
+        ]
+      }
+    }
+  }
+}
