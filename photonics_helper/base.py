@@ -50,14 +50,17 @@ class Wavelength:
 
     @cached_property
     def as_m(self) -> float:
+        """Value in metres (the internal storage unit)."""
         return self.value
 
     @cached_property
     def as_um(self) -> float:
+        """Value in micrometres."""
         return self.value * 1e6
 
     @cached_property
     def as_nm(self) -> float:
+        """Value in nanometres."""
         return self.value * 1e9
 
     def to_freq(self) -> Frequency:
@@ -69,6 +72,7 @@ class Wavelength:
         return AngularFrequency(2 * PI * C_MS / self.value, "rad/s")
 
     def to_energy(self) -> Energy:
+        """Convert to :class:`Energy` (J)."""
         return Energy(H_PLANCK * C_MS / self.value, "J")
 
     def to_wn(self) -> Wavenumber:
@@ -151,9 +155,11 @@ class Frequency:
         return Wavenumber(value=self.as_Hz / C_MS, unit="1/m")
 
     def to_time(self) -> Time:
+        """Construct the equivalent :class:`Time` (unit-converted)."""
         return Time(1.0 / self.as_Hz, "s")
 
     def to_energy(self) -> Energy:
+        """Convert to :class:`Energy` (J)."""
         return Energy(H_PLANCK * self.as_Hz, "J")
 
     @classmethod
@@ -199,10 +205,12 @@ class AngularFrequency:
 
     @cached_property
     def as_rad_s(self) -> float:
+        """Value in rad/s."""
         return self.value
 
     @cached_property
     def as_rad_ps(self) -> float:
+        """Value in rad/ps."""
         return self.value * 1e-12
 
     def to_wl(self) -> Wavelength:
@@ -218,9 +226,11 @@ class AngularFrequency:
         return Wavenumber(value=self.as_rad_s / (2 * PI * C_MS), unit="1/m")
 
     def to_time(self) -> Time:
+        """Construct the equivalent :class:`Time` (unit-converted)."""
         return Time(2 * PI / self.value, "s")
 
     def to_energy(self) -> Energy:
+        """Convert to :class:`Energy` (J)."""
         return Energy(HBAR * self.value, "J")
 
     @classmethod
@@ -266,14 +276,17 @@ class Wavenumber:
 
     @cached_property
     def as_1_m(self) -> float:
+        """Value in 1/m (inverse metres)."""
         return self.value
 
     @cached_property
     def as_1_cm(self) -> float:
+        """Value in 1/cm (per centimetre)."""
         return self.value * 1e-2
 
     @cached_property
     def as_angular(self) -> float:
+        """Value expressed in ``angular`` units."""
         return self.value * 2 * PI
 
     def to_wl(self) -> Wavelength:
@@ -289,6 +302,7 @@ class Wavenumber:
         return AngularFrequency(value=C_MS * 2 * PI * self.as_1_m, unit="rad/s")
 
     def to_energy(self) -> Energy:
+        """Convert to :class:`Energy` (J)."""
         return Energy(H_PLANCK * C_MS * self.as_1_m, "J")
 
     @classmethod
@@ -350,33 +364,41 @@ class Length:
 
     @cached_property
     def as_km(self) -> float:
+        """Value expressed in ``km`` units."""
         return self.value * 1e-3
 
     @cached_property
     def as_m(self) -> float:
+        """Value in metres (the internal storage unit)."""
         return self.value
 
     @cached_property
     def as_cm(self) -> float:
+        """Value expressed in ``cm`` units."""
         return self.value * 1e2
 
     @cached_property
     def as_mm(self) -> float:
+        """Value expressed in ``mm`` units."""
         return self.value * 1e3
 
     @cached_property
     def as_um(self) -> float:
+        """Value in micrometres."""
         return self.value * 1e6
 
     @cached_property
     def as_nm(self) -> float:
+        """Value in nanometres."""
         return self.value * 1e9
 
     @cached_property
     def as_pm(self) -> float:
+        """Value expressed in ``pm`` units."""
         return self.value * 1e12
 
     def to_wl(self) -> Wavelength:
+        """Convert to :class:`Wavelength` (m)."""
         return Wavelength(self.value, "m")
 
     @classmethod
@@ -391,6 +413,7 @@ class Length:
 
     @cached_property
     def as_meep(self) -> float:
+        """Value in MEEP normalized units."""
         return self.as_m / 1e-6
 
 
@@ -437,36 +460,45 @@ class Time:
 
     @cached_property
     def as_s(self) -> float:
+        """Value in seconds."""
         return self.value
 
     @cached_property
     def as_ms(self) -> float:
+        """Value expressed in ``ms`` units."""
         return self.value * 1e3
 
     @cached_property
     def as_us(self) -> float:
+        """Value expressed in ``us`` units."""
         return self.value * 1e6
 
     @cached_property
     def as_ns(self) -> float:
+        """Value in nanoseconds."""
         return self.value * 1e9
 
     @cached_property
     def as_ps(self) -> float:
+        """Value in picoseconds."""
         return self.value * 1e12
 
     @cached_property
     def as_fs(self) -> float:
+        """Value in femtoseconds."""
         return self.value * 1e15
 
     @cached_property
     def as_as(self) -> float:
+        """Value expressed in ``as`` units."""
         return self.value * 1e18
 
     def to_freq(self) -> Frequency:
+        """Convert to :class:`Frequency` (Hz)."""
         return Frequency(1.0 / self.value, "Hz")
 
     def to_omega(self) -> AngularFrequency:
+        """Convert to :class:`AngularFrequency` (rad/s)."""
         return AngularFrequency(2 * PI / self.value, "rad/s")
 
     @classmethod
@@ -485,6 +517,7 @@ class Time:
 
     @cached_property
     def as_meep(self) -> float:
+        """Value in MEEP normalized units."""
         return self.as_s * C_MS / 1e-6
 
 
@@ -554,15 +587,19 @@ class Energy:
         return float(self.value / const.eV * 1e3)
 
     def to_freq(self) -> Frequency:
+        """Convert to :class:`Frequency` (Hz)."""
         return Frequency(self.value / H_PLANCK, "Hz")
 
     def to_omega(self) -> AngularFrequency:
+        """Convert to :class:`AngularFrequency` (rad/s)."""
         return AngularFrequency(self.value / HBAR, "rad/s")
 
     def to_wl(self) -> Wavelength:
+        """Convert to :class:`Wavelength` (m)."""
         return Wavelength(H_PLANCK * C_MS / self.value, "m")
 
     def to_wn(self) -> Wavenumber:
+        """Convert to :class:`Wavenumber` (1/m)."""
         return Wavenumber(value=self.value / (H_PLANCK * C_MS), unit="1/m")
 
     @classmethod
@@ -589,6 +626,7 @@ class Energy:
 
     @cached_property
     def as_meep(self) -> float:
+        """Value in MEEP normalized units."""
         return self.as_J * 1e-6 / (H_PLANCK * C_MS)
 
 
@@ -702,22 +740,27 @@ class Area:
 
     @cached_property
     def as_m2(self) -> float:
+        """Value in square metres."""
         return self.value
 
     @cached_property
     def as_cm2(self) -> float:
+        """Value expressed in ``cm2`` units."""
         return self.value * 1e4
 
     @cached_property
     def as_mm2(self) -> float:
+        """Value expressed in ``mm2`` units."""
         return self.value * 1e6
 
     @cached_property
     def as_um2(self) -> float:
+        """Value in square micrometres."""
         return self.value * 1e12
 
     @cached_property
     def as_nm2(self) -> float:
+        """Value in nm²."""
         return self.value * 1e18
 
     @classmethod
@@ -728,6 +771,7 @@ class Area:
 
     @cached_property
     def as_meep(self) -> float:
+        """Value in MEEP normalized units."""
         return self.as_m2 / 1e-12
 
 
@@ -806,14 +850,17 @@ class WavelengthArray:
 
     @cached_property
     def as_m(self) -> NDArray:
+        """Value in metres (the internal storage unit)."""
         return self.value
 
     @cached_property
     def as_um(self) -> NDArray:
+        """Value in micrometres."""
         return self.value * 1e6
 
     @cached_property
     def as_nm(self) -> NDArray:
+        """Value in nanometres."""
         return self.value * 1e9
 
     def __len__(self) -> int:
@@ -969,10 +1016,12 @@ class AngularFrequencyArray:
 
     @cached_property
     def as_rad_s(self) -> NDArray:
+        """Value in rad/s."""
         return self.value
 
     @cached_property
     def as_rad_ps(self) -> NDArray:
+        """Value in rad/ps."""
         return self.value * 1e-12
 
     def __len__(self) -> int:
@@ -1047,14 +1096,17 @@ class WavenumberArray:
 
     @cached_property
     def as_1_m(self) -> NDArray:
+        """Value in 1/m (inverse metres)."""
         return self.value
 
     @cached_property
     def as_1_cm(self) -> NDArray:
+        """Value in 1/cm (per centimetre)."""
         return self.value * 1e-2
 
     @cached_property
     def as_angular(self) -> NDArray:
+        """Value expressed in ``angular`` units."""
         return self.value * 2 * PI
 
     def to_wl(self) -> WavelengthArray:

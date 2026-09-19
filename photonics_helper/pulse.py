@@ -123,6 +123,7 @@ class Envelope:
 
     @property
     def fwhm(self) -> Time:
+        """Full width at half maximum of the envelope (s)."""
         T0 = self.pulse_width.as_s
         if self.shape == "super-gaussian":
             val = 2.0 * T0 * (log(2) / 2) ** (1.0 / (2 * self.super_gaussian_order))
@@ -262,6 +263,7 @@ class Envelope:
         return np.asarray(amp * np.exp(1j * phase))
 
     def intensity(self, t: NDArray) -> NDArray:
+        """Optical intensity |A|² (W)."""
         A = self.field(t)
         return np.asarray(np.abs(A) ** 2)
 
@@ -899,6 +901,7 @@ class TemporalGrid:
 
     @cached_property
     def dt(self):
+        """Temporal grid step (s)."""
         return self.Tmax.as_s / self.N
 
     @cached_property
@@ -912,6 +915,7 @@ class TemporalGrid:
 
     @cached_property
     def dw(self):
+        """Frequency grid spacing (rad/ps)."""
         w = self.w
         return w[1] - w[0]
 
@@ -937,10 +941,12 @@ class TemporalGrid:
 
     @property
     def omega_max(self):
+        """Maximum angular frequency on the grid (rad/ps)."""
         return np.max(np.abs(self.w))
 
     @property
     def time_window(self):
+        """Total simulated time window (s)."""
         return self.N * self.dt
 
     @classmethod
@@ -980,6 +986,7 @@ class Wave:
 
     @cached_property
     def central_frequency(self) -> float:
+        """Carrier angular frequency at the central wavelength (rad/s)."""
         return self.central_wavelength.to_omega().as_rad_s
 
     @property
@@ -990,15 +997,18 @@ class Wave:
 
     @property
     def electric_field(self):
+        """Physical electric field (V/m) reconstructed from the envelope."""
         A = self.envelope_field
         return np.real(A * np.exp(-1j * self.central_frequency * self.grid.t))
 
     def instantaneous_intensity(self):
+        """Instantaneous intensity in physical units (W)."""
         E = self.electric_field
         return np.abs(E) ** 2
 
     @property
     def envelope_intensity(self):
+        """Intensity of the envelope |A|² (W)."""
         return np.abs(self.envelope_field) ** 2
 
     @property
@@ -1172,12 +1182,14 @@ class Wave:
 
     @property
     def envelope_field(self):
+        """Complex envelope field (√W)."""
         if hasattr(self, "_pulse_train_field") and self._pulse_train_field is not None:
             return self._pulse_train_field
         return self.envelope.field(self.grid.t)
 
     @cached_property
     def spectrum(self) -> NDArray:
+        """Frequency-domain envelope obtained via the configured FFT backend."""
         return np.asarray(self.grid.fft(self.envelope_field))
 
     def time_bandwidth_product(self) -> float:

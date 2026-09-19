@@ -615,54 +615,5 @@ pip install -e .
 
 # Roadmap
 
-- ~~Add methods to convert wavelengths to energy (in eV)~~
-- ~~Add functionality for dispersion calculations~~
-- ~~Modeling Envelopes~~
-- ~~Modeling Pulse~~
-- **Transfer Matrix Method (TMM)** — available (see `dbr.py`)
-  - DBR multilayer stack simulation
-  - Characteristic-matrix (Macleod) formalism with correct layer ordering
-  - Spectral response (R, T) including absorbing and oblique stacks, plus `TMM.plot_spectrum`
-  - Electric-field profiling via `TMM.field_profile`
-  - `Pattern` layer stack
-- **FROG** ✅
-  - SHG-FROG trace generation
-  - PCGPA pulse retrieval
-  - Fidelity metric
-- **Raman Modeling** ✅
-  - Time-domain Raman response h_R(t)
-  - Frequency-domain gain spectrum H(Ω)
-  - Raman pulse interaction (R(t) ⊗ |E|²)
-  - Material comparison overlays with 6 panel types
-  - Pump wavelength explorer (Stokes/anti-Stokes)
-  - SQLite material database (44 entries)
-  - Interactive Dash dashboard
-  - Catalog explorer example (`examples/11_raman_material_catalog.py`)
-- **GNLSE** ✅
-  - Dispersion (arbitrary-order β_k)
-  - Kerr effect
-  - Raman scattering (delayed response)
-  - Self-steepening (optional; default off — set `include_self_steepening=True` to match laserfun's `shock=True`)
-  - Two-photon absorption (TPA)
-  - Adaptive step-size (SSFM)
-  - Soliton propagation, fission, supercontinuum
-- **Soliton Analysis** ✅
-  - Soliton order, dispersion/nonlinear/fission lengths
-  - Dispersive wave (Cherenkov) wavelength
-  - Soliton trajectory extraction and RSFS rate
-  - Soliton counting via peak detection
-  - Publication-ready visualization (trajectories, fission dynamics, DW spectrum)
-- **Waveguide Support** ✅
-  - Confinement factor Γ in γ formula: `γ = n₂·ω₀·Γ/(c·A_eff)`
-  - Backward compatible (Γ=1.0 recovers fiber behavior)
-- **Waveguide mode import (FEM)** ✅ — `WaveguideMode.from_csv/from_npz` → `PropagationConstant`/`Dispersion`, `PropagationConstant.beta2`
-- **χ⁽²⁾ nonlinear optics** ✅ — `chi2` SHG/SFG/DFG RK4IP solver, QPM grating, `Lambda_qpm`, textbook `tanh²(κL)` reproduction
-- **GPU FFT backend** ✅ — opt-in cupy path (`PHOTONICS_FFT_BACKEND=cupy`) with transparent CPU fallback and a benchmark
-- **Unified dashboard** ✅ — `photonics_helper.dashboard.app()` combines the Raman Explorer and an interactive GNLSE result viewer
-- **Release engineering** ✅ — PyPI Trusted Publishing, Zensical API docs, and a Python 3.12/3.13 × ±pyfftw CI matrix (ruff + mypy gates)
-- **Chalcogenide Materials** ✅
-  - GeAsSe added (n₂=6e-18 m²/W, 44 materials total)
-  - Suitable for soliton fission in chalcogenide waveguides
-- **Structured Light** ✅ — Laguerre–Gaussian / OAM modes, Gaussian-beam propagation helpers, modal overlap integrals and transverse-profile plotting (`structured.py`)
-- ~~Add methods for bandwidth calculations~~
-- ~~Add methods for power/intensity conversions~~ (physical scaling via `Wave.with_effective_area` / `PeakPower.from_envelope`)
+The feature status and evolution tracker lives in **[ROADMAP.md](ROADMAP.md)** —
+shipped features (✅), how they got built, and what's coming next.

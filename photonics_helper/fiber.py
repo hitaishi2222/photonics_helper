@@ -702,10 +702,12 @@ class ZDependentDispersion:
 
     @property
     def n_omega(self) -> int:
+        """Effective index n(Ω) at each angular-frequency sample."""
         return len(self.omegas)
 
     @property
     def n_z(self) -> int:
+        """Longitudinal coordinate array (sample positions per step)."""
         return len(self.z_positions)
 
     def _default_omega0(self) -> float:
