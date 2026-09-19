@@ -48,7 +48,35 @@ jobs:
       - name: Test (pytest)
         run: pytest -q
 
-      - name: Build package
+  packaging:
+    name: wheel smoke
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Build wheel
         run: |
-          python -m pip install build
-          python -m build
+          python -m pip install --upgrade pip build
+          python -m build --wheel
+
+      - name: Verify wheel contents
+        run: python scripts/check_wheel.py
+
+      - name: Install the wheel into a clean venv and smoke-test
+        run: |
+          python -m venv /tmp/wheeltest
+          /tmp/wheeltest/bin/python -m pip install --upgrade pip
+          /tmp/wheeltest/bin/python -m pip install dist/*.whl
+          /tmp/wheeltest/bin/python -c "
+          from photonics_helper import Wavelength
+          from photonics_helper.base import Permeability
+          thz = Wavelength(1550, 'nm').to_freq().as_THz
+          assert abs(thz - 193.414) < 0.1, thz
+          assert float(Permeability.from_relative(1.0)) > 0
+          print('wheel smoke OK')
+          "
