@@ -4,7 +4,8 @@ version = "0.1.1"
 description = "A comprehensive helper library for photonics and optics calculations"
 readme = "README.md"
 requires-python = ">=3.12"
-license = {text = "MIT"}
+license = "MIT"
+license-files = ["LICENSE", "NOTICE"]
 authors = [
     {name = "Hitaishi V", email = "hitaishi2222@gmail.com"}
 ]
@@ -12,7 +13,6 @@ keywords = ["photonics", "optics", "wavelength", "frequency", "conversion"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Physics",
@@ -44,13 +44,19 @@ dev = ["pytest>=8.0", "ruff>=0.8", "mypy>=1.13"]
 all = ["plotly>=5.0", "dash>=2.18.0", "tqdm>=4.66", "pyfftw>=0.15.1", "imageio>=2.33"]
 
 [build-system]
-requires = ["setuptools>=61.0.0", "wheel"]
+# setuptools>=77 is required for PEP 639 SPDX license expressions and
+# `license-files` in [project].
+requires = ["setuptools>=77.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 
 [project.urls]
 Homepage = "https://github.com/hitaishi2222/photonics_helper"
 Documentation = "https://hitaishi2222.github.io/photonics_helper/"
+
+[tool.setuptools.packages.find]
+# Flat layout: only the library package ships (not reproductions/, examples/, etc.).
+include = ["photonics_helper*"]
 
 [tool.setuptools.package-data]
 photonics_helper = ["py.typed", "materials.db"]

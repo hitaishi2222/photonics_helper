@@ -1,0 +1,90 @@
+# Data provenance and redistribution notice
+
+The `photonics-helper` **source code** is licensed under the MIT License (see
+`LICENSE`).
+
+The package also **bundles a data file**, `photonics_helper/materials.db` (an
+11 MB SQLite database). The database is a compilation of numerical material
+data drawn from the published literature and from public databases. Its
+contents are redistributed under the terms summarised below. This file exists
+so that users, institutions and downstream packagers can audit those terms.
+
+## What is bundled
+
+| Table | Rows | What it holds | Per-row provenance |
+|---|---|---|---|
+| `nk_data` | 24 767 | tabulated `n`, `k` vs wavelength (µm) for 12 materials | `source` + `citation` columns (24 760 / 24 767 populated) |
+| `sellmeier` | 39 | Sellmeier coefficients per material + validity window | `source` column (39 / 39 populated) |
+| `raman_specs` | 44 | Raman shift, linewidth, f_R, n₂, gain, references | `references` column (44 / 44 populated) |
+| `phonon_modes` | 0 | multi-phonon mode table | currently empty (see *Known gaps*) |
+
+Every populated provenance string names the original publication, with a DOI
+or URL where one exists. The rows can be inspected directly:
+
+```sql
+SELECT material, source, citation FROM nk_data LIMIT 5;
+SELECT material, source FROM sellmeier;
+SELECT name, "references" FROM raman_specs;
+```
+
+## Sources and terms
+
+### `nk_data` — refractiveindex.info
+
+The tabulated `n`/`k` datasets were collected from
+[refractiveindex.info](https://refractiveindex.info/) via its public sitemap
+(see `nk_datasets/collect.py` and `nk_datasets/manifest.json`). The site
+distributes its compilation under **CC0 1.0 Universal (public domain
+dedication)**; the manifest records this as
+`"source": "refractiveindex.info (public domain, CC0)"`.
+
+> **Caveat for downstream redistribution.** refractiveindex.info aggregates
+> datasets contributed from individual publications. CC0 applies to the
+> database compilation; a small number of underlying datasets may carry the
+> terms of their original source. Each row's `citation` field identifies that
+> source so a redistributor can verify it. If you repackage the database, keep
+> the `citation` column intact.
+
+Seven `nk_data` rows currently have a null `citation`; these are unverified and
+should be treated as provenance-incomplete (tracked for Phase 2 of the
+roadmap).
+
+### `sellmeier` — published dispersion equations
+
+Each entry stores the coefficients as published, with the reference in
+`source` (e.g. Malitson 1965 for fused silica, Edwards & Lawrence 1984 for
+LiNbO₃, Luke et al. 2015 for Ligentec Si₃N₄). Sellmeier coefficients are
+numeric facts from the cited papers; the `source` column is the attribution
+required to reuse them responsibly.
+
+### `raman_specs` — literature-compiled Raman parameters
+
+Raman shifts, linewidths, fractional Raman contributions (`f_R`), nonlinear
+indices (`n₂`) and gain coefficients compiled from the Raman literature;
+`references` cites the paper or textbook for each row. The compilation itself
+is original to this project; the underlying numerical values are attributed.
+
+### Reproductions
+
+`reproductions/*/` contains scripts that reproduce results from published
+papers. The extracted paper text (`*.txt`) and PDFs (`*.pdf`) are **not**
+redistributed in the sdist/wheel and are git-ignored; the scripts describe the
+input parameters so the figures can be regenerated.
+
+## Known gaps (roadmap Phase 2)
+
+- `phonon_modes` is empty although `photonics_helper/phonon.py` ships a
+  hard-coded `PHONON_MATERIALS` reference table — the two are not yet unified.
+- `raman/reference.py` duplicates a `RAMAN_MATERIALS` dict that overlaps the
+  `raman_specs` table; there is no single source of truth yet.
+- No per-row licence column exists; licence is currently inferred from the
+  `source`/`citation` string.
+
+These are scheduled for the data-layer consolidation phase of the
+"Foundation Backbone" roadmap (`REPORT.md`).
+
+## Reporting a provenance problem
+
+If a dataset is misattributed or you believe it cannot be redistributed, open
+an issue at <https://github.com/hitaishi2222/photonics_helper/issues> and it
+will be corrected or removed.

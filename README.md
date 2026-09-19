@@ -617,3 +617,14 @@ pip install -e .
 
 The feature status and evolution tracker lives in **[ROADMAP.md](ROADMAP.md)** —
 shipped features (✅), how they got built, and what's coming next.
+
+# License & data
+
+The source code is released under the **MIT License** (see [`LICENSE`](LICENSE)).
+
+The bundled material database (`photonics_helper/materials.db`) is a
+compilation of numerical data from the published literature and from
+[refractiveindex.info](https://refractiveindex.info/) (CC0). Every row carries
+its own `source`/`citation`/`references` provenance; see [`NOTICE`](NOTICE) and
+the [data provenance](https://hitaishi2222.github.io/photonics_helper/data-provenance/)
+page for the full audit.

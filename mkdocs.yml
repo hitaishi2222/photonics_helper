@@ -86,3 +86,4 @@ nav:
       - FFT backends: api/fftw.md
       - Unified dashboard: api/dashboard.md
   - Reproductions: reproductions.md
+  - Data provenance: data-provenance.md
