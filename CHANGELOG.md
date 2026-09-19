@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Vector / polarization-coupled GNLSE** (`photonics_helper.vector_gnlse`,
+  2-channel split-step Fourier engine, Agrawal §6.1–6.3):
+  `VectorSplitStepEngine` with per-axis Taylor dispersion (`betas_x` /
+  `betas_y`), differential group delay walk-off (`walkoff`, s/m), the
+  `2/3` XPM anisotropy, coherent polarization FWM (`coupling="coherent"`,
+  `delta_beta` rad/m, energy-conserving mixing pair advanced with an RK4IP
+  frequency-domain substep) and the Manakov polarization-averaged mode
+  (`coupling="manakov"` — the 8/9 coefficient, Wai & Menyuk 1996).
+  `RandomBirefringenceEngine` propagates with SU(2) random-frame rotations;
+  its ensemble spectrum converges to the deterministic Manakov run and total
+  energy is conserved at machine precision in every mode. Scalar contract:
+  with `A_y ≡ 0` the vector engine equals the scalar `SplitStepEngine` to
+  machine precision (tested), so all existing scalar reproductions are
+  unaffected. Docs: `docs/vector-gnlse.md`, API page, README section.
+  Regression: `tests/test_vector_gnlse.py` (14 tests).
+
 ## [0.1.9] - 2026-09-19
 
 ### Added

@@ -90,6 +90,11 @@ if TYPE_CHECKING:  # pragma: no cover - static analyzers/IDEs only
         mi_gain_of,
     )
     from .materials import RefractiveIndex
+    from .vector_gnlse import (
+        Coupling,
+        RandomBirefringenceEngine,
+        VectorSplitStepEngine,
+    )
     from .noise import (
         add_ase_noise,
         add_noise,
@@ -224,7 +229,10 @@ __all__ = [
     "SolitonOnBackground",
     "SplitStepEngine",
     "StructuredField",
+    "Coupling",
+    "RandomBirefringenceEngine",
     "TaperedGNLSESolver",
+    "VectorSplitStepEngine",
     "TemporalGrid",
     "Time",
     "ValidationReport",
@@ -341,6 +349,10 @@ _LAZY_MODULES: dict[str, str] = {
         "DEFAULT_OBSERVABLES", "ConvergenceReport", "ObservableReport",
         "ValidationFailure", "convergence_study", "check_spm", "check_mi",
         "check_soliton", "check_gordon_ssfs", "gordon_ssfs_rate", "mi_gain_of",
+    )},
+    # .vector_gnlse — polarization-coupled GNLSE
+    **{n: ".vector_gnlse" for n in (
+        "Coupling", "RandomBirefringenceEngine", "VectorSplitStepEngine",
     )},
     "RefractiveIndex": ".materials",
     "MaterialDataset": ".materials",

@@ -72,10 +72,18 @@ the stable contract.
 - **Phase 3 — stability contract** ✅ — published policy, deprecation machinery,
   core API-surface guard, build-on-core example, contribution/citation/paper
   artefacts.
-- **Phase 4 — capability growth** (planned, satellites): physics hardening
-  (self-steepening unitarity, temporally-resolved TPA, multi-phonon Raman),
-  vector / multimode OAM GNLSE, reproducing our own chalcogenide mid-IR SCG
-  papers, cascaded χ⁽²⁾–χ⁽³⁾, and a PINN / inverse-design layer.
+- **Phase 4 — capability growth** (satellites; in progress):
+  - *Physics hardening* ✅ (0.1.9): interaction-picture self-steepening,
+    multi-phonon Raman dispatch, time-resolved TPA/free carriers,
+    `gnlse_validation` convergence + analytical checks harness.
+  - *Vector / polarization-coupled GNLSE* ✅ (this release):
+    `vector_gnlse.VectorSplitStepEngine` (per-axis dispersion, PMD walk-off,
+    XPM 2/3 + coherent polarization FWM, Manakov 8/9 mode) and
+    `RandomBirefringenceEngine` (ensemble → Manakov, validated); exact
+    scalar-limit reduction enforced by tests. Multimode/few-mode OAM
+    coupling remains future work (Phase 4 item 2 partially delivered).
+  - *Pending*: own-work chalcogenide mid-IR SCG reproductions, cascaded
+    χ⁽²⁾–χ⁽³⁾, PINN / inverse-design layer.
 
 ## Pending — author action
 

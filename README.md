@@ -594,6 +594,25 @@ fig = field.plot()                            # intensity + phase panels
 installed). The ``OAM`` winding of a mode is ``2 pi l`` around any loop that
 encloses the optical axis; see `examples/28_structured_light.py`.
 
+
+# Vector / polarization-coupled GNLSE
+
+`photonics_helper.vector_gnlse` propagates the field as a two-component
+polarization vector — the physics the scalar engine structurally cannot
+express (details: `docs/vector-gnlse.md`):
+
+- per-axis Taylor dispersion, PMD walk-off (`walkoff`, s/m) and loss,
+- XPM `2/3` + coherent polarization FWM (`coupling="coherent"`, Agrawal §6.3,
+  energy-conserving mixing pair advanced with an RK4IP substep),
+- the Manakov polarization-averaged mode (`coupling="manakov"`, the `8/9`
+  coefficient of Wai & Menyuk 1996) for randomly birefringent fiber — a
+  scalar engine overstates the effective nonlinearity by 12.5% there,
+- `RandomBirefringenceEngine`: SU(2) random-frame evolution whose ensemble
+  converges to the Manakov limit (validated),
+- exact scalar reduction: with `A_y ≡ 0` the vector engine equals the scalar
+  `SplitStepEngine` to machine precision, so every published scalar
+  reproduction remains untouched.
+
 # Solver physics hardening
 
 Four pieces of GNLSE physics, each stated against the literature and tested
