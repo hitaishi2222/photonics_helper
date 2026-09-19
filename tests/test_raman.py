@@ -919,17 +919,27 @@ class TestRamanResponse:
         return RamanResponse(spec=spec, grid=grid, **overrides)
 
     def test_construction_auto_derives_tau(self):
-        """Test that τ1, τ2 are auto-derived from Raman shift/linewidth."""
+        """τ1, τ2 auto-derive from Raman shift/linewidth (angular convention)."""
         resp = self._make_response()
         spec = resp.spec
 
-        # τ1 = 1 / ν_R (oscillation period)
-        expected_tau1 = 1.0 / spec.raman_shift_Hz
-        assert_almost_equal(resp.tau1, expected_tau1, decimal=10)  # type: ignore[arg-type]
+        # τ1 = 1 / ω_R = 1 / (2π·ν_R) (angular-frequency oscillation period)
+        expected_tau1 = 1.0 / (2.0 * np.pi * spec.raman_shift_Hz)
+        assert resp.tau1 == pytest.approx(expected_tau1, rel=1e-10)  # type: ignore[arg-type]
+        # Silica regression check (spec: τ1 ≈ 12.2 fs, NOT 75.8 fs = 1/ν_R)
+        assert resp.tau1 == pytest.approx(12.2e-15, rel=0.01)  # type: ignore[arg-type]
 
         # τ2 = 1 / (π × linewidth_Hz) (damping time from Lorentzian FWHM)
         expected_tau2 = 1.0 / (np.pi * spec.linewidth_Hz)
-        assert_almost_equal(resp.tau2, expected_tau2, decimal=10)  # type: ignore[arg-type]
+        assert resp.tau2 == pytest.approx(expected_tau2, rel=1e-10)  # type: ignore[arg-type]
+
+    def test_h_R_normalization(self):
+        """h_R(t) must integrate to 1.0 (Blow–Wood analytical normalization)."""
+        resp = self._make_response()
+        assert resp.grid is not None  # type: ignore[union-attr]
+        h_R = np.asarray(resp.h_R(np.asarray(resp.grid.t)), dtype=float)
+        integral = float(np.trapezoid(h_R, np.asarray(resp.grid.t)))
+        assert abs(integral - 1.0) < 0.02, f"h_R integral = {integral}, expected 1.0"
 
     def test_construction_explicit_tau_overrides(self):
         """Test that explicit tau1/tau2 override auto-derived values."""

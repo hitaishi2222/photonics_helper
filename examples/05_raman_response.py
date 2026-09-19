@@ -17,8 +17,8 @@ optical field. The response has two components:
 For Silica (the most common fiber material):
   - Raman shift: 440 cm⁻¹ (~13.2 THz)
   - Linewidth: 45 cm⁻¹
-  - τ1 (1/ν_R) ≈ 75.8 fs
-  - τ2 (damping time) ≈ 236 fs
+  - τ1 (1/(2π·ν_R)) ≈ 12.2 fs
+  - τ2 (damping time, 1/(π·Δν)) ≈ 236 fs
   - fR (Raman fraction) = 0.18
 """
 
