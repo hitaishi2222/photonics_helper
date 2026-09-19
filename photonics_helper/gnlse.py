@@ -270,6 +270,45 @@ def _raman_polarization(
     return np.asarray(P_inst + P_delayed)
 
 
+def _delayed_h_R(response: object, t: NDArray) -> NDArray:
+    """Return the un-scaled delayed Raman response ``h_R(t)`` from a response.
+
+    Accepts any object exposing a public ``h_R(t)`` — the single-mode
+    :class:`~photonics_helper.raman.RamanResponse` (Blow–Wood / Agrawal form)
+    and the multi-mode :class:`~photonics_helper.phonon.PhononResponse`
+    (damped-oscillator superposition) — falling back to the legacy private
+    ``_h_R`` for backwards compatibility.
+
+    References
+    ----------
+    Agrawal, *Nonlinear Fiber Optics*, 5th ed., Sec. 2.3.2 (delayed-response
+    normalization); Hollenbeck & Cantrell, *J. Opt. Soc. Am. B* **19**, 2886
+    (2002) (multi-mode response).
+    """
+    h_R = getattr(response, "h_R", None)
+    if callable(h_R):
+        return np.asarray(h_R(t), dtype=float)
+    legacy = getattr(response, "_h_R", None)
+    if callable(legacy):
+        return np.asarray(legacy(t), dtype=float)
+    raise TypeError(
+        "the fiber's Raman response must provide an h_R(t) method; got "
+        f"{type(response).__name__}"
+    )
+
+
+def _response_fR(response: object) -> float:
+    """Return ``fR`` from a Raman response, or raise a clear error."""
+    fR = getattr(response, "fR", None)
+    if fR is None:
+        raise ValueError(
+            "Raman is enabled but the response object has no fR. Pass "
+            "fR=<material fR> (e.g. via RamanSpec.phonon_response) or use "
+            "RamanResponse(spec)."
+        )
+    return float(fR)
+
+
 def raman_step(
     A: NDArray,
     fiber: FiberProfile,
@@ -310,15 +349,11 @@ def raman_step(
         )
 
     intensity = np.abs(A) ** 2
-    if not hasattr(fiber.raman_response, "fR"):
-        raise ValueError("fiber.raman_response must define fR when include_raman=True")
-    fR = fiber.raman_response.fR
+    fR = _response_fR(fiber.raman_response)
 
     # Compute h_R_fft on the fly (no cache available for standalone function)
-    h_R_fft = None
-    if hasattr(fiber.raman_response, "_h_R"):
-        h_R = fiber.raman_response._h_R(grid.t)  # causal: h_R[t<0] = 0
-        h_R_fft = grid.fft(h_R)
+    h_R = _delayed_h_R(fiber.raman_response, grid.t)  # causal: h_R[t<0] = 0
+    h_R_fft = grid.fft(h_R)
 
     P_Raman = _raman_polarization(intensity, fR, grid, h_R_fft)
 
@@ -646,7 +681,7 @@ class SplitStepEngine:
         h_R_fft : FFT of h_R(t) on ``self.grid.t``, or None when Raman is off.
         """
         if h_R_fft is not None:
-            fR = self.fiber.raman_response.fR  # type: ignore[union-attr,attr-defined]
+            fR = _response_fR(self.fiber.raman_response)
             return _raman_polarization(intensity, fR, self.grid, h_R_fft)
         return intensity
 
@@ -658,7 +693,7 @@ class SplitStepEngine:
         nonlinear step wasted an FFT per step.
         """
         if self._h_R_fft_cache is None:
-            h_R = self.fiber.raman_response._h_R(self.grid.t)  # type: ignore[union-attr,attr-defined]
+            h_R = _delayed_h_R(self.fiber.raman_response, self.grid.t)
             self._h_R_fft_cache = self.grid.fft(h_R)
         return self._h_R_fft_cache
 

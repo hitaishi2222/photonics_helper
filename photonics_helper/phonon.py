@@ -17,6 +17,11 @@ from pydantic_core import ArgsKwargs
 
 from .base import Wavenumber, WavenumberArray
 
+# 2*pi*c with c in cm/s: converts a wavenumber in cm^-1 to an angular
+# frequency in rad/s (and a linewidth in cm^-1 to an angular FWHM), used to
+# build the delayed Raman response from phonon modes.
+TWO_PI_C_CM = 2.0 * np.pi * 2.99792458e10
+
 try:
     import plotly.graph_objects as go
 
@@ -158,6 +163,75 @@ class PhononResponse:
                 f"No phonon modes for {name!r}. Available materials: {available}"
             )
         return cls(modes)
+
+    def h_R(self, t: NDArray) -> NDArray:
+        """Causal, unit-integral delayed Raman response h_R(t).
+
+        A superposition of damped oscillators, one per phonon mode::
+
+            h_R(t) = Z^-1 * sum_i w_i * exp(-t/tau_i) * sin(omega_i t) * theta(t)
+
+        where ``omega_i`` is the mode's angular frequency from its Raman shift,
+        ``gamma_i`` its angular-frequency FWHM from its linewidth
+        (``tau_i = 2/gamma_i``, the damped-oscillator / Lorentzian relation
+        ``delta_omega = 2/tau``), ``w_i`` its relative strength, and ``Z`` is
+        chosen so that ``integral_0^inf h_R(t) dt = 1``. This is the
+        multi-vibrational-mode form used with the standard GNLSE delayed
+        response ``R(t) = (1 - f_R) delta(t) + f_R h_R(t)``.
+
+        References
+        ----------
+        Agrawal, *Nonlinear Fiber Optics*, 5th ed., Sec. 2.3.2 (normalization
+        ``integral h_R dt = 1``); Hollenbeck & Cantrell, *J. Opt. Soc. Am. B*
+        **19**, 2886 (2002) (multi-vibrational-mode Raman response); Stolen,
+        Tomlinson, Haus & Gordon, *J. Opt. Soc. Am. B* **6**, 1159 (1989).
+
+        Parameters
+        ----------
+        t : NDArray
+            Time array in seconds.
+
+        Returns
+        -------
+        NDArray
+            ``h_R(t)``: zero for ``t < 0``, with unit integral over ``t >= 0``.
+        """
+        t = np.asarray(t, dtype=float)
+        result = np.zeros_like(t, dtype=float)
+        if not self.modes:
+            return result
+
+        mask = t >= 0
+        t_pos = t[mask]
+        total = np.zeros_like(t_pos)
+        normalizer = 0.0
+
+        for mode in self.modes:
+            shift_cm = float(mode.shift_cm.as_1_cm)
+            gamma_cm = float(mode.linewidth_cm.as_1_cm)
+            if shift_cm <= 0.0 or gamma_cm <= 0.0:
+                continue
+            omega = TWO_PI_C_CM * shift_cm  # rad/s
+            gamma = TWO_PI_C_CM * gamma_cm  # rad/s (angular FWHM)
+            tau = 2.0 / gamma
+            weight = float(mode.relative_strength)
+            # analytic mode integral: int_0^inf e^{-t/tau} sin(omega t) dt
+            mode_integral = omega * tau**2 / (1.0 + (omega * tau) ** 2)
+            total += weight * np.sin(omega * t_pos) * np.exp(-t_pos / tau)
+            normalizer += weight * mode_integral
+
+        # Normalise so that integral_0^inf h_R dt = 1 on the supplied grid, i.e.
+        # H(0) = 1. That is the discrete form of the Agrawal normalization
+        # (Sec. 2.3.2) and is what makes the split
+        # R(t) = (1 - f_R) delta(t) + f_R h_R(t) exact at DC. If the finite
+        # window (or a low-frequency mode) makes the trapezoid non-positive,
+        # fall back to the analytic mode-sum normaliser.
+        grid_integral = np.trapezoid(total, t_pos)
+        scale = grid_integral if grid_integral > 0.0 else normalizer
+        if scale > 0.0:
+            total /= scale
+        result[mask] = total
+        return result
 
     def _lorentzian(self, shift_cm: float, gamma_cm: float, w_cm: NDArray) -> NDArray:
         """Single Lorentzian lineshape.

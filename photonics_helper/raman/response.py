@@ -118,6 +118,22 @@ class RamanResponse:
             result[mask] /= integral
         return result
 
+    def h_R(self, t: NDArray) -> NDArray:
+        """Un-scaled delayed response h_R(t) (causal, unit integral).
+
+        Public entry point of the delayed-response contract the GNLSE consumes,
+        so single-mode (this class) and multi-mode
+        (:class:`~photonics_helper.phonon.PhononResponse`) responses are
+        interchangeable. Equivalent to :meth:`_h_R`, which is kept for
+        backwards compatibility.
+
+        References
+        ----------
+        Agrawal, *Nonlinear Fiber Optics*, 5th ed., Sec. 2.3.2;
+        Blow & Wood, *IEEE J. Quantum Electron.* **25**, 2665 (1989).
+        """
+        return self._h_R(t)
+
     def instantaneous_response(self, t: NDArray | None = None) -> NDArray:
         """Electronic Kerr response: (1 - fR)·δ(t).
 
