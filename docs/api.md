@@ -6,6 +6,7 @@ module has its own page.
 
 | Section | Page | What's in it |
 |---|---|---|
+| [Foundation core](api/core.md) | `core` | Stable primitives: units/constants/grids/materials |
 | [Units and constants](api/base.md) | `base` | Unit-safe scalars and constants |
 | [Pulse envelopes & grids](api/pulse.md) | `pulse` | ``Wave``/``Envelope``, grid tools |
 | [Fiber & propagation constants](api/fiber.md) | `fiber` | Dispersion objects, splines |

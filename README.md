@@ -111,6 +111,29 @@ available through `from_meep` / `as_meep`.
 unit mismatches surface as explicit conversions instead of propagating silently
 through a simulation — which, for photonics, is almost always the better deal.
 
+# Foundation core (`photonics_helper.core`)
+
+`photonics_helper.core` is the **stable, dependency-light foundation** the rest
+of the library — and your own projects — build on:
+
+```python
+from photonics_helper.core import units, constants, grids, materials
+```
+
+It bundles typed units, physical constants, `TemporalGrid`, and the
+`OpticalMaterial` interface, and importing it pulls in **only numpy, scipy and
+pydantic** — no matplotlib, plotly, dash, or solver modules. The package itself
+is imported lazily (PEP 562), so `import photonics_helper` costs nothing extra.
+
+```python
+import photonics_helper          # lazy: loads nothing heavy
+from photonics_helper import Wavelength   # imports only .base
+```
+
+Every existing import path is preserved: `photonics_helper.base`, 
+`photonics_helper.pulse.TemporalGrid` and friends still work and refer to the
+same objects. See the [foundation core docs](https://hitaishi2222.github.io/photonics_helper/core/).
+
 # Quick Start
 
 To get started, import the library and use its functions:

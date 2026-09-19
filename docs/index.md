@@ -29,6 +29,7 @@ See the [full quick start](quickstart.md) for a GNLSE run and the
 ## Where to go next
 
 - **[Install](install.md)** — extras (`fftw`, `webapp`, …) and FFT backends.
+- **[Foundation core](core.md)** — the stable primitives other projects build on.
 - **[Quick start](quickstart.md)** — first pulses through the solvers.
 - **[API Reference](api.md)** — every public module, one page per module.
 - **[Reproductions](reproductions.md)** — validated literature results.

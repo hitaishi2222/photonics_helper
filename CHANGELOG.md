@@ -7,7 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_Nothing yet._
+## [0.1.5] - 2026-09-19
+
+### Added
+
+- **`photonics_helper.core` foundation namespace** — the stable,
+  dependency-light primitives other projects build on:
+  `core.units`, `core.constants`, `core.grids` (the extracted `TemporalGrid`)
+  and `core.materials` (a runtime-checkable `OpticalMaterial` protocol, a
+  `Material` wrapper, and a `material()` database lookup). Importing it pulls
+  in numpy/scipy/pydantic only — no matplotlib, plotly, dash, or solver
+  modules.
+- **Lazy package import** (PEP 562): `import photonics_helper` no longer
+  eagerly imports the plotting/web/simulation stack; each public name is
+  resolved on first access. `__all__` is unchanged.
+- **Property-based tests** (Hypothesis) for unit round-trips, defining
+  relations and grid FFT/Parseval.
+- Import-budget, wheel-content and lazy-surface tests (`tests/test_core.py`,
+  `tests/test_lazy_import.py`, `tests/test_import_budget.py`) plus a
+  `wheel smoke` CI job.
+
+### Changed
+
+- matplotlib imports in `pulse.py` and `materials.py` are now function-local,
+  so importing a solver or `RefractiveIndex` does not require a plotting
+  backend.
+
+### Fixed
+
+- `Permiability` → `Permeability` spelling (hard rename; the misspelled name
+  was only in the 0.1.1 public surface).
+- Packaging: add `LICENSE`/`NOTICE`, adopt PEP 639 licence expressions, and
+  pin `[tool.setuptools.packages.find]` so flat-layout discovery cannot leak
+  `reproductions/` into the wheel.
 
 
 ## [0.1.1] - 2026-09-19
@@ -96,6 +128,7 @@ Publishing.
 - CI runner pinned to `ubuntu-24.04` (clears the ubuntu-latest → Ubuntu 26
   migration warning).
 
-[Unreleased]: https://github.com/hitaishi2222/photonics_helper/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/hitaishi2222/photonics_helper/compare/v0.1.5...HEAD
+[0.1.5]: https://github.com/hitaishi2222/photonics_helper/compare/v0.1.1...v0.1.5
 [0.1.1]: https://github.com/hitaishi2222/photonics_helper/releases/tag/v0.1.1
 [0.1.0]: https://github.com/hitaishi2222/photonics_helper/releases/tag/v0.1.0

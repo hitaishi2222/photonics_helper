@@ -66,8 +66,10 @@ nav:
   - Home: index.md
   - Installation: install.md
   - Quick start: quickstart.md
+  - Foundation core: core.md
   - API Reference:
       - api/index.md
+      - Foundation core (units/grids/materials): api/core.md
       - Units and constants: api/base.md
       - Pulse envelopes & grids: api/pulse.md
       - Fiber & propagation constants: api/fiber.md
