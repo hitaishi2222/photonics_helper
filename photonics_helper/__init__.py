@@ -76,6 +76,19 @@ if TYPE_CHECKING:  # pragma: no cover - static analyzers/IDEs only
         ZDependentDispersion,
     )
     from .gnlse import FiberProfile, GNLSESolver, SplitStepEngine, TaperedGNLSESolver
+    from .gnlse_validation import (
+        DEFAULT_OBSERVABLES,
+        ConvergenceReport,
+        ObservableReport,
+        ValidationFailure,
+        check_gordon_ssfs,
+        check_mi,
+        check_soliton,
+        check_spm,
+        convergence_study,
+        gordon_ssfs_rate,
+        mi_gain_of,
+    )
     from .materials import RefractiveIndex
     from .noise import (
         add_ase_noise,
@@ -168,6 +181,8 @@ __all__ = [
     "Area",
     "Block",
     "Chi2Result",
+    "ConvergenceReport",
+    "DEFAULT_OBSERVABLES",
     "Dispersion",
     "DispersionAdaptor",
     "DispersionModel",
@@ -179,6 +194,8 @@ __all__ = [
     "Frequency",
     "FrequencyArray",
     "GNLSESolver",
+    "ObservableReport",
+    "ValidationFailure",
     "LaguerreGaussianMode",
     "Lambda_qpm",
     "Length",
@@ -227,8 +244,13 @@ __all__ = [
     "ase_noise_field",
     "assess_simulation_readiness",
     "beam_waist",
+    "check_gordon_ssfs",
+    "check_mi",
+    "check_soliton",
+    "check_spm",
     "compare_spectrum_to_phase_matching",
     "complex_gaussian_noise",
+    "convergence_study",
     "dashboard_app",
     "delta_k_shg",
     "detect_oscillation_onset",
@@ -244,9 +266,11 @@ __all__ = [
     "gaussian_edge_steepness",
     "general_sfb",
     "generate_trace",
+    "gordon_ssfs_rate",
     "gouy_phase",
     "kuznetsov_ma",
     "material_catalog",
+    "mi_gain_of",
     "mi_gain_spectrum",
     "mi_gain_spectrum_extended",
     "mi_sideband_frequencies",
@@ -311,6 +335,12 @@ _LAZY_MODULES: dict[str, str] = {
     # .gnlse
     **{n: ".gnlse" for n in (
         "FiberProfile", "GNLSESolver", "SplitStepEngine", "TaperedGNLSESolver",
+    )},
+    # .gnlse_validation — convergence + analytical checks
+    **{n: ".gnlse_validation" for n in (
+        "DEFAULT_OBSERVABLES", "ConvergenceReport", "ObservableReport",
+        "ValidationFailure", "convergence_study", "check_spm", "check_mi",
+        "check_soliton", "check_gordon_ssfs", "gordon_ssfs_rate", "mi_gain_of",
     )},
     "RefractiveIndex": ".materials",
     "MaterialDataset": ".materials",

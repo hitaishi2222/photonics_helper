@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-09-19
+
+### Added
+
+- **Interaction-picture self-steepening (RK4IP)** in `SplitStepEngine`: the
+  shock step factors out the exactly-integrable Kerr/Raman phase and advances
+  only the shock correction `iγτ_shock ∂_t(A·P_NL)` with frequency-domain RK4
+  (Hult 2007; Hochbruck & Ostermann 2010). The historical
+  `max(1 + Ω·τ_shock, 0)` clamp is removed, and a spectral-validity guard
+  requires `Ω_max < ω₀` when self-steepening is enabled (raises with the grid
+  values and the remedy). Validated against a fully-resolved reference of the
+  same nonlinear flow (`tests/test_gnlse_unitarity.py`); the photon number is
+  conserved to machine precision in the constant-drive limit.
+- **Multi-phonon Raman response in the solver**: `PhononResponse.h_R(t)` is a
+  causal, unit-integral superposition of damped oscillators built from the
+  phonon-mode data (Hollenbeck & Cantrell 2002), and the solver's Raman
+  dispatch reads `fR` and `h_R(t)` from any response object on the fiber, so
+  multi-mode crystalline materials can be propagated
+  (`tests/test_gnlse_phonon_raman.py`).
+- **Time-resolved TPA / free-carrier model (opt-in)**:
+  `SplitStepEngine(include_free_carriers=True)` resolves the carrier density
+  over the retarded-time grid (exact TPA attenuation, carrier
+  generation/recombination, free-carrier absorption), opt-in and separate
+  from the legacy spatially-averaged TPA
+  (`tests/test_gnlse_free_carrier.py`).
+- **GNLSE validation & convergence harness** (`photonics_helper.gnlse_validation`,
+  exported at top level): `convergence_study(build_solver, refinements,
+  observables, tolerance)` with per-observable values, successive relative
+  changes and a converged verdict (Sinkin et al. 2003), plus cited analytical
+  checks `check_spm`, `check_mi`, `check_soliton`, `check_gordon_ssfs` that
+  raise `ValidationFailure` on a closed-form mismatch. Regression:
+  `tests/test_gnlse_convergence.py`.
+- `docs/gnlse-physics.md`: the (corrected) shock photon-number balance, the
+  multi-mode response, the free-carrier model and the harness, each with
+  references; an API reference page (`api/gnlse-validation.md`) and mkdocs nav
+  entries.
+
+### Changed
+
+- README gained a "Solver physics hardening" section; version bumped to 0.1.9
+  (also `CITATION.cff`).
+
 ## [0.1.8] - 2026-09-19
 
 ### Fixed

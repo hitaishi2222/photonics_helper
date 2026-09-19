@@ -594,6 +594,55 @@ fig = field.plot()                            # intensity + phase panels
 installed). The ``OAM`` winding of a mode is ``2 pi l`` around any loop that
 encloses the optical axis; see `examples/28_structured_light.py`.
 
+# Solver physics hardening
+
+Four pieces of GNLSE physics, each stated against the literature and tested
+against analytic ground truth (details and derivations: `docs/gnlse-physics.md`):
+
+- **Interaction-picture self-steepening.** The shock step factors out the
+  exact Kerr/Raman phase and advances only the shock correction with RK4 in
+  the interaction picture (Hult 2007). No spectral bin is clamped, and a
+  spectral-validity guard requires the grid to resolve only positive absolute
+  frequencies (`Ω_max < ω₀`), failing with the remedy when it does not. The
+  photon number is conserved exactly in the constant-drive limit and the step
+  matches a fully-resolved reference of the same flow to ≈1e-5.
+- **Multi-phonon Raman response.** `PhononResponse.h_R(t)` is a causal,
+  unit-integral superposition of damped oscillators (Hollenbeck & Cantrell
+  2002), and the solver dispatches over it: crystalline materials propagate
+  with their full multi-mode response, silica keeps the classic Blow–Wood form.
+- **Time-resolved TPA / free carriers (opt-in).**
+  `SplitStepEngine(include_free_carriers=True)` resolves the carrier density
+  `N(t)` on the retarded-time grid instead of spatially averaging it:
+  exact TPA attenuation `I₀/(1+βI₀z)`, carrier generation/recombination with
+  a lifetime, and free-carrier absorption (Soref & Bennett 1987; Cowan et al.
+  2003).
+- **Convergence and validation harness.**
+
+```python
+from photonics_helper import convergence_study, check_soliton, ValidationFailure
+
+report = convergence_study(
+    build,                       # your solver factory → propagated solver
+    refinements=[
+        {"N": 8192,  "Tmax_s": 8e-12, "num_steps": 1000},
+        {"N": 16384, "Tmax_s": 8e-12, "num_steps": 2000},
+        {"N": 32768, "Tmax_s": 8e-12, "num_steps": 2000},
+    ],
+    observables=["peak_intensity", "rms_bandwidth"],
+    tolerance=2e-3,
+)
+assert report.converged, report.summary()
+
+# cited checks raise ValidationFailure on a closed-form mismatch:
+check_soliton(beta2=-21e-27, gamma=1.0, t0=1e-12, wavelength_m=1550e-9, grid=grid)
+```
+
+`check_spm` (Stolen & Lin 1978), `check_mi` (Agrawal Eq. 5.1.9),
+`check_soliton` (Agrawal §5.2) and `check_gordon_ssfs` (Gordon 1986) each
+compare a *propagation result* against the closed form, so a configuration is
+checked against physics and not against another code (Sinkin et al. 2003 for
+the convergence criteria).
+
 # Reproductions
 
 The `reproductions/` directory validates the library against published results,

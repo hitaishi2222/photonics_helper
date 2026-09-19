@@ -296,7 +296,14 @@ class TestSelfSteepeningConservation:
 
         N = len(pulse_lf.t_ps)
         dt_ps = pulse_lf.t_ps[1] - pulse_lf.t_ps[0]
-        grid = TemporalGrid(N=N, Tmax=Time(N * dt_ps * 1e-12, "s"))
+        Tmax_s = N * dt_ps * 1e-12
+        # The self-steepening validity guard requires Ω_max = π·N/Tmax < ω₀.
+        # laserfun's 4096-point / 7 ps grid gives Ω_max ≈ 1.5 ω₀ at 1550 nm,
+        # so coarsen the point count until the carrier is resolved (same time
+        # window); the reference field is interpolated onto this grid.
+        while np.pi * N / Tmax_s >= omega0:
+            N //= 2
+        grid = TemporalGrid(N=N, Tmax=Time(Tmax_s, "s"))
         t_ph = grid.t
         t_lf = pulse_lf.t_ps * 1e-12
         at_interp = np.interp(t_ph, t_lf, np.real(pulse_lf.at)) + 1j * np.interp(
@@ -346,7 +353,13 @@ class TestSelfSteepeningConservation:
             np.abs(np.fft.ifftshift(grid.fft(solver.evolution[-1].envelope_field))) ** 2
         )
         ph_sw /= ph_sw.max()
-        lf_sw = np.abs(np.fft.fft(res_lf.AT[-1])) ** 2
+        # Compare on our frequency grid: interpolate laserfun's final field
+        # (its own time grid) onto ours before transforming, since the two
+        # grids now differ in point count.
+        lf_at_our = np.interp(t_ph, t_lf, np.real(res_lf.AT[-1])) + 1j * np.interp(
+            t_ph, t_lf, np.imag(res_lf.AT[-1])
+        )
+        lf_sw = np.abs(np.fft.ifftshift(grid.fft(lf_at_our))) ** 2
         lf_sw /= lf_sw.max()
         corr = np.corrcoef(ph_sw, lf_sw)[0, 1]
         # laserfun integrates the full RHS with an adaptive ODE solver while

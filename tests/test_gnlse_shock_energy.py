@@ -20,7 +20,9 @@ TAU_DUDLEY = 0.56e-15  # effective-area-corrected, RMP 2006 Sec. V.B
 
 
 def _shock_wave(n: int = 2**12) -> Wave:
-    grid = TemporalGrid(N=n, Tmax=Time(5e-12, "s"))
+    # Tmax = 8 ps keeps Ω_max = π·N/Tmax ≈ 1.61e15 rad/s below ω₀ (2.26e15),
+    # as the self-steepening validity guard now requires.
+    grid = TemporalGrid(N=n, Tmax=Time(8e-12, "s"))
     env = Envelope(
         shape="sech",
         peak_amplitude=np.sqrt(10e3),

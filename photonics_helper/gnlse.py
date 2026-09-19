@@ -124,6 +124,12 @@ class FiberProfile:
         carrier_lifetime: Carrier recombination lifetime (s). Default None.
         length: Fiber length (m).
         raman_response: Raman response function. Default None.
+        beta_tpa: Two-photon absorption coefficient β_TPA (m/W) for the
+            time-resolved free-carrier model. Default 0.
+        sigma_fca: Free-carrier absorption cross-section σ_FCA (m²) for the
+            time-resolved free-carrier model. Default 0.
+        group_velocity: Envelope group velocity v (m/s) converting the carrier
+            lifetime to a propagation length. Default None → C_MS.
     """
 
     n2: float
@@ -134,6 +140,9 @@ class FiberProfile:
     sigma_tpa: float = 0.0
     carrier_lifetime: Time | None = None
     raman_response: object | None = None
+    beta_tpa: float = 0.0
+    sigma_fca: float = 0.0
+    group_velocity: float | None = None
 
     @classmethod
     def from_gamma(
@@ -147,6 +156,9 @@ class FiberProfile:
         sigma_tpa: float = 0.0,
         carrier_lifetime: Time | None = None,
         raman_response: object | None = None,
+        beta_tpa: float = 0.0,
+        sigma_fca: float = 0.0,
+        group_velocity: float | None = None,
     ) -> FiberProfile:
         """Create a FiberProfile from a target nonlinear coefficient γ.
 
@@ -165,6 +177,14 @@ class FiberProfile:
         sigma_tpa : float — two-photon absorption cross-section. Default 0.
         carrier_lifetime : Time — carrier recombination lifetime. Default None.
         raman_response : object — Raman response function. Default None.
+        beta_tpa : float — two-photon absorption coefficient β_TPA in m/W.
+            Used by the time-resolved free-carrier model
+            (``SplitStepEngine(include_free_carriers=True)``). Default 0.
+        sigma_fca : float — free-carrier absorption cross-section σ_FCA in m².
+            Used by the time-resolved free-carrier model. Default 0.
+        group_velocity : float | None — envelope group velocity v in m/s used
+            to convert the retarded-time carrier lifetime into a propagation
+            length. Default ``None`` → the vacuum-light-speed constant.
 
         Returns
         -------
@@ -185,12 +205,19 @@ class FiberProfile:
             sigma_tpa=sigma_tpa,
             carrier_lifetime=carrier_lifetime,
             raman_response=raman_response,
+            beta_tpa=beta_tpa,
+            sigma_fca=sigma_fca,
+            group_velocity=group_velocity,
         )
 
 
 # ---------------------------------------------------------------------------
 # Nonlinear effect functions
 # ---------------------------------------------------------------------------
+
+
+# Reduced Planck constant (J·s) — used by the time-resolved free-carrier model.
+HBAR_J_S = 1.0545718e-34
 
 
 def _gamma(
@@ -362,6 +389,84 @@ def raman_step(
     return np.asarray(A * raman_phase)
 
 
+def free_carrier_step(
+    A: NDArray,
+    fiber: FiberProfile,
+    grid: TemporalGrid,
+    dz: float,
+    N: NDArray | None,
+    omega0: float,
+) -> tuple[NDArray, NDArray | None]:
+    """Time-resolved TPA / free-carrier absorption step (opt-in).
+
+    Models the per-sample carrier population over the retarded-time grid
+    (Soref & Bennett 1987; Cowan, Rieger & Young, *Appl. Phys. Lett.* **82**,
+    1745 (2003); Yin & Agrawal, *Opt. Lett.* **32**, 2951 (2007)):
+
+    ``∂A/∂z|_TPA = −(β_TPA/2) |A|² A`` — the standard TPA attenuation;
+    in intensity form ``d|A|²/dz = −β_TPA |A|⁴``, solved *exactly* per
+    sample for a constant intensity within the step:
+    ``|A|²(z+dz) = |A|² / (1 + β_TPA |A|² dz)``.
+
+    ``∂N/∂z = β_TPA |A|⁴/(2ħω₀) − N/(τ_c v)`` — carrier generation by TPA
+    and recombination (``v`` the envelope group velocity converts the
+    retarded-time lifetime into a propagation length); integrated exactly
+    per sample: ``N = N e^{−dz/L} + S·L·(1 − e^{−dz/L})`` with ``L = τ_c v``.
+
+    ``∂A/∂z|_FCA = −(σ_FCA/2) N A`` — free-carrier absorption, applied with
+    the mid-step carrier density.
+
+    Out of scope (documented, not implemented): free-carrier refraction (the
+    ``μ`` index term), carrier diffusion and drift.
+
+    Parameters
+    ----------
+    A : complex array — pulse envelope.
+    fiber : FiberProfile — carries ``beta_tpa``, ``sigma_fca``,
+        ``carrier_lifetime`` and ``group_velocity``.
+    grid : TemporalGrid — time grid (defines the sample axis of ``N``).
+    dz : float — step size (m).
+    N : NDArray | None — per-sample carrier density state from the previous
+        steps, on the same grid. ``None`` (start of propagation init).
+    omega0 : float — carrier angular frequency (rad/s).
+
+    Returns
+    -------
+    (A, N) — updated field and carrier states.
+    """
+    beta = fiber.beta_tpa
+    sigma = fiber.sigma_fca
+    if beta <= 0 and sigma <= 0:
+        return A, N
+
+    if N is None:
+        N = np.zeros(grid.N, dtype=float)
+
+    intensity = np.abs(A) ** 2
+
+    # Exact TPA attenuation: dI/dz = −β I²  ⇒  I⁺ = I / (1 + β I dz).
+    if beta > 0:
+        eps = 1e-300
+        denom = 1.0 + beta * intensity * dz
+        I_new = intensity / np.maximum(denom, eps)
+        A = A * np.sqrt(I_new / np.maximum(intensity, eps))
+
+    # Carrier population: exact integration of dN/dz = S − N/L over the step
+    # with S frozen at the step-opening intensity (operator-split convention).
+    tau_c = fiber.carrier_lifetime.as_s if fiber.carrier_lifetime is not None else 1e-9
+    v = fiber.group_velocity if fiber.group_velocity is not None else C_MS
+    L = max(tau_c * v, 1e-300)  # m — carrier recombination length
+    decay = np.exp(-dz / L)
+    source = beta * intensity**2 / (2.0 * HBAR_J_S * omega0) if beta > 0 else 0.0
+    N_mid = N * decay + source * L * (1.0 - decay)
+
+    # FCA loss with the mid-step carrier density.
+    if sigma > 0:
+        A = A * np.exp(-0.5 * sigma * N_mid * dz)
+
+    return A, N_mid
+
+
 def tpa_step(
     A: NDArray,
     fiber: FiberProfile,
@@ -457,10 +562,14 @@ class SplitStepEngine:
 
         When enabled, the shock operator ``(1 + (i/ω₀)∂t)`` of Blow & Wood
         (1989) and Dudley–Genty–Coen RMP 78, 1135 (2006), Eq. (3), is
-        integrated with frequency-domain RK4 (``τ_shock`` settable, default
-        ``1/ω₀``). Enable explicitly for cross-library comparisons; laserfun
-        defaults to shock on (but its shock term has the opposite
-        linear-in-Ω asymmetry).
+        integrated with an interaction-picture scheme (``τ_shock`` settable,
+        default ``1/ω₀``): the exactly-integrable Kerr/Raman phase
+        ``exp(iγP_NL Δz)`` is factored out and only the shock correction
+        ``iγτ_shock ∂_t(A·P_NL)`` is advanced with frequency-domain RK4 (the
+        RK4IP idea of Hult 2007 / Hochbruck & Ostermann 2010). The shock
+        factor is never clamped (see :meth:`_validate_shock_grid`). Enable
+        explicitly for cross-library comparisons; laserfun defaults to shock
+        on (but its shock term has the opposite linear-in-Ω asymmetry).
 
         Sign audit (2026): the multiplier ``1 + Ω·τ_shock`` is the correct
         physical factor ``ω/ω₀`` under this codebase's FFT convention. The
@@ -477,7 +586,16 @@ class SplitStepEngine:
         follows from its own (unshifted-FFT) convention, not from different
         physics.
     include_tpa : bool
-        Include TPA. Default False.
+        Include TPA (legacy spatially-averaged carrier model). Default False.
+    include_free_carriers : bool
+        Include the opt-in time-resolved TPA / free-carrier model: the carrier
+        population ``N(t)`` is resolved over the retarded-time grid instead of
+        spatially averaged, driven by ``β_TPA |A|⁴/(2ħω₀)`` generation and
+        ``N/(τ_c v)`` recombination, with the field attenuated by the TPA term
+        ``−(β_TPA/2)|A|²A`` and free-carrier absorption ``−(σ_FCA/2)N·A``
+        (Soref & Bennett 1987; Cowan et al. 2003; Yin & Agrawal 2007). Requires
+        ``fiber.beta_tpa`` / ``fiber.sigma_fca``; free-carrier refraction (μ),
+        diffusion and drift are out of scope. Default False.
     tau_shock : float | None
         Shock (self-steepening) timescale in seconds (SI). ``None``
         (default) uses ``1/ω₀`` at the pulse carrier frequency, matching
@@ -500,6 +618,7 @@ class SplitStepEngine:
         include_raman: bool = False,
         include_self_steepening: bool = False,
         include_tpa: bool = False,
+        include_free_carriers: bool = False,
         tau_shock: float | None = None,
         step_size: Length | None = None,
         dispersion_profile: ZDependentDispersion | Callable[[NDArray, float], NDArray] | None = None,
@@ -517,6 +636,7 @@ class SplitStepEngine:
         self.include_raman = include_raman
         self.include_self_steepening = include_self_steepening
         self.include_tpa = include_tpa
+        self.include_free_carriers = include_free_carriers
         if tau_shock is not None and not tau_shock > 0.0:
             raise ValueError(
                 f"tau_shock must be positive (seconds, SI), got {tau_shock!r}"
@@ -548,6 +668,10 @@ class SplitStepEngine:
         self._spectra_vs_z: tuple[NDArray, NDArray] | None = None
         self._energy_vs_z: list[float] | None = None
         self._U = 0.0  # carrier density for TPA
+        self._N: NDArray | None = None  # time-resolved carrier population
+
+        if self.include_self_steepening:
+            self._validate_shock_grid()
 
     @property
     def tau_shock(self) -> float:
@@ -555,6 +679,33 @@ class SplitStepEngine:
         if self._tau_shock_override is not None:
             return self._tau_shock_override
         return 1.0 / float(self.omega0)
+
+    def _validate_shock_grid(self) -> None:
+        """Reject grids that push the ``ω/ω₀`` shock expansion out of validity.
+
+        The shock operator ``(1 + (i/ω₀)∂_t)`` is the first-order form of
+        ``ω/ω₀`` (Blow & Wood 1989; Agrawal §2.3), so it is only defined for
+        channels with positive *absolute* frequency, ``ω = ω₀ + Ω > 0``. On a
+        symmetric grid spanning ``±Ω_max`` this requires ``Ω_max < ω₀``. Bins
+        beyond that would alias onto negative optical frequencies where the
+        factor ``1 + Ω·τ_shock`` has no physical meaning; the historical code
+        clamped them to zero, which silently corrupted the shock physics.
+        Failing loudly is the honest alternative (design decision D2).
+        """
+        omega_max = float(self.grid.omega_max)
+        omega0 = float(self.omega0)
+        if omega_max >= omega0:
+            ratio = omega_max / omega0
+            raise ValueError(
+                "self-steepening requires the grid to resolve only positive "
+                "absolute frequencies, i.e. Ω_max < ω₀, but got "
+                f"Ω_max = {omega_max:.4e} rad/s >= ω₀ = {omega0:.4e} rad/s "
+                f"(Ω_max/ω₀ = {ratio:.3f}). The grid has N = {self.grid.N} "
+                f"samples over Tmax = {self.grid.Tmax.as_s:.4e} s. Fix by "
+                f"increasing the time window Tmax by at least {ratio:.3f}× "
+                "(equivalently reducing N for the same Tmax), or by disabling "
+                "self-steepening."
+            )
 
     def _linear_step(self, A: NDArray, dz: float) -> NDArray:
         """Apply dispersion via FFT: A(ω) ← A(ω) · exp(−i·Σ β_k(Ω)·Δz).
@@ -698,26 +849,54 @@ class SplitStepEngine:
         return self._h_R_fft_cache
 
     def _nonlinear_step(self, A: NDArray, dz: float) -> tuple[NDArray, float]:
-        """Apply nonlinear effects.
+        """Apply nonlinear effects with an interaction-picture shock step.
 
-        Kerr/Raman phase rotation is an exact exponential (unitary). With
-        self-steepening, the shock operator ``(1 + (i/ω₀)∂t)`` (Blow & Wood
-        1989; Dudley–Genty–Coen RMP 78, 1135 (2006), Eq. (3)) is integrated
-        with classical RK4 in the frequency domain: the nonlinear source
-        spectrum is multiplied by ``(1 + Ω·τ_shock)`` with ``τ_shock``
-        settable (default ``1/ω₀``).  This is the sign that reproduces the
-        paper's femtosecond SCG, where self-steepening counteracts the Raman
-        self-frequency red-shift (adding the shock term *reduces* the red
-        edge).  laserfun applies the opposite linear-in-Ω asymmetry, so a
+        The total nonlinear polarization is
+        ``P_NL = (1-fR)|A|² + fR·(h_R ⊛ |A|²)`` (real for a real response),
+        and the nonlinear GNLSE term is
+        ``iγ (1 + (i/ω₀)∂_t)(A·P_NL)`` (Blow & Wood 1989;
+        Dudley–Genty–Coen RMP 78, 1135 (2006), Eq. (3)).
+
+        **Photon-number balance (corrected).** The shock contribution is
+        ``iγτ_shock ∂_t(A·P_NL)`` (the ``Ω·τ`` part of the factor, with
+        ``i ∂_t → −Ω`` in this codebase's FFT convention). With a real
+        response,
+
+        ``d/dz ∫|A|² dt = −2γτ ∫ P_NL · Im(A* ∂_t A) dt`",
+
+        which vanishes only when the field evolves under a *time-independent*
+        ``P_NL`` (pure SPM with a frozen drive — then the integral is a total
+        time derivative and the step is exactly conservative; verified to
+        machine precision for the constant-``P_NL`` case). In general the
+        residual is a **physical** error of the first-order ``ω/ω₀`` shock
+        expansion, ``O(τΩ_max)`` at the band edge, and no integrator can
+        remove what the model itself does not conserve: a fully-resolved
+        (heavily substepped) classical-RK4 reference of the same flow drifts
+        identically on fissioned states. The historical ``max(1 + Ω·τ, 0)``
+        clamp was removed both because it is unphysical (see
+        :meth:`_validate_shock_grid`) and because it destroyed even this
+        approximate structure.
+
+        **Integrator.** The stiff, exactly-integrable part of the step is the
+        phase rotation ``exp(iγP_NL Δz)``. Following the RK4IP /
+        exponential-integrator idea (Hult, *JLT* **25**, 3770 (2007);
+        Hochbruck & Ostermann, *Acta Numerica* **19**, 209 (2010)), that phase
+        is applied exactly in two symmetric half-steps (Strang splitting) and
+        only the much smaller shock correction ``iγτ_shock ∂_t(A·P_NL)`` is
+        advanced with frequency-domain RK4. No Runge–Kutta stage ever
+        integrates the stiff phase, and no bin is clamped. The scheme is
+        validated against a heavily-substepped reference of the same flow
+        (``tests/test_gnlse_unitarity.py::test_integrator_fidelity``).
+
+        The shock sign ``(1 + Ω·τ_shock)`` (rather than ``1 − Ω·τ_shock``) is
+        the convention that reproduces the paper's femtosecond SCG, where
+        self-steepening counteracts the Raman self-frequency red-shift.
+        laserfun applies the opposite linear-in-Ω asymmetry, so a
         cross-library shock comparison disagrees (tracked in
-        ``tests/test_gnlse_regression.py``).  The factor is clamped at zero:
-        FFT bins with ``1 + Ω·τ_shock < 0`` correspond to non-positive
-        absolute frequencies (aliased band) where the multiplier would
-        unphysically flip the sign of the nonlinear drive — the source of the
-        historic energy drift.
+        ``tests/test_gnlse_regression.py``).
 
-        The total nonlinear polarization is:
-          P_NL = (1-fR)|A|² + fR·(h_R ⊗ |A|²)
+        The grid must satisfy ``Ω_max < ω₀`` when self-steepening is enabled;
+        :meth:`_validate_shock_grid` enforces this at construction.
         """
         gamma = self._get_gamma(self._current_z)
         intensity = np.abs(A) ** 2
@@ -734,54 +913,55 @@ class SplitStepEngine:
 
         P_NL = self._nl_intensity(intensity, h_R_fft)
 
-        # Exact (unitary) Kerr/Raman phase rotation.
-        A_noshock = A * np.exp(1j * gamma * P_NL * dz)
-
         if self.include_self_steepening:
-            # Self-steepening: RK4 in the frequency domain with the shock
-            # factor (ω/ω₀ = 1 + Ω·τ_shock).  This sign reproduces the Fig. 3
-            # SCG (self-steepening reduces the Raman red edge); laserfun's
-            # Ω-asymmetry is opposite.  ``τ_shock = 1/ω₀`` matches the paper's
-            # uncorrected value; ``0.56 fs`` gives Dudley's
-            # effective-area-corrected value. The factor is clamped at zero
-            # (see docstring).
-            shock_factor = np.clip(1.0 + self.grid.w * self.tau_shock, 0.0, None)
-            A_w = self.grid.fft(A)
+            tau = self.tau_shock
+            # Shock correction operator in the frequency domain:
+            #   shock_rhs(A) = iγτ ∂_t(A·P_NL)  →  iγτ·Ω·F{A·P_NL}
+            # Purely imaginary on the diagonal, so its exact exponential is
+            # unitary; RK4 only approximates the (small) P_NL variation.
+            shock_kernel = 1j * gamma * tau * self.grid.w
 
-            def shock_rhs_freq(A_w_stage):
-                a = self.grid.ifft(A_w_stage)
-                p_nl = self._nl_intensity(np.abs(a) ** 2, h_R_fft)
-                nl_src = p_nl * a
-                nl_w = self.grid.fft(nl_src)
-                nl_w *= shock_factor
-                return 1j * gamma * nl_w
+            def shock_rhs(A_state: NDArray) -> NDArray:
+                p_nl = self._nl_intensity(np.abs(A_state) ** 2, h_R_fft)
+                src_w = self.grid.fft(p_nl * A_state)
+                return np.asarray(self.grid.ifft(shock_kernel * src_w), dtype=complex)
 
-            def _rk4_shock_step(A_w_in, h):
-                k1 = shock_rhs_freq(A_w_in)
-                k2 = shock_rhs_freq(A_w_in + 0.5 * h * k1)
-                k3 = shock_rhs_freq(A_w_in + 0.5 * h * k2)
-                k4 = shock_rhs_freq(A_w_in + h * k3)
-                return A_w_in + (h / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
+            def _rk4_shock(A_state: NDArray, h: float) -> NDArray:
+                k1 = shock_rhs(A_state)
+                k2 = shock_rhs(A_state + 0.5 * h * k1)
+                k3 = shock_rhs(A_state + 0.5 * h * k2)
+                k4 = shock_rhs(A_state + h * k3)
+                return np.asarray(
+                    A_state + (h / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4),
+                    dtype=complex,
+                )
 
-            # The shock factor (up to ~1 + Ωmax·τ_shock ≈ 4–5 at the band
-            # edge) amplifies the effective nonlinear phase per step; at
-            # fission spikes γ·P·factor·dz can approach O(1), where a single
-            # RK4 step loses accuracy and leaks energy. Substep the shock
-            # update so the effective phase per substep stays ≤ 0.05 rad
-            # (RK4 local error ~ (0.05)⁵ — negligible). Deterministic: M is
-            # fixed by the step-opening state, not by iteration.
-            phase_scale = gamma * float(np.max(P_NL)) * float(shock_factor.max()) * dz
-            n_sub = int(min(50, max(1, np.ceil(phase_scale / 0.05))))
+            # Symmetric (Strang) split: half the exact Kerr/Raman phase, the
+            # full shock correction, then the trailing half phase.
+            A_state = A * np.exp(0.5j * gamma * P_NL * dz)
+
+            # Substep so the shock-induced change per substep stays small.
+            # Only the shock term is resolved; the stiff phase is analytic, so
+            # this needs far fewer substeps than the old classical-RK4 scheme.
+            shock_rate = float(np.max(np.abs(shock_kernel))) * float(np.max(P_NL))
+            n_sub = int(min(200, max(1, np.ceil(shock_rate * dz / 0.05))))
             h_sub = dz / n_sub
             for _ in range(n_sub):
-                A_w = _rk4_shock_step(A_w, h_sub)
-            A = self.grid.ifft(A_w)
+                A_state = _rk4_shock(A_state, h_sub)
+
+            P_final = self._nl_intensity(np.abs(A_state) ** 2, h_R_fft)
+            A = A_state * np.exp(0.5j * gamma * P_final * dz)
         else:
-            A = A_noshock
+            # Exact (unitary) Kerr/Raman phase rotation.
+            A = A * np.exp(1j * gamma * P_NL * dz)
 
         A, U_new = tpa_step(
             A, self.fiber, self.grid, dz, self.include_tpa, self._U, self.omega0
         )
+        if self.include_free_carriers:
+            A, self._N = free_carrier_step(
+                A, self.fiber, self.grid, dz, self._N, self.omega0
+            )
         return A, U_new
 
     def _get_omega_bounds(self) -> tuple[float, float]:
@@ -1212,7 +1392,12 @@ class GNLSESolver:
         ``NLSE`` uses ``shock=True`` by default — set ``True`` when comparing
         against laserfun or reproducing Dudley-style supercontinuum demos.
     include_tpa : bool
-        Include two-photon absorption. Default False.
+        Include two-photon absorption (legacy spatially-averaged model).
+        Default False.
+    include_free_carriers : bool
+        Include the opt-in time-resolved TPA/free-carrier model (see
+        :class:`SplitStepEngine`). Requires ``fiber.beta_tpa`` /
+        ``fiber.sigma_fca``. Default False.
     check_phase_matching : bool
         Run the phase-matching preflight and emit warnings before propagating.
     step_size : Length | None
@@ -1231,6 +1416,7 @@ class GNLSESolver:
         include_raman: bool = True,
         include_self_steepening: bool = False,
         include_tpa: bool = False,
+        include_free_carriers: bool = False,
         check_phase_matching: bool = False,
         step_size: Length | None = None,
         betas_unit: BetasUnit = "ps^k/m",
@@ -1244,6 +1430,7 @@ class GNLSESolver:
         self.include_raman = include_raman
         self.include_self_steepening = include_self_steepening
         self.include_tpa = include_tpa
+        self.include_free_carriers = include_free_carriers
         self.check_phase_matching = check_phase_matching
         self.step_size = step_size
         if tau_shock is not None and not tau_shock > 0.0:
@@ -1281,6 +1468,7 @@ class GNLSESolver:
             include_raman=self.include_raman,
             include_self_steepening=self.include_self_steepening,
             include_tpa=self.include_tpa,
+            include_free_carriers=self.include_free_carriers,
             tau_shock=self.tau_shock,
             step_size=self.step_size,
         )
@@ -1466,7 +1654,12 @@ class TaperedGNLSESolver:
         Include self-steepening (shock term). Default ``False`` (laserfun
         ``NLSE`` defaults to ``shock=True``).
     include_tpa : bool
-        Include two-photon absorption. Default False.
+        Include two-photon absorption (legacy spatially-averaged model).
+        Default False.
+    include_free_carriers : bool
+        Include the opt-in time-resolved TPA/free-carrier model (see
+        :class:`SplitStepEngine`). Requires ``fiber.beta_tpa`` /
+        ``fiber.sigma_fca``. Default False.
     min_shrink_factor : float
         Floor for the gradient-based step shrink factor in z-dependent mode.
         Must be in (0, 1]. Default 0.1. Raise it (e.g. 0.3) to trade a small
@@ -1489,6 +1682,7 @@ class TaperedGNLSESolver:
         include_raman: bool = True,
         include_self_steepening: bool = False,
         include_tpa: bool = False,
+        include_free_carriers: bool = False,
         check_phase_matching: bool = False,
         min_shrink_factor: float = 0.1,
         step_size: Length | None = None,
@@ -1506,6 +1700,7 @@ class TaperedGNLSESolver:
         self.include_raman = include_raman
         self.include_self_steepening = include_self_steepening
         self.include_tpa = include_tpa
+        self.include_free_carriers = include_free_carriers
         self.check_phase_matching = check_phase_matching
         self.min_shrink_factor = min_shrink_factor
         if tau_shock is not None and not tau_shock > 0.0:
@@ -1577,6 +1772,7 @@ class TaperedGNLSESolver:
             include_raman=self.include_raman,
             include_self_steepening=self.include_self_steepening,
             include_tpa=self.include_tpa,
+            include_free_carriers=self.include_free_carriers,
             dispersion_profile=self.dispersion_profile,
             a_eff_fn=self.a_eff_fn,
             alpha_fn=self.alpha_fn,
