@@ -50,7 +50,7 @@ build-backend = "setuptools.build_meta"
 
 [project.urls]
 Homepage = "https://github.com/hitaishi2222/photonics_helper"
-Documentation = "https://github.com/hitaishi2222/photonics_helper#readme"
+Documentation = "https://hitaishi2222.github.io/photonics_helper/"
 
 [tool.setuptools.package-data]
 photonics_helper = ["py.typed", "materials.db"]

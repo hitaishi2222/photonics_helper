@@ -2,6 +2,10 @@
 
 A comprehensive helper library for photonics and optics calculations, providing easy-to-use tools for wavelength, frequency, and angular frequency conversions.
 
+📖 **Documentation:** <https://hitaishi2222.github.io/photonics_helper/> — built
+with [Zensical](https://zensical.org/) from the docstrings, one page per API
+module.
+
 # Installation
 
 ```bash
