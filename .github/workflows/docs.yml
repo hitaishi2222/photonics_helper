@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   build:
-    name: Build mkdocs site
+    name: Build docs site
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
@@ -30,7 +30,7 @@ jobs:
           python -m pip install -e ".[docs,plotting,webapp]"
 
       - name: Build
-        run: mkdocs build --strict
+        run: zensical build
 
       - uses: actions/upload-pages-artifact@v4
         with:

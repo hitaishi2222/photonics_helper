@@ -7,6 +7,7 @@ edit_uri: edit/main/docs/
 
 theme:
   name: material
+  variant: classic            # Zensical: pick 'modern' for the new look
   logo: img/icon.png
   favicon: img/icon.png
   features:
@@ -62,5 +63,25 @@ extra_javascript:
 
 nav:
   - Home: index.md
-  - API Reference: api.md
+  - Installation: install.md
+  - Quick start: quickstart.md
+  - API Reference:
+      - api/index.md
+      - Units and constants: api/base.md
+      - Pulse envelopes & grids: api/pulse.md
+      - Fiber & propagation constants: api/fiber.md
+      - GNLSE: api/gnlse.md
+      - Phase-matching diagnostics (χ³): api/phase-matching.md
+      - χ⁽²⁾ nonlinear optics (SHG / SFG / DFG): api/chi2.md
+      - Raman scattering: api/raman.md
+      - Soliton analysis: api/soliton.md
+      - Breathers and exact solutions: api/breathers.md
+      - Noise sources: api/noise.md
+      - Optical wave breaking: api/wave-breaking.md
+      - Structured light (LG / OAM): api/structured.md
+      - DBR / TMM: api/dbr.md
+      - Materials & n/k database: api/materials.md
+      - Phonons: api/phonon.md
+      - FFT backends: api/fftw.md
+      - Unified dashboard: api/dashboard.md
   - Reproductions: reproductions.md

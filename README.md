@@ -15,6 +15,9 @@ and long propagation runs):
 pip install "photonics-helper[fftw]"
 ```
 
+Other optional extras: `plotting`, `webapp`, `extras`, `mode-export` — e.g.
+`pip install "photonics-helper[webapp]"` for the unified Dash dashboard.
+
 When `pyfftw` is present, every FFT in `gnlse.py` and `raman.py` executes on
 the system FFTW3 library with cached plans; otherwise the solver transparently
 falls back to `numpy.fft`. See `photonics_helper._fftw` (env vars
@@ -580,14 +583,18 @@ Requires the `webapp` (Dash) and `plotting` (Plotly) extras; see
 `examples/32_unified_dashboard.py`. The standalone Raman app remains available
 as `photonics_helper.raman.app()`.
 
-API documentation is built with mkdocs + mkdocstrings from the docstrings:
+API documentation is built with [Zensical](https://zensical.org/) +
+mkdocstrings from the docstrings (one page per module in the API section):
 
 ```bash
 pip install -e ".[docs]"
-mkdocs serve        # http://127.0.0.1:8000
+zensical serve      # http://127.0.0.1:8000
 ```
 
-`.github/workflows/` also provides the CI matrix, the mkdocs build/deploy, and
+(Zensical reads the repo's `mkdocs.yml`, so the classic `mkdocs serve`
+workflow also works — both builders stay supported.)
+
+`.github/workflows/` also provides the CI matrix, the docs build/deploy, and
 the PyPI Trusted Publishing release (cut a `v*` tag to publish).
 
 # Development
@@ -648,7 +655,7 @@ pip install -e .
 - **χ⁽²⁾ nonlinear optics** ✅ — `chi2` SHG/SFG/DFG RK4IP solver, QPM grating, `Lambda_qpm`, textbook `tanh²(κL)` reproduction
 - **GPU FFT backend** ✅ — opt-in cupy path (`PHOTONICS_FFT_BACKEND=cupy`) with transparent CPU fallback and a benchmark
 - **Unified dashboard** ✅ — `photonics_helper.dashboard.app()` combines the Raman Explorer and an interactive GNLSE result viewer
-- **Release engineering** ✅ — PyPI Trusted Publishing, mkdocs API docs, and a Python 3.12/3.13 × ±pyfftw CI matrix (ruff + mypy gates)
+- **Release engineering** ✅ — PyPI Trusted Publishing, Zensical API docs, and a Python 3.12/3.13 × ±pyfftw CI matrix (ruff + mypy gates)
 - **Chalcogenide Materials** ✅
   - GeAsSe added (n₂=6e-18 m²/W, 44 materials total)
   - Suitable for soliton fission in chalcogenide waveguides
