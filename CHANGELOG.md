@@ -24,6 +24,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   machine precision (tested), so all existing scalar reproductions are
   unaffected. Docs: `docs/vector-gnlse.md`, API page, README section.
   Regression: `tests/test_vector_gnlse.py` (14 tests).
+- **Multimode (few-mode) coupled GNLSE** (`photonics_helper.multimode_gnlse`):
+  `MultimodeSplitStepEngine` propagates N guided spatial modes as coupled
+  envelopes — per-mode Taylor dispersion and modal group delay (`group_delays`,
+  s/m), SPM/XPM coefficient sets (degenerate LP `1, 2/3` or isotropic), and
+  opt-in pump-driven inter-modal FWM (`include_fwm=True`): each pump channel
+  exchanges the pair (m, q) through conjugate Hamiltonian partners, gated by
+  the angular-momentum rule `ℓ_m = 2ℓ_n − ℓ_q` when `oam_l` is supplied.
+  Contracts (regression-tested): single channel = scalar engine (machine
+  precision); 2-channel LP-degenerate = the polarization vector engine
+  (machine precision); mode walk-off = Δβ₁·L; FWM vs an independent dense
+  RK4 <5%; forbidden FWM triplets unmixed to machine precision. Modes as
+  nonlinear channels complete the Phase 4 item 2 group ("structured.py
+  stops being a linear-only portrait"). Docs: `docs/multimode-gnlse.md` +
+  API page. Regression: `tests/test_multimode_gnlse.py` (11 tests).
 
 ## [0.1.9] - 2026-09-19
 

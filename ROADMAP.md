@@ -82,6 +82,15 @@ the stable contract.
     `RandomBirefringenceEngine` (ensemble → Manakov, validated); exact
     scalar-limit reduction enforced by tests. Multimode/few-mode OAM
     coupling remains future work (Phase 4 item 2 partially delivered).
+  - *Multimode/few-mode OAM coupling* ✅ (this release):
+    `multimode_gnlse.MultimodeSplitStepEngine` — per-mode dispersion +
+    group delay, LP (`1, 2/3`) / isotropic SPM-XPM models, opt-in pump-driven
+    inter-modal FWM (Hamiltonian pair exchange) gated by the
+    angular-momentum rule `ℓ_m = 2ℓ_n − ℓ_q`; contracts: single-channel =
+    scalar engine (machine precision), 2-channel LP-degenerate =
+    `VectorSplitStepEngine` (machine precision), FWM vs dense RK4 <5%,
+    forbidden triplets unmixed to machine precision. Mode-specific overlap
+    tensors and pump depletion are future work.
   - *Pending*: own-work chalcogenide mid-IR SCG reproductions, cascaded
     χ⁽²⁾–χ⁽³⁾, PINN / inverse-design layer.
 

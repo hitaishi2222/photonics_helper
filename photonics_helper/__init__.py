@@ -95,6 +95,10 @@ if TYPE_CHECKING:  # pragma: no cover - static analyzers/IDEs only
         RandomBirefringenceEngine,
         VectorSplitStepEngine,
     )
+    from .multimode_gnlse import (
+        CoeffModel,
+        MultimodeSplitStepEngine,
+    )
     from .noise import (
         add_ase_noise,
         add_noise,
@@ -229,7 +233,9 @@ __all__ = [
     "SolitonOnBackground",
     "SplitStepEngine",
     "StructuredField",
+    "CoeffModel",
     "Coupling",
+    "MultimodeSplitStepEngine",
     "RandomBirefringenceEngine",
     "TaperedGNLSESolver",
     "VectorSplitStepEngine",
@@ -349,6 +355,10 @@ _LAZY_MODULES: dict[str, str] = {
         "DEFAULT_OBSERVABLES", "ConvergenceReport", "ObservableReport",
         "ValidationFailure", "convergence_study", "check_spm", "check_mi",
         "check_soliton", "check_gordon_ssfs", "gordon_ssfs_rate", "mi_gain_of",
+    )},
+    # .multimode_gnlse — few-mode coupled GNLSE
+    **{n: ".multimode_gnlse" for n in (
+        "CoeffModel", "MultimodeSplitStepEngine",
     )},
     # .vector_gnlse — polarization-coupled GNLSE
     **{n: ".vector_gnlse" for n in (

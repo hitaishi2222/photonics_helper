@@ -612,6 +612,17 @@ express (details: `docs/vector-gnlse.md`):
 - exact scalar reduction: with `A_y ≡ 0` the vector engine equals the scalar
   `SplitStepEngine` to machine precision, so every published scalar
   reproduction remains untouched.
+- exact scalar reduction: with `A_y ≡ 0` the vector engine equals the scalar
+  `SplitStepEngine` to machine precision, so every published scalar
+  reproduction remains untouched.
+
+`photonics_helper.multimode_gnlse` generalizes the same machinery to **N
+simultaneously guided spatial modes** (`MultimodeSplitStepEngine`): per-mode
+dispersion/group-delay/loss, LP (`1, 2/3`) or isotropic SPM-XPM models, and
+opt-in pump-driven inter-modal FWM (`include_fwm=True`) gated by the
+angular-momentum rule `ℓ_m = 2ℓ_n − ℓ_q` when OAM indices are supplied —
+so `structured.py`'s LG/OAM portraits become a genuinely nonlinear
+modal-propagation layer. Details: `docs/multimode-gnlse.md`.
 
 # Solver physics hardening
 

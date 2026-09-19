@@ -71,6 +71,7 @@ nav:
   - Building on the core: building-on-core.md
   - GNLSE physics: gnlse-physics.md
   - Vector / polarization-coupled GNLSE: vector-gnlse.md
+  - Multimode (few-mode) GNLSE: multimode-gnlse.md
   - API Reference:
       - api/index.md
       - Foundation core (units/grids/materials): api/core.md
@@ -80,6 +81,7 @@ nav:
       - GNLSE: api/gnlse.md
       - GNLSE validation & convergence: api/gnlse-validation.md
       - Vector (polarization) GNLSE: api/vector-gnlse.md
+      - Multimode (few-mode) GNLSE: api/multimode-gnlse.md
       - Phase-matching diagnostics (χ³): api/phase-matching.md
       - χ⁽²⁾ nonlinear optics (SHG / SFG / DFG): api/chi2.md
       - Raman scattering: api/raman.md
