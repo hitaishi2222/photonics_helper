@@ -1,136 +1,156 @@
-"""Photonics helper library — units, materials, fibers, pulses, FROG."""
+"""Photonics helper library — units, materials, fibers, pulses, FROG.
 
-from .base import (
-    C_MS,
-    EPS_0,
-    H_PLANCK,
-    HBAR,
-    MU_0,
-    PI,
-    AngularFrequency,
-    AngularFrequencyArray,
-    Area,
-    Energy,
-    Frequency,
-    FrequencyArray,
-    Length,
-    PeakPower,
-    Permeability,
-    Permittivity,
-    Power,
-    Time,
-    Wavelength,
-    WavelengthArray,
-    Wavenumber,
-    WavenumberArray,
-)
-from .breathers import (
-    SolitonOnBackground,
-    akhmediev_breather,
-    general_sfb,
-    kuznetsov_ma,
-    peregrine_soliton,
-    sfb_peak_ratio,
-    sfb_spatial_period,
-    sfb_temporal_period,
-)
-from .chi2 import (
-    Chi2Result,
-    Lambda_qpm,
-    delta_k_shg,
-    qpm_grating,
-    shg_coupling,
-    solve_dfg,
-    solve_sfg,
-    solve_shg,
-    solve_three_wave,
-)
-from .dashboard import app as dashboard_app
-from .dbr import (
-    TMM,
-    Block,
-    Material,
-    Pattern,
-    plot_2d,
-    plot_index,
-)
-from .fiber import Dispersion, PropagationConstant, WaveguideMode, ZDependentDispersion
-from .gnlse import FiberProfile, GNLSESolver, SplitStepEngine, TaperedGNLSESolver
-from .materials import RefractiveIndex
-from .noise import (
-    add_ase_noise,
-    add_noise,
-    ase_noise_field,
-    complex_gaussian_noise,
-)
-from .phase_matching import (
-    DispersionAdaptor,
-    DispersionModel,
-    DispersiveWaveResult,
-    PhaseMatchResult,
-    PropagationConstantAdaptor,
-    SimulationReadinessReport,
-    ValidationReport,
-    ZDependentDispersionAdaptor,
-    assess_simulation_readiness,
-    compare_spectrum_to_phase_matching,
-    dispersive_wave_roots,
-    fwm_delta_beta_degenerate,
-    fwm_delta_beta_general,
-    fwm_efficiency,
-    fwm_idler_frequency,
-    mi_gain_spectrum,
-    mi_gain_spectrum_extended,
-    mi_sideband_frequencies,
-    plot_fwm_efficiency,
-    plot_mi_gain,
-    plot_readiness_report,
-    plot_spectrum_with_pm_overlay,
-    scan_fwm_detuning,
-)
-from .phonon import PHONON_MATERIALS, PhononMode, PhononResponse
-from .pulse import (
-    Envelope,
-    FROGTrace,
-    TemporalGrid,
-    Wave,
-    fidelity,
-    generate_trace,
-    retrieve,
-)  # type: ignore
-from .raman import (
-    COMMON_COMPARISONS,
-    RAMAN_MATERIALS,
-    MaterialComparison,
-    PumpWavelengthExplorer,
-    RamanDatabase,
-    RamanFrequencyResponse,
-    RamanPulseInteraction,
-    RamanResponse,
-    RamanSpec,
-    app,
-)
-from .soliton import SolitonAnalyzer
-from .structured import (
-    LaguerreGaussianMode,
-    StructuredField,
-    beam_waist,
-    gouy_phase,
-    overlap,
-    plot_transverse_profile,
-    radius_of_curvature,
-    rayleigh_range,
-)
-from .wave_breaking import (
-    WaveBreaking,
-    detect_oscillation_onset,
-    detect_steepening_onset,
-    dispersion_length,
-    edge_steepness,
-    gaussian_edge_steepness,
-    nonlinear_length,
-    wave_breaking_distance,
-)
+This package uses **lazy imports** (PEP 562). ``import photonics_helper`` binds
+almost nothing; each public name is imported from its defining module the first
+time it is accessed::
+
+    from photonics_helper import Wavelength   # imports .base only
+
+The goal is that the foundation layer — units, constants, grids and materials —
+can be used without pulling in the plotting/simulation stack (matplotlib,
+plotly, dash). See ``photonics_helper.core`` for the documented foundation
+surface.
+
+The public surface is the static ``__all__`` below; it must not shrink. Names
+are resolved from ``_LAZY_MODULES`` (and ``_LAZY_ATTR`` for aliased exports) by
+``__getattr__`` and cached in the module globals after first access.
+"""
+
+from __future__ import annotations
+
+import importlib
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:  # pragma: no cover - static analyzers/IDEs only
+    from .base import (
+        C_MS,
+        EPS_0,
+        H_PLANCK,
+        HBAR,
+        MU_0,
+        PI,
+        AngularFrequency,
+        AngularFrequencyArray,
+        Area,
+        Energy,
+        Frequency,
+        FrequencyArray,
+        Length,
+        PeakPower,
+        Permeability,
+        Permittivity,
+        Power,
+        Time,
+        Wavelength,
+        WavelengthArray,
+        Wavenumber,
+        WavenumberArray,
+    )
+    from .breathers import (
+        SolitonOnBackground,
+        akhmediev_breather,
+        general_sfb,
+        kuznetsov_ma,
+        peregrine_soliton,
+        sfb_peak_ratio,
+        sfb_spatial_period,
+        sfb_temporal_period,
+    )
+    from .chi2 import (
+        Chi2Result,
+        Lambda_qpm,
+        delta_k_shg,
+        qpm_grating,
+        shg_coupling,
+        solve_dfg,
+        solve_sfg,
+        solve_shg,
+        solve_three_wave,
+    )
+    from .dashboard import app as dashboard_app
+    from .dbr import TMM, Block, Material, Pattern, plot_2d, plot_index
+    from .fiber import (
+        Dispersion,
+        PropagationConstant,
+        WaveguideMode,
+        ZDependentDispersion,
+    )
+    from .gnlse import FiberProfile, GNLSESolver, SplitStepEngine, TaperedGNLSESolver
+    from .materials import RefractiveIndex
+    from .noise import (
+        add_ase_noise,
+        add_noise,
+        ase_noise_field,
+        complex_gaussian_noise,
+    )
+    from .phase_matching import (
+        DispersionAdaptor,
+        DispersionModel,
+        DispersiveWaveResult,
+        PhaseMatchResult,
+        PropagationConstantAdaptor,
+        SimulationReadinessReport,
+        ValidationReport,
+        ZDependentDispersionAdaptor,
+        assess_simulation_readiness,
+        compare_spectrum_to_phase_matching,
+        dispersive_wave_roots,
+        fwm_delta_beta_degenerate,
+        fwm_delta_beta_general,
+        fwm_efficiency,
+        fwm_idler_frequency,
+        mi_gain_spectrum,
+        mi_gain_spectrum_extended,
+        mi_sideband_frequencies,
+        plot_fwm_efficiency,
+        plot_mi_gain,
+        plot_readiness_report,
+        plot_spectrum_with_pm_overlay,
+        scan_fwm_detuning,
+    )
+    from .phonon import PHONON_MATERIALS, PhononMode, PhononResponse
+    from .pulse import (
+        Envelope,
+        FROGTrace,
+        TemporalGrid,
+        Wave,
+        fidelity,
+        generate_trace,
+        retrieve,
+    )
+    from .raman import (
+        COMMON_COMPARISONS,
+        RAMAN_MATERIALS,
+        MaterialComparison,
+        PumpWavelengthExplorer,
+        RamanDatabase,
+        RamanFrequencyResponse,
+        RamanPulseInteraction,
+        RamanResponse,
+        RamanSpec,
+        app,
+    )
+    from .soliton import SolitonAnalyzer
+    from .structured import (
+        LaguerreGaussianMode,
+        StructuredField,
+        beam_waist,
+        gouy_phase,
+        overlap,
+        plot_transverse_profile,
+        radius_of_curvature,
+        rayleigh_range,
+    )
+    from .wave_breaking import (
+        WaveBreaking,
+        detect_oscillation_onset,
+        detect_steepening_onset,
+        dispersion_length,
+        edge_steepness,
+        gaussian_edge_steepness,
+        nonlinear_length,
+        wave_breaking_distance,
+    )
 
 __all__ = [
     "COMMON_COMPARISONS",
@@ -253,3 +273,103 @@ __all__ = [
     "solve_three_wave",
     "wave_breaking_distance",
 ]
+
+# Public name -> defining module. Kept in one place so __getattr__ is a lookup,
+# not a chain of ifs. Every name in __all__ must appear here (tested).
+_LAZY_MODULES: dict[str, str] = {
+    # .base — constants + unit types
+    **{n: ".base" for n in (
+        "C_MS", "EPS_0", "H_PLANCK", "HBAR", "MU_0", "PI",
+        "AngularFrequency", "AngularFrequencyArray", "Area", "Energy",
+        "Frequency", "FrequencyArray", "Length", "PeakPower", "Permeability",
+        "Permittivity", "Power", "Time", "Wavelength", "WavelengthArray",
+        "Wavenumber", "WavenumberArray",
+    )},
+    # .breathers
+    **{n: ".breathers" for n in (
+        "SolitonOnBackground", "akhmediev_breather", "general_sfb",
+        "kuznetsov_ma", "peregrine_soliton", "sfb_peak_ratio",
+        "sfb_spatial_period", "sfb_temporal_period",
+    )},
+    # .chi2
+    **{n: ".chi2" for n in (
+        "Chi2Result", "Lambda_qpm", "delta_k_shg", "qpm_grating",
+        "shg_coupling", "solve_dfg", "solve_sfg", "solve_shg", "solve_three_wave",
+    )},
+    "dashboard_app": ".dashboard",
+    # .dbr
+    **{n: ".dbr" for n in (
+        "TMM", "Block", "Material", "Pattern", "plot_2d", "plot_index",
+    )},
+    # .fiber
+    **{n: ".fiber" for n in (
+        "Dispersion", "PropagationConstant", "WaveguideMode", "ZDependentDispersion",
+    )},
+    # .gnlse
+    **{n: ".gnlse" for n in (
+        "FiberProfile", "GNLSESolver", "SplitStepEngine", "TaperedGNLSESolver",
+    )},
+    "RefractiveIndex": ".materials",
+    # .noise
+    **{n: ".noise" for n in (
+        "add_ase_noise", "add_noise", "ase_noise_field", "complex_gaussian_noise",
+    )},
+    # .phase_matching
+    **{n: ".phase_matching" for n in (
+        "DispersionAdaptor", "DispersionModel", "DispersiveWaveResult",
+        "PhaseMatchResult", "PropagationConstantAdaptor",
+        "SimulationReadinessReport", "ValidationReport",
+        "ZDependentDispersionAdaptor", "assess_simulation_readiness",
+        "compare_spectrum_to_phase_matching", "dispersive_wave_roots",
+        "fwm_delta_beta_degenerate", "fwm_delta_beta_general", "fwm_efficiency",
+        "fwm_idler_frequency", "mi_gain_spectrum", "mi_gain_spectrum_extended",
+        "mi_sideband_frequencies", "plot_fwm_efficiency", "plot_mi_gain",
+        "plot_readiness_report", "plot_spectrum_with_pm_overlay", "scan_fwm_detuning",
+    )},
+    # .phonon
+    **{n: ".phonon" for n in ("PHONON_MATERIALS", "PhononMode", "PhononResponse")},
+    # .pulse
+    **{n: ".pulse" for n in (
+        "Envelope", "FROGTrace", "TemporalGrid", "Wave", "fidelity",
+        "generate_trace", "retrieve",
+    )},
+    # .raman
+    **{n: ".raman" for n in (
+        "COMMON_COMPARISONS", "RAMAN_MATERIALS", "MaterialComparison",
+        "PumpWavelengthExplorer", "RamanDatabase", "RamanFrequencyResponse",
+        "RamanPulseInteraction", "RamanResponse", "RamanSpec", "app",
+    )},
+    "SolitonAnalyzer": ".soliton",
+    # .structured
+    **{n: ".structured" for n in (
+        "LaguerreGaussianMode", "StructuredField", "beam_waist", "gouy_phase",
+        "overlap", "plot_transverse_profile", "radius_of_curvature", "rayleigh_range",
+    )},
+    # .wave_breaking
+    **{n: ".wave_breaking" for n in (
+        "WaveBreaking", "detect_oscillation_onset", "detect_steepening_onset",
+        "dispersion_length", "edge_steepness", "gaussian_edge_steepness",
+        "nonlinear_length", "wave_breaking_distance",
+    )},
+}
+
+# Exports whose public name differs from the attribute in the defining module.
+_LAZY_ATTR: dict[str, str] = {"dashboard_app": "app"}
+
+
+def __getattr__(name: str) -> Any:
+    """Import and cache a public name on first access (PEP 562)."""
+    try:
+        module_name = _LAZY_MODULES[name]
+    except KeyError:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}") from None
+
+    module = importlib.import_module(module_name, __name__)
+    value = getattr(module, _LAZY_ATTR.get(name, name))
+    globals()[name] = value  # cache so __getattr__ runs once
+    return value
+
+
+def __dir__() -> list[str]:
+    """Expose the public surface without importing it."""
+    return sorted(__all__)

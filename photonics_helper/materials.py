@@ -4,7 +4,6 @@ import warnings
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, Literal, Self, cast
 
-import matplotlib.pyplot as plt
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 from pydantic import model_validator
@@ -331,6 +330,8 @@ class RefractiveIndex:
 
     def plot(self, include_k: bool = True):
         """Plot n (and optionally k) versus wavelength."""
+        import matplotlib.pyplot as plt
+
         plt.plot(self.wl.as_um, self.n, label="n")
         if include_k:
             plt.plot(self.wl.as_um, self.k, label="k")

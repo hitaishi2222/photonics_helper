@@ -23,9 +23,7 @@ from functools import cached_property, lru_cache
 from math import acosh, log, pi, sqrt
 from typing import Any, Literal, Self
 
-import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib import gridspec
 from numpy.typing import NDArray
 from pydantic.dataclasses import dataclass
 from scipy.special import airy
@@ -1237,6 +1235,8 @@ class Wave:
         figsize : passed to plt.figure()
         save_path : if given, save figure to this path
         """
+        import matplotlib.pyplot as plt
+        from matplotlib import gridspec
 
         t = self.grid.t * t_scale
         w = self.grid.w * w_scale
