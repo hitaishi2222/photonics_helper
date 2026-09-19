@@ -426,7 +426,9 @@ class RefractiveIndex:
         return cls.from_complex(nk, wls)
 
     @classmethod
-    def from_material_database(cls, material: str, n_points: int = 200) -> Self:
+    def from_material_database(
+        cls, material: str, n_points: int = 200, axis: str | None = None
+    ) -> Self:
         """Build a RefractiveIndex from materials.db.
 
         Resolution order:
@@ -437,6 +439,14 @@ class RefractiveIndex:
            so callers are steered to the dataset browser.
         2. Otherwise (no author requested) fall back to Sellmeier dispersion,
            preserving the original behavior.
+
+        axis : str | None — for birefringent crystals (e.g. LiNbO₃) the
+            Sellmeier-table sub-row to load: ``"extraordinary"`` (or ``"e"``)
+            and ``"ordinary"`` (or ``"o"``) select ``<material>_er`` /
+            ``<material>_or`` rows (raises ``ValueError`` when the sub-row is
+            not seeded). The no-axis canonical row of an axis-bearing material
+            is the *extraordinary* index by convention (d33-active for x-cut
+            LiNbO₃ χ⁽²⁾ work).
         """
         from .raman import RamanDatabase
 
@@ -471,7 +481,23 @@ class RefractiveIndex:
 
         # No author requested (or unknown name): preserve legacy Sellmeier
         # fallback so existing callers keep working.
-        sellmeier = db.get_sellmeier(cast(NKMaterial, material))
+        if axis is not None:
+            ax = axis.lower()
+            if ax in ("extraordinary", "e", "er", "extra"):
+                suffix = "_er"
+            elif ax in ("ordinary", "o", "or", "ord"):
+                suffix = "_or"
+            else:
+                raise ValueError(
+                    f"Unknown axis {axis!r} (use 'extraordinary'/'ordinary')"
+                )
+            sellmeier = db.get_sellmeier(f"{material}{suffix}")  # type: ignore[arg-type]
+            if sellmeier is None:
+                raise ValueError(
+                    f"No Sellmeier axis row '{material}{suffix}' in materials.db"
+                )
+        else:
+            sellmeier = db.get_sellmeier(cast(NKMaterial, material))
         if sellmeier is None:
             raise ValueError(f"No Sellmeier data for {material} in materials.db")
 

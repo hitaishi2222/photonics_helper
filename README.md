@@ -296,9 +296,15 @@ from photonics_helper.chi2 import Lambda_qpm, shg_coupling, solve_shg
 wl = Wavelength(1550, "nm")
 sigma = shg_coupling(wl, d_eff=10e-12, n=2.0, A_eff=Area(1.0, "um^2"))
 
+# v0.1.1: σ follows the Boyd convention (ω d_eff/(n c))·√(2 Z₀/(n³ A_eff)),
+# which is 2× smaller than the v0.1.0 release — see CHANGELOG [Unreleased].
+```
 result = solve_shg(length=4e-3, P0=0.1, sigma=sigma, n_steps=4000)
 result.efficiency()[-1]     # η at the output
 result.power("sh")          # SH power vs z (W)
+
+# Per-field propagation loss (dB/cm) — lossy coupled-mode limit:
+solve_shg(length=4e-3, P0=0.1, sigma=sigma, loss_db_per_cm=(3.0, 63.5))
 
 # Quasi-phase-matching: Λ = 2π/|Δk| from the phase mismatch
 period = Lambda_qpm(delta_k)

@@ -294,6 +294,43 @@ class PropagationConstant:
             self.wavelengths = self.x_values.to_wl()
         return self
 
+    def __call__(self, omega: "NDArray | float") -> "float | NDArray":
+        """Alias for :meth:`beta` — makes the pc directly usable as ``beta_fn``."""
+        return self.beta(omega)
+
+    def beta(self, omega: "NDArray | float") -> "float | NDArray":
+        """Callable β(ω) via spline interpolation of the stored values.
+
+        Scalar input returns a Python ``float``; array input returns an
+        ``NDArray`` of the same shape. Raises ``ValueError`` when ``omega``
+        lies outside the stored ``n_eff(λ)``/ω table window.
+
+        Bridges ``DispersionModel``-style usage (``beta_fn`` in
+        :mod:`photonics_helper.phase_matching` and the χ⁽²⁾ solvers) without
+        the :class:`~photonics_helper.phase_matching.PropagationConstantAdaptor`
+        indirection.
+        """
+        omega_arr = np.atleast_1d(np.asarray(omega, dtype=float))
+        om = np.asarray(self.omegas.as_rad_s, dtype=float)
+        beta = np.asarray(self.values, dtype=float)
+        if len(om) < 2:
+            raise ValueError(
+                "beta(omega) requires at least 2 tabulated points, got "
+                f"{len(om)}"
+            )
+        order = np.argsort(om)
+        spline = make_splrep(om[order], beta[order])
+        lo, hi = float(om.min()), float(om.max())
+        if omega_arr.min() < lo - 1e-9 or omega_arr.max() > hi + 1e-9:
+            raise ValueError(
+                f"beta(omega) queried outside the stored table window "
+                f"[{lo:.6g}, {hi:.6g}] rad/s"
+            )
+        result = spline(omega_arr)
+        if np.isscalar(omega) or np.asarray(omega).ndim == 0:
+            return float(result.reshape(-1)[0])
+        return np.asarray(result, dtype=float)
+
     def beta2(self, wavelength: Wavelength) -> float:
         """Return the group-velocity dispersion ``d²β/dω²`` (s²/m).
 

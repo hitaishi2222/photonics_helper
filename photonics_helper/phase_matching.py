@@ -7,6 +7,15 @@ Provides cross-cutting analysis tools:
 - Simulation readiness assessment
 - Spectrum-to-PM validation
 
+**Where is phase matching?** (χ³ vs χ² map)
+- This module: χ⁽³⁾ processes — FWM / modulation instability /
+  dispersive-wave roots (all use ``beta_fn`` at a single ω).
+- ``photonics_helper.chi2``: χ⁽²⁾ processes — SHG / SFG / DFG phase
+  matching (``delta_k_shg``, ``Lambda_qpm``) and the coupling constants.
+Compute the phase-mismatch objects with the module matching your
+process. Both modules accept any callable ``β(ω)`` — including a
+``PropagationConstant`` directly since v0.1.1
+
 Phase-matching predictions (MI gain, dispersive-wave roots, FWM detuning) assume
 the linear dispersion ``β(ω)`` and pump parameters supplied. They do **not**
 include self-steepening (shock term) corrections to the nonlinear polarization;

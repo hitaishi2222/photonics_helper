@@ -1146,3 +1146,80 @@ class TestVisualization:
 # ============================================================================
 # NOTE: `Time` is imported locally inside each test method that needs it.
 # ============================================================================
+
+
+# ================= PropagationConstant.beta callable (openspec 0.1.1) =====
+
+
+class TestPropagationConstantBeta:
+    """pc.beta(omega) bridge — no adaptor indirection needed (task L7)."""
+
+    def test_scalar_returns_python_float(self, omega0, beta2, beta3):
+        from photonics_helper.fiber import (
+            PropagationConstant as PC,
+        )
+        from photonics_helper.base import AngularFrequencyArray
+
+        omegas = omega0 + np.linspace(-3e12, 3e12, 9)
+        n_eff = 2.14 + 1e-4 * np.arange(9)
+        pc = PC.beta_from_neff(
+            n_eff, AngularFrequencyArray(omegas, "rad/s")
+        )
+        result = pc.beta(omega0)
+        assert isinstance(result, float)
+        assert not isinstance(result, np.ndarray)
+        expected = n_eff[4] * omega0 / 299792458.0
+        assert result == pytest.approx(expected, rel=1e-6)
+
+    def test_array_returns_array(self, omega0):
+        from photonics_helper.base import AngularFrequencyArray
+        from photonics_helper.fiber import PropagationConstant as PC
+
+        omegas = omega0 + np.linspace(-3e12, 3e12, 9)
+        n_eff = 2.0 + 1e-4 * np.arange(9)
+        pc = PC.beta_from_neff(n_eff, AngularFrequencyArray(omegas, "rad/s"))
+        result = pc.beta(omegas)
+        assert isinstance(result, np.ndarray)
+        assert result.shape == omegas.shape
+
+    def test_out_of_range_raises(self, omega0):
+        from photonics_helper.base import AngularFrequencyArray
+        from photonics_helper.fiber import PropagationConstant as PC
+
+        omegas = omega0 + np.linspace(-3e12, 3e12, 9)
+        pc = PC.beta_from_neff(2.0 + 0.0 * omegas,
+                               AngularFrequencyArray(omegas, "rad/s"))
+        with pytest.raises(ValueError, match="outside the stored table"):
+            pc.beta(omega0 - 9e12)
+
+    def test_matches_adaptor_result(self, omega0):
+        """pc.beta(ω) ≡ PropagationConstantAdaptor bridge (<1e-6 rel)."""
+        from photonics_helper.base import (
+            AngularFrequencyArray,
+        )
+        from photonics_helper.fiber import PropagationConstant as PC
+        from photonics_helper.phase_matching import (
+            PropagationConstantAdaptor,
+        )
+
+        omegas = omega0 + np.linspace(-3e12, 3e12, 9)
+        pc_ = PC(values=omegas * 2.14 / 299792458.0,
+                 x_values=AngularFrequencyArray(omegas, "rad/s"))
+        adaptor = PropagationConstantAdaptor(pc_)
+        for w in np.linspace(omegas[0] + 1e11, omegas[-1] - 1e11, 25):
+            assert float(pc_.beta(float(w))) == pytest.approx(
+                float(adaptor(float(w))), rel=1e-6
+            )
+
+    def test_direct_fwm_use_no_attributeerror(self, omega0, beta2):
+        """The Stage-B crash from the SHG replication is gone: a PC built via
+        WaveguideMode/table import works directly as beta_fn for FWM."""
+        from photonics_helper.base import AngularFrequencyArray
+        from photonics_helper.fiber import PropagationConstant as PC
+        from photonics_helper.phase_matching import fwm_delta_beta_degenerate
+
+        omegas = omega0 + np.linspace(-3e12, 3e12, 9)
+        neff = 2.1 + 2e-20 * (omegas - omega0) ** 2 / 2
+        pc = PC.beta_from_neff(neff, AngularFrequencyArray(omegas, "rad/s"))
+        db = fwm_delta_beta_degenerate(pc, omega0, omega0 + 1e12)
+        assert np.isfinite(float(db))

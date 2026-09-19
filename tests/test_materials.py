@@ -166,3 +166,62 @@ def test_group_velocity_array_shape():
     arr = ri.group_velocity_array()
     assert len(arr) == 200
     assert np.all(arr > 1e8) and np.all(arr < 3e8)
+
+
+# ================= LiNbO₃ birefringent E&L data (openspec 0.1.1) =================
+
+# article-verified anchors: Wang et al. Opt. Express 25(6), 6963 (2017),
+# modal phase-matching replication (~/Research/sim/shg_solve/plan.md §1.2)
+# n_e(0.775)=2.187, n_e(1.55)=2.139; n_o(1.55)=2.211, Δn(1.55)≈0.072
+_TABLE = [
+    ("LiNbO3", 0.775, 2.187, 2e-3),
+    ("LiNbO3", 1.55, 2.139, 2e-3),
+    ("LiNbO3_er", 0.775, 2.187, 2e-3),
+    ("LiNbO3_er", 1.55, 2.139, 2e-3),
+    ("LiNbO3_or", 0.775, 2.259, 2e-3),
+    ("LiNbO3_or", 1.55, 2.211, 2e-3),
+]
+
+
+@pytest.mark.parametrize(("material", "wl_um", "want", "tol"), _TABLE)
+def test_linbo3_edwards_lawrence_anchors(material, wl_um, want, tol):
+    """LiNbO₃ Sellmeier reproduces the E&L anchors (was 2.261 flat — wrong)."""
+    ri = RefractiveIndex.from_material_database(material)
+    assert ri.n_func(wl_um) == pytest.approx(want, abs=tol)
+
+
+def test_linbo3_birefringence_at_pump():
+    """Δn ≈ n_o − n_e = 0.072 at 1.55 µm, and e < o (positive uniaxial)."""
+    ri_e = RefractiveIndex.from_material_database("LiNbO3", axis="extraordinary")
+    ri_o = RefractiveIndex.from_material_database("LiNbO3", axis="ordinary")
+    dn = ri_o.n_func(1.55) - ri_e.n_func(1.55)
+    assert ri_e.n_func(1.55) < ri_o.n_func(1.55)
+    assert dn == pytest.approx(0.0716, abs=3e-3)
+
+
+def test_linbo3_axis_validation():
+    with pytest.raises(ValueError, match="Unknown axis"):
+        RefractiveIndex.from_material_database("LiNbO3", axis="ray")
+    with pytest.raises(ValueError, match="No Sellmeier axis row"):
+        RefractiveIndex.from_material_database("Silica", axis="extraordinary")
+
+
+def test_linbo3_dispersion_is_physical():
+    """E&L n_e decreases monotonically 0.6–1.6 µm (was ~flat before)."""
+    ri = RefractiveIndex.from_material_database("LiNbO3")
+    assert ri.n_func(0.6) == pytest.approx(2.2267, abs=5e-3)
+    assert ri.n_func(1.6) < ri.n_func(0.9) < ri.n_func(0.6)
+
+
+def test_linbo3_db_matches_direct_sellmeier_construction():
+    """Cross-check: DB-sourced n_e vs direct E&L from_sellmeier construction
+    (the workaround the SHG replication had to use before this fix)."""
+    direct = RefractiveIndex.from_sellmeier(
+        1.0,
+        [2.9804, 0.5981, 8.822],
+        [0.02147, 0.08967, 416.08],
+        (0.4, 2.0),
+    )
+    via_db = RefractiveIndex.from_material_database("LiNbO3", axis="extraordinary")
+    for wl in (0.6, 0.775, 1.064, 1.55, 2.0):
+        assert via_db.n_func(wl) == pytest.approx(direct.n_func(wl), abs=1e-9)

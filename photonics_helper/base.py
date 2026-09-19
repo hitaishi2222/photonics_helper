@@ -15,6 +15,7 @@ from pydantic.dataclasses import dataclass
 PI: float = const.pi
 C_MS: float = const.c
 EPS_0: float = const.epsilon_0
+Z0: float = 1.0 / (const.epsilon_0 * const.c)  # vacuum impedance, ≈ 376.73 Ω
 MU_0: float = const.mu_0
 H_PLANCK: float = const.h
 HBAR: float = const.hbar

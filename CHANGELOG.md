@@ -5,9 +5,39 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [Unreleased] (planned: 0.1.1)
 
-_Nothing yet — next release planned as 0.1.1._
+### Fixed
+
+- **BREAKING** — `chi2.shg_coupling` was exactly 2× the standard Boyd/Miller
+  plane-wave coupling; η from it was 4× too large. `σ` now follows
+  `(ω d_eff/(n c))·√(2 Z₀/(n³ A_eff))`: the published 0.1.0 χ⁽²⁾ efficiencies
+  must be re-derived (see the `chi2-nonlinear` spec change for details).
+
+### Added
+
+- **χ⁽²⁾ mode-overlap coupling** — `chi2.shg_coupling_overlap(E_pump, E_sh, dx, dz)`
+  computes the modal overlap `g` from transverse mode arrays
+  (Wang et al. 2017, Eq. 2), plus `chi2.pgln_overlap` for the periodically-
+  grooved-LN quasi-phase-matched `g'` (Eqs. 3–5). Higher-order / multi-lobe
+  SH modes — the case of TE₀(ω)↔TE₃(2ω) modal phase matching — are now
+  supported without hand-rolled code.
+- **Propagation loss in `chi2.solve_shg`** — per-field power loss
+  (`loss_db_per_cm`), reproducing the lossy coupled-mode limit of Wang et
+  al. Eq. (10); the loss-free path stays bitwise identical.
+- **LiNbO₃ birefringence** — the wrong, near-dispersion-free Zeiger
+  Sellmeier entry (n(1.55 µm) ≈ 2.261) is replaced by the widely-used
+  Edwards & Lawrence (1984) curves. `from_material_database("LiNbO3")` now
+  returns the extraordinary index (d33-active for x-cut work); select the
+  ordinary axis via `axis="ordinary"` (rows `LiNbO3_er` / `LiNbO3_or`).
+- **`PropagationConstant.beta(omega)` / `__call__`** — callable β(ω) on the
+  stored table; usable directly as `beta_fn` in `phase_matching` and `chi2`
+  without the adaptor indirection (fixes an SHG-replication `AttributeError`).
+- **χ⁽³⁾ / χ⁽²⁾ phase-matching docmap** in both module docstrings.
+
+### Deprecated
+
+- _None._
 
 ## [0.1.0] - 2026-09-19
 
