@@ -72,6 +72,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     <5%).
   - Regression: `tests/test_multimode_v2.py` (7 tests); the pre-v2 suite
     is updated where the corrected mixing changes the physics contract.
+- **Data layer: materials DB backend relocated to core**
+  (`core.data`, Phase 1 backbone wart resolved): the SQLite backend class
+  moved from `raman/db.py` to `core/data.py` as `MaterialsDatabase` — path
+  resolution, schema creation/migration and all generic queries
+  (Sellmeier, tabulated n/k, provenance, phonon modes, specs).
+  `raman.db.RamanDatabase` stays importable as a documented alias of the
+  identical class; `core.materials._lookup_metadata` and
+  `materials.from_material_database` reach the backend through `core.data`
+  so no module in the core imports satellites at module level. Regression:
+  `tests/test_core.py` (2 new tests).
 - **Inverse-design v2: differentiable (torch) fitting**
   (`inverse_design.fit_shg_autodiff`, `[pinns]` extra): the degenerate SHG
   three-wave physics written as a batched multi-start fixed-step RK4

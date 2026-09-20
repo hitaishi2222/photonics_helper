@@ -130,7 +130,10 @@ the stable contract.
   DOI. To be done once the project reaches a suitable milestone.
 - [ ] Mint the Zenodo DOI and add it to `CITATION.cff` (`identifiers:`) and the
   README once the archive exists.
-- [ ] `core.materials.material()` loads the bundled database through the
-  `raman` subpackage's SQLite backend. Harmless today (lazy import, import
-  budget intact) but conceptually the material database should not live under a
-  satellite; a future `core.data` module would fix it.
+- [x] Material database backend relocated to the foundation layer
+  (2026-09-20): `photonics_helper/core/data.py` now owns ``materials.db``
+  (path resolution, schema, generic queries) as ``MaterialsDatabase``;
+  `core.materials._lookup_metadata` and `materials.from_material_database`
+  reach it directly instead of importing the Raman satellite (which stays
+  importable via a documented alias in `raman/db.py`). Regression:
+  `tests/test_core.py` (satellite-free `core.data` import + alias identity).

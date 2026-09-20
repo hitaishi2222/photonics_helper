@@ -19,7 +19,7 @@ from .base import PI, WavelengthArray
 # in type annotations here, so a ``TYPE_CHECKING`` guard is sufficient and adds
 # no runtime import.
 if TYPE_CHECKING:
-    from .raman import RamanDatabase
+    from .core.data import MaterialsDatabase as RamanDatabase
 
 # ─── Known materials ─────────────────────────────────────────────────────────
 # Canonical material names stored in ``materials.db`` (the ``raman_specs`` table).
@@ -467,7 +467,7 @@ class RefractiveIndex:
             With an actionable message when the material is unknown, the axis
             is unknown or unavailable, or the database is missing/empty/corrupt.
         """
-        from .raman import RamanDatabase
+        from .core.data import MaterialsDatabase as RamanDatabase
 
         if not isinstance(material, str) or not material.strip():
             raise ValueError(
@@ -658,7 +658,7 @@ def material_catalog(name: str | None = None) -> list[MaterialDataset]:
     ['Silica', 'Silica']  # a Sellmeier equation and (if seeded) spectra
     """
     from ._provenance import extract_doi
-    from .raman import RamanDatabase
+    from .core.data import MaterialsDatabase as RamanDatabase
 
     db = RamanDatabase()
     provenance = {rec["source_key"]: rec for rec in db.list_provenance()}

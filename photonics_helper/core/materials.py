@@ -115,9 +115,9 @@ def _lookup_metadata(
     provenance is metadata, so a lookup miss must not break ``material()``.
     """
     try:
-        from ..raman import RamanDatabase
+        from .data import MaterialsDatabase
 
-        db = RamanDatabase()
+        db = MaterialsDatabase()
 
         # A tabulated key ("material-author") is itself a provenance source
         # key, so look it up directly first.

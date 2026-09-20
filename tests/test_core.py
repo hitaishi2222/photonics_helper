@@ -137,3 +137,33 @@ def test_grid_fft_roundtrip_without_matplotlib() -> None:
     grid = TemporalGrid(N=256, Tmax=Time(1.0, "ps"))
     field = np.random.default_rng(0).normal(size=grid.N) + 0j
     assert np.allclose(grid.ifft(grid.fft(field)), field)
+
+
+def test_core_data_does_not_import_satellites_at_module_level():
+    """The materials DB backend (core.data) must stay a core primitive.
+
+    Satellite leaves (``raman`` reference tables, ``phonon`` types) are
+    method-level lazy imports only — importing ``core.data`` must not
+    pull any satellite module, preserving the foundation import budget.
+    """
+    import subprocess
+    import sys
+
+    code = (
+        "import sys\n"
+        "import photonics_helper.core.data\n"
+        "mods = [m for m in sys.modules if 'raman' in m or 'phonon' in m]\n"
+        "assert not mods, mods\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def test_core_data_is_the_material_database_backend():
+    """The historical RamanDatabase path is an alias of core.data."""
+    from photonics_helper.core.data import MaterialsDatabase
+    from photonics_helper.raman.db import RamanDatabase
+
+    assert RamanDatabase is MaterialsDatabase
