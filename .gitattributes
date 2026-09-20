@@ -1,0 +1,6 @@
+# GitHub Linguist: keep the language bar representative of the codebase.
+# paper.bib is the JOSS bibliography (TeX bucket) — documentation, not language.
+paper/paper.bib linguist-documentation
+# Binary data and vendored outputs are not languages either
+*.db linguist-vendored
+*.npz linguist-vendored
