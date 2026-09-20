@@ -119,6 +119,38 @@ the stable contract.
   - *Pending*: none — Phase 4 scope is decoupled from unpublished
     own-work reproduction targets.
 
+## Phase 5 — depth & delivery (proposed scope, to be implemented later)
+
+Candidate directions gathered on 2026-09-20 (not yet started; each item is
+independently scheduled; they do not have to land together):
+
+1. **FROG depth** — principal-component generalized-projections (PGPA)
+   algorithm and a synthetic SHG-FROG / ptychographic-FROG validation
+   suite (round-trip retrieval across pulse shapes, chirps and noise
+   levels). Completes the P2 physics-depth list from the original review.
+2. **GPU GNLSE backend** — a full cupy/JAX backend option for the
+   split-step engines (today only the FFT layer can be GPU-dispatched);
+   requires an accuracy contract against the CPU reference before
+   release.
+3. **Waveguide-mode-solver interface** — first-class n_eff(λ) ingestion
+   from external FEM exports (`femwell`, `tidy3d`, CSV/npz) wired into
+   the waveguide GNLSE and the phase-matching diagnostics; builds on the
+   existing `mode-export` extra.
+4. **Reproducibility pipeline v2** — a parameters-JSON schema (versioned,
+   validated) plus auto-generated per-study reports (HTML/PDF) for every
+   entry in `reproductions/` and every user simulation.
+5. **Dashboard unification** — merge the Raman Dash app and the GNLSE
+   result viewer into one navigable web frontend.
+6. **Code layout rearrangement** — verify every `examples/` script runs
+   on the current surface; fix breakages; re-home any straggler modules
+   uncovered while auditing (the import-path preference: flat
+   `photonics_helper.<module>` paths stay canonical; `core.*` is the
+   foundation-builder surface only).
+
+Work starts with the examples audit (item 6's verification pass) and the
+items proceed fastest-to-value; nothing above is binding on the core
+stability contract (Phase 3 rules apply).
+
 ## Pending — author action
 
 - [ ] **JOSS software-paper submission.** The prerequisites are in place

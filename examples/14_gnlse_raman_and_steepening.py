@@ -41,9 +41,19 @@ def make_pulse(wavelength_nm=1064, T0_fs=50):
     return pulse
 
 
-def make_high_power_pulse(wavelength_nm=1064, T0_fs=50, peak_power_W=10000):
-    """Create a high-power pulse for nonlinear effects."""
-    grid = TemporalGrid(N=2**13, Tmax=Time(4 * T0_fs * 1e-15, "s"))
+def make_high_power_pulse(
+    wavelength_nm=1064, T0_fs=50, peak_power_W=10000, grid=None
+):
+    """Create a high-power pulse for nonlinear effects.
+
+    The self-steepening substep requires the grid's Nyquist offset to stay
+    below the carrier (Omega_max = 2*pi/dt < omega_0); for a 1064 nm pump
+    that means dt > 3.55 fs. The default window (N = 8192 over 16 ps ->
+    dt ~ 3.9 fs) satisfies this with ~10% margin; pass a shared ``grid``
+    to keep the pulse and the Raman response on one grid.
+    """
+    if grid is None:
+        grid = TemporalGrid(N=2**13, Tmax=Time(16e-12, "s"))
     A0 = np.sqrt(peak_power_W)
     env = Envelope(shape="gaussian", peak_amplitude=A0, pulse_width=Time(T0_fs, "fs"))
     pulse = Wave(
@@ -82,10 +92,14 @@ def main():
         raman_linewidth_cm=45.0,
         fR=0.18,
     )
-    raman_grid = TemporalGrid(N=2**13, Tmax=Time(500, "fs"))
+    # One shared propagation grid (dt ~ 2.2 fs: satisfies the self-steepening
+    # Omega_max < omega_0 guard at 1064 nm); the Raman response is built on
+    # the same grid so its cached h_R FFT matches the engine exactly.
+    sim_grid = TemporalGrid(N=2**13, Tmax=Time(16e-12, "s"))
+
     raman_response = RamanResponse(
         spec=silica_spec,
-        grid=raman_grid,
+        grid=sim_grid,
         tau1=Time(12.2, "fs").as_s,
         tau2=Time(32, "fs").as_s,
     )
@@ -98,11 +112,12 @@ def main():
         raman_response=raman_response,
     )
 
-    # ── Run simulations ────────────────────────────────────────────────────
-
     # Case A: Dispersion + Kerr only (baseline)
     pulse = make_high_power_pulse(
-        wavelength_nm=central_wl.as_nm, T0_fs=T0.as_fs, peak_power_W=P0
+        wavelength_nm=central_wl.as_nm,
+        T0_fs=T0.as_fs,
+        peak_power_W=P0,
+        grid=sim_grid,
     )
     betas_arr = np.array([beta2_ps2_m])
     n_steps_base = GNLSESolver.estimate_num_steps(
