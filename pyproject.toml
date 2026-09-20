@@ -44,7 +44,7 @@ mode-export = ["femwell>=0.1.12", "tidy3d>=2.12"]
 # built by .github/workflows/docs.yml.
 docs = ["zensical>=0.0.60", "mkdocstrings[python]>=0.26"]
 # CI tooling (ruff + mypy gates and the test suite) — used by .github/workflows/ci.yml
-dev = ["pytest>=8.0", "ruff>=0.8", "mypy>=1.13", "hypothesis>=6.0", "pyyaml>=6.0"]
+dev = ["pytest>=8.0", "ruff>=0.8", "mypy>=1.13,<2.4", "hypothesis>=6.0", "pyyaml>=6.0"]
 all = ["plotly>=5.0", "dash>=2.18.0", "tqdm>=4.66", "pyfftw>=0.15.1", "imageio>=2.33"]
 
 [build-system]

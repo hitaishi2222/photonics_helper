@@ -331,10 +331,16 @@ class MultimodeSplitStepEngine:
             return 1.0
         return _LP_FWM
 
-    def _diagonal_phase(self, A: list[NDArray]) -> list[float]:
-        """Instantaneous diagonal SPM/XPM phase rate ``γ·P_m`` per channel."""
+    def _diagonal_phase(self, A: list[NDArray]) -> list[NDArray]:
+        """Instantaneous diagonal SPM/XPM phase rate ``γ·P_m`` per channel.
+
+        With mode-specific ``xpm_weights`` (Mumtaz Eq. 8), the weights are
+        per-pair floats so the returned rate is an intensity array per
+        channel; the docstring's scalar-model interpretation is unchanged
+        for the default coefficient models.
+        """
         gamma = self._gamma_v()
-        out: list[float] = []
+        out: list[NDArray] = []
         for i in range(self._n):
             tot = self._xpm_factor(i, i) * (np.abs(A[i]) ** 2)
             for j in range(self._n):
