@@ -5,9 +5,9 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.9] - 2026-09-20 (completion of the 0.1.9 line)
 
-### Added
+### Added (2026-09-20 — Phase-4 extensions on top of the 0.1.9 physics release)
 
 - **Vector / polarization-coupled GNLSE** (`photonics_helper.vector_gnlse`,
   2-channel split-step Fourier engine, Agrawal §6.1–6.3):
@@ -95,7 +95,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.9] - 2026-09-19
 
-### Added
+### Added (physics hardening)
 
 - **Interaction-picture self-steepening (RK4IP)** in `SplitStepEngine`: the
   shock step factors out the exactly-integrable Kerr/Raman phase and advances
