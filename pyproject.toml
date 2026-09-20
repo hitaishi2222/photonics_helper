@@ -30,6 +30,10 @@ plotting = ["plotly>=5.0"]
 webapp = ["dash>=2.18.0"]
 examples = ["tqdm>=4.66"]
 extras = ["imageio>=2.33"]
+# Differentiable (torch) inverse-design layer — fit_shg_autodiff trains the
+# chi(2) three-wave model with back-propagated gradients through the RK4
+# integration (Phase 4 item 5 v2).
+pinns = ["torch>=2.0"]
 # FFTW3 backend for the GNLSE / Raman FFTs (pyfftw ships cp311–cp313 wheels;
 # the solver falls back to numpy.fft automatically when this is absent)
 fftw = ["pyfftw>=0.15.1"]

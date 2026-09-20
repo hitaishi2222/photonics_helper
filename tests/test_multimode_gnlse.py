@@ -170,17 +170,24 @@ class TestInterModalFWMHeavy:
     def _dense_reference(length, z_samples, gamma, a0, a1, a2, h=0.002):
         """RK4 of the engine's exact RHS at the CW plane (single-pump model).
 
-        Diagonal: isotropic SPM/XPM with the shared γ; FWM: the pump on
-        channel 1 drives the (0, 2) exchange pair through conjugate
-        partners — identical equations to the engine's mixing step.
+        Diagonal: isotropic SPM/XPM with the shared γ; FWM: every pump
+        drives both ordered exchange pairs through the Mumtaz (2013)
+        Eq. (6) creation arms — identical equations to the engine's
+        mixing step (all ``+iγ A_n² A_q*`` terms over the (n, m, q) sum).
         """
 
         def deriv(s):
             am0, am1, am2 = s
             diag = gamma * (abs(am0) ** 2 + abs(am1) ** 2 + abs(am2) ** 2)
-            d0 = 1j * diag * am0 + 1j * gamma * am1 * am1 * np.conj(am2)
-            d1 = 1j * diag * am1
-            d2 = 1j * diag * am2 - 1j * gamma * np.conj(am1 * am1) * am0
+            d0 = 1j * diag * am0 + 1j * gamma * (
+                am1 * am1 * np.conj(am2) + am2 * am2 * np.conj(am1)
+            )
+            d1 = 1j * diag * am1 + 1j * gamma * (
+                am0 * am0 * np.conj(am2) + am2 * am2 * np.conj(am0)
+            )
+            d2 = 1j * diag * am2 + 1j * gamma * (
+                am0 * am0 * np.conj(am1) + am1 * am1 * np.conj(am0)
+            )
             return np.array([d0, d1, d2])
 
         state = np.array([a0, a1, a2], dtype=complex)
@@ -277,8 +284,10 @@ class TestOAMvSelectionRule:
     def test_allowed_pair_exchanges(self):
         """ℓ_m = 2ℓ_n − ℓ_q holds for the pair (0, 2) through ℓ_n = 0."""
         a0, a2 = self._run([-1, 0, +1])
-        assert a2 < np.sqrt(0.05) * 0.999  # seeded arm oscillates (exchanged)
-        assert a0 < np.sqrt(5.0) * 1.0  # pump arm also touched (XPM/FWM)
+        # the Mumtaz-consistent mixing is phase-sensitive: the seeded arm
+        # is exchanged (and can be parametrically amplified past its seed)
+        assert abs(a2 - np.sqrt(0.05)) > 0.01 * np.sqrt(0.05)
+        assert a0 < np.sqrt(5.0) * 1.01  # pump arm also touched (XPM/FWM)
 
     def test_forbidden_pair_is_spm_only(self):
         """A triplet violating ℓ_m = 2ℓ_n − ℓ_q does not mix (no FWM)."""

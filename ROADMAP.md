@@ -85,12 +85,22 @@ the stable contract.
   - *Multimode/few-mode OAM coupling* ✅ (this release):
     `multimode_gnlse.MultimodeSplitStepEngine` — per-mode dispersion +
     group delay, LP (`1, 2/3`) / isotropic SPM-XPM models, opt-in pump-driven
-    inter-modal FWM (Hamiltonian pair exchange) gated by the
+    inter-modal FWM (Manley–Rowe exchange) gated by the
     angular-momentum rule `ℓ_m = 2ℓ_n − ℓ_q`; contracts: single-channel =
     scalar engine (machine precision), 2-channel LP-degenerate =
     `VectorSplitStepEngine` (machine precision), FWM vs dense RK4 <5%,
-    forbidden triplets unmixed to machine precision. Mode-specific overlap
-    tensors and pump depletion are future work.
+    forbidden triplets unmixed to machine precision.
+    *Extension (2026-09-20, Mumtaz et al., JLT 31, 398 (2013),
+    doi:10.1109/JLT.2012.2235414, Eq. 6/8; Poletti & Horak, JOSA B 25, 1645
+    (2008), doi:10.1364/JOSAB.25.001645, Eq. 15):* `xpm_weights` and
+    `fwm_weights` mode-specific overlap tensors override the uniform
+    coefficient models pair-wise; `fwm_pump_depletion=True` adds the
+    Manley–Rowe pump back-conversion arm `+2iγf* A_mA_qA_n*` — the FWM
+    pair arm was also corrected to the Mumtaz creation form `+iγfA_n²A_m*`
+    (the previous conjugate partner leaked photon number pointwise);
+    depleted runs conserve Σ|A|² to <1e-6 and match the dense
+    Manley–Rowe reference to <5%. Distribution-mode-specific overlap
+    tensors and pump depletion: done.
   - *Cascaded χ⁽²⁾–χ⁽³⁾* ✅ (this release): `chi2.solve_cascaded_shg`
     (three-wave + Kerr SPM/XPM integrator; limit contracts: pure quadratic
     = `solve_shg` exactly, pure Kerr = analytic SPM exactly, large-Δk
@@ -99,8 +109,15 @@ the stable contract.
     `inverse_design.fit_two_wave` (identifiable κ/|Δk| recovery, exact on
     synthetic data; the (σ, P₀) degeneracy documented) and
     `design_efficiency` (exact against the analytic tanh²(κL) design
-    formula). PINN/autodiff training is declared future work.
-  - *Pending*: own-work chalcogenide mid-IR SCG reproductions.
+    formula).
+  - *Inverse-design layer (v2, autodiff)* ✅ (2026-09-20):
+    `fit_shg_autodiff` — differentiable batched multi-start RK4 SHG
+    model in torch (=[pinns] extra), trained with Adam over (σ, P₀, Δk);
+    forward validated vs `solve_shg` (1.7e-8), full-triple recovery
+    within ~10% when the absolute SH power breaks the κ = σ√P₀
+    degeneracy (documented; not asserted for η-only data).
+  - *Pending*: none — Phase 4 scope is decoupled from unpublished
+    own-work reproduction targets.
 
 ## Pending — author action
 

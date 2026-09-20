@@ -56,6 +56,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   recovers the analytic tanh²(κL) design length exactly and fails loudly
   for unreachable targets. Regression: `tests/test_inverse_design.py`
   (5 tests). PINN/differentiable training is declared future work.
+- **Multimode GNLSE v2 — overlap tensors + pump-depletion**
+  (`multimode_gnlse`, Mumtaz JLT 31, 398 (2013), doi:10.1109/JLT.2012.2235414,
+  Eq. 6/8; Poletti & Horak JOSA B 25, 1645 (2008), doi:10.1364/JOSAB.25.001645):
+  - `xpm_weights` (N×N) and `fwm_weights` (N⁴) — mode-specific nonlinear
+    overlap tensors override the uniform `coef_model` factors pair-wise
+    (Mumtaz Eq. 8), including the SPM slot.
+  - `fwm_pump_depletion=True` — Manley–Rowe-consistent FWM exchange:
+    creation arms `+iγ f A_n²A_q*` / `+iγ f A_n²A_m*` plus the
+    back-conversion pump arm `+2iγ f* A_m A_q A_n*`. The FWM pair arm
+    itself was corrected from the previous complex-conjugate form to the
+    Mumtaz creation form (the old arm leaked photon number pointwise;
+    the depleted set conserves Σ|A|² to <1e-6 split-step / machine-prec
+    pointwise on the RHS, verified against a dense Manley–Rowe RK4 to
+    <5%).
+  - Regression: `tests/test_multimode_v2.py` (7 tests); the pre-v2 suite
+    is updated where the corrected mixing changes the physics contract.
+- **Inverse-design v2: differentiable (torch) fitting**
+  (`inverse_design.fit_shg_autodiff`, `[pinns]` extra): the degenerate SHG
+  three-wave physics written as a batched multi-start fixed-step RK4
+  integrator in torch.float64 with gradients flowing through the
+  integration; Adam over (log σ, log P₀, Δk) recovers the full triple
+  within ~10% when the absolute SH power along z is supplied (breaking
+  the `κ = σ√P₀` degeneracy of the η-only inverse problem — the flat
+  direction is documented and NOT asserted). torch forward validated
+  against `solve_shg` to 1.7e-8. Regression:
+  `tests/test_inverse_design_autodiff.py` (2 tests, ~32 s).
 
 ## [0.1.9] - 2026-09-19
 

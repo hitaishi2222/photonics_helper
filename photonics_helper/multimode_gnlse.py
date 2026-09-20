@@ -16,7 +16,15 @@ Model (all channels coupled through one shared scalar γ):
 - opt-in inter-modal four-wave mixing ``iγ·f·A_n A_p A_q*`` (RK4IP
   frequency-domain substep, Strang-split around the diagonal phase),
   restricted by angular momentum conservation
-  ``ℓ_m = ℓ_n + ℓ_p − ℓ_q`` when OAM indices are supplied.
+  ``ℓ_m = ℓ_n + ℓ_p − ℓ_q`` when OAM indices are supplied;
+- optional **pump depletion**: the full Manley–Rowe-consistent exchange
+  (creation arms ``+iγ f A_n²A_q*`` / ``+iγ f A_n²A_m*`` and the
+  back-conversion pump arm ``+2iγ f* A_m A_q A_n*``), which conserves
+  ``Σ|A|²`` to RK4 round-off (Mumtaz Eq. 6 three-recoupling structure);
+- optional **mode-specific nonlinear overlap weights** (Mumtaz Eq. 8 /
+  Poletti & Horak Eq. 7): ``xpm_weights`` (N×N, SPM/XPM slot) and
+  ``fwm_weights`` (N×N×N×N, FWM slot) override the uniform
+  ``coef_model`` factors mode-pair-wise.
 
 The degenerate two-channel strip-down of this engine is the variety
 implemented in :mod:`photonics_helper.vector_gnlse` (the two polarization
@@ -26,9 +34,16 @@ arbitrary mode counts.
 References
 ----------
 G. P. Agrawal, *Nonlinear Fiber Optics*, 5th ed. §6.4 (scalar XPM 2/3, FWM);
-M. Poletti & P. Horak, *Multiple LSD, mode statement* (vector modal
-equations of few-mode fiber, LP/SP bases); L. G. Wright et al.,
-*Nat. Commun.* **6**, 6682 (2015) (resonant inter-modal FWM).
+M. Poletti & P. Horak, "Description of ultrashort pulse propagation in
+multimode optical fibers," J. Opt. Soc. Am. B **25**, 1645 (2008),
+doi:10.1364/JOSAB.25.001645 (vector modal equations, overlap tensors,
+photon-number conservation Eq. 15); S. Mumtaz, R.-J. Essiambre & G. P.
+Agrawal, "Nonlinear propagation in multimode and multicore fibers:
+generalization of the Manakov equations," J. Lightwave Technol. **31**, 398
+(2013), doi:10.1109/JLT.2012.2235414 (Eq. 6/8: ``f_lmnp`` overlap tensor,
+``γ/3`` coherent mixing + ``2γ/3`` SPM/XPM structure; arXiv:1207.6645);
+L. G. Wright et al., *Nat. Commun.* **6**, 6682 (2015) (resonant inter-modal
+FWM).
 """
 
 from __future__ import annotations
@@ -98,6 +113,23 @@ class MultimodeSplitStepEngine:
         OAM azimuthal order ℓ of each channel. When supplied (and FWM is
         on) FWM triples are restricted to ``ℓ_m = ℓ_n + ℓ_p − ℓ_q``;
         otherwise every triplet is allowed.
+    xpm_weights : array_like, optional
+        Mode-specific SPM/XPM overlap weights (Mumtaz Eq. 8 style), an
+        ``N×N`` real array. ``w[i, j]`` multiplies ``|A_j|²`` entering
+        channel ``i`` (including ``i == j``, i.e. the SPM slot). When
+        given, this overrides the uniform ``coef_model`` factors.
+    fwm_weights : array_like, optional
+        Mode-specific FWM overlap weights, an ``N×N×N×N`` real array;
+        ``w[m, n, p, q]`` weights the ``→ m`` transition pumped by
+        ``(n, p)`` consuming ``q``. When given, it multiplies every
+        allowed triple (OAM gating, if any, still applies first).
+    fwm_pump_depletion : bool
+        Include the Manley–Rowe-consistent back-conversion pump arm
+        ``+2iγ f* A_m A_q A_n*`` in the FWM substep (requires
+        ``include_fwm=True``). With this on, ``Σ|A|²`` is conserved to
+        RK4 round-off and strong pumps show the parametric
+        back-conversion oscillation. Default False (pump-driven
+        approximation: the pump evolves only through SPM/XPM).
     step_size : Length | None
         Fixed step size (m); ``None`` uses ``length/num_steps``.
     """
@@ -115,6 +147,9 @@ class MultimodeSplitStepEngine:
         coef_model: CoeffModel = "lp_degenerate",
         include_fwm: bool = False,
         oam_l: list[int] | None = None,
+        xpm_weights=None,
+        fwm_weights=None,
+        fwm_pump_depletion: bool = False,
         step_size: Length | None = None,
     ):
         waves = list(waves)
@@ -154,6 +189,29 @@ class MultimodeSplitStepEngine:
             raise ValueError(f"fiber.length must be positive, got {fiber.length!r}")
         if step_size is not None and step_size.as_m <= 0:
             raise ValueError(f"step_size must be positive, got {step_size!r}")
+        if fwm_pump_depletion and not include_fwm:
+            raise ValueError(
+                "fwm_pump_depletion=True requires include_fwm=True (the "
+                "back-conversion pump arm lives in the FWM substep)."
+            )
+        if xpm_weights is not None:
+            w = np.asarray(xpm_weights, dtype=float)
+            if w.shape != (self._n, self._n):
+                raise ValueError(
+                    f"xpm_weights must be ({self._n}, {self._n}), got "
+                    f"{w.shape}."
+                )
+            if not np.all(np.isfinite(w)):
+                raise ValueError("xpm_weights must be finite.")
+        if fwm_weights is not None:
+            fw = np.asarray(fwm_weights, dtype=float)
+            if fw.shape != (self._n,) * 4:
+                raise ValueError(
+                    f"fwm_weights must be ({self._n},)*4 = "
+                    f"{(self._n,) * 4}, got {fw.shape}."
+                )
+            if not np.all(np.isfinite(fw)):
+                raise ValueError("fwm_weights must be finite.")
         if betas is None:
             raise ValueError("betas is required")
 
@@ -176,6 +234,9 @@ class MultimodeSplitStepEngine:
         self.coef_model: CoeffModel = coef_model
         self.include_fwm = include_fwm
         self.oam_l = None if oam_l is None else list(oam_l)
+        self.xpm_weights = None if xpm_weights is None else np.asarray(xpm_weights, dtype=float).copy()
+        self.fwm_weights = None if fwm_weights is None else np.asarray(fwm_weights, dtype=float).copy()
+        self.fwm_pump_depletion = fwm_pump_depletion
         self.step_size = step_size
 
         self.grid: TemporalGrid = waves[0].grid
@@ -235,7 +296,13 @@ class MultimodeSplitStepEngine:
         return np.asarray(self.grid.ifft(f_w), dtype=complex)
 
     def _xpm_factor(self, i: int, j: int) -> float:
-        """SPM/XPM coefficient between channels i and j."""
+        """SPM/XPM coefficient between channels i and j.
+
+        ``xpm_weights`` (Mumtaz Eq. 8, when supplied) overrides the uniform
+        ``coef_model`` factors mode-pair-wise, including the SPM slot.
+        """
+        if self.xpm_weights is not None:
+            return float(self.xpm_weights[i, j])
         if i == j:
             return 1.0
         return 1.0 if self.coef_model == "isotropic" else _LP_XPM
@@ -252,7 +319,14 @@ class MultimodeSplitStepEngine:
         return self.oam_l[m] == self.oam_l[n] + self.oam_l[p] - self.oam_l[q]
 
     def _fwm_factor(self, m: int, n: int, p: int, q: int) -> float:
-        """Numeric FWM coefficient of the (m n p q) transition."""
+        """Numeric FWM coefficient of the (m n p q) transition.
+
+        ``fwm_weights`` (Mumtaz Eq. 8, when supplied) multiplies every
+        allowed triple mode-pair-wise; OAM gating (if any) is applied
+        first in :meth:`_fwm_allowed`.
+        """
+        if self.fwm_weights is not None:
+            return float(self.fwm_weights[m, n, p, q])
         if self.coef_model == "isotropic":
             return 1.0
         return _LP_FWM
@@ -270,19 +344,28 @@ class MultimodeSplitStepEngine:
         return out
 
     def _fwm_rhs(self, A: list[NDArray]) -> list[NDArray]:
-        """Pump-driven FWM right-hand side for every channel (Hamiltonian form).
+        """Pump-driven FWM right-hand side for every channel.
 
         Each pump channel ``n`` drives the exchange pair ``(m, q)`` with
-        ``m != q``, ``m != n``, ``q != n`` through
+        ``m != q``, ``m != n``, ``q != n`` through the Mumtaz Eq. (6)
+        creation arms (γ/3-weighted coherent terms of the vector modal
+        equation, here written with the engine's uniform-Gamma
+        convention absorbed into ``f``):
 
-            dA_m/dz|FWM = i Σ_n γ f(mnnq)     · A_n²  A_q*
-            dA_q/dz|FWM = i Σ_n conj(f(mnnq)) · A_n*² A_m
+            dA_m/dz|FWM = i Σ_n γ f(mnnq)  · A_n²  A_q*
+            dA_q/dz|FWM = i Σ_n γ f(nnmq)  · A_n²  A_m*
 
-        i.e. the pair annihilates two pump photons into (m, q) and its
-        complex conjugate. The two rows are conjugate partners, so this
-        mixing is exactly energy conserving (Hamiltonian substructure) and
-        the structure matches the energy-conserving polarization-FWM pair
-        the vector engine implements for ``N = 2``.
+        With ``fwm_pump_depletion`` the Manley–Rowe-consistent
+        back-conversion arm of the same exchange is added on the pump:
+
+            dA_n/dz|FWM += 2iγ conj(f(nnmq)) · A_m A_q A_n*
+
+        (the factor 2 = two pump photons per exchange event; the doubled
+        index-ordering count of the fully symmetric overlap tensor).
+        The depleted set is exactly photon-conserving — verified against
+        an RK4 probe to round-off — and reproduces the parametric
+        back-conversion oscillation of strong pumps. Without the pump
+        arm the substep is the standard pump-driven approximation.
         """
         gamma = self._gamma_v()
         N = self._n
@@ -291,21 +374,23 @@ class MultimodeSplitStepEngine:
             return rhs
         for n in range(N):
             pump_sq = A[n] * A[n]
-            f_pump_sq = np.conj(pump_sq)
             for m in range(N):
                 if m == n:
                     continue
-                for q in range(N):
-                    if q == n or q == m:
+                for q in range(m + 1, N):
+                    if q == n:
                         continue
                     if not self._fwm_allowed(m, n, n, q):
                         continue
                     f_m = self._fwm_factor(m, n, n, q)
+                    f_q = self._fwm_factor(q, n, n, m)
                     rhs[m] = rhs[m] + 1j * gamma * f_m * pump_sq * np.conj(A[q])
-                    # complex-conjugate partner of the same transition:
-                    # conj(iγf) = −iγ conj(f), so the pair arm carries the
-                    # minus — this is what makes the exchange Hamiltonian.
-                    rhs[q] = rhs[q] - 1j * gamma * np.conj(f_m) * f_pump_sq * A[m]
+                    rhs[q] = rhs[q] + 1j * gamma * f_q * pump_sq * np.conj(A[m])
+                    if self.fwm_pump_depletion:
+                        rhs[n] = (
+                            rhs[n]
+                            + 2j * gamma * np.conj(f_m) * A[m] * A[q] * np.conj(A[n])
+                        )
         return rhs
 
     def _fwm_substep_count(self, A: list[NDArray], dz: float) -> int:

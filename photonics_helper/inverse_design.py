@@ -17,6 +17,14 @@ PINN direction, with no heavy dependencies:
 Both return :class:`FitResult` (values + cost + convergence metadata).
 Scope: scalar-parameter least squares over exact physics — no surrogate
 training; the differentiable-PINN layer re-uses these forward calls.
+
+The torch-based extension, :func:`fit_shg_autodiff`, differentiates the
+same three-wave physics directly (a small batched RK4 integrator written
+in torch with gradients flowing through the integration): gradient-based,
+trained with Adam, and able to fit the full ``(sigma, P0, dk)`` triple
+when an extra observable (the absolute SH power along z) breaks the
+``kappa = sigma*sqrt(P0)`` degeneracy of the eta-only inverse problem.
+Requires the ``[pinns]`` extra (torch).
 """
 
 from __future__ import annotations
@@ -29,7 +37,12 @@ import numpy as np
 if TYPE_CHECKING:  # pragma: no cover
     from numpy.typing import NDArray
 
-__all__ = ["FitResult", "design_efficiency", "fit_two_wave"]
+__all__ = [
+    "FitResult",
+    "design_efficiency",
+    "fit_shg_autodiff",
+    "fit_two_wave",
+]
 
 
 @dataclass
@@ -163,7 +176,8 @@ def fit_two_wave(
         curve = np.abs(result.field("sh")) ** 2 / np.maximum(
             np.abs(result.field("fundamental")) ** 2, 1e-30
         )
-        return np.interp(z, result.z, curve) - ratios_a
+        interp = np.asarray(np.interp(z, result.z, curve), dtype=float)
+        return np.asarray(interp - ratios_a)
 
     # multi-start grid: the η(z) surface is oscillatory in Δk, so a single
     # start can land in a shallow basin. Seed κ across its bracket,
@@ -299,4 +313,198 @@ def design_efficiency(
         converged=True,
         n_evals=n_evals[0],
         residual_norm=abs(achieved - target),
+    )
+
+
+# ---------------------------------------------------------------------------
+# torch / autodiff extension (Phase 4 item 5 v2 — the "[pinns] extra")
+# ---------------------------------------------------------------------------
+
+
+def fit_shg_autodiff(
+    *,
+    z_samples: Sequence[float],
+    ratios: Sequence[float],
+    sh_power: Sequence[float] | None = None,
+    sigma0: float = 1.0,
+    P0_prior: float = 1.0,
+    delta_k0: float = 0.0,
+    n_steps: int = 60,
+    n_iter: int = 800,
+    lr: float = 8e-3,
+    power_weight: float = 1.0,
+    seed: int = 0,
+) -> FitResult:
+    """Train (sigma, P0, dk) against measured eta(z) with back-propagated gradients.
+
+    The degenerate SHG three-wave system (the same physics as
+    :func:`solve_shg`, lossless) is written as a fixed-step RK4 integrator
+    in ``torch.float64`` with real-component state stacking;
+    ``torch.autograd`` differentiates through the whole integration and
+    Adam descends the loss
+
+        L = mean_z (eta_model(z) - eta_data(z))^2
+          + power_weight * mean_z (P_SH_model(z) - P_SH_data(z))^2
+
+    (the optional absolute-SH-power term). The eta-only inverse problem
+    has the ``kappa = sigma*sqrt(P0)`` degeneracy documented under
+    :func:`fit_two_wave`: fitting only ``ratios`` leaves ``(sigma, P0)``
+    a flat direction of the loss, so any combination with the same
+    kappa is equally good. Supplying ``sh_power`` (absolute SH power in W
+    at the *same* z samples) makes all three parameters identifiable;
+    batched multi-start Adam runs every grid start in parallel and the
+    lowest-loss run is returned.
+
+    Parameters
+    ----------
+    z_samples : sequence — propagation positions (m), strictly increasing.
+    ratios : sequence — measured conversion efficiency ``eta(z)``.
+    sh_power : sequence or None — absolute SH power samples (W); breaks the
+        ``(sigma, P0)`` degeneracy when provided.
+    sigma0, P0_prior : float — seeds; the multi-start grid is built around
+        them (X0.2, X0.5, X1, X2 in each).
+    delta_k0 : float — seed phase mismatch; when 0 the grid spreads
+        ``dk in {-60, -10, 0, 10, 60}``.
+    n_steps : int — RK4 nodes of the differentiable integrator (=60 matches
+        the data-generation resolution to <1e-3 relative on eta).
+    n_iter : int — Adam iterations per start.
+    lr : float — Adam learning rate.
+    power_weight : float — weight of the SH-power term in the loss.
+    seed : int — torch RNG seed (Adam is deterministic on CPU anyway).
+
+    Returns
+    -------
+    FitResult
+        ``values = {"sigma": ..., "P0": ..., "delta_k": ...}`` plus
+        convergence metadata; ``cost`` is the final lowest per-start loss.
+
+    Raises
+    ------
+    ImportError — when torch is missing; install
+    ``photonics-helper[pinns]`` (or ``pip install torch``).
+    """
+    try:
+        import torch
+    except ImportError as exc:  # pragma: no cover - env dependent
+        raise ImportError(
+            "fit_shg_autodiff requires torch. Install with: "
+            "pip install photonics-helper[pinns] (or `pip install torch`)."
+        ) from exc
+
+    z = np.asarray(z_samples, dtype=float)
+    eta_data = np.asarray(ratios, dtype=float)
+    if len(z) != len(eta_data) or len(z) < 3:
+        raise ValueError(
+            "z_samples and ratios must be equal-length sequences of at "
+            "least 3 samples."
+        )
+    if np.any(np.diff(z) <= 0):
+        raise ValueError("z_samples must be strictly increasing.")
+    length = float(z.max())
+    if length <= 0:
+        raise ValueError(f"z_samples must span a positive length, got {length}")
+    if sigma0 <= 0 or P0_prior <= 0:
+        raise ValueError(
+            f"sigma0 and P0_prior must be positive, got {sigma0!r}, {P0_prior!r}"
+        )
+
+    torch.manual_seed(seed)
+
+    torch_d = torch.float64
+    eta_t = torch.tensor(eta_data, dtype=torch_d)
+    if sh_power is not None:
+        psh_t = torch.tensor(np.asarray(sh_power, dtype=float), dtype=torch_d)
+
+    # Batched multi-start grid: the eta(z) surface is oscillatory in dk, so a
+    # single Adam run can land in a shallow basin (the same reason
+    # fit_two_wave seeds over kappa / dk brackets).
+    sigma_starts = max(sigma0, 1e-6) * np.array([0.2, 0.5, 1.0, 2.0])
+    P0_starts = max(P0_prior, 1e-6) * np.array([0.25, 0.5, 1.0, 2.0])
+    dk_starts = (
+        np.array([-60.0, -10.0, 0.0, 10.0, 60.0])
+        if delta_k0 == 0.0
+        else np.array([delta_k0])
+    )
+    grid0 = [
+        (s0, p0, dk0)
+        for s0 in sigma_starts
+        for p0 in P0_starts
+        for dk0 in dk_starts
+    ]
+    B = len(grid0)
+    log_sig = torch.log(torch.tensor([p[0] for p in grid0], dtype=torch_d))
+    log_P0 = torch.log(torch.tensor([p[1] for p in grid0], dtype=torch_d))
+    dks = torch.tensor([p[2] for p in grid0], dtype=torch_d)
+    log_sig.requires_grad_(True)
+    log_P0.requires_grad_(True)
+    dks.requires_grad_(True)
+    opt = torch.optim.Adam([log_sig, log_P0, dks], lr=float(lr))
+    dz = length / float(n_steps)
+    sel = torch.tensor(
+        np.clip(np.round(z / dz).astype(int), 0, n_steps), dtype=torch.long
+    )
+
+    def rhs_batched(Y, s, m):
+        """Real-component batched RHS of the degenerate SHG system.
+
+        Same physics as ``solve_shg`` (lossless branch):
+        ``da_f = i sigma a_sh a_f*``, ``da_sh = i sigma a_f^2 - i dk a_sh``.
+        Fields are stacked as real components [af_re, af_im, ash_re,
+        ash_im] to keep the autograd graph float64-uniform.
+        """
+        uu, vv, xx, yy = Y[0], Y[1], Y[2], Y[3]
+        return torch.stack(
+            [
+                s * (xx * vv - yy * uu),
+                s * (xx * uu + yy * vv),
+                -2.0 * s * uu * vv + m * yy,
+                s * (uu * uu - vv * vv) - m * xx,
+            ]
+        )
+
+    loss_vec = torch.zeros(B, dtype=torch_d)
+    for _it in range(int(n_iter)):
+        opt.zero_grad()
+        s = torch.exp(log_sig).view(1, B)
+        m = dks.view(1, B)
+        u = torch.sqrt(torch.exp(log_P0)).view(1, B)
+        v = torch.zeros(1, B, dtype=torch_d)
+        x = torch.zeros(1, B, dtype=torch_d)
+        y = torch.zeros(1, B, dtype=torch_d)
+        Y = torch.stack([u, v, x, y]).view(4, B)
+
+        eta_curve = torch.zeros(int(n_steps) + 1, B, dtype=torch_d)
+        psh_curve = torch.zeros(int(n_steps) + 1, B, dtype=torch_d)
+        for step in range(int(n_steps)):
+            k1 = rhs_batched(Y, s[0], m[0])
+            k2 = rhs_batched(Y + 0.5 * dz * k1, s[0], m[0])
+            k3 = rhs_batched(Y + 0.5 * dz * k2, s[0], m[0])
+            k4 = rhs_batched(Y + dz * k3, s[0], m[0])
+            Y = Y + dz / 6.0 * (k1 + 2 * k2 + 2 * k3 + k4)
+            P = Y[2] ** 2 + Y[3] ** 2
+            Pf = torch.clamp(Y[0] ** 2 + Y[1] ** 2, min=1e-30)
+            eta_curve[step + 1] = (P / Pf)[0]
+            psh_curve[step + 1] = P
+        eta_pred = eta_curve[sel]  # (n_samples, B)
+        loss_vec = torch.mean((eta_pred - eta_t.view(-1, 1)) ** 2, dim=0)
+        if sh_power is not None:
+            loss_vec = loss_vec + float(power_weight) * torch.mean(
+                (psh_curve[sel] - psh_t.view(-1, 1)) ** 2, dim=0
+            )
+        loss = loss_vec.sum()
+        loss.backward()
+        opt.step()
+
+    with torch.no_grad():
+        k = int(torch.argmin(loss_vec))
+    sigma_fit = float(torch.exp(log_sig)[k])
+    P0_fit = float(torch.exp(log_P0)[k])
+    dk_fit = float(dks[k])
+    cost = float(loss_vec[k])
+    return FitResult(
+        values={"sigma": sigma_fit, "P0": P0_fit, "delta_k": dk_fit},
+        cost=cost,
+        converged=True,
+        n_evals=int(n_iter) * B,
+        residual_norm=float(cost ** 0.5),
     )
