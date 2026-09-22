@@ -708,8 +708,13 @@ class SplitStepEngine:
             )
 
     def _linear_step(self, A: NDArray, dz: float) -> NDArray:
-        """Apply dispersion via FFT: A(ω) ← A(ω) · exp(−i·Σ β_k(Ω)·Δz).
+        """Apply dispersion via FFT: A(ω) ← A(ω) · exp(+i·Σ β_k(Ω)·Δz).
 
+        (Sign audit 2026-09-21: the summary line previously read ``exp(−i·…)``
+        while the code below applies ``exp(+1j*phi)`` — a stale docstring from
+        before the dispersion-sign flip; the plus sign is the physically
+        correct propagator and pairs with the ``exp(−iωt)`` forward FFT
+        convention, as the note below describes.)
         Also applies loss: multiply by exp(-α·Δz/2).
         Dispersion Taylor expansion starts at k=2 (β₂, β₃, ...).
         β₁ (group velocity) is not included — pulse stays in group-velocity frame.

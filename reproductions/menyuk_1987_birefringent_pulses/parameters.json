@@ -1,0 +1,90 @@
+{
+  "paper": "C. R. Menyuk, Nonlinear pulse propagation in birefringent optical fibers, IEEE J. Quantum Electron. QE-23, 174 (1987)",
+  "doi": "10.1109/JQE.1073308",
+  "doi_uri": "https://doi.org/10.1109/JQE.1987.1073308",
+  "description": "Normalized vector NLSE (8a/8b) with the 2/3 XPM factor and oscillating FWM term: (i) scalar single-polarization soliton Eq. (9), (ii) exact two-polarization locked vector soliton Eq. (10) — each axis carries 3/5 of the scalar peak — as a filament-identity check, (iii) the locking -> linear-splitting bifurcation over 20 km located at delta* ~ 0.04.",
+  "central_wavelength_nm": 1550.0,
+  "n2_m2_per_W": 2.6e-20,
+  "A_eff_um2": 52.0,
+  "gamma_derived_per_W_m": 2.0272e-3,
+  "loss_dB_per_km": 0.0,
+  "beta3": 0.0,
+  "note_scalars": "Same physical fiber profile as the Manakov reproduction (n2 = 2.6e-20 m2/W, A_eff = 52 um2 at 1550 nm gives gamma = 2.027e-3 W-1 m-1). The paper works in normalized units; the physical anchors z0 (0.71 km, 1.8 m) fix beta2 exactly via beta2 = -pi t0^2/(2 z0). The printed D(lambda) = 6.5e-3 s/m has ambiguous digitized units and is not used numerically; z0 is the paper's stated value. Cross-check: D(1.55 um) ~ 14 ps/(nm km) for the derived beta2, a standard 1987 dispersion-shifted telecom fiber.",
+  "conventions": {
+    "z0": "z0 = pi^2 c tau0^2 / (D(lambda) lambda0); xi = pi z / (2 z0)",
+    "t0": "T0 = tau / 1.763 (tau = intensity FWHM; 0.568 tau = (1/1.763) tau sech convention)",
+    "beta2": "beta2 = -pi t0^2 / (2 z0) (anomalous, sech solitons); anchored by the paper's z0 values",
+    "delta": "delta = (k1 - l1) t0 / (2|beta2|); group-delay mismatch in |beta2| units",
+    "walkoff_engine": "Delta_beta1 = 2 |beta2| delta / t0 = pi delta t0 / z0 (SI s/m; engine walkoff = beta1_y - beta1_x, paper's 2 delta drift between the axes in the mean frame)",
+    "delta_beta_engine": "FWM mismatch: paper phase R delta xi = R delta pi z / (2 z0) enters the engine as e^{+-2i Delta_beta z} with Delta_beta = R delta pi / (4 z0)",
+    "scalar_soliton_peak": "P1 = |beta2| / (gamma t0^2); vector-soliton per-axis peak P_axis = (3/5) P1 (each axis carries 3/5 of the scalar intensity, total 6/5)",
+    "chirps_eq10": "launch u = v = sqrt(3/5 P1) sech(t/t0) exp(-+ i delta t/t0) with engine walkoff = Delta_beta1: the +- chirps each contribute +- half the walk-off, so the coincident lock stays coincident in the engine x-retarded frame"
+  },
+  "case_5ps": {
+    "tau_FWHM_ps": 5.0,
+    "t0_ps_derived": 2.8361,
+    "z0_m_paper": 710.0,
+    "beta2_derived_ps2_per_km": -17.795,
+    "P1_W_derived": 1.0917,
+    "P_axis_W_derived": 0.6550,
+    "R_paper": 1.4e6,
+    "delta_range_typical": [0.3, 3.0],
+    "delta_biref_range_full": [1.3e-3, 200.0],
+    "delta_n_range_paper1": [5e-9, 8e-4],
+    "scan": {
+      "delta_min": 0.01,
+      "delta_max": 0.1,
+      "delta_step": 0.005,
+      "length_km": 20.0,
+      "length_z0": 28.17,
+      "split_criterion": "x-y intensity overlap < 0.5 vs linear (gamma=0) reference run with the same walkoff",
+      "expected_delta_star_paper": 0.04
+    }
+  },
+  "case_250fs": {
+    "tau_FWHM_ps": 0.25,
+    "t0_ps_derived": 0.1418,
+    "z0_m_paper": 1.8,
+    "beta2_derived_ps2_per_km": -17.548,
+    "P1_W_derived": 430.6,
+    "P_axis_W_derived": 258.4,
+    "R_paper": 700.0,
+    "delta_range": [7e-5, 0.1],
+    "R_delta_le_1": 1.4e-3,
+    "note": "R delta <= 1 for delta <= 1.4e-3: only regime where the FWM term must be kept; delta = 0.1 gives R delta = 70 (FWM beat length ~20 cm, resolvable)."
+  },
+  "measured": {
+    "eq9_delta0_shape_L2": 1.2e-6,
+    "eq9_boosted_center_err_ps": 1.3e-6,
+    "eq9_boosted_phase_rate_residual_rad": 7.9e-4,
+    "eq10_5ps_shape_L2": 6.9e-6,
+    "eq10_5ps_coincidence_err_ps": 3.4e-6,
+    "eq10_5ps_phase_rate_residual_rad": 3.1e-3,
+    "eq10_250fs_coherent_shape_L2": [3.9e-3, 4.9e-3],
+    "eq10_250fs_coherent_peak_rel": [0.0139, -0.0161],
+    "fwm_small_delta_field_rel_diff": 0.831,
+    "linear_reference_separation_ps": 10.039,
+    "linear_reference_expected_ps": 10.0,
+    "locked_window_delta": [0.01, 0.51],
+    "split_window_delta": [0.56, 0.61]
+  },
+  "tolerances": {
+    "TOL_SHAPE_L2": 2e-3,
+    "TOL_CENTER_PS": 0.02,
+    "TOL_PEAK_REL": 5e-4,
+    "TOL_PHASE_THEORY": 0.05,
+    "TOL_COH_SHAPE_L2": 0.02
+  },
+  "numerics": {
+    "case_5ps": {
+      "N_samples": 2048,
+      "T_half_ps": 160.0,
+      "step_m": 50.0
+    },
+    "case_250fs": {
+      "N_samples": 2048,
+      "T_half_ps": 8.0,
+      "step_m": 0.05
+    }
+  }
+}

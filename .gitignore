@@ -50,4 +50,4 @@ site/
 # Reproduction reprints & rendered page images (local only, do not commit)
 reproductions/**/*.pdf
 reproductions/planned/**/pages/
-test_reproductions
+tests/test_reproductions.py

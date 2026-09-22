@@ -1,0 +1,80 @@
+{
+  "paper": "D. Marcuse, C. R. Menyuk, P. K. A. Wai, Application of the Manakov-PMD equation to studies of signal propagation in optical fibers with randomly varying birefringence, J. Lightwave Technol. 15, 1735 (1997)",
+  "doi": "10.1109/50.622902",
+  "description": "Manakov/8-9 averaged equation and the random-birefringence equivalent: (i) the Manakov soliton width/power law Eq. (30) with the explicit 8/9, (ii) the Fig. 5 fluctuation of the random-birefringence soliton (~1%) around the Manakov solution, (iii) the Fig. 4 NRZ dispersion-map system (16-bit PRBS, lossless 500 km, reduced to 2 periods for runtime) propagated with the random SU(2) rotation engine vs the deterministic averaged Manakov run.",
+  "central_wavelength_nm": 1.55e3,
+  "n2_m2_per_W": 2.6e-20,
+  "A_eff_um2": 52.0,
+  "gamma_derived_per_W_m": 2.0272e-3,
+  "loss_dB_per_km": 0.0,
+  "beta3": 0.0,
+  "nrz": {
+    "bits": 16,
+    "pattern_16bit": [1, 0, 1, 1, 0, 0, 1, 0, 1, 0, 0, 1, 1, 1, 0, 1],
+    "note_pattern": "pseudorandom word; exact bit sequence not specified in the paper — a fixed pseudorandom word is recorded here and in reproduce.py",
+    "bit_period_ns": 0.2,
+    "rate_Gb_s": 5.0,
+    "prefilter_B_GHz": 8.75,
+    "peak_power_mW": 20.0,
+    "electrical_filter_B_GHz": 5.0,
+    "fiber_length_km": 500.0,
+    "dispersion_map": {
+      "period_km": 100.0,
+      "normal_D_ps_nm_km": -1.0,
+      "normal_length_km": 80.0,
+      "anom_D_ps_nm_km": 4.0,
+      "anom_length_km": 20.0,
+      "cumulative_zero": true
+    },
+    "derived_beta2_normal_ps2_per_km": 1.27498,
+    "derived_beta2_anom_ps2_per_km": -5.09992
+  },
+  "pmd": {
+    "L_corr_m": 100.0,
+    "Lambda_beat_m": 50.0,
+    "D_PMD_ps_sqrt_km": 3.0,
+    "dz_main_interval_km": 1.0,
+    "delta_z_substep_m": 1.6667,
+    "note": "Sec. III example: dz=1 km, L_corr=100 m, Lambda_beat=50 m, D_PMD=3 ps/km^(1/2), delta z = Lambda_beat/30 = 1.67 m (paper Eq. (28): b = pi/Lambda_beat, nu' = D_PMD/(2 sqrt(2 L_corr)), sigma = sqrt(delta z/(2 L_corr)))"
+  },
+  "pmd_extreme_mixed_length": {
+    "L_corr_m": 10.0,
+    "Lambda_beat_m": 10000.0,
+    "mixing_length_km": 100.0,
+    "delta_z_j_definition": "L_corr/30 (instead of Lambda_beat/30)",
+    "note": "Sec. IV-C / Fig. 6: same Sec. IV-A parameter set with L_corr = 10 m and Lambda_beat = 10 km; to see a nonlinear-PMD effect the paper further lowered L_corr to 1 m. Only the stated geometry is recorded here; the nonlinear-PMD term is not implemented in the engine."
+  },
+  "soliton_check": {
+    "beta2_ps2_per_km": -21.0,
+    "T0_ps": 10.0,
+    "peak_total_power_W_expected": 0.11656,
+    "scalar_soliton_peak_W_expected": 0.10361,
+    "z0_km": 4.7619,
+    "propagation_z0": 30.0,
+    "expected_CNLS_fluctuation_pct": 1.0,
+    "measured_fluctuation_pct": 2.3,
+    "note": "Eq. (30): tau_m = [9/(8(|U|^2+|V|^2)_peak)]^(1/2) in soliton units -> the Manakov fundamental soliton carries a peak SUM power 9/8 times the scalar-soliton peak for the same width."
+  },
+  "grid": {
+    "grid_N": 1024,
+    "note": "paper used 2^10 points for the NRZ runs (Fig. 4/5 soliton checks smaller window)"
+  },
+  "engine": {
+    "module": "photonics_helper.vector_gnlse",
+    "manakov_run": "VectorSplitStepEngine(coupling='manakov') (8/9 averaged, no rotations)",
+    "birefringent_run": "RandomBirefringenceEngine (random SU(2) frame rotations Eq. (34)/(35) class, uniform axis + uniform angle)",
+    "rotation_step_m": 20.0,
+    "note_rotation_step": "the paper resolves delta z = Lambda_beat/30 = 1.67 m for its linear M-matrix evaluation; the nonlinear Fig. 5 run converges by delta_z_j ~ 20 m (peak fluctuation saturates at 2.3 % for steps <= 20 m; the paper's own CNLS-run value is ~1 %). Runtime ~5 s per 30-z0 run.",
+    "nrz_rotation_step_m": 100.0,
+    "note_nrz": "Fig. 4 runs use a 100 m frame step — the Poincare-sphere mixing length Lambda_beat^2/(12 pi^2 L_corr) = 4.2 m is far shorter, so mixing is rapid; birefringent vs averaged-Manakov detected currents agree to 2e-4 relative L2 (the paper claims 'exactly the same output')."
+  },
+  "tolerances": {
+    "manakov_soliton_peak_rel": 0.005,
+    "manakov_soliton_shape_l2": 0.005,
+    "random_peak_fluctuation_pct": 3.0,
+    "random_shape_l2": 0.03,
+    "random_vs_manakov_current_l2": 0.01,
+    "energy_drift": 1e-9,
+    "pulse_peak_time_shift_ps": 15.0
+  }
+}

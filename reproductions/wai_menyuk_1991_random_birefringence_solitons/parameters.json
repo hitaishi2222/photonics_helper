@@ -1,0 +1,50 @@
+{
+  "paper": "P. K. A. Wai, C. R. Menyuk, H. H. Chen, Stability of solitons in randomly varying birefringent fibers, Opt. Lett. 16, 1231 (1991)",
+  "doi": "10.1364/OL.16.001231",
+  "description": "Randomly rotating birefringence sections (paper Eq. (2)) over the coupled NLSE with deterministic walk-off delta (paper Eq. (1)); reproduction of (i) the first-order soliton shadow after one soliton period (analytic Eqs. (5)/(6) vs numerics), (ii) the delay identity delay = delta * integral cos(2 theta) dxi over 40 soliton periods, (iii) bounded pulse-width statistics for delta = 1.25..7.5, (iv) the polarization budget (locked for delta <= 1.3, depolarized but bounded for large delta).",
+  "central_wavelength_nm": 1550.0,
+  "n2_m2_per_W": 2.6e-20,
+  "A_eff_um2": 52.0,
+  "loss_dB_per_km": 0.0,
+  "model": {
+    "rotation_law": "per section of length z_h: U' = cos(theta) U + sin(theta) exp(i phi) V; V' = -sin(theta) exp(-i phi) U + cos(theta) V (paper Eq. (2)); theta, phi uniform on [0, 2*pi)",
+    "walkoff_local": "paper Eq. (1): each axis drifts delta*t0 per unit xi = delta*|beta2|/t0 per meter (relative 2*delta*|beta2|/t0); engine walkoff (relative, local y channel) = 2*delta*|beta2|/t0, split symmetrically +-walkoff/2 about the mean frame",
+    "normalized_distance": "xi = |beta2| z / t0^2; one soliton period z0 = pi t0^2 / (2|beta2|) corresponds to dxi = pi/2. Confirmed by the paper's own variance formula (p. 1233): Var[int cos(2 theta) dxi] = pi^2 z_h Z / (8 z0^2), which the discrete random walk reproduces exactly for dxi = (pi/2) z_h/z0 per section",
+    "fwm_terms": "dropped by the paper (R delta >> 1: 'rapidly varying, will average to zero'); engine coupling='incoherent' (SPM + 2/3 XPM)",
+    "averaged_limit": "8/9 Manakov (paper Eq. (3)); launch soliton = Manakov soliton with the full power in the U direction (chi = 0)",
+    "launch": "U = sqrt(9/8 * P1) sech(t/T0), V = 0 (paper Eq. (6): U(0) = sqrt(9/8) A sech(A(t - delta*I)), A = 1)"
+  },
+  "paper_numbers": {
+    "z_h_m": 100.0,
+    "z0_m": 55000.0,
+    "note_z0": "soliton period of the 50-ps (intensity FWHM) solitons; z_h = 100 m = z0/550 (Fig. 1 caption: axes rotate every z0/500, Sec. III uses z_h = 100 m with z0 = 55 km)",
+    "tau_FWHM_ps": 50.0,
+    "t0_ps_derived": 28.36074872376631,
+    "delta_values_paper": [1.25, 2.5, 4.0, 5.0, 7.5],
+    "R_delta_condition": "R delta equals 4*(soliton period)/(beat length), large in practice -> FWM dropped",
+    "distance_span_soliton_periods": 40.0,
+    "seeds_note": "paper Figs. 1-4 all use ONE particular theta/phi sequence; five different random sequences per delta were tried and 'qualitatively similar'"
+  },
+  "derived_engine": {
+    "beta2_ps2_per_km": -22.9716701492524,
+    "beta2_s2_per_m": -2.2971670149252398e-26,
+    "gamma_per_W_m": 0.0020268339700579307,
+    "P1_scalar_soliton_peak_W": 0.014090909090909093,
+    "launch_power_W": 0.01585227272727273,
+    "launch_amplitude_W_half": 0.12590895026965749,
+    "walkoff_fs_per_m_per_delta": 1.6199621789252788,
+    "walkoff_per_section_fs_per_delta": 161.99621789252788,
+    "dxi_per_section": 0.0028559933214452665,
+    "I_variance_one_z0_paper_formula": 0.0022398505137756542,
+    "I_variance_one_z0_discrete": 0.002239850513775654
+  },
+  "numerics": {
+    "N_samples": 2048,
+    "temporal_window_t0_units": 40.0,
+    "step_m": 100.0,
+    "steps_per_40z0": 22000,
+    "seed": 14191,
+    "runtime_s": 30.0,
+    "runtime_note": "40 z0 = 2200 km at 100 m sections = 22000 split steps per delta; one fixed theta/phi sequence shared across the five delta values (paper's protocol)"
+  }
+}

@@ -111,18 +111,28 @@ feature that does not exist yet.
 
 ## What is missing in the library to go further
 
+> Status audit 2026-09-21: items 1 and 2 below have since **landed**
+> (`step2-raman-noise-source`; `tau_shock` override + RK4IP integrator in
+> 0.1.9). The reproduction scripts have not yet been re-wired to use them —
+> that, plus a full β(ω) PCF model, is what bounds Figs. 13–28 today.
+
 1. **Stochastic Raman noise source** (`Γ_R` in the paper's Eq. 5) and input
    shot noise. Without it Figs. 18–22 and 28 cannot be reproduced, and the
-   coherence analysis is impossible.
+   coherence analysis is impossible. — *LANDED* (`noise.py`: ASE background,
+   one-photon-per-mode spontaneous Raman seed with thermal factor), figures
+   still to be re-run on top of it.
 2. **A user-settable shock time** (`τ_shock`). The paper uses the
    effective-area-corrected 0.56 fs; the library hard-codes `1/ω₀ = 0.443 fs`.
    This is the single largest systematic difference in the full SCG.
+   — *LANDED*: `tau_shock=` override (0.1.9).
 3. **A full β(ω) model for the PCF** (or a bundled dispersion table). Only the
    835 nm Taylor coefficients are available here, so multi-wavelength figures
    (13–17, 23, 24–27) are either reconstructed (Fig. 23) or not attempted.
 4. **A norm-preserving shock integrator.** The existing RK4 shock step leaks a
    few percent of energy at high bandwidth, which limits quantitative
-   agreement in the full SCG.
+   agreement in the full SCG. — *LANDED as the interaction-picture RK4IP
+   integrator*; the residual ≈5–6 % drift is model-intrinsic (first-order
+   shock term), not integrator error — see `ISSUES.md` #1.
 5. **Digitised experimental data** for Figs. 11–12 (Corwin 22 fs, Dudley 25 fs).
 
 ## Verification harness

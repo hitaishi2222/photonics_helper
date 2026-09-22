@@ -1,0 +1,47 @@
+{
+  "reference": "W. H. Renninger & F. W. Wise, Optical solitons in graded-index multimode fibres, Nat. Commun. 4, 1719 (2013), doi:10.1038/ncomms2739",
+  "fiber": {
+    "lambda0_nm": 1550.0,
+    "core_radius_um": 31.25,
+    "delta": 0.029,
+    "n0": 1.444,
+    "n2_m2_per_W": 3.2e-20,
+    "beta2_fs2_per_cm": -281.0,
+    "w0_um": 6.658,
+    "self_imaging_period_um": 407.6,
+    "mode_delays_fs_per_m": {"p0": 0.0, "p1": 33.73, "p2": 101.58},
+    "mode_delays_fs_per_m_paper": {"p1": 33.0, "p2": 99.0},
+    "A_eff_um2": 139.3,
+    "length_m": 52.0
+  },
+  "pulse": {
+    "fwhm_fs": 300.0,
+    "energy_nJ": 0.5,
+    "shape": "sech",
+    "t0_fs": 170.2,
+    "seed_waist_um": 5.0,
+    "mode_energy_percent": {"p0": 92.27, "p1": 7.18, "p2": 0.56},
+    "note": "10-um-diameter (1/e^2) Gaussian seed; fractions from the overlap integral with the paraxial modes of paper Eq. (2) (paper Methods: 92.2 / 7.17 / 0.56)"
+  },
+  "simulation": {
+    "grid_points": 16384,
+    "window_ps": 80.0,
+    "step_m": 0.1,
+    "num_steps": 520,
+    "num_saves": 261,
+    "coef_model": "isotropic",
+    "include_fwm": true,
+    "fwm_pump_depletion": true
+  },
+  "checks": {
+    "walk_off_fs_per_m": {"p1": 33.73, "p2": 101.58, "paper": [33, 99]},
+    "soliton_e_tau_Js": "E*tau = 2|beta2| c Aeff / (omega0 n2), Aeff = pi*w0^2",
+    "expected_soliton_fwhm_fs": 213.0
+  },
+  "page_refs": {
+    "fiber/pulse parameters": "Methods, PDF pages 5-6",
+    "Eq. (2) paraxial modes": "PDF page 2",
+    "Eq. (6) soliton condition": "PDF page 3",
+    "Fig. 2 / 3 targets": "PDF pages 3-4"
+  }
+}

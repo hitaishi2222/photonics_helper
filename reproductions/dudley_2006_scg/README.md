@@ -150,16 +150,24 @@ also accept `dynamic_range_db`, `cmap`, `z_scale`, and `plotly`, in addition to
 
 ## ISSUES
 
-1. **Self-steepening time scale.** The paper uses the effective-area-corrected
-   `τ_shock = 0.56 fs` (their Eq. 3). The library's shock operator uses
-   `1/ω₀ = 0.443 fs` and has no override. This is a ~26 % difference in the
-   shock term; the full SCG bandwidth is therefore not expected to match the
-   paper to better than the few-percent level. Tracked separately in
-   `REPORT.md` (self-steepening energy drift).
-2. **No stochastic Raman/shot noise.** The paper's Fig. 3 uses single-shot
-   simulations with noise, and Sec. VI.D analyses noise-driven decoherence.
-   Noise is not modelled here, so the exact fine structure and coherence
-   figures are **not** reproduced.
+> Status audit 2026-09-21: issues 1–2 below are **stale** (the features
+> landed); 3–6 remain true model/data limitations.
+
+1. **Self-steepening time scale — RESOLVED.** The paper uses the
+   effective-area-corrected `τ_shock = 0.56 fs` (their Eq. 3). The library's
+   shock operator defaults to `1/ω₀ = 0.443 fs` but now takes a `tau_shock=`
+   override (`step1-gnlse-shock-tau-and-energy`, 0.1.9); the scripts here set
+   `tau_shock=0.56e-15` and the residual few-percent-level caveat applies to
+   the remaining self-steepening drift only (see the model-intrinsic note in
+   `reproductions/README.md` → "ISSUE detail — shock energy drift") —
+   previously this entry wrongly said the override did not exist.
+2. **No stochastic Raman/shot noise — RESOLVED (source shipped).** The
+   paper's Fig. 3 uses single-shot simulations with noise, and Sec. VI.D
+   analyses noise-driven decoherence. The library now ships the stochastic
+   source (`step2-raman-noise-source`: one-photon-per-mode Γ_R with thermal
+   factor, `photonics_helper.noise`) — but the figures here (18–22, 28) are
+   still not reproduced in this folder, so the exact fine structure and
+   coherence figures remain **not** reproduced (the deterministic paths only).
 3. **Fig. 10 beat frequency.** The paper quotes ≈ 165 THz between the two
    beating spectrogram bands. The deterministic simulation gives a different
    beat (≈ 17 THz here). The script therefore validates the *method* and the

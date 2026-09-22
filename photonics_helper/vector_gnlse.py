@@ -346,19 +346,38 @@ class VectorSplitStepEngine:
                 ay + (h / 6.0) * (k1y + 2.0 * k2y + 2.0 * k3y + k4y),
             )
 
-        # substep the mixing contribution: keep Δφ_mixing ≲ 0.05 rad per substep.
+        # substep the mixing contribution: keep Δφ_mixing ≲ 0.05 rad per
+        # substep, AND resolve the mismatch oscillation 2Δβ·dz itself (the
+        # phase factors are frozen at the step midpoint, so 2Δβ dz must be
+        # well below 1 rad inside the substep grid or the mixing term gets a
+        # systematic phase error that loses the filament).
         mix_rate = max(
             float(np.max(np.abs(mix_x) * np.abs(Ax * Ay))),
             float(np.max(np.abs(mix_y) * np.abs(Ax * Ay))),
             1e-30,
         )
-        n_sub = int(min(200, max(1, int(np.ceil(mix_rate * dz / 0.05)))))
+        dbeta_rate = 2.0 * abs(self.delta_beta)   # mismatch phase rate (rad/m)
+        n_sub = int(
+            min(
+                2000,
+                max(
+                    1,
+                    int(np.ceil(mix_rate * dz / 0.05)),
+                    int(np.ceil(dbeta_rate * dz / 0.05)),
+                ),
+            )
+        )
         h_sub = dz / n_sub
 
         ax = Ax * np.exp(0.5j * Dx * dz)
         ay = Ay * np.exp(0.5j * Dy * dz)
         for _ in range(n_sub):
             ax, ay = rk4_pair(ax, ay, h_sub)
+        # second Strang half: the diagonal phase completes around the mixing
+        # substep (missed before: coherent runs decayed at half the
+        # nonlinearity and lost the soliton entirely).
+        ax = ax * np.exp(0.5j * Dx * dz)
+        ay = ay * np.exp(0.5j * Dy * dz)
         return ax, ay
 
     # ------------------------------------------------------------------

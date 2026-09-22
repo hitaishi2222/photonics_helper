@@ -94,10 +94,18 @@ class MultimodeSplitStepEngine:
         rad/ps), or one shared array for every channel.
     betas_unit : BetasUnit
         Unit of the dispersion coefficients. Default ``"ps^k/m"``.
-    group_delays : sequence of float, optional
+    group_delays: sequence of float, optional
         Modal group delay ``β₁⁽ᵐ⁾ − β₁⁽⁰⁾`` (SI, s/m) in the retarded
         frame of channel 0. ``None`` (default) = co-riding modes; forced
         ``group_delays[0] == 0``.
+    phase_offsets : sequence of float, optional
+        Modal propagation-constant offset ``Δβ₀⁽ᵐ⁾ = β₀⁽ᵐ⁾ − β₀⁽⁰⁾``
+        (rad/m) in the retarded frame of channel 0. Frequency-independent
+        phase accumulated as ``e^{i Δβ₀ z}`` in each channel's linear
+        step; this is the absolute modal phase the retarded-frame Taylor
+        expansion omits, and it is what provides discrete intermodal
+        quasi-phase matching (e.g. the GRIN geometric-parametric-
+        instability ladder, where ``Δβ₀⁽ᵖ⁾ = −2πp/ξ`` from self-imaging).
     coef_model : {"lp_degenerate", "isotropic"}
         Nonlinear coefficients:
 
@@ -144,6 +152,7 @@ class MultimodeSplitStepEngine:
         *,
         betas_unit: BetasUnit = "ps^k/m",
         group_delays: list[float] | None = None,
+        phase_offsets: list[float] | None = None,
         coef_model: CoeffModel = "lp_degenerate",
         include_fwm: bool = False,
         oam_l: list[int] | None = None,
@@ -184,6 +193,11 @@ class MultimodeSplitStepEngine:
             if abs(group_delays[0]) > 0:
                 raise ValueError(
                     "group_delays[0] must be 0 (the reference frame)."
+                )
+        if phase_offsets is not None:
+            if len(phase_offsets) != self._n:
+                raise ValueError(
+                    "phase_offsets must match the channel count exactly."
                 )
         if fiber.length.as_m <= 0:
             raise ValueError(f"fiber.length must be positive, got {fiber.length!r}")
@@ -231,6 +245,9 @@ class MultimodeSplitStepEngine:
         self.waves = waves
         self.fiber = fiber
         self.group_delays = None if group_delays is None else list(group_delays)
+        self.phase_offsets = (
+            None if phase_offsets is None else list(phase_offsets)
+        )
         self.coef_model: CoeffModel = coef_model
         self.include_fwm = include_fwm
         self.oam_l = None if oam_l is None else list(oam_l)
@@ -273,7 +290,8 @@ class MultimodeSplitStepEngine:
         )
 
     def _linear_step(self, field: NDArray, dz: float, m: int) -> NDArray:
-        """Linear step (dispersion + group delay + shared loss) for mode m."""
+        """Linear step (dispersion + group delay + phase offset + shared loss)
+        for mode m."""
         f_w = self.grid.fft(field)
         omega_ps = self.grid.w * 1e-12  # rad/s → rad/ps
 
@@ -289,6 +307,10 @@ class MultimodeSplitStepEngine:
                 # (matching the vector engine's walkoff convention), so a
                 # slower mode (Δβ₁ > 0) drifts to later times.
                 phi -= gd * self.grid.w * dz
+        if self.phase_offsets is not None:
+            db0 = self.phase_offsets[m]
+            if db0:
+                phi += db0 * dz
         f_w = f_w * np.exp(1j * phi)
         alpha = self.fiber.alpha
         if alpha > 0:

@@ -1,0 +1,78 @@
+{
+  "reference": "K. Krupa, A. Tonello, A. Barthelemy, T. Mansuryan, V. Couderc, G. Millot, P. Grelu, D. Modotto, S. A. Babin, S. Wabnitz, Multimode nonlinear fiber optics, a spatiotemporal avenue, APL Photonics 4, 110901 (2019)",
+  "doi": "10.1063/1.5119434",
+  "original_paper": "K. Krupa, A. Tonello, A. Barthelemy, V. Couderc, B. M. Shalaby, A. Bendahmane, G. Millot, S. Wabnitz, Observation of geometric parametric instability induced by the periodic spatial self-imaging of multimode waves, Phys. Rev. Lett. 116, 183901 (2016), arXiv:1602.04991",
+  "description": "Reproduction of the geometric parametric instability (GPI) sideband ladder: a strong quasi-CW beam in a GRIN MMF self-images with period xi and the resulting longitudinal index grating quasi-phase-matches a degenerate FWM cascade to discrete frequency shifts f_h ~ sqrt(h) f_m, reaching ~124.5 THz at first order (1064 nm pump). Review Fig. 14 left panel = PRL Fig. 3; total spectrum reproduced here with the modal engine.",
+  "fiber": {
+    "type": "GRIN MMF, truncated parabolic index",
+    "core_radius_um": 26.0,
+    "n_co": 1.470,
+    "n_cl": 1.457,
+    "delta": 0.0088,
+    "beta2_fs2_per_m": 16.55,
+    "n2_m2_per_W": 3.2e-20,
+    "self_imaging_period_mm": 0.6155,
+    "page_refs": {
+      "core_radius / n_co / n_cl / delta / beta2": "PRL p.3 (analytic section); review p.18 quote kappa'' = 16.55e-27 s2/m",
+      "self_imaging_period": "PRL p.3 (xi = 0.615 mm); review Fig. 21 (0.6 mm measured, 50/125 um fiber, 1030 nm pump)",
+      "n2": "PRL p.3 numerics section"
+    }
+  },
+  "pump": {
+    "central_wavelength_nm": 1064.0,
+    "pulse_duration_ps_numerics": 9.0,
+    "quasi_cw": "PRL numerics use a 9 ps pulse (much longer than the soliton/GPI time scales) to emulate the sub-ns experiment",
+    "intensity_GW_per_cm2_numerics": 10.0,
+    "beam_diameter_um_numerics": 40.0,
+    "peak_to_peak_power_kW_experiment": 50.0,
+    "fiber_length_m_experiment": 6.0,
+    "fiber_length_m_numerics": 0.4,
+    "page_refs": {
+      "pump/beam/length (numerics)": "PRL p.3 (In the numerics we used an input beam diameter of 40 um ... pulse duration of 9 ps, input intensity I = 10 GW/cm2 ... fiber's length of 0.4 m)",
+      "pump/beam/length (experiment)": "PRL p.3 (In the experiment, we used a 6m-long standard GRIN MMF ... Pp-p = 50 kW ... FWHM diameter of 35 um)"
+    }
+  },
+  "gpi_ladder": {
+    "qpm_condition": "2 k_P - k_S - k_A = -2 pi h / xi",
+    "detunings_THz_analytic_low_power": [124.5, 175.9, 215.5, 249.0, 278.2, 304.9, 329.6],
+    "detunings_THz_analytic_with_I10GWcm2": [124.76, 176.6, 216.36, 249.87, 279.39, 306.07, 330.61],
+    "wavelengths_nm": [737.9, 655.1, 602.9, 564.8, 535.4, 511.0, 490.4],
+    "first_order_values_THz": {"analytic": 125.0, "simulation_PRL": 124.5, "experiment": 123.5},
+    "nonlinear_power_shift_THz_per_x4_power_at_h1": 2.0,
+    "page_refs": {
+      "qpm + formula": "PRL p.3 (2 k_P - k_S - k_A = -2 pi h/xi; (2 pi f_h)^2 = 2 pi h/(xi kappa'') - 2 n2 I_hat omega0/(c kappa''))",
+      "ladder printing in headings": "review Fig. 14 left panel",
+      "nonlinear shift": "PRL p.4 (pulse intensity x4 => ~2 THz shift at h=1)"
+    }
+  },
+  "numerics_original": {
+    "scheme": "3+1D Gross-Pitaevskii split-step (direct field); periodic in t, zeroed field at window boundaries",
+    "dz_mm": 0.02,
+    "spatial_grid": "64x64",
+    "spatial_window_um": 150.0,
+    "raman_included": false,
+    "material_absorption": false
+  },
+  "numerics_ours": {
+    "engine": "MultimodeSplitStepEngine",
+    "note": "modal (equivalent) implementation: symmetric LP0p ladder of the truncated-parabolic GRIN fiber with paraxial beta_p(omega), per-mode group delays, per-mode phase offsets delta beta0^(p) = -2 pi p / xi (the self-imaging grating, added to the engine for this reproduction), intermodal FWM with Manley-Rowe pump depletion; equivalent to the PRL's direct GP solver per review Sec. III Eq. (4) Gaussian-ansatz justification",
+    "modes_retained": 4,
+    "temporal_grid_points": 16384,
+    "temporal_window_s": 27.32e-12,
+    "grid_resolution_GHz": 36.6,
+    "nyquist_THz": 300.0,
+    "step_size_mm_experiment_run": 0.05,
+    "step_size_mm_numerics_run": 0.02,
+    "launch_noise_rel_experiment": 1e-5,
+    "launch_noise_amplitude_dB": -100.0,
+    "launch_noise_numerics_runs": 3e-4,
+    "noise_stands_in_for": "GP roundoff/chaos self-seeding; ladder positions insensitive to it",
+    "cases": {
+      "experiment_faithful_fig14": "L = 6 m, P_p-p = 50 kW, 35 um FWHM Gaussian",
+      "numerics_power_check": "L = 0.4 m, I = 10 GW/cm2 (P_p-p = 12.57 kW over 40 um 1/e2), x4 run",
+      "no_grating_control": "same as experiment_run with phase_offsets=None"
+    },
+    "raman_included": false,
+    "self_steepening": false
+  }
+}

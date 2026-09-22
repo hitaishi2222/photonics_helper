@@ -89,10 +89,18 @@ profile, ensemble spectrum). Paper page images in `paper_pages/`.
 
 ## ISSUES
 
-- The library has **no stochastic noise source**, so the noise is generated
-  inside this reproduction (white complex Gaussian, 1.4 % intensity contrast —
-  the paper states <5 %). The paper's ASE model (a −50 dB spectral background
-  with random phase) is not reproduced exactly, and the ensemble size here (4–12)
+> Status audit 2026-09-21: the "library has no stochastic noise source"
+> sentence below is **stale** — `step2-raman-noise-source` shipped
+> `photonics_helper.noise` (ASE background, one-photon-per-mode spontaneous
+> Raman/shot seed). This reproduction still seeds its own white Gaussian by
+> construction; re-wiring it onto the shipped source (and an ASE-shaped −50 dB
+> background) is a possible upgrade.
+
+- The library's stochastic noise source (`photonics_helper.noise`) landed
+  **after** this reproduction was written; the noise is generated inside this
+  reproduction (white complex Gaussian, 1.4 % intensity contrast — the paper
+  states <5 %). The paper's ASE model (a −50 dB spectral background with
+  random phase) is not reproduced exactly, and the ensemble size here (4–12)
   is far smaller than the paper's ~50 000 peaks, so no histogram-statistics or
   coherence claim is made.
 - The paper's **Figs. 1, 2, 3** (single-shot temporal/spectral evolution,

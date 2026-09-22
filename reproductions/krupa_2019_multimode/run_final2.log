@@ -1,0 +1,14 @@
+[1] analytic: xi = 0.6157 mm (PRL 0.615), f_m = 124.98 THz (PRL printed 125.0, ladder 124.5) OK
+  case 'numerics fine (dz=0.02mm)': loaded from cache
+  case 'numerics coarse (dz=0.1mm)': loaded from cache
+[2] step convergence (dz 0.1 vs 0.02 mm): ladder shift 0.00% OK
+  case 'numerics x4 (dz=0.02mm)': loaded from cache
+[3] f1 shift at x4 peak intensity: 0.04 THz (124.45 -> 124.41; PRL ~2 THz downward) OK
+  running case 'experiment-faithful (L=6m)': L = 6.0 m, P = 50.0 kW ...
+[4] measured anti-Stokes ladder (THz): [125.11, 176.02, 215.92, 249.05, 278.51, None, None]
+[5] energy drift over 6 m: 6.51e-03 OK
+[5b] Stokes mirror of h=1 at 124.93 THz (anti-Stokes 125.11 THz) OK
+  running case 'no-grating control': L = 6.0 m, P = 50.0 kW ...
+[6] control (phase_offsets=None): zero peaks in GPI windows OK
+wrote /home/hiti/Hiti/projects/photonics_helper/reproductions/planned/krupa_2019_multimode/krupa_gpi_ladder.png
+Krupa 2019 review / GPI sidebands: validation passed
