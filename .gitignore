@@ -46,3 +46,8 @@ nk_datasets/yaml/
 
 # Generated mkdocs site (built/deployed by .github/workflows/docs.yml)
 site/
+
+# Reproduction reprints & rendered page images (local only, do not commit)
+reproductions/**/*.pdf
+reproductions/planned/**/pages/
+test_reproductions
