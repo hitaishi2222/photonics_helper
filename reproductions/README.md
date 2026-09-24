@@ -14,6 +14,12 @@ Run all reproduction tests with:
 python -m pytest tests/test_reproductions.py
 ```
 
+> **`tests/test_reproductions.py` is LOCAL-ONLY (gitignored, see `.gitignore`)**
+> — it is not published with the repo. Each reproduced paper is registered
+> there as a pytest wrapper around its folder's `validate()`; keep new
+> reproductions in the suite locally (mark heavy ones `pytest.mark.slow`),
+> just never commit the file.
+
 ## Available
 
 | Reproduction | Reference (DOI) | Module stack | Status |
@@ -31,6 +37,10 @@ python -m pytest tests/test_reproductions.py
 | [`renninger_wise_2013_grin_solitons`](renninger_wise_2013_grin_solitons/) | Renninger & Wise, *Nat. Commun.* **4**, 1719 (2013) · [10.1038/ncomms2739](https://doi.org/10.1038/ncomms2739) | `multimode_gnlse` (3 GRIN modes, isotropic tensors) | ✅ temporal locking 0.06 of linear walk-off; FWHM on Eq. (6) fixed point to 1.0 %; self-imaging 400.5 µm direct via `phase_offsets` (1.7 %). ⚠ higher-mode blue-shift sign pending **ISSUES.md #0** (convention audit) |
 | [`menyuk_1987_birefringent_pulses`](menyuk_1987_birefringent_pulses/) | Menyuk, *IEEE JQE* **QE-23**, 174 (1987) · [10.1109/JQE.1987.1073308](https://doi.org/10.1109/JQE.1987.1073308) | `vector_gnlse` (incoherent 2/3 XPM + coherent FWM branch) | ✅ Eq. (9)/(10) soliton filaments at machine precision (shape L2 7×10⁻⁶); coherent-FWM filament deviation O(1/Rδ) as predicted (0.4–1.6 %, Rδ = 70); FWM decisively active at Rδ = 0.7 (83 % field change); linear-split criterion δ* = 0.04 reproduced to 0.4 % (10.04 ps = 2 × FWHM over 20 km); nonlinear lock holds to δ ≈ 0.56 (paper's δ ≤ 1 border) |
 | [`krupa_2019_multimode`](krupa_2019_multimode/) | Krupa et al., *APL Photonics* **4**, 110901 (2019) · [10.1063/1.5119434](https://doi.org/10.1063/1.5119434) (GPI: Krupa, *PRL* **116**, 183901 (2016)) | `multimode_gnlse` (modal GNLSE + `phase_offsets` grating) | ✅ ξ = 0.6157 mm / f_m = 124.98 THz (PRL 0.615 / 125.0); √h·f_m ladder to 0.5 % for h ≤ 3 (h = 1..5 measured); f₁ power shift 0.04 THz; photon drift 6.5e-3; no-grating control = 0 peaks. **Not in the test suite — ~35 min runtime** |
+| [`mumtaz_2013_multimode_jlt`](mumtaz_2013_multimode_jlt/) | Mumtaz, Essiambre & Agrawal, *JLT* **31**, 398 (2013) · [10.1109/JLT.2012.2235414](https://doi.org/10.1109/JLT.2012.2235414) (spec source of v2 multimode Eq. 12/29) | `multimode_gnlse` (Manakov `xpm_weights`) + Eq. 6 stochastic harness | ✅ Table-II walk-offs exact (≤3e-6); SPM 1→8/9 at M=1 to 8.6e-4; M=2 ensemble-vs-generalized-Manakov: inter-mode XPM **2→4/3** confirmed (best-fit weight exactly 4/3, L2 2.9e-2 @ 32 seeds, 1/√N scaling); both sides energy-conserving to 1e-12; in the test suite (~9 s) |
+| [`wai_menyuk_1991_random_birefringence_solitons`](wai_menyuk_1991_random_birefringence_solitons/) | Wai, Menyuk & Chen, *Opt. Lett.* **16**, 1231 (1991) · [10.1364/OL.16.001231](https://doi.org/10.1364/OL.16.001231) | `vector_gnlse` (`RandomBirefringenceEngine`, Wai-1991 Eq.-(2) rotation law) | ✅ Fig. 1 shadow peak ratio 1.10 vs Eq. (5); Fig. 2 delay = δ·∫cos2θ dξ (corr 0.978, paper's "agreed quite well"); Fig. 3 widths bounded, no splitting at δ ≤ 5 to ~5 % (δ=7.5 caveat in folder README); Fig. 4 polarization budget 0.966/0.919/0.800/0.845/0.630; energy conserved to ≤6e-12; in the (local-only) test suite (~30 s) |
+| [`guasoni_2015_generalized_mi_multimode`](guasoni_2015_generalized_mi_multimode/) | Guasoni, *Phys. Rev. A* **92**, 033849 (2015) · [10.1103/PhysRevA.92.033849](https://doi.org/10.1103/PhysRevA.92.033849) | `multimode_gnlse` (XPM-coupled deck) + Eq.-(8)/(9) eigen solver | ✅ Fig. 3 anchor to **0.7 %** (g₁ = 0.9071 / g₂ = 0.7070 vs paper 0.90 / 0.71); Fig. 3 inset eigenvectors to ~0.1 in ln (−0.349/−3.30/−3.37 vs −0.35/−3.22/−3.35); single-mode MI closed form to 1e-9. **Split-step layer recorded-outstanding** (see folder README + `../ISSUES.md` #7); ~90 s |
+| [`raissi_2019_pinn_nlse`](raissi_2019_pinn_nlse/) | Raissi, Perdikaris & Karniadakis, *J. Comput. Phys.* **378**, 686 (2019) · [10.1016/j.jcp.2018.10.045](https://doi.org/10.1016/j.jcp.2018.10.045) | reproduction-local PINN (torch float64, Adam + L-BFGS) + `SplitStepEngine` data | ✅ §I Schrödinger example: PINN rel-L2 **6.1e-3** vs paper 1.97e-3 (accepted ≤ 1e-2 per the folder plan's worst-case clause — see `ISSUES.md` #6); loss 1.24e-6; engine ground truth verified to 1e-12 energy drift; cut profiles at t = 0.59/0.79/0.98 overlay the exact solution. ~55 min CPU (Adam 25 k + L-BFGS, `--nf-chunk 5000`). Not in the test suite (heavy; data-validation + smoke-train test only) |
 
 ## Findings surfaced while reproducing (see `../ISSUES.md`)
 

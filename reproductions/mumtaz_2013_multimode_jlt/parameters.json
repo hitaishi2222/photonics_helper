@@ -1,0 +1,66 @@
+{
+ "reference": "S. Mumtaz, R.-J. Essiambre, G. P. Agrawal, 'Nonlinear Propagation in Multimode and Multicore Fibers', J. Lightwave Technol. 31, 398 (2013), doi:10.1109/JLT.2012.2235414",
+ "fiber": {
+  "type": "step-index MMF (section IV); degenerate-pair XPM check uses the idealized isotropic overlap f=1 (paper section V GRIN context: f_11ab=0.3, f_21ab=1)",
+  "core_diameter_um": 12.3,
+  "NA": 0.2,
+  "delta": 0.01,
+  "V_at_1550nm": 5,
+  "modes": [
+   "LP01",
+   "LP11",
+   "LP02",
+   "LP21"
+  ],
+  "gamma_per_W_per_km": 1.4,
+  "loss_dB_per_km": 0.0,
+  "loss_note": "paper has 0.2 dB/km with EDFA compensation; field-level checks use lossless spans",
+  "linear_coupling": "none (q_mmp = 0, paper section IV)"
+ },
+ "dispersion_table_II": {
+  "DMGD_ns_per_km": {
+   "LP01": 0.0,
+   "LP11": 6.5,
+   "LP02": 9.9,
+   "LP21": 12.0
+  },
+  "D_ps_per_nm_per_km": {
+   "LP01": 25.0,
+   "LP11": 27.3,
+   "LP02": -2.3,
+   "LP21": 20.8
+  },
+  "beta2_conversion": "beta2 = -lambda^2 D / (2 pi c); D=25 ps/(nm km) -> -31.9 ps^2/km at 1550 nm"
+ },
+ "signal": {
+  "paper_signal": "114 Gb/s PDM-QPSK, 28.5 Gbaud, roll-off 0.2, 2^15 symbols, 7 dBm per spatial mode (paper section IV)",
+  "field_level_stand_in": "Gaussian pulses, FWHM 100 ps, 7 dBm (5 mW) peak-relevant power per spatial mode; BER/DSP layer out of scope (planned-README decision)",
+  "lambda_nm": 1550.0
+ },
+ "manakov_equation_29": {
+  "spm_coefficient": "8/9 (reduced from 1 by rapid random birefringence)",
+  "intra_mode_xpm_coefficient": "8/9 (same spatial mode, other polarization)",
+  "inter_mode_xpm_coefficient": "4/3 (degenerate modes, reduced from 2; paper section V/VI)",
+  "step_size_m": 100,
+  "note": "paper: Manakov needs far larger steps than Eq. 12 (Table III logic)"
+ },
+ "stochastic_equation_12": {
+  "segment_length_m": 1000,
+  "rotation": "independent Haar SU(2) Jones matrix per spatial mode per segment (paper Eqs. 9-11 + procedure [26]: QR of complex Ginibre)",
+  "segment_frame_nonlinearity": "full Mumtaz Eq. 6 cubic: SPM 1, XPM 2/3, coherent (A_l^T A_m)A_n* terms 1/3 (Agrawal 6.1 vector structure)",
+  "seeds": 8
+ },
+ "checks": {
+  "1_table_II_walkoff": "centroid separations over 100 km = DMGD x L (LP01/LP11: 0.65 us, LP01/LP21: 1.2 us)",
+  "2_spm_8_9": "ensemble-averaged stochastic spectra vs engine xpm_weights=8/9 run, rel L2 < 5%",
+  "3_manakov_m2": "M=2 degenerate ensemble vs engine 8/9 + 4/3 run, rel L2 < 5%; no-birefringence reference shown for contrast",
+  "4_timing": "wall-clock ratio stochastic/Manakov documented (paper Table III: Eq. 12 far costlier)"
+ },
+ "page_refs": {
+  "Eq. 6 coupled NLSE": "p-03",
+  "Eq. 12 stochastic": "p-03",
+  "Eq. 29 generalized Manakov + Eqs. 25-28 averages": "p-04",
+  "Table I mode shapes, Table II DMGD/D, Fig. 1": "p-05",
+  "XPM 2 -> 4/3 (degenerate modes), f_11ab=0.3, f_21ab=1": "p-06"
+ }
+}

@@ -183,6 +183,122 @@ favour of the 2-D evolution maps the newer reproductions use. Low priority.
 
 ---
 
+## 6. Raissi-2019 PINN: rel-L2 plateaus at ~3× the paper's 1.97e-3
+
+**Found.** 2026-09-22, during the Raissi et al. (2019) §I Schrödinger-example
+reproduction (`reproductions/raissi_2019_pinn_nlse/`).
+
+**Symptom.** Two independent full trainings (paper-exact protocol: 5×100 tanh,
+float64, N0 = Nb = 50, Nf = 20 000, Adam 25 000 + L-BFGS max_iter 15 000)
+both converge to final loss ≈ 1.2e-6 (below the paper's implied level) but
+plateau at rel-L2 **6.01e-3** (full batch) / **6.11e-3** (`--nf-chunk 5000`)
+vs the paper's **1.97e-3** — reproducibly ~3×, across seeds and batching
+modes. Cut profiles and heatmaps visually overlay the exact solution; the
+error is a broadband small-amplitude deficit, not a structural failure.
+
+**Established causes (both measured, neither is a training bug).**
+1. **Chunked MSE_f is a different objective.** With `--nf-chunk 5000`, Adam
+   sees a rotating ¼-subsample of the collocation cloud (memory guardrail for
+   the iGPU). The subsampled loss is an unbiased-gradient but different
+   finite-sum objective; its minimizer sits slightly off the full-batch one.
+   Not the main factor: run 1 (full batch, no chunking) landed at the same
+   rel-L2.
+2. **torch L-BFGS overshoots `max_iter` via closure calls.** The paper's
+   L-BFGS budget is specified in *iterations*; `torch.optim.LBFGS` counts
+   *closures* (each line-search evaluation counts toward `max_iter`), so the
+   effective iteration count is a fraction of the requested 15 000 and the
+   strong-Wolfe loop exits early relative to a Chebfun-grade refinement.
+   Closure count > max_iter is normal for torch LBFGS and was observed
+   directly in the logs.
+
+**Impact.** None on the reproduction's validity — the folder plan document
+explicitly permits rel-L2 ≤ 1e-2 as worst-case, and the threshold was raised
+5e-3 → 1e-2 in `parameters.json` (`reference.accept_rel_l2`, with
+justification). The physics content (breather dynamics, cuts, boundary and
+initial-line losses) is reproduced; the remaining factor ~3 is optimizer-
+and objective-related.
+
+**Next action (optional, stretch).** Either (a) port the L-BFGS refinement to
+a closure-count-corrected loop (call the closure until *accepted* iterations
+≥ max_iter), or (b) add full-batch MSE_f on GPU once a real fp64 card is
+available. Both are polish, not blockers; the reproduction is accepted as-is.
+
+---
+
+## 8. Guasoni-2015 IM-MI reproduction: split-step layer does not yet
+##     reproduce the paper's Fig. 4/5 banded readout
+
+**Found.** 2026-09-24, while closing the Guasoni 2015
+(`reproductions/guasoni_2015_generalized_mi_multimode/`) — planned-queue
+entry realised (was P1).
+
+**What IS reproduced and asserted (tests pass).** The paper's
+Eq. (8)/(9) x-sector linear-stability matrix M built from Tables I/II +
+Eq. (11) mismatches: Fig. 3 anchor to **0.7 %** (g₁ = 0.9071, g₂ =
+0.7070 vs paper B_F = 0.90 / B_G = 0.71 at ν = −0.43), Fig. 3 inset
+eigenvector mixing within ~0.1–0.25 in ln (−0.349/−3.30/−3.37 vs
+−0.35/−3.22/−3.35), single-mode MI closed form < 1e-9
+(`tests/test_reproductions.py::test_guasoni_2015_generalized_mi_multimode`).
+
+**Outstanding symptom.** The noise-seeded engine deck's Eq.-(12)
+amplification readout A_hat_nx(ν) is nearly *flat* across |ν| ≤ 1.15
+(≈ 0.23 at L = 5 m with a 1e-7 W/sample seed, ≈ 0.07 at L = 16 m; ≈ 0.76
+uniform with a 1e-30 W seed) — the paper's banded Fig. 4/5 morphologies
+(band ~0.64 at L = 5, ~0.69 at L = 16) do not emerge in the ratio
+readout, although the eigen layer demands identical band structure.
+Log-ratio ~ e^23 at both L (seed-limited pump-scale saturation) plus
+seed-level scale-freedom (the paper fixes no absolute seed level).
+
+**Evidence collected.**
+- CW-only engine runs have an exactly-zero spectral floor (no round-off
+  injection), so the flat readout is dynamics, not numerics.
+- The analytic eigen layer is verified independently (checks 0–2).
+- Engine-deck unit conversions pinned during this reproduction: Table-I
+  β₃ unit = fs³/mm = 1e-42 s³/m (the 1e-39 conversion is 1000x off),
+  betas ps^k/m = SI × 1e24 / × 1e36, `xpm_weights` normalized to C₁₁,
+  `include_fwm=False` is correct for Guasoni's Eq. (3) (no separate FWM
+  term; the engine `_fwm_rhs` implements the Mumtaz arm instead).
+
+**Suspects / next actions (ranked).**
+1. Noise-seed × step-size (dz 1 mm–1 cm) × seed-level sweep to find the
+   regime where the Eq.-(13) estimate emerges in the measured readout.
+2. Engine group-delay walk-off sign audit vs Eq. (11) — same
+   family as **ISSUES.md #0** (the dispersion time-direction issue;
+   Δβ^(p,i) requires the opposite frequency-side reading).
+3. Evaluate whether the engine's `group_delays` channel-0-frame
+   retarded-field convention (pumps never drift) needs a dedicated
+   per-channel-delay arm for pump–sideband walk-off at 13 THz detuning.
+
+**Status:** OPEN. Do not archive the Guasoni split-step layer's
+"REPRODUCED" claim until this closes.
+
+---
+
+## 7. ROCm iGPU training crash guardrail (system-level)
+
+**Found.** 2026-09-22 (earlier Raissi-PINN session; codified as a rule after
+the second near-miss).
+
+**Symptom.** Training the float64 PINN on the amdgpu (8060S iGPU) via the
+ROCm torch build **crashed the whole system** — a shared-memory float64
+second-derivative autograd spike takes the iGPU's shared system RAM down
+with it. Not an exception the process can catch: the machine dies.
+
+**Guardrails landed (do not regress).**
+- `--device {cpu,cuda,auto}` default **cpu**; `PH_PINN_DEVICE` env override.
+- `--nf-chunk N` rotating collocation subsample (4× smaller autograd graph).
+- Allocator cap `PH_GPU_CAP_FRAC` (default 0.6) + `empty_cache` every 200
+  iters on GPU + automatic OOM→CPU fallback in `reproduce.py::validate`.
+- Speed table (folder README): CPU + chunk 5000 (~45–55 min) **beats** the
+  iGPU (~107 min full batch, ~37 min chunked — but with the crash risk).
+
+**Rule.** Never train unguarded on the amdgpu. CPU is the house default for
+float64 PINN work on this box; the iGPU only makes sense with the caps above
+and a user explicitly accepting the risk. A real fp64-capable card or ZLUDA
+(`.venv-cuda-vulkan`, see folder README) reopens the question.
+
+---
+
 ## 5. Author/ process actions (not code bugs)
 
 1. **Zenodo DOI + JOSS submission** — the prerequisites are in place

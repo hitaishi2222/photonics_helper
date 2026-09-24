@@ -1,0 +1,94 @@
+{
+ "reference": "M. Guasoni, 'Generalized modulational instability in multimode fibers: wideband parametric amplification', Phys. Rev. A 92, 033849 (2015), doi:10.1103/PhysRevA.92.033849",
+ "fiber": {
+  "type": "circular step-index MMF, ideally isotropic (no mode coupling, no degeneracy splitting of LP11/LP21)",
+  "core_diameter_um": 24.0,
+  "core_radius_um": 12.0,
+  "n_core": 1.5035,
+  "n_clad": 1.5,
+  "V_number": "2*pi*R/lambda*(n_core^2-n_clad^2)^0.5 = 4.98 ~ 5 at 1550 nm",
+  "V_typo_note": "paper p-04 text prints 'n_clad = 1.5 and n_core = 1.5035' but assigns n_clad the larger value; V~5 confirms the roles are as written here (read back from pages/p-04.png). The planned README had also transposed the beta2/beta3 columns of Table I; corrected here against pages/p-05.png.",
+  "loss": "zero (paper Sec. III; losses analyzed separately in the paper's Sec. VII via a truncated Magnus expansion, out of scope)",
+  "gamma_11_W^-1_km^-1": 10.0,
+  "gamma_11_note": "C_11 = 10 W^-1 km^-1 defines the reproduction's gamma scale; all Table II entries are C_kn/C_11",
+  "modes": ["LP01 (1x)", "LP02 (2x)", "LP11 (3x)", "LP21 (4x)"],
+  "table_I_ref": "pages/p-05.png",
+  "table_II_ref": "pages/p-05.png",
+  "bimodal_coefficients": {
+   "b_S": 1.0,
+   "b_X": 0.6666666666666666,
+   "b_parallel": 2.0,
+   "b_perp": 0.6666666666666666,
+   "page_refs": "p-03 (definitions). With a purely x-polarized input (|p_ny| = 0) all b_X and b_perp contributions to the x-sector vanish; the y-polarized sideband sub-matrix decouples and gains nothing (paper pinpoints its own Â_ny analysis as 'not considered')."
+  }
+ },
+ "table_I_modes": {
+  "LP01_1x": {"beta_per_um": 6.0995, "gvm_ps_per_m": 0.0, "beta2_ps2_per_km": 21.7, "beta3_fs3_per_mm": 89.5},
+  "LP02_2x": {"beta_per_um": 6.0836, "gvm_ps_per_m": 10.8, "beta2_ps2_per_km": -147.7, "beta3_fs3_per_mm": -7361.1},
+  "LP11_3x": {"beta_per_um": 6.0891, "gvm_ps_per_m": 7.1, "beta2_ps2_per_km": 36.3, "beta3_fs3_per_mm": -169.9},
+  "LP21_4x": {"beta_per_um": 6.0848, "gvm_ps_per_m": 13.6, "beta2_ps2_per_km": -3.5, "beta3_fs3_per_mm": -2128.7},
+  "note": "paper text: propagated as 1x/2x/3x/4x; note LP01 beta2=+21.7 ps^2/km (normal!), LP02=-147.7, LP11=+36.3, LP21=-3.5; the planned README had the LP11/LP21 columns swapped, and also had GVM=13.6 vs the LP02 10.8 ps/m convention, both corrected."
+ },
+ "table_II_C_over_gamma11": {
+  "matrix": [
+   [1.0, 0.73, 0.66, 0.45],
+   [0.73, 0.96, 0.37, 0.33],
+   [0.66, 0.37, 1.04, 0.61],
+   [0.45, 0.33, 0.61, 0.92]
+  ],
+  "shape": "C_kn/C_11, row k = output sideband mode 1..4, col n = pump mode 1..4"
+ },
+ "pump": {
+  "lambda_nm": 1550.0,
+  "polarization": "x (LP01..LP21 become 1x..4x scalar x-channels)",
+  "power_per_mode_w": 1000.0,
+  "total_input_power_w": 4000.0,
+  "pump_phases": "psi_nx(0) = 0 for all modes (real cw amplitudes, |p_nx| = sqrt(1000 W))",
+  "characteristic_length_m": 0.1,
+  "characteristic_time_s": 3.32e-14,
+  "characteristic_time_note": "T_NL,1 = (beta2_1x * L_NL,1 / 2)^0.5 = (21.7 ps^2/km * 0.1 m / 2)^0.5 = 32.9 fs; paper quotes 30.1 THz for nu=1 (0.9 %), consistent",
+  "nu_to_detuning_Hz": "Omega/(2*pi) = nu * 30.1 THz",
+  "gain_unit_per_m": 10.0,
+  "page_refs": "p-05 for all normalizations"
+ },
+ "noise_seed": {
+  "paper": "weak white background noise r_nx(0,t) added on top of each modal cw pump, per-frequency-sample Gaussian real+imag (paper Sec. III page refs: p-04)",
+  "per_sample_power_w": 1e-7,
+  "note": "paper never fixes the absolute seed level; Eq. (12) is a log-ratio so only relative spectra matter; the SSFM here seeds every nx mode identically with per-sample power 1e-7 W (total 4e-7 W), far below amplified band amplitude after L = 5..16 m and negligible against the cw pump per mode"
+ },
+ "comparison_anchors": [
+  "Fig. 3: at nu = -0.43 the paired gains B_G = g1 = 0.71 and B_F = g2 = 0.90 (normalized to L_NL,1^-1 = 10 m^-1); ln(|wt~_{1,2}[2]|) = -0.35 (g1's 2x component), ln(|wt~_{2,2}[2]|) = -3.35, ln(|wt~_{1,4}[4]|) = -3.22 (g1's 4x component), ln(|wt~_{2,4}[4]|) = -3.35",
+  "Fig. 2b: conventional/secondary bands labelled B_A..B_D (zoom 0.85..1.1); Fig. 2c: zoom 0..0.65 with B_G..B_J",
+  "Fig. 4/5/6 amplification factors: Fig. 4b (L=5, nu in 0..0.65) dominant band ~0.64 (B_G - 0.07); Fig. 5 (L=16, same band) dominant band ~0.69 (B_F - 0.21); Fig. 6 similar for 4x with ~0.67 peak"
+ ],
+ "engine_model": {
+  "library": "photonics_helper.multimode_gnlse.MultimodeSplitStepEngine",
+  "coef_model": "isotropic (all-ones) with explicit xpm_weights = C matrix (Mumtaz Eq.-8-style per-pair weights), include_fwm=True, fwm_weights = C tensor (Mumtaz Eq. 8 / Eq. 6 geometry)",
+  "html_note": "the split-step engine implements the SPM + intermodal XPM scalar-coupled cubic exactly (b_S=1 diag, b_||=2 for k != n), matching the paper's Eq. (3) HiBi form substituted with the isotropic b_S/b_parallel values; the amplitude amplification factors and two-mode MI bands emerge automatically",
+  "include_fwm_note": "the paper's linearized MI eigen-matrix (Eq. 8/9) is the exact linearization of the Eq. (3) cubic; the engine's separate `_fwm_rhs` handles the A_n^2 A_q* intermodal FWM for the Mumtaz/paper's 1207.6645v1 (also Eq. 6 of Guasoni Eq. 2 structure), which is REQUIRED: without it the noise-seed spectra satisfy only the SPM/XPM flow whose linearized matrix lacks the intermodal (n != m off-diagonal) 2x2 parametric coupling that produces the multimode gain bands",
+  "pump_depletion": "off (paper uses undepleted-pump approximation; lossless; uniform 1000 W/mode cw keeps |p_na| constant beyond noise floor)"
+ },
+ "fig2_note": "Fig. 2 (gain-mapping of Eq. 8 at 1550 nm, four-panel version) is the qualitative target; Fig. 3 dots are the quantitative anchors for the matrix build",
+ "page_refs": {
+  "Eq. 1 mode expansion": "p-02",
+  "Eq. 2 coupled modal GNLSE, e_r,klmn mismatch definitions": "p-02",
+  "Eq. 3 HiBi (SPM + XPM) propagation model": "p-02",
+  "Eq. 4 sideband ansatz": "p-03",
+  "Eq. 5 cw solution + phi_nx": "p-03",
+  "Eq. 6 signal-sideband equation": "p-03",
+  "Eq. 7 rotating-frame transform": "p-03",
+  "Eq. 8 16x16 M structure": "p-03",
+  "Eq. 9 M block entries": "p-03",
+  "Eq. 10 eigen-expansion": "p-04",
+  "V number / Fig. 1 modal profiles / R=12um": "p-04",
+  "Fiber + lambda + 2R=24um": "p-04",
+  "Fig. 2 gain curves vs detuning, Fig. 3 dominant-gain eigenpairs B_F/B_G": "p-06",
+  "Fig. 4/5/6 SSFM amplification factors vs detuning (L=5,16 m)": "p-07",
+  "Eq. 11 bimodal gain formula": "p-04",
+  "Eq. 12 amplification factor, Eq. 13/14 dominant gain + eigenvector normalization": "p-05",
+  "Table I / II": "p-05",
+  "Losses Sec. VII (out of scope)": "p-10",
+  "Appendix A Eq. 13 derivation / noise seed model": "p-13",
+  "Fig. 10 spectral averaging": "p-13"
+ }
+}
