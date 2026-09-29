@@ -2,7 +2,7 @@
 
 `photonics_helper.multimode_gnlse` propagates *N* simultaneously guided
 spatial modes as coupled modal envelopes — the nonlinear complement of
-[`structured.py`](structured.md) (details and references there):
+[`structured.py`](api/structured.md) (details and references there):
 
 - per-mode Taylor dispersion (`betas[fiber_mode]`), modal group delay
   (`group_delays`, s/m — walk-off in the retarded frame of channel 0), and
