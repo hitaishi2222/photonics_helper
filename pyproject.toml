@@ -74,6 +74,9 @@ select = ["E4", "E7", "E9", "F"]
 # sys.path bootstrap scripts intentionally import after the path hack
 "benchmarks/*" = ["E402"]
 "examples/*" = ["E402"]
+# Exploratory probe/diagnostic scripts inside a reproduction folder:
+# scratch analyses (bootstrap imports, throwaway variables, terse style)
+"reproductions/*/diagnostics/*" = ["E402", "F841", "E702", "E741", "E731", "F811"]
 # `l` is the standard Laguerre–Gaussian azimuthal index in physics notation
 "photonics_helper/structured.py" = ["E741"]
 "examples/28_structured_light.py" = ["E741"]

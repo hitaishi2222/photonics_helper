@@ -173,3 +173,18 @@ banded readout. Open items before declaring the split-step layer green:
    growth regime the paper's split-step deck does.
 
 Track under **ISSUES.md** (cross-cutting, added there 2026-09-24).
+
+
+**Status (2026-09-28, post-#0 re-run):** eigen layer still asserted green; the Eq.-12 engine readout remains flat after the #0 convention fix (band 0.233 vs edge 0.230 at L = 5 m) and the seed-level sweep (1e-7/1e-5/1e-3 W) is flat/robust — see `diagnostics/probe_sweep_post0.md`. Outstanding: task 7.3 per-channel walk-off arm audit (do not archive the REPRODUCED banded-readout claim; keep RECORDED-OUTSTANDING).
+
+**Task 7.3 walk-off audit — v2 (2026-09-30):** ~75 s, herdr tab. The
+v1 "sign-inverted walk-off" reading was a probe artifact (v1 envelopes
+centered on the FFT seam; tones aliased at dt = 48.8 fs). With the
+corrected probe (envelope at t = 0, T = 200 ps) the multimode linear
+layer is VINDICATED in full: the GVM arm (±GVM·L exact), the beta2 arm
+(dphi/dOmega = beta2*w, -6.032 vs -6.032) and the beta3 Omega^2/2 arm
+(beta3-only probe within ~7 %) all reproduce Eq. (11) verbatim post-#0
+(see `diagnostics/walkoff_13thz_summary.md` + ISSUES.md #8 addendum).
+Item 2 of the open list above is therefore CLOSED (sign correct); the
+flat Eq.-12 banded readout keeps a different-open cause (item 1/3
+families), and the folder stays RECORDED-OUTSTANDING on that one.

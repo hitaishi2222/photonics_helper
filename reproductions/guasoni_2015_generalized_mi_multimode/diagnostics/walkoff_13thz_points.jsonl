@@ -1,0 +1,147 @@
+{"type": "meta", "N": 8192, "T_ps": 400.0, "L_m": 0.5, "ts": 1790649260.2355287}
+{"type": "start", "n": 1, "om_thz": 0.0, "gvm": true}
+{"type": "point", "n": 1, "om_thz": 0.0, "gvm": true, "tau_meas_ps": -116.612781, "tau_hyp_gvm_ps": 5.4, "tau_hyp_gvd_ps": -0.0, "tau_hyp_sum_ps": 5.4, "energy_drift_pct": 0.0, "elapsed_s": 2.4}
+{"type": "start", "n": 1, "om_thz": 0.0, "gvm": false}
+{"type": "point", "n": 1, "om_thz": 0.0, "gvm": false, "tau_meas_ps": -6.52738, "tau_hyp_gvm_ps": 5.4, "tau_hyp_gvd_ps": -0.0, "tau_hyp_sum_ps": 5.4, "energy_drift_pct": 0.0, "elapsed_s": 2.39}
+{"type": "start", "n": 1, "om_thz": -13.0, "gvm": true}
+{"type": "point", "n": 1, "om_thz": -13.0, "gvm": true, "tau_meas_ps": -179.072059, "tau_hyp_gvm_ps": 5.4, "tau_hyp_gvd_ps": -5.508911, "tau_hyp_sum_ps": -0.108911, "energy_drift_pct": 0.0, "elapsed_s": 2.4}
+{"type": "start", "n": 1, "om_thz": -13.0, "gvm": false}
+{"type": "point", "n": 1, "om_thz": -13.0, "gvm": false, "tau_meas_ps": -75.210793, "tau_hyp_gvm_ps": 5.4, "tau_hyp_gvd_ps": -5.508911, "tau_hyp_sum_ps": -0.108911, "energy_drift_pct": 0.0, "elapsed_s": 2.38}
+{"type": "start", "n": 1, "om_thz": 13.0, "gvm": true}
+{"type": "point", "n": 1, "om_thz": 13.0, "gvm": true, "tau_meas_ps": -50.049047, "tau_hyp_gvm_ps": 5.4, "tau_hyp_gvd_ps": -19.345742, "tau_hyp_sum_ps": -13.945742, "energy_drift_pct": 0.0, "elapsed_s": 2.4}
+{"type": "start", "n": 1, "om_thz": 13.0, "gvm": false}
+{"type": "point", "n": 1, "om_thz": 13.0, "gvm": false, "tau_meas_ps": -5.537561, "tau_hyp_gvm_ps": 5.4, "tau_hyp_gvd_ps": -19.345742, "tau_hyp_sum_ps": -13.945742, "energy_drift_pct": 0.0, "elapsed_s": 2.39}
+{"type": "start", "n": 1, "om_thz": -5.0, "gvm": true}
+{"type": "point", "n": 1, "om_thz": -5.0, "gvm": true, "tau_meas_ps": -71.794036, "tau_hyp_gvm_ps": 5.4, "tau_hyp_gvd_ps": 0.822567, "tau_hyp_sum_ps": 6.222567, "energy_drift_pct": 0.0, "elapsed_s": 2.41}
+{"type": "start", "n": 1, "om_thz": -5.0, "gvm": false}
+{"type": "point", "n": 1, "om_thz": -5.0, "gvm": false, "tau_meas_ps": -3.666764, "tau_hyp_gvm_ps": 5.4, "tau_hyp_gvd_ps": 0.822567, "tau_hyp_sum_ps": 6.222567, "energy_drift_pct": 0.0, "elapsed_s": 2.39}
+{"type": "start", "n": 1, "om_thz": 5.0, "gvm": true}
+{"type": "point", "n": 1, "om_thz": 5.0, "gvm": true, "tau_meas_ps": -159.277851, "tau_hyp_gvm_ps": 5.4, "tau_hyp_gvd_ps": -4.499291, "tau_hyp_sum_ps": 0.900709, "energy_drift_pct": 0.0, "elapsed_s": 2.4}
+{"type": "start", "n": 1, "om_thz": 5.0, "gvm": false}
+{"type": "point", "n": 1, "om_thz": 5.0, "gvm": false, "tau_meas_ps": -52.354493, "tau_hyp_gvm_ps": 5.4, "tau_hyp_gvd_ps": -4.499291, "tau_hyp_sum_ps": 0.900709, "energy_drift_pct": 0.0, "elapsed_s": 2.39}
+{"type": "start", "n": 2, "om_thz": 0.0, "gvm": true}
+{"type": "point", "n": 2, "om_thz": 0.0, "gvm": true, "tau_meas_ps": -75.985422, "tau_hyp_gvm_ps": 3.55, "tau_hyp_gvd_ps": 0.0, "tau_hyp_sum_ps": 3.55, "energy_drift_pct": 0.0, "elapsed_s": 2.41}
+{"type": "start", "n": 2, "om_thz": 0.0, "gvm": false}
+{"type": "point", "n": 2, "om_thz": 0.0, "gvm": false, "tau_meas_ps": -1.104728, "tau_hyp_gvm_ps": 3.55, "tau_hyp_gvd_ps": 0.0, "tau_hyp_sum_ps": 3.55, "energy_drift_pct": 0.0, "elapsed_s": 2.39}
+{"type": "start", "n": 2, "om_thz": -13.0, "gvm": true}
+{"type": "point", "n": 2, "om_thz": -13.0, "gvm": true, "tau_meas_ps": -60.639197, "tau_hyp_gvm_ps": 3.55, "tau_hyp_gvd_ps": -1.028944, "tau_hyp_sum_ps": 2.521056, "energy_drift_pct": 0.0, "elapsed_s": 2.41}
+{"type": "start", "n": 2, "om_thz": -13.0, "gvm": false}
+{"type": "point", "n": 2, "om_thz": -13.0, "gvm": false, "tau_meas_ps": -0.740142, "tau_hyp_gvm_ps": 3.55, "tau_hyp_gvd_ps": -1.028944, "tau_hyp_sum_ps": 2.521056, "energy_drift_pct": 0.0, "elapsed_s": 2.4}
+{"type": "start", "n": 2, "om_thz": 13.0, "gvm": true}
+{"type": "point", "n": 2, "om_thz": 13.0, "gvm": true, "tau_meas_ps": -92.987705, "tau_hyp_gvm_ps": 3.55, "tau_hyp_gvd_ps": 0.163605, "tau_hyp_sum_ps": 3.713605, "energy_drift_pct": 0.0, "elapsed_s": 2.4}
+{"type": "start", "n": 2, "om_thz": 13.0, "gvm": false}
+{"type": "point", "n": 2, "om_thz": 13.0, "gvm": false, "tau_meas_ps": -17.291015, "tau_hyp_gvm_ps": 3.55, "tau_hyp_gvd_ps": 0.163605, "tau_hyp_sum_ps": 3.713605, "energy_drift_pct": 0.0, "elapsed_s": 2.39}
+{"type": "start", "n": 2, "om_thz": -5.0, "gvm": true}
+{"type": "point", "n": 2, "om_thz": -5.0, "gvm": true, "tau_meas_ps": -87.192824, "tau_hyp_gvm_ps": 3.55, "tau_hyp_gvd_ps": -0.293341, "tau_hyp_sum_ps": 3.256659, "energy_drift_pct": 0.0, "elapsed_s": 2.4}
+{"type": "start", "n": 2, "om_thz": -5.0, "gvm": false}
+{"type": "point", "n": 2, "om_thz": -5.0, "gvm": false, "tau_meas_ps": -11.754092, "tau_hyp_gvm_ps": 3.55, "tau_hyp_gvd_ps": -0.293341, "tau_hyp_sum_ps": 3.256659, "energy_drift_pct": 0.0, "elapsed_s": 2.38}
+{"type": "start", "n": 2, "om_thz": 5.0, "gvm": true}
+{"type": "point", "n": 2, "om_thz": 5.0, "gvm": true, "tau_meas_ps": -65.198728, "tau_hyp_gvm_ps": 3.55, "tau_hyp_gvd_ps": 0.165332, "tau_hyp_sum_ps": 3.715332, "energy_drift_pct": 0.0, "elapsed_s": 2.4}
+{"type": "start", "n": 2, "om_thz": 5.0, "gvm": false}
+{"type": "point", "n": 2, "om_thz": 5.0, "gvm": false, "tau_meas_ps": 0.025369, "tau_hyp_gvm_ps": 3.55, "tau_hyp_gvd_ps": 0.165332, "tau_hyp_sum_ps": 3.715332, "energy_drift_pct": 0.0, "elapsed_s": 2.38}
+{"type": "start", "n": 3, "om_thz": 0.0, "gvm": true}
+{"type": "point", "n": 3, "om_thz": 0.0, "gvm": true, "tau_meas_ps": -138.998537, "tau_hyp_gvm_ps": 6.8, "tau_hyp_gvd_ps": -0.0, "tau_hyp_sum_ps": 6.8, "energy_drift_pct": 0.0, "elapsed_s": 2.4}
+{"type": "start", "n": 3, "om_thz": 0.0, "gvm": false}
+{"type": "point", "n": 3, "om_thz": 0.0, "gvm": false, "tau_meas_ps": 2.032941, "tau_hyp_gvm_ps": 6.8, "tau_hyp_gvd_ps": -0.0, "tau_hyp_sum_ps": 6.8, "energy_drift_pct": 0.0, "elapsed_s": 2.38}
+{"type": "start", "n": 3, "om_thz": -13.0, "gvm": true}
+{"type": "point", "n": 3, "om_thz": -13.0, "gvm": true, "tau_meas_ps": -141.0298, "tau_hyp_gvm_ps": 6.8, "tau_hyp_gvd_ps": -2.67069, "tau_hyp_sum_ps": 4.12931, "energy_drift_pct": 0.0, "elapsed_s": 2.4}
+{"type": "start", "n": 3, "om_thz": -13.0, "gvm": false}
+{"type": "point", "n": 3, "om_thz": -13.0, "gvm": false, "tau_meas_ps": 1.028939, "tau_hyp_gvm_ps": 6.8, "tau_hyp_gvd_ps": -2.67069, "tau_hyp_sum_ps": 4.12931, "energy_drift_pct": 0.0, "elapsed_s": 2.4}
+{"type": "start", "n": 3, "om_thz": 13.0, "gvm": true}
+{"type": "point", "n": 3, "om_thz": 13.0, "gvm": true, "tau_meas_ps": -138.419974, "tau_hyp_gvm_ps": 6.8, "tau_hyp_gvd_ps": -4.729062, "tau_hyp_sum_ps": 2.070938, "energy_drift_pct": 0.0, "elapsed_s": 2.4}
+{"type": "start", "n": 3, "om_thz": 13.0, "gvm": false}
+{"type": "point", "n": 3, "om_thz": 13.0, "gvm": false, "tau_meas_ps": 1.778043, "tau_hyp_gvm_ps": 6.8, "tau_hyp_gvd_ps": -4.729062, "tau_hyp_sum_ps": 2.070938, "energy_drift_pct": 0.0, "elapsed_s": 2.38}
+{"type": "start", "n": 3, "om_thz": -5.0, "gvm": true}
+{"type": "point", "n": 3, "om_thz": -5.0, "gvm": true, "tau_meas_ps": -138.31726, "tau_hyp_gvm_ps": 6.8, "tau_hyp_gvd_ps": -0.151478, "tau_hyp_sum_ps": 6.648522, "energy_drift_pct": 0.0, "elapsed_s": 2.4}
+{"type": "start", "n": 3, "om_thz": -5.0, "gvm": false}
+{"type": "point", "n": 3, "om_thz": -5.0, "gvm": false, "tau_meas_ps": 2.041039, "tau_hyp_gvm_ps": 6.8, "tau_hyp_gvd_ps": -0.151478, "tau_hyp_sum_ps": 6.648522, "energy_drift_pct": 0.0, "elapsed_s": 2.39}
+{"type": "start", "n": 3, "om_thz": 5.0, "gvm": true}
+{"type": "point", "n": 3, "om_thz": 5.0, "gvm": true, "tau_meas_ps": -140.054947, "tau_hyp_gvm_ps": 6.8, "tau_hyp_gvd_ps": -0.94316, "tau_hyp_sum_ps": 5.85684, "energy_drift_pct": 0.0, "elapsed_s": 2.4}
+{"type": "start", "n": 3, "om_thz": 5.0, "gvm": false}
+{"type": "point", "n": 3, "om_thz": 5.0, "gvm": false, "tau_meas_ps": 1.515128, "tau_hyp_gvm_ps": 6.8, "tau_hyp_gvd_ps": -0.94316, "tau_hyp_sum_ps": 5.85684, "energy_drift_pct": 0.0, "elapsed_s": 2.39}
+{"type": "meta", "N": 8192, "T_ps": 200.0, "L_m": 0.5, "ts": 1790660268.1016672}
+{"type": "start", "n": 1, "om_thz": 0.0, "gvm": true}
+{"type": "point", "n": 1, "om_thz": 0.0, "gvm": true, "tau_meas_ps": 5.4, "tau_hyp_gvm_ps": 5.4, "tau_hyp_gvd_ps": -0.0, "tau_hyp_sum_ps": 5.4, "energy_drift_pct": 0.0, "elapsed_s": 2.42}
+{"type": "start", "n": 1, "om_thz": 0.0, "gvm": false}
+{"type": "point", "n": 1, "om_thz": 0.0, "gvm": false, "tau_meas_ps": -0.0, "tau_hyp_gvm_ps": 5.4, "tau_hyp_gvd_ps": -0.0, "tau_hyp_sum_ps": 5.4, "energy_drift_pct": 0.0, "elapsed_s": 2.41}
+{"type": "start", "n": 1, "om_thz": -13.0, "gvm": true}
+{"type": "point", "n": 1, "om_thz": -13.0, "gvm": true, "tau_meas_ps": -0.632172, "tau_hyp_gvm_ps": 5.4, "tau_hyp_gvd_ps": -5.508911, "tau_hyp_sum_ps": -0.108911, "energy_drift_pct": 0.0, "elapsed_s": 2.42}
+{"type": "start", "n": 1, "om_thz": -13.0, "gvm": false}
+{"type": "point", "n": 1, "om_thz": -13.0, "gvm": false, "tau_meas_ps": -6.032172, "tau_hyp_gvm_ps": 5.4, "tau_hyp_gvd_ps": -5.508911, "tau_hyp_sum_ps": -0.108911, "energy_drift_pct": 0.0, "elapsed_s": 2.4}
+{"type": "start", "n": 1, "om_thz": 13.0, "gvm": true}
+{"type": "point", "n": 1, "om_thz": 13.0, "gvm": true, "tau_meas_ps": 11.432172, "tau_hyp_gvm_ps": 5.4, "tau_hyp_gvd_ps": -19.345742, "tau_hyp_sum_ps": -13.945742, "energy_drift_pct": 0.0, "elapsed_s": 2.42}
+{"type": "start", "n": 1, "om_thz": 13.0, "gvm": false}
+{"type": "point", "n": 1, "om_thz": 13.0, "gvm": false, "tau_meas_ps": 6.032172, "tau_hyp_gvm_ps": 5.4, "tau_hyp_gvd_ps": -19.345742, "tau_hyp_sum_ps": -13.945742, "energy_drift_pct": 0.0, "elapsed_s": 2.41}
+{"type": "start", "n": 1, "om_thz": -5.0, "gvm": true}
+{"type": "point", "n": 1, "om_thz": -5.0, "gvm": true, "tau_meas_ps": 3.079934, "tau_hyp_gvm_ps": 5.4, "tau_hyp_gvd_ps": 0.822567, "tau_hyp_sum_ps": 6.222567, "energy_drift_pct": 0.0, "elapsed_s": 2.42}
+{"type": "start", "n": 1, "om_thz": -5.0, "gvm": false}
+{"type": "point", "n": 1, "om_thz": -5.0, "gvm": false, "tau_meas_ps": -2.320066, "tau_hyp_gvm_ps": 5.4, "tau_hyp_gvd_ps": 0.822567, "tau_hyp_sum_ps": 6.222567, "energy_drift_pct": 0.0, "elapsed_s": 2.41}
+{"type": "start", "n": 1, "om_thz": 5.0, "gvm": true}
+{"type": "point", "n": 1, "om_thz": 5.0, "gvm": true, "tau_meas_ps": 7.720066, "tau_hyp_gvm_ps": 5.4, "tau_hyp_gvd_ps": -4.499291, "tau_hyp_sum_ps": 0.900709, "energy_drift_pct": 0.0, "elapsed_s": 2.43}
+{"type": "start", "n": 1, "om_thz": 5.0, "gvm": false}
+{"type": "point", "n": 1, "om_thz": 5.0, "gvm": false, "tau_meas_ps": 2.320066, "tau_hyp_gvm_ps": 5.4, "tau_hyp_gvd_ps": -4.499291, "tau_hyp_sum_ps": 0.900709, "energy_drift_pct": 0.0, "elapsed_s": 2.4}
+{"type": "start", "n": 2, "om_thz": 0.0, "gvm": true}
+{"type": "point", "n": 2, "om_thz": 0.0, "gvm": true, "tau_meas_ps": 3.55, "tau_hyp_gvm_ps": 3.55, "tau_hyp_gvd_ps": 0.0, "tau_hyp_sum_ps": 3.55, "energy_drift_pct": 0.0, "elapsed_s": 2.41}
+{"type": "start", "n": 2, "om_thz": 0.0, "gvm": false}
+{"type": "error", "n": 2, "om_thz": 0.0, "gvm": false, "error": "BrokenPipeError(32, 'Broken pipe')"}
+{"type": "meta", "N": 8192, "T_ps": 200.0, "L_m": 0.5, "ts": 1790660302.6410208}
+{"type": "start", "n": 1, "om_thz": 0.0, "gvm": true}
+{"type": "point", "n": 1, "om_thz": 0.0, "gvm": true, "tau_meas_ps": 5.4, "tau_hyp_gvm_ps": 5.4, "tau_hyp_gvd_ps": -0.0, "tau_hyp_sum_ps": 5.4, "energy_drift_pct": 0.0, "elapsed_s": 2.43}
+{"type": "start", "n": 1, "om_thz": 0.0, "gvm": false}
+{"type": "point", "n": 1, "om_thz": 0.0, "gvm": false, "tau_meas_ps": -0.0, "tau_hyp_gvm_ps": 5.4, "tau_hyp_gvd_ps": -0.0, "tau_hyp_sum_ps": 5.4, "energy_drift_pct": 0.0, "elapsed_s": 2.43}
+{"type": "start", "n": 1, "om_thz": -13.0, "gvm": true}
+{"type": "point", "n": 1, "om_thz": -13.0, "gvm": true, "tau_meas_ps": -0.632172, "tau_hyp_gvm_ps": 5.4, "tau_hyp_gvd_ps": -5.508911, "tau_hyp_sum_ps": -0.108911, "energy_drift_pct": 0.0, "elapsed_s": 2.46}
+{"type": "start", "n": 1, "om_thz": -13.0, "gvm": false}
+{"type": "point", "n": 1, "om_thz": -13.0, "gvm": false, "tau_meas_ps": -6.032172, "tau_hyp_gvm_ps": 5.4, "tau_hyp_gvd_ps": -5.508911, "tau_hyp_sum_ps": -0.108911, "energy_drift_pct": 0.0, "elapsed_s": 2.4}
+{"type": "start", "n": 1, "om_thz": 13.0, "gvm": true}
+{"type": "point", "n": 1, "om_thz": 13.0, "gvm": true, "tau_meas_ps": 11.432172, "tau_hyp_gvm_ps": 5.4, "tau_hyp_gvd_ps": -19.345742, "tau_hyp_sum_ps": -13.945742, "energy_drift_pct": 0.0, "elapsed_s": 2.43}
+{"type": "start", "n": 1, "om_thz": 13.0, "gvm": false}
+{"type": "point", "n": 1, "om_thz": 13.0, "gvm": false, "tau_meas_ps": 6.032172, "tau_hyp_gvm_ps": 5.4, "tau_hyp_gvd_ps": -19.345742, "tau_hyp_sum_ps": -13.945742, "energy_drift_pct": 0.0, "elapsed_s": 2.41}
+{"type": "start", "n": 1, "om_thz": -5.0, "gvm": true}
+{"type": "point", "n": 1, "om_thz": -5.0, "gvm": true, "tau_meas_ps": 3.079934, "tau_hyp_gvm_ps": 5.4, "tau_hyp_gvd_ps": 0.822567, "tau_hyp_sum_ps": 6.222567, "energy_drift_pct": 0.0, "elapsed_s": 2.44}
+{"type": "start", "n": 1, "om_thz": -5.0, "gvm": false}
+{"type": "point", "n": 1, "om_thz": -5.0, "gvm": false, "tau_meas_ps": -2.320066, "tau_hyp_gvm_ps": 5.4, "tau_hyp_gvd_ps": 0.822567, "tau_hyp_sum_ps": 6.222567, "energy_drift_pct": 0.0, "elapsed_s": 2.4}
+{"type": "start", "n": 1, "om_thz": 5.0, "gvm": true}
+{"type": "point", "n": 1, "om_thz": 5.0, "gvm": true, "tau_meas_ps": 7.720066, "tau_hyp_gvm_ps": 5.4, "tau_hyp_gvd_ps": -4.499291, "tau_hyp_sum_ps": 0.900709, "energy_drift_pct": 0.0, "elapsed_s": 2.4}
+{"type": "start", "n": 1, "om_thz": 5.0, "gvm": false}
+{"type": "point", "n": 1, "om_thz": 5.0, "gvm": false, "tau_meas_ps": 2.320066, "tau_hyp_gvm_ps": 5.4, "tau_hyp_gvd_ps": -4.499291, "tau_hyp_sum_ps": 0.900709, "energy_drift_pct": 0.0, "elapsed_s": 2.39}
+{"type": "start", "n": 2, "om_thz": 0.0, "gvm": true}
+{"type": "point", "n": 2, "om_thz": 0.0, "gvm": true, "tau_meas_ps": 3.55, "tau_hyp_gvm_ps": 3.55, "tau_hyp_gvd_ps": 0.0, "tau_hyp_sum_ps": 3.55, "energy_drift_pct": 0.0, "elapsed_s": 2.41}
+{"type": "start", "n": 2, "om_thz": 0.0, "gvm": false}
+{"type": "point", "n": 2, "om_thz": 0.0, "gvm": false, "tau_meas_ps": 0.0, "tau_hyp_gvm_ps": 3.55, "tau_hyp_gvd_ps": 0.0, "tau_hyp_sum_ps": 3.55, "energy_drift_pct": 0.0, "elapsed_s": 2.4}
+{"type": "start", "n": 2, "om_thz": -13.0, "gvm": true}
+{"type": "point", "n": 2, "om_thz": -13.0, "gvm": true, "tau_meas_ps": 5.032518, "tau_hyp_gvm_ps": 3.55, "tau_hyp_gvd_ps": -1.028944, "tau_hyp_sum_ps": 2.521056, "energy_drift_pct": 0.0, "elapsed_s": 2.42}
+{"type": "start", "n": 2, "om_thz": -13.0, "gvm": false}
+{"type": "point", "n": 2, "om_thz": -13.0, "gvm": false, "tau_meas_ps": 1.482518, "tau_hyp_gvm_ps": 3.55, "tau_hyp_gvd_ps": -1.028944, "tau_hyp_sum_ps": 2.521056, "energy_drift_pct": 0.0, "elapsed_s": 2.4}
+{"type": "start", "n": 2, "om_thz": 13.0, "gvm": true}
+{"type": "point", "n": 2, "om_thz": 13.0, "gvm": true, "tau_meas_ps": 2.067482, "tau_hyp_gvm_ps": 3.55, "tau_hyp_gvd_ps": 0.163605, "tau_hyp_sum_ps": 3.713605, "energy_drift_pct": 0.0, "elapsed_s": 2.42}
+{"type": "start", "n": 2, "om_thz": 13.0, "gvm": false}
+{"type": "point", "n": 2, "om_thz": 13.0, "gvm": false, "tau_meas_ps": -1.482518, "tau_hyp_gvm_ps": 3.55, "tau_hyp_gvd_ps": 0.163605, "tau_hyp_sum_ps": 3.713605, "energy_drift_pct": 0.0, "elapsed_s": 2.41}
+{"type": "start", "n": 2, "om_thz": -5.0, "gvm": true}
+{"type": "point", "n": 2, "om_thz": -5.0, "gvm": true, "tau_meas_ps": 4.120199, "tau_hyp_gvm_ps": 3.55, "tau_hyp_gvd_ps": -0.293341, "tau_hyp_sum_ps": 3.256659, "energy_drift_pct": 0.0, "elapsed_s": 2.43}
+{"type": "start", "n": 2, "om_thz": -5.0, "gvm": false}
+{"type": "point", "n": 2, "om_thz": -5.0, "gvm": false, "tau_meas_ps": 0.570199, "tau_hyp_gvm_ps": 3.55, "tau_hyp_gvd_ps": -0.293341, "tau_hyp_sum_ps": 3.256659, "energy_drift_pct": 0.0, "elapsed_s": 2.41}
+{"type": "start", "n": 2, "om_thz": 5.0, "gvm": true}
+{"type": "point", "n": 2, "om_thz": 5.0, "gvm": true, "tau_meas_ps": 2.979801, "tau_hyp_gvm_ps": 3.55, "tau_hyp_gvd_ps": 0.165332, "tau_hyp_sum_ps": 3.715332, "energy_drift_pct": 0.0, "elapsed_s": 2.44}
+{"type": "start", "n": 2, "om_thz": 5.0, "gvm": false}
+{"type": "point", "n": 2, "om_thz": 5.0, "gvm": false, "tau_meas_ps": -0.570199, "tau_hyp_gvm_ps": 3.55, "tau_hyp_gvd_ps": 0.165332, "tau_hyp_sum_ps": 3.715332, "energy_drift_pct": 0.0, "elapsed_s": 2.47}
+{"type": "start", "n": 3, "om_thz": 0.0, "gvm": true}
+{"type": "point", "n": 3, "om_thz": 0.0, "gvm": true, "tau_meas_ps": 6.8, "tau_hyp_gvm_ps": 6.8, "tau_hyp_gvd_ps": -0.0, "tau_hyp_sum_ps": 6.8, "energy_drift_pct": 0.0, "elapsed_s": 2.45}
+{"type": "start", "n": 3, "om_thz": 0.0, "gvm": false}
+{"type": "point", "n": 3, "om_thz": 0.0, "gvm": false, "tau_meas_ps": 0.0, "tau_hyp_gvm_ps": 6.8, "tau_hyp_gvd_ps": -0.0, "tau_hyp_sum_ps": 6.8, "energy_drift_pct": 0.0, "elapsed_s": 2.41}
+{"type": "start", "n": 3, "om_thz": -13.0, "gvm": true}
+{"type": "point", "n": 3, "om_thz": -13.0, "gvm": true, "tau_meas_ps": 6.657058, "tau_hyp_gvm_ps": 6.8, "tau_hyp_gvd_ps": -2.67069, "tau_hyp_sum_ps": 4.12931, "energy_drift_pct": 0.0, "elapsed_s": 2.44}
+{"type": "start", "n": 3, "om_thz": -13.0, "gvm": false}
+{"type": "point", "n": 3, "om_thz": -13.0, "gvm": false, "tau_meas_ps": -0.142942, "tau_hyp_gvm_ps": 6.8, "tau_hyp_gvd_ps": -2.67069, "tau_hyp_sum_ps": 4.12931, "energy_drift_pct": 0.0, "elapsed_s": 2.42}
+{"type": "start", "n": 3, "om_thz": 13.0, "gvm": true}
+{"type": "point", "n": 3, "om_thz": 13.0, "gvm": true, "tau_meas_ps": 6.942942, "tau_hyp_gvm_ps": 6.8, "tau_hyp_gvd_ps": -4.729062, "tau_hyp_sum_ps": 2.070938, "energy_drift_pct": 0.0, "elapsed_s": 2.46}
+{"type": "start", "n": 3, "om_thz": 13.0, "gvm": false}
+{"type": "point", "n": 3, "om_thz": 13.0, "gvm": false, "tau_meas_ps": 0.142942, "tau_hyp_gvm_ps": 6.8, "tau_hyp_gvd_ps": -4.729062, "tau_hyp_sum_ps": 2.070938, "energy_drift_pct": 0.0, "elapsed_s": 2.39}
+{"type": "start", "n": 3, "om_thz": -5.0, "gvm": true}
+{"type": "point", "n": 3, "om_thz": -5.0, "gvm": true, "tau_meas_ps": 6.745022, "tau_hyp_gvm_ps": 6.8, "tau_hyp_gvd_ps": -0.151478, "tau_hyp_sum_ps": 6.648522, "energy_drift_pct": 0.0, "elapsed_s": 2.44}
+{"type": "start", "n": 3, "om_thz": -5.0, "gvm": false}
+{"type": "point", "n": 3, "om_thz": -5.0, "gvm": false, "tau_meas_ps": -0.054978, "tau_hyp_gvm_ps": 6.8, "tau_hyp_gvd_ps": -0.151478, "tau_hyp_sum_ps": 6.648522, "energy_drift_pct": 0.0, "elapsed_s": 2.43}
+{"type": "start", "n": 3, "om_thz": 5.0, "gvm": true}
+{"type": "point", "n": 3, "om_thz": 5.0, "gvm": true, "tau_meas_ps": 6.854978, "tau_hyp_gvm_ps": 6.8, "tau_hyp_gvd_ps": -0.94316, "tau_hyp_sum_ps": 5.85684, "energy_drift_pct": 0.0, "elapsed_s": 2.43}
+{"type": "start", "n": 3, "om_thz": 5.0, "gvm": false}
+{"type": "point", "n": 3, "om_thz": 5.0, "gvm": false, "tau_meas_ps": 0.054978, "tau_hyp_gvm_ps": 6.8, "tau_hyp_gvd_ps": -0.94316, "tau_hyp_sum_ps": 5.85684, "energy_drift_pct": 0.0, "elapsed_s": 2.45}

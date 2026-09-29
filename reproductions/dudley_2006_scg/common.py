@@ -280,11 +280,16 @@ class Evolution:
     def spectra(self) -> np.ndarray:
         """Spectral power |Ã(z,Ω)|² (arb. units), shape (nz, N).
 
-        Uses the fftshifted convention of :attr:`TemporalGrid.fft` so that the
-        spectral axis is aligned with :attr:`omega`.
+        Must use the SAME analysis kernel as the engine's transform pair
+        (``TemporalGrid.fft``, analysis ``e^{+iΩt}`` after ISSUES.md #0).
+        A raw ``np.fft.fft`` (kernel ``e^{−i}``) mirrors the bin assignment of
+        every complex wideband field, silently blue↔red-flipping the λ map
+        (that was the fig06 "586 nm anti-Stokes pile" regression).
         """
-        shifted = np.fft.fftshift(np.fft.fft(self.fields, axis=1), axes=1)
-        return np.abs(shifted) ** 2
+        out = np.empty(self.fields.shape, dtype=float)
+        for i, u in enumerate(self.fields):
+            out[i] = np.abs(np.fft.fftshift(np.conj(np.fft.fft(np.conj(np.fft.ifftshift(u)))))) ** 2
+        return out
 
     def wavelength_nm(self) -> np.ndarray:
         """Vacuum wavelength (nm) for each spectral bin, ascending."""
@@ -406,7 +411,11 @@ def spectrogram(
     S = np.zeros((n_delays, len(E)), dtype=float)
     for i, tau in enumerate(delays):
         gated = E * np.interp(t - tau, t, g.real)
-        S[i] = np.abs(np.fft.fftshift(np.fft.fft(gated))) ** 2
+        # Same analysis kernel family as the engine pair (ISSUES.md #0):
+        # a raw np.fft (e^{−i}) mirrors the ω-axis assignment of complex
+        # fields and rotates the spectrogram trace in λ.
+        S[i] = (np.fft.fftshift(np.conj(np.fft.fft(np.conj(np.fft.ifftshift(gated))))))
+        S[i] = np.abs(S[i]) ** 2
     return delays * 1e12, omega, S
 
 
@@ -740,15 +749,18 @@ def spectral_evolution_data(
 def temporal_evolution_data(
     evo: Evolution,
     *,
-    time_reversal: bool = True,
+    time_reversal: bool = False,
 ) -> tuple[NDArray, NDArray]:
     """Return (time_ps, intensity) in the literature comoving convention.
 
-    The library's internal time grid runs opposite to the standard Agrawal /
-    Dudley convention, so Raman-red-shifted solitons appear at *negative*
-    internal time (see :meth:`Evolution.output_intensity`).  With
-    ``time_reversal=True`` the axis is flipped so solitons appear at positive
-    delay, matching Dudley et al. (2006) Fig. 3(b).  Spectra are unaffected.
+    Post-ISSUES.md #0 (engine convention swap, closed 2026-09-30) the
+    library's internal time grid ALREADY runs in the standard Agrawal /
+    Dudley direction: Raman-red-shifted solitons appear at *positive*
+    delay, matching Dudley et al. (2006) Fig. 3(b) directly (red-shifted
+    soliton is slower for beta2 < 0, i.e. later arrival).  The historical
+    ``time_reversal=True`` flip compensated the pre-#0 mirrored engine and
+    is kept only for back-compatibility with old notebooks; all current
+    callers should leave it False.  Spectra are unaffected.
     """
     t_ps = np.asarray(evo.t, dtype=float) * 1e12
     intensity = np.asarray(evo.intensity, dtype=float)
@@ -763,7 +775,7 @@ def temporal_evolution_data(
 def temporal_feature_labels(
     evo: Evolution,
     *,
-    time_reversal: bool = True,
+    time_reversal: bool = False,
     n_bands: int = 24,
     wl_range: tuple[float, float] = (400.0, 1400.0),
     floor_db: float = 40.0,
@@ -790,7 +802,9 @@ def temporal_feature_labels(
     n_z, n_t = evo.fields.shape
     labels = np.empty((n_z, n_t), dtype=object)
     for iz, snapshot in enumerate(evo.fields):
-        spectrum = np.fft.fftshift(np.fft.fft(snapshot))
+        # Engine-consistent e^{+i} kernel (ISSUES.md #0 resolution addendum):
+        # a raw np.fft.fft mirrors the bins of complex snapshot fields.
+        spectrum = np.fft.fftshift(np.conj(np.fft.fft(np.conj(np.fft.ifftshift(snapshot)))))
         best = np.full(n_t, -np.inf)
         best_band = np.zeros(n_t, dtype=int)
         for b, mask in enumerate(band_masks):

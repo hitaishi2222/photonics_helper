@@ -215,7 +215,7 @@ def _plot(
     ax_spec.grid(True, which="both", alpha=0.3)
 
     # (b) output temporal intensity in dB vs time (literature comoving time)
-    t_ps, inten = common.temporal_evolution_data(evo, time_reversal=True)
+    t_ps, inten = common.temporal_evolution_data(evo, time_reversal=False)
     inten_dB = 10.0 * np.log10(inten[-1] / inten[-1].max() + 1e-30)
     ax_time.plot(t_ps, inten_dB, color="C0", lw=1.2)
     ax_time.set_xlim(*t_bounds)
@@ -242,7 +242,7 @@ def _plot(
         t_bounds=t_bounds,
         dynamic_range_db=dynamic_range_db,
         cmap=cmap,
-        time_reversal=True,
+        time_reversal=False,
     )
     ax_evo_time.set_title("(d) Temporal evolution")
 
@@ -286,9 +286,9 @@ def _plot_plotly(
         grid, common.carrier_wavelength_nm(evo)
     )
 
-    t_ps, intensity = common.temporal_evolution_data(evo, time_reversal=True)
+    t_ps, intensity = common.temporal_evolution_data(evo, time_reversal=False)
     int_db = common._db_clipped(intensity, dynamic_range_db)
-    t_labels = common.temporal_feature_labels(evo, time_reversal=True)
+    t_labels = common.temporal_feature_labels(evo, time_reversal=False)
 
     wl, psd = evo.spectrum_on_wavelength()
     out_spec_db = 10.0 * np.log10(psd[-1] / psd[-1].max() + 1e-30)

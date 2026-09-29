@@ -444,7 +444,6 @@ def validate(*, make_plot: bool = True) -> dict:
         ).tolist(),
     }
 
-    df_res = 2 * np.pi * 1e12 / (N_GRID / WINDOW_S)   # GHz per spectrum bin
 
     # --- 2. Step-size convergence at the PRL numerics point ---------------
     fine = run_case("numerics fine (dz=0.02mm)", LEN_NUM, P_PKP_NUM,

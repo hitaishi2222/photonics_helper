@@ -40,7 +40,7 @@ This repository uses [OpenSpec](https://github.com/Fission-AI/OpenSpec)-style
 change proposals under `openspec/changes/` (spec-driven: why → what → design →
 tasks). For anything beyond a trivial fix:
 
-1. Describe the *why* and the affected capability.
+1. Describe the _why_ and the affected capability.
 2. Keep implementation details in the design section.
 3. Land the change and tests together.
 

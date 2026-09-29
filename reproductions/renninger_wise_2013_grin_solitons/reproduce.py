@@ -445,6 +445,15 @@ def validate(*, fast: bool = False, make_plot: bool = True) -> dict:
     # relative ordering is recorded and discussed in the README rather than
     # asserted.  The decisive mode-locking evidence is the temporal overlap.
     higher_blue = centres[1] < centres[0] and centres[2] < centres[1]
+    # Post-#0 audit (2026-09-30): under the current (dense-DFT-arbitrated)
+    # convention the higher-mode centroids are BLUE-shifted relative to the
+    # fundamental (paper Fig. 2c), −1.06/−3.80 nm vs required −1.53/−4.61.
+    # Assert the sign of the RELATIVE shifts (robust to common-mode
+    # radiation in the absolute centroids); magnitudes recorded, not
+    # asserted (locked-carrier compromise at 7.2 %/0.56 % seed fractions).
+    rel_shifts = [centres[1] - centres[0], centres[2] - centres[0]]
+    assert rel_shifts[0] < 0 and rel_shifts[1] < 0, (
+        "higher-mode locking shifts must be blue (paper Fig. 2c)", rel_shifts)
 
     # total energy conservation along z (both runs)
     energy_lin = eng_lin.energy_vs_z
@@ -464,6 +473,7 @@ def validate(*, fast: bool = False, make_plot: bool = True) -> dict:
             "fwhm_relative_error": float(fwhm_err),
             "compression_factor": float(compression),
             "spectral_centroids_nm": centres,
+            "relative_shift_nm": rel_shifts,
             "higher_modes_blue_shifted": bool(higher_blue),
             "measured_shift_nm": [c - 1550.0 for c in centres],
             "energy_drift_linear": drift_lin,

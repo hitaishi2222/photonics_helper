@@ -41,7 +41,7 @@ and checks the results below.
 | Total-energy drift (nonlinear) | ≈ 0 | 1.0 % | Strang-split error |
 | MFD self-imaging period (linear, post-processing) | 408 µm | 400.5 µm | 1.7 % |
 | MFD self-imaging period (linear, direct `phase_offsets` run) | 408 µm | 400.5 µm | 1.7 % |
-| Required locking shift p=1, p=2 (Δω = −Δβ₁/β₂) | −1.53 / −4.61 nm (blue) | +1.01 / +4.30 nm measured | sign pending ISSUES #0 |
+| Required locking shift p=1, p=2 (Δω = −Δβ₁/β₂) | −1.53 / −4.61 nm (blue) | −1.30 / −4.58 nm relative centroids, blue (post-#0 re-audit + FWM Euler fix 2026-09-30) | ✅ sign + magnitude (85 %/99 %) |
 
 The decisive result — **temporal locking** — is reproduced: the two higher
 modes, which walk off by up to 5.3 ps linearly, collapse to |Δt| ≤ 0.32 ps
@@ -53,21 +53,21 @@ conservation, and the linear MFD self-imaging.
 
 ## Caveats / findings
 
-1. **Higher-order-mode spectral shift ordering is not cleanly recovered.**
-   The paper reports the higher-order modes blue-shifted (Fig. 2c).  The
-   *magnitudes* of the measured centroid shifts (+1.01 / +4.30 nm for
-   p = 1, 2) match the kinematically required shifts for group-velocity
-   locking (Δω = −Δβ₁/β₂ → −1.53 / −4.61 nm, blue) within 7–34 %, but the
-   sign comes out opposite under the library's wavelength map
-   `λ = c/(ω₀ + grid.w)`.  The measured shifts + walk-off + XPM trap are
-   mutually consistent inside the engine; the sign discrepancy traces to an
-   **engine-level Fourier-convention inconsistency** (the dispersion
-   operator's group-delay direction is time-reversed relative to the
-   group-delay and Raman operators — see **ISSUES.md #0**, established with
-   an independent dense-DFT reference at 1e-13).  Until that audit lands,
-   the reproduction records `higher_modes_blue_shifted = false` and treats
-   the temporal locking (the physical content of "same group velocity") as
-   the decisive test.
+1. **Higher-order-mode spectral shift — RESOLVED 2026-09-30 (post-#0 audit).**
+   The original red-shifted measurement (+1.01 / +4.30 nm for p = 1, 2) was
+   taken **before** the ISSUES.md #0 Fourier-convention swap and was an
+   artifact of the mirrored wavelength map, not engine physics. Re-measured
+   under the current (dense-DFT-arbitrated) convention, the per-mode
+   spectral centroids relative to the fundamental are
+   **−1.30 / −4.58 nm (blue)**, vs the kinematically required −1.531 / −4.611 nm
+   (Δω = −Δβ₁/β₂) — correct sign, magnitudes to 85 %/99 % (the residual
+   deficit is the locked-carrier compromise: p = 1/2 carry only
+   7.2 %/0.56 % of the energy, so their carrier is pulled by the
+   fundamental via XPM, and the centroid includes dispersive radiation).
+   The paper's Fig. 2c blue-shift is reproduced; `validate()` now asserts
+   the relative-shift sign. This was the LAST open symptom of
+   **ISSUES.md #0 — closed 2026-09-30** (arrival-time channel independently
+   validated by the Brahms & Travers reproduction the same day).
 2. **Spatial self-imaging (paper Fig. 3d) — now reproduced directly.**
    The engine's retarded-frame Taylor expansion starts at β₂ and originally
    omitted the absolute Δβ₀ phase.  Status 2026-09-21: `phase_offsets`

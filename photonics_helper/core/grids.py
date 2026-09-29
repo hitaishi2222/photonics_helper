@@ -58,24 +58,26 @@ class TemporalGrid:
         return w[1] - w[0]
 
     def fft(self, A_t):
-        """Forward FFT with photonics_helper convention: ``FFT(A)·dt``.
+        """Forward FFT — analysis kernel ``e^{+iΩt}``, scaled by ``dt``.
 
-        The result is fftshifted and scaled by ``dt`` so that Parseval's
-        theorem holds with the companion :meth:`ifft`. Raw FFT magnitudes
-        differ from laserfun (which uses unshifted ``fft`` without ``dt``);
-        compare normalized spectra or time-domain intensities across tools.
-
-        Executes on the FFTW3 backend (:mod:`photonics_helper._fftw`) when
-        ``pyfftw`` is installed, falling back to ``numpy.fft`` otherwise.
+        **Convention swap 2026-09 (openspec ``fix-audit-issues-batch``,
+        ``ISSUES.md #0``)**: the analysis kernel is now ``e^{+iΩt}`` and the
+        companion :meth:`ifft` synthesis kernel ``e^{−iΩt}``, the standard
+        Agrawal pairing (A(z,T) = ∫Ã(Ω)·e^{−iΩT}; the carrier factor is
+        ``e^{−iω₀t}``). Implemented as ``conj(DFT(conj(·)))`` on the same
+        backend primitive (the DFT pair mirrored). Bin ``w > 0`` under the
+        λ map ``λ = c/(ω₀ + grid.w)`` is the blue side, and Parseval still
+        holds with the paired transforms.
         """
-        return _fft_backend(A_t) * self.dt
+        return np.conj(_fft_backend(np.conj(np.asarray(A_t)))) * self.dt
 
     def ifft(self, A_w):
         """Inverse FFT paired with :meth:`fft` (includes ``1/dt`` scaling).
 
-        Executes on the FFTW3 backend when ``pyfftw`` is installed.
+        Synthesis kernel ``e^{−iΩt}`` after the #0 convention swap; see
+        :meth:`fft`.
         """
-        return _ifft_backend(A_w) / self.dt
+        return np.conj(_ifft_backend(np.conj(np.asarray(A_w)))) / self.dt
 
     @property
     def omega_max(self):

@@ -183,14 +183,29 @@ def test_tapered_solver_accepts_betas_unit():
         beta=beta,
         central_wavelength=pulse.central_wavelength.as_m,
     )
-    solver = TaperedGNLSESolver(
-        pulse=pulse,
-        fiber=fiber,
-        dispersion_profile=profile,
-        include_raman=False,
-        betas_unit="s^k/m",
-    )
+    # Non-default units are inert on the tapered solver (dispersion comes from
+    # the SI profile) — must warn, not stay silent (ISSUES.md #3).
+    with pytest.warns(UserWarning, match="betas_unit"):
+        solver = TaperedGNLSESolver(
+            pulse=pulse,
+            fiber=fiber,
+            dispersion_profile=profile,
+            include_raman=False,
+            betas_unit="s^k/m",
+        )
     assert solver.betas_unit == "s^k/m"
+
+    import warnings as _w
+
+    with _w.catch_warnings():
+        _w.simplefilter("error", UserWarning)
+        solver_default = TaperedGNLSESolver(
+            pulse=pulse,
+            fiber=fiber,
+            dispersion_profile=profile,
+            include_raman=False,
+        )
+    assert solver_default.betas_unit == "ps^k/m"
 
     with pytest.raises(ValueError):
         TaperedGNLSESolver(

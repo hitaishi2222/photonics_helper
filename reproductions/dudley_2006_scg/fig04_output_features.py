@@ -66,7 +66,9 @@ def _band_temporal_delay(
     omega = evo.omega
     lam = 2.0 * np.pi * common.C_MS / (evo.omega0 + omega) * 1e9
     mask = np.abs(lam - center_nm) <= half_width_nm
-    spectrum = np.fft.fftshift(np.fft.fft(evo.fields[-1]))
+    # Engine-consistent e^{+i} kernel so the mask lands on the correct
+    # sideband under the c/(ω₀+grid.w) λ map (ISSUES.md #0 addendum).
+    spectrum = np.fft.fftshift(np.conj(np.fft.fft(np.conj(np.fft.ifftshift(evo.fields[-1])))))
     filtered = np.fft.ifft(np.fft.ifftshift(spectrum * mask))
     intensity = np.abs(filtered) ** 2
     return float(evo.t[int(np.argmax(intensity))] * 1e12), float(intensity.max())

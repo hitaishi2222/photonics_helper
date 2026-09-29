@@ -365,6 +365,83 @@ class TestMI:
             np.sqrt(2 * gamma * P_pump / abs(beta2)), rel=0.05
         )
 
+    def test_extended_mi_betas_path_exact(self, gamma, P_pump):
+        """#2 fix: the analytic betas path must be offset-free by construction.
+
+        Δ(Ω) = 2 Σ_even-k βₖΩᵏ/k! — reproduces the classical gain exactly
+        for realistic SMF β₂ where the absolute-carrier path is
+        round-off-destroyed (documented cases: Δ = 0.0 vs −0.056 at
+        ±1.68e12 rad/s; −0.5 vs −0.352 at ±4.19e12).
+        """
+        from photonics_helper.phase_matching import (
+            mi_gain_spectrum,
+            mi_gain_spectrum_extended,
+        )
+
+        beta2 = -2.1e-26  # realistic SMF (−21 ps²/km), not the ~1000x crutch
+        omega0 = 2 * PI * C_MS / 1550e-9
+        Om = np.linspace(
+            -1.5 * np.sqrt(-4 * gamma * P_pump / beta2),
+            1.5 * np.sqrt(-4 * gamma * P_pump / beta2),
+            2001,
+        )  # spans the documented round-off cases and the true cutoff
+        classical = mi_gain_spectrum(beta2, gamma, P_pump, Om)
+
+        ext = mi_gain_spectrum_extended(
+            None, omega0, gamma, P_pump, omega_m=Om, betas=np.array([beta2])
+        )
+        assert np.allclose(ext["gain"], classical, rtol=1e-9, atol=1e-14)
+        assert ext["Omega_cutoff"] == pytest.approx(
+            np.sqrt(-4 * gamma * P_pump / beta2), rel=0.01
+        )
+
+    def test_extended_mi_detuning_convention(self, gamma, P_pump):
+        """#2 fix: beta_fn_convention='detuning' must be offset-free.
+
+        The caller supplies β~(Ω) = β(ω₀+Ω) − β(ω₀); the library never sees
+        the large carrier term, reproducing the documented round-off cases
+        exactly: Δ(±1.68e12) = −0.056 and Δ(±4.19e12) = −0.352 for SMF β₂.
+        """
+        from photonics_helper.phase_matching import mi_gain_spectrum_extended
+
+        beta2 = -2.1e-26  # s²/m (−21 ps²/km, the ISSUES #2 demonstration case)
+        def domega(w):
+            return 0.5 * beta2 * w**2  # β₁ cancels analytically in Δ
+        expected_cutoff = np.sqrt(-4 * gamma * P_pump / beta2)
+
+        # Δ(Ω) = β~(Ω) + β~(−Ω) = β₂Ω² for the pure-β₂ reference:
+        assert np.isclose(
+            domega(1.68e12) + domega(-1.68e12), -0.056, atol=5e-3
+        ), "documented case 1 not reproduced by the reference formula"
+        assert np.isclose(
+            domega(4.19e12) + domega(-4.19e12), -0.352, atol=2.5e-2
+        ), "documented case 2 not reproduced (pure-β₂ ref: −0.369; ISSUES quotes −0.352 incl. β₄)"
+
+        ext = mi_gain_spectrum_extended(
+            domega,
+            0.0,
+            gamma,
+            P_pump,
+            omega_m=np.linspace(-1.5 * expected_cutoff, 1.5 * expected_cutoff, 2001),
+            beta_fn_convention="detuning",
+        )
+        assert ext["Omega_cutoff"] == pytest.approx(expected_cutoff, rel=0.01)
+
+    def test_extended_mi_absolute_convention_warns(self, gamma, P_pump):
+        """#2: the legacy absolute-carrier path must emit a deprecation."""
+        from photonics_helper.phase_matching import mi_gain_spectrum_extended
+
+        beta2 = -21e-24
+        omega0 = 2 * PI * C_MS / 1550e-9
+        with pytest.warns(DeprecationWarning, match="cancellation|round-off|betas=|detuning"):
+            mi_gain_spectrum_extended(
+                lambda w: 0.5 * beta2 * (w - omega0) ** 2,
+                omega0,
+                gamma,
+                P_pump,
+                omega_m=np.linspace(-1e12, 1e12, 5),
+            )
+
     def test_mi_summary_no_grid(self, beta2, gamma, P_pump):
         """mi_gain_spectrum with omega_m=None returns summary dict."""
         from photonics_helper.phase_matching import mi_gain_spectrum

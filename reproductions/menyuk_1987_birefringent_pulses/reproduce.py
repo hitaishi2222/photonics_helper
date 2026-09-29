@@ -249,7 +249,6 @@ def filament_run(
         n=n,
     )
     eng.propagate(int(round(length_m / step_m)), nsaves=3)
-    t = grid.t
     px = np.abs(eng.evolution_x[-1].envelope_field) ** 2
     py = np.abs(eng.evolution_y[-1].envelope_field) ** 2
     return grid, eng, px, py
@@ -532,7 +531,6 @@ def split_scan(
     assert float(np.min(ovls_a[lock_mask])) > 0.9, {
         "min_overlap_locked": float(np.min(ovls_a[lock_mask])),
     }
-    split_mask = deltas >= 0.9
     d_nl_lo = float(deltas[np.argmax(ovls_a < 0.5)])
     assert 0.3 < d_nl_lo <= 1.0, {"d_nl_lo": d_nl_lo}
 
@@ -570,8 +568,6 @@ def _plot_filaments(case5: dict, case250: dict, out_paths: dict) -> None:
         coupling="incoherent", length_m=L5, step_m=STEP_5PS_M,
     )
     c_th = abs(case5["beta2_s2_per_m"]) * L5 / case5["T0"]
-    fx = np.abs(eng.evolution_x[-1].envelope_field) ** 2
-    fy = np.abs(eng.evolution_y[-1].envelope_field) ** 2
     x = (grid.t - c_th) * 1e12
     r5 = case5["P_axis"] / np.cosh((grid.t - c_th) / case5["T0"]) ** 2
 

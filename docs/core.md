@@ -3,7 +3,7 @@
 `photonics_helper.core` is the **foundation layer** of the library — the small,
 dependency-light set of primitives that everything else (and anything you build)
 can rely on. It is deliberately separate from the solvers and plotting helpers,
-which are *satellites* layered on top.
+which are _satellites_ layered on top.
 
 ```python
 from photonics_helper.core import units, constants, grids, materials
@@ -26,12 +26,12 @@ not just documented.
 
 ## What is in the core
 
-| Module | Contents |
-|---|---|
-| `core.units` | Typed unit classes: `Wavelength`, `Frequency`, `AngularFrequency`, `Energy`, `Time`, `Length`, `Area`, `Power`, `Wavenumber`, `PeakPower`, `Permittivity`, `Permeability`, and their array variants |
-| `core.constants` | `C_MS`, `EPS_0`, `MU_0`, `Z0`, `H_PLANCK`, `HBAR`, `PI` |
-| `core.grids` | `TemporalGrid` — time/frequency sampling and the documented FFT convention |
-| `core.materials` | `OpticalMaterial` protocol, `Material`, and the `material()` database lookup |
+| Module           | Contents                                                                                                                                                                                            |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `core.units`     | Typed unit classes: `Wavelength`, `Frequency`, `AngularFrequency`, `Energy`, `Time`, `Length`, `Area`, `Power`, `Wavenumber`, `PeakPower`, `Permittivity`, `Permeability`, and their array variants |
+| `core.constants` | `C_MS`, `EPS_0`, `MU_0`, `Z0`, `H_PLANCK`, `HBAR`, `PI`                                                                                                                                             |
+| `core.grids`     | `TemporalGrid` — time/frequency sampling and the documented FFT convention                                                                                                                          |
+| `core.materials` | `OpticalMaterial` protocol, `Material`, and the `material()` database lookup                                                                                                                        |
 
 ### Units
 
@@ -78,16 +78,16 @@ def group_index(mat: OpticalMaterial, wavelength_um: float) -> float:
 
 ## Stable core, evolving satellites
 
-| Layer | Modules | Guarantee |
-|---|---|---|
-| **Core (stable)** | `core.units`, `core.constants`, `core.grids`, `core.materials` | Foundation contract; additive-only changes within a major version |
-| **Satellites** | `gnlse`, `chi2`, `phase_matching`, `soliton`, `pulse`, `raman`, `dbr`, `frog`, `structured`, `breathers`, `noise`, `wave_breaking`, `phonon`, `dashboard` | First-class, but may evolve as physics and features develop |
+| Layer             | Modules                                                                                                                                                   | Guarantee                                                         |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| **Core (stable)** | `core.units`, `core.constants`, `core.grids`, `core.materials`                                                                                            | Foundation contract; additive-only changes within a major version |
+| **Satellites**    | `gnlse`, `chi2`, `phase_matching`, `soliton`, `pulse`, `raman`, `dbr`, `frog`, `structured`, `breathers`, `noise`, `wave_breaking`, `phonon`, `dashboard` | First-class, but may evolve as physics and features develop       |
 
 Both layers keep their **existing import paths**. Nothing in this namespace
 replaces `photonics_helper.base` or `photonics_helper.materials` — for example,
 `from photonics_helper.base import Wavelength` and
-`from photonics_helper.core.units import Wavelength` refer to the *same class
-object*.
+`from photonics_helper.core.units import Wavelength` refer to the _same class
+object_.
 
 ## Building on the core
 

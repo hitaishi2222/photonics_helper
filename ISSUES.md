@@ -79,6 +79,55 @@ Eq. 6 fixed point) is unaffected.
 arbiter promoted to a permanent regression test
 (`tests/test_gnlse_convention.py`), then re-run every reproduction.
 
+**Resolution addendum (2026-09-28, peer-review session).** Issue #0's symptom
+now has a second, subtler half. The engine-side convention swap (conjugated
+transform pair + plain causal `h_R` convolution + `exp(+iΣβₖΩᵏz/k!)`) is
+physically correct — re-verified against the Gordon SSFS law (3/3
+`test_raman_ssfs`), the Stokes-side gain probe, and causal h_R. The
+regression of `dudley_2006_scg` fig06 ("ejected-soliton mass piles at
+λ≈586–655 nm, mean λ → 660 nm") was **not** a Raman-sign problem and not a
+coincidence of mirrored bugs: the repro's analysis helper
+`reproductions/dudley_2006_scg/common.py::Evolution.spectra` still read the
+fields with the **raw `np.fft.fft` kernel `e^{−i}`** (pre-swap convention),
+which mirrors the bin assignment of complex wideband fields and silently
+blue↔red-flips the λ map. Narrowband/symmetric observables are insensitive
+(all engine Raman tests kept passing), which is why the mismatch hid until
+fig06. A tone probe through `TemporalGrid.fft` vs the raw reading pins the
+direction unambiguously (a physical-red tone envelope `e^{+iΩ_m t}` lands at
+bin `w = −Ω_m`, i.e. red under the λ map, only under the e^{+i} kernel).
+Fix applied in `common.Evolution.spectra` (analysis now uses the same
+e^{+i} kernel family as `TemporalGrid.fft`); fig06 fast validation passes
+(mean λ 835 → 1250.7 nm, ejected P/FWHM within KH tolerance) and the full
+fast suite passes 1128/1128. Any other site reading fields with a raw
+`np.fft` and mapping bins via `c/(ω₀+grid.w)` must be audited for the same
+mirror hazard (candidates: the spectrogram helper and the z=… interp path in
+the same `common.py`).
+
+**Resolution addendum (2026-09-30, arrival-time channel).** Post-fix
+validation of the #0 family in the *arrival-time* channel landed with the
+Brahms & Travers 2021 reproduction (`reproductions/dw_timing_gas_hollowcore/`):
+RDW walk-off τ(E) = L_prop·Δβ₁ rises with pump energy in all ten pressure
+decks (Spearman ρ ≥ 0.977 — the Fig. 1c mechanism direction), and the
+resampled timing jitter reproduces the paper's Fig. 5 (< 300 as in 9/10
+decks; ∝ pump noise). One engine-frame caveat was surfaced and is engine-
+by-design, not a bug: `_linear_step` drops β₁ (carrier group-velocity
+frame), so the RDW walk-off is reconstructed on the analysis side via the
+analytic β₁ propagation leg (Eq. 11/12 with the simulated RDW λ) — the raw
+engine-frame moment measures only the ≤ 0.2 fs envelope-frame imprint.
+Any future in-engine absolute-arrival observable needs a β₁-aware readout
+helper (queued as optional follow-up in the folder README).
+
+**CLOSED 2026-09-30 (same-day re-audit).** The original failing symptom —
+the Renninger & Wise higher-mode blue-shift sign — was re-measured under
+the current post-swap convention: relative spectral centroids −1.06 /
+−3.80 nm (blue) vs the kinematically required −1.53 / −4.61 nm. The
+pre-swap red measurement (+1.01 / +4.30) was an artifact of the mirrored
+λ-map, not engine physics. `renninger_wise_2013_grin_solitons::validate`
+now asserts the relative-shift sign. Four independent channels agree with
+the current convention: dense-DFT reference (1.9e-13), Raman/SSFS law,
+FFT-kernel tone probe, RDW group-delay walk-off.
+
+
 ---
 
 ## 1. Self-steepening: residual photon-number drift (model-intrinsic)
@@ -105,11 +154,17 @@ Already landed (do not re-file): `tau_shock` override, RK4IP shock
 integrator, adaptive substepping, `energy_vs_z` monitor with >5 % warning,
 `Ω_max < ω₀` grid guard.
 
-**Next action.** Optionally implement a photon-conserving shock term as an
-opt-in `conserving_shock=True` flag (pcGNLSE form; two sign/|γ|
-modifications vs the standard GNLSE), with conservation + red-shift +
-blue-skew validation tests. Until then, quote the drift as a stated
-tolerance per reproduction and respect the monitor warning.
+**Resolved (2026-09-28, openspec fix-audit-issues-batch §5).** The opt-in
+`conserving_shock=True` flag is shipped: `SplitStepEngine` (and
+`GNLSESolver` pass-through) implement the pcGNLSE operator (time-domain
+form, Huang et al. arXiv:2607.05244) — |γ| on the delayed-Raman phase arm
+and on the SS–Raman dissipative cross term; the instantaneous SPM/SS arm
+keeps the signed γ. Default path byte-identical (flag-gated branch only).
+Validation tests: `tests/test_gnlse_conserving_shock.py` (drift
+non-negative vs the standard +5–6 % drift; γ>0 reduction to the standard
+solution; SSFS red-sign preserved with the flag on) plus `docstring
+context` in `SplitStepEngine` docstring. The model-intrinsic standard-GNLSE
+drift note above remains the correct description of `conserving_shock=False`.
 
 **Detailed write-up:** `reproductions/README.md` → "ISSUE detail — shock
 energy drift". Also touched: `REPORT.md` (2 annotated entries),
@@ -138,15 +193,19 @@ and `beta_fn(omega0 ± Ω)` directly — no offset-aware interface.
 `beta_fn` *without* the β₀/ω₀ carrier offset (e.g. a callable of the detuning
 only); the β₁ term cancels analytically so this is exact in the Taylor limit.
 
-**Next action.** Either document/validate the offset-free `beta_fn` contract,
-or accept a relative-detuning callable / evaluate with an offset-aware
-interface so the carrier never enters the subtraction. (The scalar
-`mi_gain_spectrum` is unaffected — it takes β₂ directly and matches Agrawal
-Eq. (5.1.9) exactly since `fix-mi-gain-convention`.)
-
----
-
-## 3. `TaperedGNLSESolver`: inert `betas_unit` parameter
+**Resolved (2026-09-28, openspec fix-audit-issues-batch §3).**
+`mi_gain_spectrum_extended` now implements the offset-aware contract so the
+carrier never enters the subtraction:
+1. ``betas=<β₂…βₖ s^k/m array>`` — Δ computed analytically as
+   2·Σ_even-k βₖΩᵏ/k!, exact by construction (regression test
+   `test_extended_mi_betas_path_exact` reproduces the classical gain for
+   realistic SMF β₂ at rtol 1e-9).
+2. ``beta_fn_convention="detuning"`` — caller supplies β~(Ω) = β(ω₀+Ω) − β(ω₀)
+   (regression test pins the documented round-off cases −0.056 / −0.352).
+3. The legacy absolute-carrier path is kept for compatibility but emits
+   ``DeprecationWarning`` pointing at the two contracts.
+`examples/26_mi_gain_convention.py` updated to the `betas=` path (runs green).
+(The scalar `mi_gain_spectrum` is unaffected## 3. `TaperedGNLSESolver`: inert `betas_unit` parameter
 
 **Symptom.** The resolved solver takes `betas_unit` (validated against the
 usual unit strings) but has no `betas` array at all — its dispersion comes
@@ -156,32 +215,21 @@ effect. A user passing `betas_unit="SI"` in good faith gets silence.
 **Verified current.** No warning is emitted; the docstring documents the
 inertia but nothing guards against the confusion.
 
-**Next action.** Emit a `UserWarning` when `betas_unit != "ps^k/m"` is passed
-to `TaperedGNLSESolver` (or drop the flag there; it is on the stable surface
-now, so prefer warn-over-remove).
-Source: `REVIEW.md` §change 1 note and the re-review of
-`add-gnlse-beta-units-validation`.
-
----
+**Resolved (2026-09-28, openspec fix-audit-issues-batch §3.4).**
+`TaperedGNLSESolver.__init__` now emits a `UserWarning` whenever
+`betas_unit != "ps^k/m"` (validated strings still raise `ValueError` on
+bogus input; the default path stays warning-free). Regression test added to
+`tests/test_gnlse_beta_units.py` (`test_tapered_solver_accepts_betas_unit`
+now asserts warn-on-nondefault and silent-on-default). ---
 
 ## 4. `plot_waterfall`: non-standard waterfall rendering (cosmetic)
 
-**Symptom.** The waterfall plot mixes time on the x-axis with a z offset
-added directly to the y values (`envelope + z_steps[i]*1e3`), producing a
-profile-of-offsets figure that is hard to interpret; plotting is
-qualitative-only and the axis is not a proper lagged-perspective (no shared
-axes, no z tick mapping).
-
-**Verified current.** Still present in `gnlse.py::plot_waterfall` (confirmed
-by `REPORT.md` §caveat 7 and the code shape; the readout is unchanged).
-Cosmetic/UX only — no physics impact; all quantitative diagnostic surfaces
-are separate.
-
-**Next action.** Either re-draw as a true ridge/waterfall (per-trace y offset
-handled by the artist transform, z-axis secondary ticks) or deprecate it in
-favour of the 2-D evolution maps the newer reproductions use. Low priority.
-
----
+**Resolved (2026-09-28, openspec fix-audit-issues-batch Â§3.5).**
+`plot_waterfall` re-drawn as a true ridge: each trace keeps its own data
+values and is shifted vertically via per-artist `ScaledTranslation`
+transforms (`ax.transData + offset`), with z-labelled y-tick baselines, a
+colorbar and an explicit ylim. The dated cosmetic complaint no longer
+exists; `test_waterfall_plot_returns_figure` stays green. ---
 
 ## 6. Raissi-2019 PINN: rel-L2 plateaus at ~3× the paper's 1.97e-3
 
@@ -259,18 +307,213 @@ seed-level scale-freedom (the paper fixes no absolute seed level).
   `include_fwm=False` is correct for Guasoni's Eq. (3) (no separate FWM
   term; the engine `_fwm_rhs` implements the Mumtaz arm instead).
 
-**Suspects / next actions (ranked).**
-1. Noise-seed × step-size (dz 1 mm–1 cm) × seed-level sweep to find the
-   regime where the Eq.-(13) estimate emerges in the measured readout.
-2. Engine group-delay walk-off sign audit vs Eq. (11) — same
-   family as **ISSUES.md #0** (the dispersion time-direction issue;
-   Δβ^(p,i) requires the opposite frequency-side reading).
-3. Evaluate whether the engine's `group_delays` channel-0-frame
-   retarded-field convention (pumps never drift) needs a dedicated
-   per-channel-delay arm for pump–sideband walk-off at 13 THz detuning.
+**Progress log (2026-09-28, openspec fix-audit-issues-batch §7).**
+The engine deck was re-run after the #0 convention fix: the Eq.-12 readout
+remains flat (band max 0.233 vs edge 0.230 at L = 5 m) — the convention fix
+did not change the outcome, as expected for this time-symmetric observable.
+Ranked-sweep result (task 7.2): seed level has no lever — 1e-7/1e-5/1e-3 W
+give band/edge 0.233/0.230, 0.188/0.184, 0.141/0.138 (larger seeds do not
+produce the paper's band 0.64 ± walk-off structure; the readout value *falls*
+with seed). Numbers: `reproductions/guasoni_2015_generalized_mi_multimode/
+diagnostics/probe_sweep_post0.md`. Still open (7.3): per-channel
+pump–sideband walk-off arm audit at the 13 THz detuning vs Eq. (11) —
+needs a dedicated session; do not archive the banded-readout claim.
 
-**Status:** OPEN. Do not archive the Guasoni split-step layer's
-"REPRODUCED" claim until this closes.
+**Walk-off audit — RETRACTED and superseded (2026-09-30, second run,
+`walkoff_13thz_summary.md`).** The v1 walk-off finding (sign-inverted /
+~3.5x / window-dependent group-delays arm) was entirely a PROBE ARTIFACT,
+not an engine defect: the v1 probe envelopes were centered on the
+circular FFT seam (tt = T/2 = array edge), so every time-shift readout
+was biased by wrap spill, and the v1 voices were aliased (dt = 48.8 fs
+-> Nyquist 10.24 THz < 13 THz). With the corrected probe (envelope at
+t = 0, T = 200 ps, unaliased tones) the multimode linear layer is
+vindicated in full: GVM arm exact (+5.400 ps for GVM = 10.8 ps/m at
+L = 0.5 m, sign and magnitude exact for all three channels); beta2
+group-velocity arm exact (dphi/dOmega = beta2 * w, -6.032 ps vs -6.032);
+beta3 Omega^2/2 arm realized in dphi/dOmega (beta3-only probe matches
+the analytic within ~7 %, limited by tone-packet width and dz = 1 mm).
+Also pinned: a tone exp(+i*Om*t) lands at bin w = -Om (red under the
+lambda map) after the #0 swap — the hypothesis column must use the
+bin-mapped side, which is what fixes the +-13 THz "mismatch".
+
+CONSEQUENCE for #8: the walk-off-arm explanation family for the flat
+Eq.-12 banded readout is CLOSED — the multimode linear layer realizes
+the Eq.-(11) arms verbatim, so the flat readout has a different cause
+(deck noise statistics / seed level / the paper's own readout's
+windowing). The Eq.-12 mystery therefore REMAINS OPEN but the
+linear-layer suspicion is dead; do not re-open it without new evidence.
+
+## 10. Wright-2015 STMI reproduction: engine-side check B asserts a noise
+##     artifact; reproduce's Kerr mismatch term inconsistent with the engine
+
+**Found.** 2026-09-27, first working session on
+`reproductions/planned/wright_2015_self_organized_instability/` (previously
+planning-only). All numbers reproducible from the scripts in that folder's
+`diagnostics/` (`probe_gain.py`, `probe_mismatch.py`, `probe_phase.py`).
+
+**Symptom.** `reproduce.py` asserted "engine develops spectral peaks at the
+analytic STMI roots (B)" based on `peak_bin_gain` = 113×/297× at ~115.8 /
+~81.9 THz. Direct probes of the same runs show these are argmax picks over a
+χ²-noise floor: at the exact analytic-root bin of the same 1 m run the
+out/in power ratio is **0.896**, and a coherent conjugate-tone probe at the
+analytic root over 0.3 m gives amplitude gain **0.998** (theory at resonance:
+cosh(γ_f P0·L) = 1.47). The engine spectrum on this grid is a noise floor —
+the gain band (half-width ≈ Ω·(γ_f P0/β₂Ω²) ≈ ±0.01 THz) is narrower than the
+grid's df ≈ 0.02 THz, so a noise-floor grid cannot evidence check B at all.
+The whole check is a noise artifact and does **not** evidence MI.
+
+**Engine mismatch derivation (hand, from operator algebra).** With
+`phase_offsets = -N·κ` on the sideband channels and full-γ self-phase on the
+pump (XPM weight 2/3 on the sidebands), the effective pair mismatch is
+`Ξ = (2/3)γP0 − (β₂Ω² + 2·offset)` — z-oscillation probe measured
+δ_eff ≈ 10.4 rad/m at the reproduce's analytic root, vs Ξ(old root) ≈ 9.4 rad/m
+(order consistent; the exact γP0/3-vs-γ_fP0 bookkeeping is not yet pinned —
+see the 2×2 eigen-map plan in `diagnostics/probe_map.py`). The reproduce's
+analytic condition `0.5·sym − N·κ + (2/3)γP0 = 0` has the Kerr term with the
+wrong sign/weight for this engine coupling; corrected: `0.5·sym − N·κ − γP0/3
+= 0` (root shifts by only ~0.02 THz — Fig. 3d conclusions unaffected).
+
+**Resolved (2026-09-28, openspec fix-audit-issues-batch §6, short-L
+verification; full-scale run pending on the author machine).**
+
+1. Formula pinned analytically AND numerically: the engine's effective pair
+   mismatch is `dbar = 0.5·sym − N·κ − γP₀/3` (pump self-phases at full γP₀;
+   sideband diagonals (2/3)γP₀). The reproduce's legacy `stmi_shift_thz`
+   misses the root by +0.015–0.022 THz; corrected roots
+   `stmi_shift_thz_corrected` added (N=1: 81.842, N=2: 115.691, N=5: 182.7).
+2. Check B rewritten deterministically (`check_b_deterministic`): coherent
+   conjugate-tone probe seeded along the growing eigenvector at the
+   corrected root, exponent asserted against the exact 2×2 sinh(gL) — no
+   noise-floor peak picking. Measured (L = 15 cm, 32 k grid, ~15 min):
+   |b2|/a = 0.4218 vs analytic sinh(gL) = 0.4874 (13.5 %, within the 20 %
+   tolerance); off-resonance control collapses to 1e-4; energy drift
+   1e-10 (photon-conserving). At the LEGACY root the probe measures an
+   oscillatory mismatch dbar = −4.7 rad/m — direct confirmation of the
+   corrected Kerr term.
+3. Grid resolution: the ±0.01 THz gain band vs df = 20 GHz story is moot
+   for the deterministic probe (peak picking removed; exponent readout).
+4. `validate(fast=True)` runs check B' only (smoke path documented in the
+   docstring); the full-parameter noise-seeded ladder runs and the
+   measured-vs-analytic gain-spectrum figure (task 6.4) remain the
+   author-side slow path.
+Folder README row updated accordingly.
+
+**Task 6.4 executed (2026-09-29/30, herdr background).**
+Session 1 (`diagnostics/probe_gain_spectrum.py`, L = 0.10 m, 50 points,
+~2.6 h): coherent asinh-recovery gives g = 2.6-3.2 /m at EVERY detuning
+across the +-0.03 THz sweep, including where the 2x2 mismatch band
+(|dbar| > c) predicts zero net gain — NOT a gain-band measurement.
+Session 2 pins the interpretation: at these detunings the sibling
+amplitude is the oscillatory coupling |b2| ~ 2c/|xi_eff|·|sin(xi_eff L/2)|
+(|b2|/a ~ 0.28-0.30 over the sweep window), linear-at-origin and
+numerically indistinguishable from a sinh-cusp at a single length
+(the +20 THz far-off control still collapses to ~1e-4, as before).
+Session 2 (`probe_gain_spectrum2.py`, L = 0.4 m, |b2(z)| trajectory
+readout, running) separates the families by the end/half-trajectory
+ratio: growth (sinh) ~2.0 monotone vs oscillatory ~1.3 turning over at
+z = pi/xi_eff. Also established: the probe REQUIRES N = 16384 (Nyquist
+164 THz); at N = 8192 the ~115.7 THz sideband aliases and the readout
+zeros exactly. The L = 0.1 m figure renders from `plot_gain_spectrum.py`
+(record of the single-length upper-bound ambiguity).
+
+**Task 6.4 COMPLETE (2026-09-30, both sweeps landed).** The L = 0.4 m
+trajectory sweep (`gain_spectrum_ztraj.jsonl`, 38 points) cleanly separates
+the families and closes the rebuild at the probe level: measured growth
+flags align with the analytic band |dbar| < c for both orders — order 2
+growth over dbar = -7.0..+3.3 rad/m, order 1 over dbar = -5.8..+3.3 rad/m
+(grid pitch 0.38 THz vs band half-width c ~= 2.8 rad/m ~= 1.6 bins) — and
+outside the band |b2(z)| turns over at z ~= pi/xi_eff (end values
+0.02-0.45), exactly the 2x2 oscillatory envelope (caveat: a global ~0.9
+amplitude factor from the KAPPA phase-projection convention; not a model
+break). +20 THz far-off control collapses to ~1e-4 as before. Figures:
+`wright_2015_gain_ztraj.png` (discriminating, band-aligned) and
+`wright_2015_gain_spectrum.png` (session-1 upper-bound record); renderers
+`plot_gain_ztraj.py` / `plot_gain_spectrum.py`. The corrected condition
+`dbar = 0.5*sym - N*kappa - gamma*P0/3` is validated against the engine.
+
+**CLOSED (2026-09-30, full-parameter engine deck landed — ~35 min with the
+`_phi_base` dispersion-cache optimization).** validate() slow path:
+16384 grid x 32000 ladder steps x 0.64 m, noise-seeded degenerate sideband
+pair. Engine peaks at 81.84 THz (order 1, analytic 81.82, rel-err 0.024 %)
+and 115.70 THz (order 2, analytic 115.676, rel-err 0.021 %) with
+peak_bin_gain 291x…293x / 263x — real MI bumps at the CORRECTED roots,
+above the chi2 floor (a noise floor cannot localize the analytic root;
+the earlier 113x/297x values were a noise-artifact argmax at the OLD
+legacy root). Energy drift 0.0 %. Figure `wright_2015_stmi.png`. The
+reproduction is complete and PROMOTED to `reproductions/`.
+---
+
+## 11. Multimode FWM substep: RK4 blow-up in strongly driven configurations
+
+**Found.** 2026-09-27, same Wright-2015 session.
+
+**Symptom.** With `include_fwm=True, fwm_pump_depletion=True`, a CW pump
+(1.5 kW, γP0 = 4.7 /m) and a sideband channel seeded at ~1e-4 of the pump
+amplitude **without** its idler partner, the idler grows to |A| ~ 1e240 and
+the run aborts with `RuntimeWarning: overflow` / NaN in
+`_fwm_rhs` (`_fwm_substep_count` then crashes on `ceil(NaN)`). A physically
+correct spontaneous idler should reach ~sinh(γ_f P0·L)·|a_sig| — not e^553.
+
+**Probable cause.** `_fwm_substep_count` caps substeps at 200
+(`rate·dz/0.05`): above the cap the explicit frequency-domain RK4 runs with
+h·λ far beyond RK4's stability region for the amplified mode and the error
+grows algebraically with the field. The cap should either raise the substep
+floor, trigger an adaptive dz shrink, or at minimum raise a loud warning
+instead of silently NaN-ing.`
+
+**Resolved (2026-09-28, openspec fix-audit-issues-batch §4).**
+`MultimodeSplitStepEngine._fwm_substep_count` is now stability-driven:
+the inner-step count satisfies η·h ≤ 2.5 for the strongest exchange pair
+(`η = γ f |Aₙ|²`, `MultimodeSplitStepEngine._fwm_rate_max`), instead of the
+old silent hard cap of 200; the accuracy target (η·h ≲ 0.05, cap 200) is
+kept as a lower bound only. Configurations whose stability requirement
+exceeds `_FWM_SUBSTEP_MAX = 8192` inner steps raise a loud `ValueError`
+naming the rate and channel (no `ceil(NaN)` path remains); a non-finite
+state inside the substep loop aborts immediately with `FloatingPointError`.
+Regression tests: `tests/test_multimode_fwm.py` (γP₀ = 4.7 /m, single
+seeded sideband without idler → idler stays at the sinh(γP₀·L)·seed level;
+stability-driven counting; loud overdrive failure).
+
+## 12. Multimode FWM substep: hidden Euler integrator (energy drift + RW fixed-point regression) — RESOLVED
+
+**Found.** 2026-09-30, during the #0-closure re-audit of
+`renninger_wise_2013_grin_solitons::validate` (the blue-shift re-check
+itself PASSED — see the #0 closure above; this is a different check in
+the same validate).
+
+**Symptom.** The nonlinear 52 m GRIN run's output FWHM landed 10.5 %
+off the Eq. (6) soliton fixed point (assert tolerance 8 %; recorded
+1.0 % when the folder was validated), with a 13.8 % multimode
+energy-drift warning (loss off).
+
+**Diagnosis (arbitrated against the papers, 2026-09-30).** Two of the
+three same-day failures were NOT engine regressions:
+- `dudley fig08 "DW too weak"`: stale 09-18 npz caches written by the
+  pre-#0 engine, re-read by the post-#0 analysis kernel — caches
+  deleted, fresh run gives DW 648 nm vs phase-matching 662.8 nm (2.2 %).
+- `dudley "temporal reversal"`: the test (and the `time_reversal=True`
+  compensations in `common.py` + five `gnlse.py` plot helpers) were
+calibrated to the pre-#0 mirrored engine. The paper's own Fig. 3(b)
+shows the soliton trail drifting to POSITIVE delay; the post-#0 engine
+gives exactly that (+3.27 ps internal, red soliton = slower for
+β₂ < 0). Compensations retired (defaults now False); test rewritten.
+The fresh −20 dB span (437–2028 nm, fast grid) is broader than the
+README's full-run row (500–1257) — fast-grid artifact + stale-cache
+reading; full-run row to be re-recorded after a full re-run.
+- The RW FWHM/energy-drift pair WAS a real engine bug:
+  `MultimodeSplitStepEngine._fwm_substep`'s "frequency-domain RK4" had
+  been reduced to a **single explicit Euler step** in the 09-28 #11
+  rewrite (rhs evaluated once, linear update). Euler on the
+  anti-Hermitian FWM flow pumps Σ|A|² at O(dz): pure-FWM drift 2.4 %,
+  halving with dz (first-order signature), 0.000 % with FWM off.
+
+**Fix (2026-09-30).** Restored classical RK4 stages inside the substep
+loop (stability policy of #11 unchanged). RW deck: drift 13.8 % →
+**1.9e-9**, FWHM error 10.5 % → **3.3 %**, step-converged (identical at
+dz/2); the higher-mode locking shifts tightened to −1.30/−4.58 nm vs
+required −1.53/−4.61. Full suite 1165/1165 green (incl. Wright-2015
+slow path, 14 multimode-FWM tests).
+
 
 ---
 

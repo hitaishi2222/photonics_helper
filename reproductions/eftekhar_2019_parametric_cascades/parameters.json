@@ -1,0 +1,45 @@
+{
+  "reference": "M. A. Eftekhar, Z. Sanjabi-Eznaveh, H. E. Lopez-Aviles, S. Benis, J. E. Antonio-Lopez, M. Kolesik, F. Wise, R. Amezcuas-Correa & D. N. Christodoulides, Accelerated nonlinear interactions in graded-index multimode fibers, Nat. Commun. 10, 1638 (2019), doi:10.1038/s41467-019-09687-9",
+  "fiber": {
+    "lambda0_nm": 1550.0,
+    "core_radius_initial_um": 40.0,
+    "core_radius_taper_end_um": 10.0,
+    "delta": 0.0016,
+    "n0": 1.444,
+    "n2_m2_per_W": 2.9e-20,
+    "taper_law": "a(z) = a0 * exp(-gamma*z/2)",
+    "taper_length_m": 0.04,
+    "gamma_per_m": 69.315,
+    "w0_initial_um": 15.54,
+    "self_imaging_period_initial_um": 2221.4,
+    "self_imaging_period_end_um": 555.4,
+    "uniform_silica_beta2_s2_per_m": -2.81e-26,
+    "note": "Methods (PDF p-08): Delta = 1.6e-3, n2 = 2.9e-20 m^2/W, core radius reduced from 40 to 10 um; taper law from Fig. 1 caption region (PDF p-02, a(z) = a0 exp(-gamma z/2)); Fig. 1b example is a 4-cm taper. beta2 = Renninger-Wise fused-silica value at 1550 nm (the paper's fibre is Ge-doped; same order)."
+  },
+  "pulse": {
+    "fwhm_fs": 300.0,
+    "t0_fs": 170.2,
+    "shape": "sech",
+    "linear_probe_energy_nJ": 0.5,
+    "linear_seed_spot_w0_ratio": 1.5,
+    "soliton_energy_nJ": 1.45,
+    "soliton_note": "~N=1 soliton scale for this fibre (E*tau = 2|beta2| c Aeff/(omega0 n2)); the paper's own 400-fs/500-kW pulses are N>>1 inside 55 modes - the fission cascade is out of scope for the 3-mode engine."
+  },
+  "simulation": {
+    "grid_points": 16384,
+    "window_ps": 20.0,
+    "num_chunks": 40,
+    "chunk_length_m": 0.001,
+    "step_m": 4.0e-6,
+    "coef_model": "isotropic",
+    "include_fwm_linear": false,
+    "note_on_taper": "The engine has no z-dependent dispersion; the taper is propagated in 40 uniform chunks, each rebuilt with the walk-off group_delays, phase_offsets and modal overlaps of its mid-chunk core radius."
+  },
+  "page_refs": {
+    "Methods (Delta, n2, radii, z-step)": "PDF p-08",
+    "taper law a(z) = a0 exp(-gamma z/2)": "PDF p-02",
+    "Fig. 1b 4-cm taper spot oscillation": "PDF p-03",
+    "Fig. 2c >45 nm DW blue shift": "PDF p-04",
+    "Eq. (1) Ermakov spot size": "PDF p-03"
+  }
+}

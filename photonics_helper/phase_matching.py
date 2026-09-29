@@ -704,6 +704,8 @@ def mi_gain_spectrum_extended(
     alpha: float = 0.0,
     L: float | None = None,
     omega_m: NDArray | None = None,
+    betas: NDArray | None = None,
+    beta_fn_convention: str = "absolute",
 ) -> dict:
     """Extended MI gain using full dispersion relation.
 
@@ -719,6 +721,24 @@ def mi_gain_spectrum_extended(
     β(ω) ≈ β₀ + β₁Ω + ½β₂Ω² this reduces exactly to the classical result
     g(Ω) = |β₂|Ω√(Ω_c² − Ω²) with Ω_c² = 4γP/|β₂|.
 
+    Numerics (ISSUES.md #2 — catastrophic cancellation): the mismatch is a
+    small difference of large β values whenever the β argument carries the
+    carrier offset. Evaluating a β(ω) callable at *absolute* frequencies
+    ω₀ ≈ 1.2e15 rad/s limits Δ to the float64 ULP ≈ 0.25 rad/s, which swamps
+    physical mismatches (0.01–0.4 rad/s for typical SMF). Two offset-aware
+    contracts avoid forming Δ from large terms:
+
+    1. ``betas=<β₂…βₖ s^k/m array>`` (recommended) — Δ is evaluated
+       analytically as 2·Σ_${even k} βₖΩᵏ/k!, exact by construction.
+    2. ``beta_fn_convention="detuning"`` — `beta_fn(Ω)` must return
+       β(ω₀+Ω) − β(ω₀) as a function of the *detuning* Ω (rad/s); then
+       Δ(Ω) = β~(Ω) + β~(−Ω) and the β₁ cancellation is built in.
+
+    The legacy ``beta_fn_convention="absolute"`` path (β_fn called at
+    absolute ω) is deprecated and warns: at NIR carriers it is
+    round-off-limited and should be re-derived as one of the two contract
+    forms above.
+
     References
     ----------
     - Agrawal, *Nonlinear Fiber Optics*, 5th ed., §5.1 (linear stability
@@ -727,14 +747,21 @@ def mi_gain_spectrum_extended(
 
     Parameters
     ----------
-    beta_fn : callable — β(ω) function.
-    omega0 : float — pump carrier frequency (rad/s).
+    beta_fn : callable — Dispersion function. With ``"detuning"``,
+              `beta_fn(Ω)` returns β(ω₀+Ω) − β(ω₀) from detuning Ω (rad/s);
+              with the legacy ``"absolute"`` it is called at absolute angular
+              frequency. Ignored when ``betas`` is given.
+    omega0 : float — pump carrier frequency (rad/s). Used for grid
+             auto-scaling and the deprecated absolute path.
     gamma : float — nonlinear coefficient (1/(W·m)).
     P : float — pump power (W).
     alpha : float — loss (1/m). Default 0 (not used in gain formula).
     L : float — length (m). If None, 1/γ (not used in gain formula).
     omega_m : 1-D array — modulation frequencies (rad/s). If None,
               auto-generates a grid based on classical estimate.
+    betas : 1-D array — Taylor coefficients β₂…βₖ in s^k/m. When given, Δ is
+            computed analytically and `beta_fn` is ignored (recommended).
+    beta_fn_convention : "absolute" (legacy, deprecated) or "detuning".
 
     Returns
     -------
@@ -747,14 +774,36 @@ def mi_gain_spectrum_extended(
         # Auto-generate grid using classical estimate for scale
         # Classical cutoff: Ω_c² = 4γP/|β₂|
         domega = 1e12
-        beta2_est = _as_scalar(
-            (
-                beta_fn(omega0 + domega)
-                - 2 * beta_fn(omega0)
-                + beta_fn(omega0 - domega)
+        if betas is not None:
+            betas_arr_ = np.atleast_1d(np.asarray(betas, dtype=float))
+            beta2_est = float(betas_arr_[0])
+        elif beta_fn_convention == "detuning":
+            beta2_est = _as_scalar(
+                (
+                    beta_fn(domega)
+                    + beta_fn(-domega)
+                )
+                / domega**2
             )
-            / domega**2
-        )
+        else:
+            warnings.warn(
+                "mi_gain_spectrum_extended with beta_fn_convention='absolute' "
+                "evaluates β at the NIR carrier ω₀ where the float64 ULP "
+                "(~0.25 rad/s) swamps the physical mismatch Δ(Ω); pass per-"
+                "Taylor βₖ coefficients via betas= or use "
+                "beta_fn_convention='detuning' (β~(Ω) = β(ω₀+Ω) − β(ω₀)) for "
+                "an offset-free evaluation (ISSUES.md #2).",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            beta2_est = _as_scalar(
+                (
+                    beta_fn(omega0 + domega)
+                    - 2 * beta_fn(omega0)
+                    + beta_fn(omega0 - domega)
+                )
+                / domega**2
+            )
         if beta2_est < 0:
             Omega_classical = np.sqrt(max(4 * gamma * P / abs(beta2_est), 1e12))
         else:
@@ -762,14 +811,32 @@ def mi_gain_spectrum_extended(
         omega_m = np.linspace(-3 * Omega_classical, 3 * Omega_classical, 500)
 
     omega_arr = np.atleast_1d(np.asarray(omega_m, dtype=float))
-    beta_pump = beta_fn(omega0)
 
     # Δ(Ω) = β(ω₀+Ω) + β(ω₀−Ω) − 2β(ω₀)  (even dispersion mismatch)
-    omega_plus = omega0 + omega_arr
-    omega_minus = omega0 - omega_arr
-    beta_plus = beta_fn(omega_plus)
-    beta_minus = beta_fn(omega_minus)
-    D = beta_plus + beta_minus - 2 * beta_pump
+    if betas is not None:
+        # Analytic even-matched Taylor evaluation: never forms large-carrier
+        # differences. Δ(Ω) = 2·Σ_{k even} βₖ Ωᵏ/k! (β₂..βₖ, k≥2).
+        betas_arr = np.atleast_1d(np.asarray(betas, dtype=float))
+        D = np.zeros_like(omega_arr, dtype=float)
+        for j, beta_k in enumerate(betas_arr, start=2):
+            if j % 2 == 0:
+                D += 2.0 * beta_k * omega_arr**j / factorial(j)
+    elif beta_fn_convention == "detuning":
+        D = beta_fn(omega_arr) + beta_fn(-omega_arr)
+    else:
+        warnings.warn(
+            "mi_gain_spectrum_extended: absolute-carrier β evaluation is "
+            "round-off-limited at NIR carriers (ISSUES.md #2); use betas= or "
+            "beta_fn_convention='detuning'.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        beta_pump = beta_fn(omega0)
+        omega_plus = omega0 + omega_arr
+        omega_minus = omega0 - omega_arr
+        beta_plus = beta_fn(omega_plus)
+        beta_minus = beta_fn(omega_minus)
+        D = beta_plus + beta_minus - 2 * beta_pump
 
     # Extended MI gain: g(Ω) = √[−D(Ω)·(D(Ω) + 4γP)]
     # Gain exists when -4γP < D < 0

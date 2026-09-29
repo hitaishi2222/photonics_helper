@@ -74,19 +74,20 @@ gain = mi_gain_spectrum(beta2, gamma, P0, Omega)
 
 
 omega0 = 2 * np.pi * 299792458.0 / lam0
-# NOTE (numerics): the extended solver evaluates beta_fn at ω₀ ± Ω with a
-# carrier ω₀ ≈ 1.2e15 rad/s; float64 gives it a ~0.25 rad/s ULP, so a β_fn
-# that returns the *absolute* β(ω) including the 2πc/λ₀ offset swamps the
-# tiny mismatch Δ(Ω) ~ 0.1 rad/s with round-off (catastrophic cancellation).
-# The β₁ offset cancels analytically in Δ, so supply β_fn *without* that
-# linear term to make the mismatch resolvable — this is a user-side
-# workaround for a known library numerical caveat.
+# Numerics note: Δ(Ω) needs the β₁ cancellation applied BEFORE any large-
+# carrier arithmetic. The extended solver offers two offset-aware contracts:
+#   1. betas=<ψ₂…ψₖ s^k/m array> — analytic Δ, exact by construction;
+#   2. beta_fn_convention="detuning" with β~(Ω) = β(ω₀+Ω) − β(ω₀).
+# Evaluating β at absolute ω is round-off-limited at NIR carriers (the
+# float64 ULP ≈ 0.25 rad/s swamps Δ ~ 0.1 rad/s) and now emits a
+# DeprecationWarning.
 ext = mi_gain_spectrum_extended(
-    beta_fn=lambda w: 0.5 * beta2 * (w - omega0) ** 2,  # Δ carries the signal
+    beta_fn=None,
     omega0=omega0,
     gamma=gamma,
     P=P0,
     omega_m=Omega,
+    betas=np.array([beta2]),  # analytic Δ(Ω) = β₂Ω² path
 )
 
 print(

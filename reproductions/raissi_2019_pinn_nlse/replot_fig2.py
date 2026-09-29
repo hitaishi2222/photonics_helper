@@ -18,8 +18,6 @@ sys.path.insert(0, str(HERE))
 def evaluate(make_plot: bool = True) -> dict:
     """Rebuild the trained net from the checkpoint and re-run the checks."""
     import numpy as np
-    import torch
-
     import reproduce as R
 
     params = json.loads(R.PARAMETERS.read_text())

@@ -228,7 +228,7 @@ class Wai1991Engine(RandomBirefringenceEngine):
         J_list = [0.0]
         energy_list = [1.0]
 
-        I = 0.0
+        integ = 0.0
         I2 = 0.0 + 0.0j
         I4 = 0.0 + 0.0j
         J = 0.0
@@ -237,8 +237,6 @@ class Wai1991Engine(RandomBirefringenceEngine):
         ax0 = np.abs(self.A_x) ** 2 + np.abs(self.A_y) ** 2
         fwhm0 = _fwhm(t, ax0)
 
-        final_x: NDArray = self.A_x.copy()
-        final_y: NDArray = self.A_y.copy()
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             for step in range(n_steps):
@@ -280,7 +278,7 @@ class Wai1991Engine(RandomBirefringenceEngine):
                 self.A_y = s * ep.conjugate() * lx + c * ly
 
                 # analytic random sums over the same sequence (xi units)
-                I += cos(2.0 * theta) * self.dxi
+                integ += cos(2.0 * theta) * self.dxi
                 I2 += sin(2.0 * theta) * ep.conjugate() * self.dxi
                 I4 += sin(4.0 * theta) * ep.conjugate() * self.dxi
 
@@ -298,7 +296,7 @@ class Wai1991Engine(RandomBirefringenceEngine):
                         / (np.sum(np.abs(self.A_x) ** 2)
                            + np.sum(np.abs(self.A_y) ** 2))))
                     delay_list.append(float((com - 0.0) / self.unit_T0))
-                    I_list.append(float(I))
+                    I_list.append(float(integ))
                     I2_list.append(complex(I2))
                     I4_list.append(complex(I4))
                     J_list.append(float(J))
@@ -530,10 +528,10 @@ def check_fig2_3_4(setup: dict, sweeps: dict) -> dict:
     widths = {}
     powers = {}
     for delta, res in sweeps.items():
-        I = np.asarray(res["I"])
+        ii = np.asarray(res["I"])
         J = np.asarray(res["J"])
         delay = np.asarray(res["delay"])
-        expected = delta * I                    # paper Eq. (6), t0 units
+        expected = delta * ii                   # paper Eq. (6), t0 units
         l2 = rel_l2(delay, expected)
         corr = float(np.corrcoef(delay, expected)[0, 1])
         # exact COM identity: delay = delta * int (E_lx - E_ly)/E dxi
@@ -585,13 +583,13 @@ def check_fig2_3_4(setup: dict, sweeps: dict) -> dict:
 
 def _plot_fig2_3_4(sweeps: dict) -> None:
     delta = 2.5
-    I = np.asarray(sweeps[delta]["I"])
+    ii = np.asarray(sweeps[delta]["I"])
     delay = np.asarray(sweeps[delta]["delay"])
     zps = np.asarray(sweeps[delta]["z"])
     fig, ax = plt.subplots(figsize=(6.5, 4))
     ax.plot(zps, delay / delta, lw=1.4,
             label="numeric delay/δ (engine)")
-    ax.plot(zps, I, "k--", lw=1.2, label="∫cos2θ dξ (Eq. (6))")
+    ax.plot(zps, ii, "k--", lw=1.2, label="∫cos2θ dξ (Eq. (6))")
     ax.set_xlabel("distance (soliton periods)")
     ax.set_ylabel("normalized time delay")
     ax.set_title("Fig. 2: delay of the soliton tracks the rotating axes "

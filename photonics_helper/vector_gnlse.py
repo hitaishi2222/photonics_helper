@@ -286,9 +286,11 @@ class VectorSplitStepEngine:
         phi *= dz
         if apply_walkoff and self.walkoff != 0.0:
             # Retarded frame of the x axis: ∂A_y/∂z gains the drift term
-            # −Δβ₁ ∂A_y/∂T. Inside the (+iφ) convention this is a
-            # first-order Taylor term β₁Ω applied with a minus sign.
-            phi -= self.walkoff * self.grid.w * dz
+            # −Δβ₁ ∂A_y/∂T. Post-#0 synthesis ``e^{−iΩt}``: this is a
+            # first-order Taylor term applied with a plus sign, so a
+            # slower y axis (Δβ₁ > 0) drifts to later times (flipped from
+            # the pre-#0 mirrored-kernel convention, ISSUES.md #0).
+            phi += self.walkoff * self.grid.w * dz
         f_w = f_w * np.exp(1j * phi)
 
         alpha = self.fiber.alpha

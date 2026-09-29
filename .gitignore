@@ -51,3 +51,4 @@ site/
 reproductions/**/*.pdf
 reproductions/planned/**/pages/
 tests/test_reproductions.py
+oe2001_checkpoint_A.pt

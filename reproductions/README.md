@@ -24,6 +24,7 @@ python -m pytest tests/test_reproductions.py
 
 | Reproduction | Reference (DOI) | Module stack | Status |
 |---|---|---|---|
+| [`eftekhar_2019_parametric_cascades`](eftekhar_2019_parametric_cascades/) | Eftekhar et al., *Nat. Commun.* **10**, 1638 (2019) · [10.1038/s41467-019-09687-9](https://doi.org/10.1038/s41467-019-09687-9) | `multimode_gnlse` (3 GRIN modes) + chunked taper | ✅ MFD-oscillation periods match the window-avg L_si to 0.1 % / 2.4 %; acceleration ratio x3.33 vs window model x3.25 (pointwise claim x4); walk-off integral to 0.06 % (linear) / 0.05 % (N≈1 nonlinear), energy exact. DW-cascade/Fig. 2c out of scope (3-mode, no Raman) |
 | [`stolen_lin_1978_spm`](stolen_lin_1978_spm/) | Stolen & Lin, *Phys. Rev. A* **17**, 1448 (1978) · [10.1103/PhysRevA.17.1448](https://doi.org/10.1103/PhysRevA.17.1448) | GNLSE (Kerr) + pulse | ✅ spectrum matches closed form to ~1e-13; peak-count rule exact |
 | [`macleod_quarter_wave_dbr`](macleod_quarter_wave_dbr/) | Macleod, *Thin-Film Optical Filters*; Born & Wolf (textbook) | `dbr` TMM | ✅ peak reflectance matches exact closed form to <1e-6; stopband width within 7% |
 | [`shg_textbook`](shg_textbook/) | Boyd, *Nonlinear Optics* (3rd ed.), Ch. 2; Fejer et al., *IEEE JQE* **28**, 2631 (1992) · [10.1109/3.159513](https://doi.org/10.1109/3.159513) | `chi2` (RK4IP) | ✅ η matches `tanh²(κL)` to ≤8e-15; first-order QPM recovers `tanh²((2/π)κL)` to 0.12% |
@@ -34,13 +35,15 @@ python -m pytest tests/test_reproductions.py
 | [`narhi_2016_mi_breathers`](narhi_2016_mi_breathers/) | Närhi et al., *Nat. Commun.* **7**, 13675 (2016) · [10.1038/ncomms13675](https://doi.org/10.1038/ncomms13675) | GNLSE (NLSE) + phase_matching + SplitStepEngine | ✅ MI sideband 46.41 GHz = paper 46.4; exact Peregrine ratio 8.9996 (theory 9); Akhmediev ratio 5.8284; noise-seeded MI reproduces the triangular wings and ratio-9 events |
 | [`tomlinson_1985_wave_breaking`](tomlinson_1985_wave_breaking/) | Tomlinson, Stolen & Johnson, *Opt. Lett.* **10**, 457 (1985) · [10.1364/OL.10.000457](https://doi.org/10.1364/OL.10.000457) | GNLSE (NLSE) | ✅ steep edges → flat top → oscillations; steepening onset at 0.57 `z_WB`; scaling `z ∝ P₀^(−0.54)` (theory −0.5) with `z/√(L_D L_NL)` constant to 9 % |
 | [`marcuse_menyuk_wai_1997_manakov_pmd`](marcuse_menyuk_wai_1997_manakov_pmd/) | Marcuse, Menyuk & Wai, *JLT* **15**, 1735 (1997) · [10.1109/50.622902](https://doi.org/10.1109/50.622902) | `vector_gnlse` (`manakov` coupling + `RandomBirefringenceEngine`) | ✅ Eq. (30) 8/9 law exact (ratio 9/8, shapes invariant to 7×10⁻⁴ over 30 z₀); Fig. 5 peak fluctuation 2.2 % (paper ≈ 1 %, tolerance 3 %); Fig. 4 NRZ birefringent-vs-averaged currents to 2×10⁻⁴ L2 (paper: "exactly the same") |
-| [`renninger_wise_2013_grin_solitons`](renninger_wise_2013_grin_solitons/) | Renninger & Wise, *Nat. Commun.* **4**, 1719 (2013) · [10.1038/ncomms2739](https://doi.org/10.1038/ncomms2739) | `multimode_gnlse` (3 GRIN modes, isotropic tensors) | ✅ temporal locking 0.06 of linear walk-off; FWHM on Eq. (6) fixed point to 1.0 %; self-imaging 400.5 µm direct via `phase_offsets` (1.7 %). ⚠ higher-mode blue-shift sign pending **ISSUES.md #0** (convention audit) |
+| [`renninger_wise_2013_grin_solitons`](renninger_wise_2013_grin_solitons/) | Renninger & Wise, *Nat. Commun.* **4**, 1719 (2013) · [10.1038/ncomms2739](https://doi.org/10.1038/ncomms2739) | `multimode_gnlse` (3 GRIN modes, isotropic tensors) | ✅ temporal locking 0.06 of linear walk-off; FWHM on Eq. (6) fixed point to 3.3 %; self-imaging 400.5 µm direct via `phase_offsets` (1.7 %); higher-mode blue-shift −1.30/−4.58 nm vs required −1.53/−4.61 (post-#0 audit + FWM Euler fix 2026-09-30 — **ISSUES.md #0 closed, #12 resolved**) |
 | [`menyuk_1987_birefringent_pulses`](menyuk_1987_birefringent_pulses/) | Menyuk, *IEEE JQE* **QE-23**, 174 (1987) · [10.1109/JQE.1987.1073308](https://doi.org/10.1109/JQE.1987.1073308) | `vector_gnlse` (incoherent 2/3 XPM + coherent FWM branch) | ✅ Eq. (9)/(10) soliton filaments at machine precision (shape L2 7×10⁻⁶); coherent-FWM filament deviation O(1/Rδ) as predicted (0.4–1.6 %, Rδ = 70); FWM decisively active at Rδ = 0.7 (83 % field change); linear-split criterion δ* = 0.04 reproduced to 0.4 % (10.04 ps = 2 × FWHM over 20 km); nonlinear lock holds to δ ≈ 0.56 (paper's δ ≤ 1 border) |
 | [`krupa_2019_multimode`](krupa_2019_multimode/) | Krupa et al., *APL Photonics* **4**, 110901 (2019) · [10.1063/1.5119434](https://doi.org/10.1063/1.5119434) (GPI: Krupa, *PRL* **116**, 183901 (2016)) | `multimode_gnlse` (modal GNLSE + `phase_offsets` grating) | ✅ ξ = 0.6157 mm / f_m = 124.98 THz (PRL 0.615 / 125.0); √h·f_m ladder to 0.5 % for h ≤ 3 (h = 1..5 measured); f₁ power shift 0.04 THz; photon drift 6.5e-3; no-grating control = 0 peaks. **Not in the test suite — ~35 min runtime** |
 | [`mumtaz_2013_multimode_jlt`](mumtaz_2013_multimode_jlt/) | Mumtaz, Essiambre & Agrawal, *JLT* **31**, 398 (2013) · [10.1109/JLT.2012.2235414](https://doi.org/10.1109/JLT.2012.2235414) (spec source of v2 multimode Eq. 12/29) | `multimode_gnlse` (Manakov `xpm_weights`) + Eq. 6 stochastic harness | ✅ Table-II walk-offs exact (≤3e-6); SPM 1→8/9 at M=1 to 8.6e-4; M=2 ensemble-vs-generalized-Manakov: inter-mode XPM **2→4/3** confirmed (best-fit weight exactly 4/3, L2 2.9e-2 @ 32 seeds, 1/√N scaling); both sides energy-conserving to 1e-12; in the test suite (~9 s) |
 | [`wai_menyuk_1991_random_birefringence_solitons`](wai_menyuk_1991_random_birefringence_solitons/) | Wai, Menyuk & Chen, *Opt. Lett.* **16**, 1231 (1991) · [10.1364/OL.16.001231](https://doi.org/10.1364/OL.16.001231) | `vector_gnlse` (`RandomBirefringenceEngine`, Wai-1991 Eq.-(2) rotation law) | ✅ Fig. 1 shadow peak ratio 1.10 vs Eq. (5); Fig. 2 delay = δ·∫cos2θ dξ (corr 0.978, paper's "agreed quite well"); Fig. 3 widths bounded, no splitting at δ ≤ 5 to ~5 % (δ=7.5 caveat in folder README); Fig. 4 polarization budget 0.966/0.919/0.800/0.845/0.630; energy conserved to ≤6e-12; in the (local-only) test suite (~30 s) |
-| [`guasoni_2015_generalized_mi_multimode`](guasoni_2015_generalized_mi_multimode/) | Guasoni, *Phys. Rev. A* **92**, 033849 (2015) · [10.1103/PhysRevA.92.033849](https://doi.org/10.1103/PhysRevA.92.033849) | `multimode_gnlse` (XPM-coupled deck) + Eq.-(8)/(9) eigen solver | ✅ Fig. 3 anchor to **0.7 %** (g₁ = 0.9071 / g₂ = 0.7070 vs paper 0.90 / 0.71); Fig. 3 inset eigenvectors to ~0.1 in ln (−0.349/−3.30/−3.37 vs −0.35/−3.22/−3.35); single-mode MI closed form to 1e-9. **Split-step layer recorded-outstanding** (see folder README + `../ISSUES.md` #7); ~90 s |
+| [`wright_2015_self_organized_instability`](wright_2015_self_organized_instability/) | Wright et al., *Nat. Photon.* **10**, 471 (2016 online 2015) · [10.1038/nphoton.2015.60](https://doi.org/10.1038/nphoton.2015.60) | `multimode_gnlse` (FWM Jacobian, `oam_l` gating) + `phase_offsets` | ✅ check A: analytic STMI ladder vs digitized Fig. 3d circles to −5.2/−0.9/−2.8 % (tol 15 %); check-B' probe: engine growth band = the corrected 2x2 band |dbar| < c for both orders, out-of-band |b2(z)| turnover at z ≈ π/xi_eff (Fig. `wright_2015_gain_ztraj.png`); full-parameter deck: MI peaks 0.024/0.021 % of the roots, gains 29x/263x above the floor. Corrected Kerr condition dbar = 0.5·sym − N·κ − γP0/3 (see `../ISSUES.md` #10). ~35 min slow path / ~15 min check-B' |
+| [`guasoni_2015_generalized_mi_multimode`](guasoni_2015_generalized_mi_multimode/)   | Guasoni, *Phys. Rev. A* **92**, 033849 (2015) · [10.1103/PhysRevA.92.033849](https://doi.org/10.1103/PhysRevA.92.033849) | `multimode_gnlse` (XPM-coupled deck) + Eq.-(8)/(9) eigen solver | ✅ Fig. 3 anchor to **0.7 %** (g₁ = 0.9071 / g₂ = 0.7070 vs paper 0.90 / 0.71); Fig. 3 inset eigenvectors to ~0.1 in ln (−0.349/−3.30/−3.37 vs −0.35/−3.22/−3.35); single-mode MI closed form to 1e-9. **Split-step layer recorded-outstanding** (see folder README + `../ISSUES.md` #7); ~90 s |
 | [`raissi_2019_pinn_nlse`](raissi_2019_pinn_nlse/) | Raissi, Perdikaris & Karniadakis, *J. Comput. Phys.* **378**, 686 (2019) · [10.1016/j.jcp.2018.10.045](https://doi.org/10.1016/j.jcp.2018.10.045) | reproduction-local PINN (torch float64, Adam + L-BFGS) + `SplitStepEngine` data | ✅ §I Schrödinger example: PINN rel-L2 **6.1e-3** vs paper 1.97e-3 (accepted ≤ 1e-2 per the folder plan's worst-case clause — see `ISSUES.md` #6); loss 1.24e-6; engine ground truth verified to 1e-12 energy drift; cut profiles at t = 0.59/0.79/0.98 overlay the exact solution. ~55 min CPU (Adam 25 k + L-BFGS, `--nf-chunk 5000`). Not in the test suite (heavy; data-validation + smoke-train test only) |
+| [`dw_timing_gas_hollowcore`](dw_timing_gas_hollowcore/) | Brahms & Travers, arXiv:2101.04014 (2021) | `TaperedGNLSESolver` gas β(ω,z) (Marcatili–Schmeltzer + Boerzsoenyi He) + RDW arrival-time statistics | ✅ REPRODUCED 2026-09-30 (plasma-free subset): transmission 86.8 % vs paper ~87 %; ZDW 477.9 nm pressure-insensitive; τ(E) rising in all 10 decks (ρ ≥ 0.98, Fig. 1c mechanism); Fig. 5 jitter < 300 as in 9/10 decks (medians 99–129 as; 0.8-bar exception 371 as recorded); jitter ∝ pump noise (1 %/2 % median ratio 0.51–0.84); Δv_g(RDW) −0.85..−1.0 km/s vs Fig. 5c circles. Arrival time reconstructed via the analytic β₁ propagation leg (Eq. 11/12 with simulated RDW λ) — post-#0 time-direction validation; ionisation arm out of scope v1 |
 
 ## Findings surfaced while reproducing (see `../ISSUES.md`)
 
@@ -57,12 +60,12 @@ Reproducing papers is also a bug hunt. Landmark bugs found and fixed:
 - **FROG chirped-pulse retrieval** — PCA projection with seeded restarts.
 - **MI gain convention** — exact linear-stability result 4γP/|β₂|.
 
-**Currently open and blocking one reproduction:** the engine's dispersion
-operator runs with a time direction opposite to its own Raman and
-group-delay operators (dense-DFT arbiter evidence at 1e-13) — see
-**`../ISSUES.md` #0**.  First surfaced by the Renninger & Wise 2013
-higher-mode blue-shift caveat; the multicomponent-soliton results
-(locking, compression, self-imaging) are unaffected.
+**CLOSED 2026-09-30** (see `ISSUES.md` #0): the original failing symptom
+(the Renninger & Wise higher-mode blue-shift) re-measured **blue** under
+the post-swap convention (−1.06/−3.80 nm vs required −1.53/−4.61), and the
+arrival-time channel was independently validated by the Brahms & Travers
+reproduction the same day. The multicomponent-soliton results (locking,
+compression, self-imaging) were unaffected throughout.
 
 ## Findings across reproductions
 
@@ -92,8 +95,11 @@ higher-mode blue-shift caveat; the multicomponent-soliton results
 2. **No quantum/shot noise.** The Dudley coherence figures (18, 20–22) are not
    reproducible without a stochastic Raman source; the deterministic
    reproductions are single-shot only. *(Partially closed: the stochastic
-   Raman source landed in `step2-raman-noise-source`; the coherence
-   figures still await a reproduction.)*
+   Raman source landed in `step2-raman-noise-source`; **Fig. 19 coherence
+   reproduced 2026-09-30** (`dudley_2006_scg/fig19_coherence.py`: |g₁₂| 0.91
+   in the pump/soliton band vs 0.03–0.13 in the far wings — the noise-driven
+   decoherence structure of the paper); Figs. 18/20–22/28 still await a
+   reproduction.)*
 3. **Full GVD curves are not digitised.** Where a paper's figure needs β(ω)
    across wavelengths (Dudley Fig. 23), this repo uses a Taylor
    reconstruction; far-from-835-nm results are qualitative.

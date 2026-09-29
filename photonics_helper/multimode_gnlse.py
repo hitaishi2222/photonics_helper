@@ -291,31 +291,53 @@ class MultimodeSplitStepEngine:
 
     def _linear_step(self, field: NDArray, dz: float, m: int) -> NDArray:
         """Linear step (dispersion + group delay + phase offset + shared loss)
-        for mode m."""
-        f_w = self.grid.fft(field)
-        omega_ps = self.grid.w * 1e-12  # rad/s → rad/ps
+        for mode m.
 
-        phi = np.zeros_like(omega_ps, dtype=float)
-        for k, beta_k in enumerate(self.betas[m], start=2):
-            phi += beta_k * omega_ps**k / factorial(k)
-        phi *= dz
-        if self.group_delays is not None:
-            gd = self.group_delays[m]
-            if gd:
-                # retardation in the frame of channel 0: enters the φ
-                # stack as a first-order Taylor term with a minus sign
-                # (matching the vector engine's walkoff convention), so a
-                # slower mode (Δβ₁ > 0) drifts to later times.
-                phi -= gd * self.grid.w * dz
+        The dispersion phase `phi(dz) = dz * Σ_k (β_k/k!) ω^k` is linear in
+        `dz`, so the ω-polynomial (Taylor terms + group delay) is precomputed
+        per (mode, grid) once — only the `dz` scaling and the phase-offset
+        `dz` term are applied per step. dtype fast path avoided: real `phi`
+        arrays are small (1 float array) and the multiply kernels let numpy
+        pick the pairing.
+        """
+        phi_base = self._phi_base(m)      # Σ β_k ω^k / k! (+ group delay), 1/ length units
+        f_w = self.grid.fft(field)
+        phi = phi_base * dz
         if self.phase_offsets is not None:
             db0 = self.phase_offsets[m]
             if db0:
-                phi += db0 * dz
+                phi = phi + db0 * dz
         f_w = f_w * np.exp(1j * phi)
         alpha = self.fiber.alpha
         if alpha > 0:
             f_w = f_w * np.exp(-alpha * dz / 2)
         return np.asarray(self.grid.ifft(f_w), dtype=complex)
+
+    def _phi_base(self, m: int) -> NDArray:
+        """Cached per-(mode, grid) dispersion phase polynomial (1/length units).
+
+        Σ_k (β_k/k!) ω^k over the Taylor orders, plus the group-delay
+        Taylor-1 term `Δβ₁·ω` (retardation in the frame of channel 0, with
+        a plus sign — post-#0 synthesis kernel ``e^{−iΩt}``; a slower mode,
+        Δβ₁ > 0, drifts to later times — sign flipped from the pre-#0
+        mirrored-kernel convention, see ISSUES.md #0). The caller multiplies
+        by `dz` per step.
+        """
+        if not hasattr(self, "_phi_base_cache"):
+            self._phi_base_cache: dict[int, np.ndarray] = {}
+        cache = self._phi_base_cache
+        phi = cache.get(m)
+        if phi is None:
+            omega_ps = self.grid.w * 1e-12  # rad/s -> rad/ps
+            phi = np.zeros_like(omega_ps, dtype=float)
+            for k, beta_k in enumerate(self.betas[m], start=2):
+                phi += beta_k * omega_ps**k / factorial(k)
+            if self.group_delays is not None:
+                gd = self.group_delays[m]
+                if gd:
+                    phi += gd * self.grid.w
+            cache[m] = phi
+        return phi
 
     def _xpm_factor(self, i: int, j: int) -> float:
         """SPM/XPM coefficient between channels i and j.
@@ -421,12 +443,66 @@ class MultimodeSplitStepEngine:
                         )
         return rhs
 
+    _FWM_SUBSTEP_CAP = 200
+    #: Max-FWM rate·η within one explicit RK4 substep for stability margin.
+    #: Explicit RK4's absolute stability region on the imaginary axis ends at
+    #: η·h ≈ 2.83; keep ≤ 2.5 (ISSUES.md #11: the old hard cap of 200 left
+    #: h·λ unbounded beyond it and produced the |A| ~ 1e240 algebraic blow-up).
+    _FWM_SUBSTEP_RATE = 2.5
+    #: Coupling-based estimator for the exchange-pair growth rate: the tightest
+    #: stability limiting eigenvalue of the 2×2 pair is ±2c with
+    #: c = γ f P (frequency-domain amplitude coupling per unit length).
+    _FWM_SUBSTEP_MAX = 8192
+
+    def _fwm_rate_max(self, A: list[NDArray], dz: float) -> tuple[float, int]:
+        """Max exchange-pair exponential rate η and its offending channel.
+
+        The FWM driver amplitude for channel m is |γ f A²_n·A_q*|, i.e. the
+        creation rate per unit length; feasibility of the explicit RK4 update
+        is governed by η·h ≤ 2.5 on the strongest pair (ISSUES.md #11).
+        """
+        gamma = self._gamma_v()
+        N = self._n
+        rate_max, arg_ch = 0.0, 0
+        for n in range(N):
+            pump = float(np.max(np.abs(A[n]) ** 2))
+            for m in range(N):
+                if m == n:
+                    continue
+                for q in range(m + 1, N):
+                    if q == n or not self._fwm_allowed(m, n, n, q):
+                        continue
+                    c = gamma * self._fwm_factor(m, n, n, q) * pump
+                    if abs(c) > rate_max:
+                        rate_max, arg_ch = abs(float(c)), n
+        return rate_max, arg_ch
+
     def _fwm_substep_count(self, A: list[NDArray], dz: float) -> int:
-        """Frequency-domain RK4 substeps keeping Δφ_FWM ≲ 0.05 rad/step."""
-        rhs = self._fwm_rhs(A)
-        rate = max((float(np.max(np.abs(r))) for r in rhs), default=0.0)
+        """Explicit-RK4 substeps: stability-driven with an accuracy floor.
+
+        Policy (ISSUES.md #11):
+        - stability requires η·h_sub ≤ 2.5 for the strongest exchange pair;
+        - accuracy targets η·h_sub ≲ 0.05 rad but at most ``_FWM_SUBSTEP_CAP``
+          = 200 inner steps (the historical cap);
+        - the number of inner steps is the *stability* requirement; if that
+          exceeds ``_FWM_SUBSTEP_MAX`` the configuration is not integrable
+          with this explicit scheme at this outer dz and a loud error names
+          the channel and rate (never silently NaNs).
+        """
+        rate, ch = self._fwm_rate_max(A, dz)
         rate = max(rate, 1e-30)
-        return int(min(200, max(1, int(np.ceil(rate * dz / 0.05)))))
+        n_stab = int(np.ceil(rate * dz / self._FWM_SUBSTEP_RATE))
+        if n_stab > self._FWM_SUBSTEP_MAX:
+            raise ValueError(
+                f"FWM exchange pair rate |γ f P| = {rate:.3e} /m over outer "
+                f"dz = {dz:.3e} m exceeds the explicit RK4 stability region "
+                f"even with {self._FWM_SUBSTEP_MAX} substeps (η·h ≈ "
+                f"{rate * dz / self._FWM_SUBSTEP_MAX:.2f} > 2.5); reduce the "
+                "outer step size or disable FWM on channel "
+                f"{ch} (ISSUES.md #11)."
+            )
+        n_acc = min(self._FWM_SUBSTEP_CAP, int(np.ceil(rate * dz / 0.05)))
+        return int(max(1, max(n_stab, n_acc)))
 
     def _coupled_nonlinear_step(
         self, A: list[NDArray], dz: float
@@ -450,8 +526,31 @@ class MultimodeSplitStepEngine:
         h_sub = dz / n_sub
         states = [Ai * np.exp(0.5j * d * dz) for Ai, d in zip(A, diag_in)]
         for _ in range(n_sub):
-            rhs = self._fwm_rhs(states)
-            states = [Ai + h_sub * k for Ai, k in zip(states, rhs)]
+            # Classical RK4 on the frozen-coefficient FWM flow (anti-Hermitian
+            # when the weight tensor is exchange-symmetric -> photon-number
+            # conserving to O(h_sub^5)).  ISSUES.md #12: the 2026-09-28 #11
+            # rewrite accidentally reduced this to a single explicit Euler
+            # step (rhs evaluated once, linear update), which pumps |A|^2 at
+            # O(dz) — the 13.8 % energy drift and the Eq.-(6) fixed-point
+            # regression of the Renninger-Wise deck.
+            k1 = self._fwm_rhs(states)
+            k2 = self._fwm_rhs([Ai + 0.5 * h_sub * ki for Ai, ki in zip(states, k1)])
+            k3 = self._fwm_rhs([Ai + 0.5 * h_sub * ki for Ai, ki in zip(states, k2)])
+            k4 = self._fwm_rhs([Ai + h_sub * ki for Ai, ki in zip(states, k3)])
+            states = [
+                Ai + (h_sub / 6.0) * (k1i + 2 * k2i + 2 * k3i + k4i)
+                for Ai, k1i, k2i, k3i, k4i in zip(states, k1, k2, k3, k4)
+            ]
+            # Loud failure on any non-finite state (ISSUES.md #11: the old
+            # code surfaced this as ceil(NaN) crashes downstream).
+            for m, s in enumerate(states):
+                if not np.all(np.isfinite(s.view(float) if s.dtype == complex else s)):
+                    raise FloatingPointError(
+                        f"FWM substep produced non-finite amplitudes in "
+                        f"channel {m} at z = {self._current_z:.4e} m; the "
+                        "substep integrator diverged — reduce the outer "
+                        "step size or the seed amplitude (ISSUES.md #11)."
+                    )
         diag_out = self._diagonal_phase(states)
         return [Ai * np.exp(0.5j * d * dz) for Ai, d in zip(states, diag_out)]
 

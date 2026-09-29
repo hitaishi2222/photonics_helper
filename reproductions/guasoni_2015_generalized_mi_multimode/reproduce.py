@@ -177,19 +177,19 @@ def eigen_matrix(nu: float, keep_offdiag: bool = True) -> NDArray:
     """
     om = float(nu) * NU_TO_OMEGA
     S = np.zeros((4, 4), dtype=complex)
-    I = np.zeros((4, 4), dtype=complex)
+    Kmat = np.zeros((4, 4), dtype=complex)
     for n in range(4):
         S[n, n] = kappa_n(n, om) + B_S * C_MAT[n, n] * P_MODE
-        I[n, n] = B_S * C_MAT[n, n] * P_MODE
+        Kmat[n, n] = B_S * C_MAT[n, n] * P_MODE
         if keep_offdiag:
             for m in range(4):
                 if m != n:
                     S[n, m] = B_PAR * C_MAT[m, n] * P_MODE
-                    I[n, m] = B_PAR * C_MAT[m, n] * P_MODE
+                    Kmat[n, m] = B_PAR * C_MAT[m, n] * P_MODE
     M = np.zeros((8, 8), dtype=complex)
     M[:4, :4] = S
-    M[:4, 4:] = I
-    M[4:, :4] = -np.conj(I)
+    M[:4, 4:] = Kmat
+    M[4:, :4] = -np.conj(Kmat)
     Mx = np.zeros((4, 4), dtype=complex)
     for n in range(4):
         Mx[n, n] = kappa_n(n, -om) + B_S * C_MAT[n, n] * P_MODE

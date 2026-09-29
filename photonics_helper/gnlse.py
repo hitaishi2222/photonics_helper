@@ -287,11 +287,13 @@ def _raman_polarization(
     if h_R_fft is not None:
         I_fft = grid.fft(intensity)
         # The physical Raman response is causal and must amplify the Stokes
-        # (red) sideband.  On this FFT grid the required direction is the
-        # correlation with h_R, i.e. conj(fft(h_R)) = fft(h_R(-t)); using the
-        # plain convolution instead amplifies the anti-Stokes band and makes
-        # solitons blue-shift.  The DC component is unchanged (H(0) = 1).
-        P_delayed = fR * np.real(grid.ifft(np.conj(h_R_fft) * I_fft))
+        # (red) sideband.  Under the post-#0 transform pair (analysis
+        # ``e^{+iΩt}``, synthesis ``e^{−iΩt}``), the delayed (non-instantaneous)
+        # Raman polarization is the plain convolution with the causal h_R:
+        # ``ifft( fft(h_R) · fft(I) )``.  (Before the #0 swap the mirrored
+        # backend pair required ``conj`` here; that would now amplify the
+        # anti-Stokes band and blue-shift solitons.)  DC unchanged (H(0) = 1).
+        P_delayed = fR * np.real(grid.ifft(h_R_fft * I_fft))
     else:
         P_delayed = np.zeros_like(intensity)
     return np.asarray(P_inst + P_delayed)
@@ -619,6 +621,7 @@ class SplitStepEngine:
         include_self_steepening: bool = False,
         include_tpa: bool = False,
         include_free_carriers: bool = False,
+        conserving_shock: bool = False,
         tau_shock: float | None = None,
         step_size: Length | None = None,
         dispersion_profile: ZDependentDispersion | Callable[[NDArray, float], NDArray] | None = None,
@@ -637,6 +640,10 @@ class SplitStepEngine:
         self.include_self_steepening = include_self_steepening
         self.include_tpa = include_tpa
         self.include_free_carriers = include_free_carriers
+        # Opt-in photon-conserving nonlinear operator (pcGNLSE; time-domain
+        # form, Huang et al. arXiv:2607.05244): |γ| in the delayed-Raman
+        # phase arm and in the SS–Raman dissipative cross term (ISSUES.md #1).
+        self.conserving_shock = bool(conserving_shock)
         if tau_shock is not None and not tau_shock > 0.0:
             raise ValueError(
                 f"tau_shock must be positive (seconds, SI), got {tau_shock!r}"
@@ -841,6 +848,23 @@ class SplitStepEngine:
             return _raman_polarization(intensity, fR, self.grid, h_R_fft)
         return intensity
 
+    def _delayed_intensity(
+        self, intensity: NDArray, h_R_fft: NDArray | None
+    ) -> NDArray:
+        """Delayed-Raman driving intensity ``f_R · (h_R ⊗ |A|²)``.
+
+        Used by the opt-in conserving-shock (pcGNLSE) path to split the
+        nonlinear amplitude into the instantaneous and delayed pieces
+        (ISSUES.md #1); identical to the delayed part of
+        :meth:`_nl_intensity`.
+        """
+        if h_R_fft is None:
+            return np.zeros_like(intensity, dtype=float)
+        fR = _response_fR(self.fiber.raman_response)
+        return fR * np.asarray(
+            self.grid.ifft(h_R_fft * self.grid.fft(intensity)), dtype=float
+        )
+
     def _get_h_R_fft(self) -> NDArray:
         """FFT of the Raman response on ``self.grid.t`` (cached).
 
@@ -918,6 +942,28 @@ class SplitStepEngine:
 
         P_NL = self._nl_intensity(intensity, h_R_fft)
 
+        if self.conserving_shock:
+            # pcGNLSE (ISSUES.md #1): split the nonlinear amplitude into the
+            # instantaneous (SPM, signed γ) and delayed-Raman (|γ|) pieces;
+            # the shock stage applies signed γτ to the pure-SS (P_inst) arm
+            # and |γ|τ to the SS–Raman cross (P_del) arm.
+            if h_R_fft is None or self.fiber.raman_response is None:
+                raise ValueError(
+                    "conserving_shock=True requires include_raman=True and a "
+                    "Raman response (the pcGNLSE modification is on the "
+                    "Raman/SS–Raman arms)."
+                )
+            fR0 = float(_response_fR(self.fiber.raman_response))
+            P_inst = (1.0 - fR0) * intensity
+            P_del = fR0 * np.asarray(
+                self.grid.ifft(h_R_fft * self.grid.fft(intensity)),
+                dtype=float,
+            )
+            g_r = abs(gamma)
+        else:
+            P_inst = P_del = None  # unused
+            g_r = gamma
+
         if self.include_self_steepening:
             tau = self.tau_shock
             # Shock correction operator in the frequency domain:
@@ -925,8 +971,20 @@ class SplitStepEngine:
             # Purely imaginary on the diagonal, so its exact exponential is
             # unitary; RK4 only approximates the (small) P_NL variation.
             shock_kernel = 1j * gamma * tau * self.grid.w
+            shock_kernel_pc = 1j * g_r * tau * self.grid.w
 
             def shock_rhs(A_state: NDArray) -> NDArray:
+                src_w = self.grid.fft(A_state)
+                if self.conserving_shock:
+                    # signed γτ on the pure-SS (instantaneous) arm;
+                    # |γ|τ on the SS–Raman (delayed) cross arm.
+                    i_state = (1.0 - fR0) * np.abs(A_state) ** 2
+                    d_state = self._delayed_intensity(np.abs(A_state) ** 2, h_R_fft)
+                    rhs = (
+                        shock_kernel * self.grid.fft(i_state * A_state)
+                        + shock_kernel_pc * self.grid.fft(d_state * A_state)
+                    )
+                    return np.asarray(self.grid.ifft(rhs), dtype=complex)
                 p_nl = self._nl_intensity(np.abs(A_state) ** 2, h_R_fft)
                 src_w = self.grid.fft(p_nl * A_state)
                 return np.asarray(self.grid.ifft(shock_kernel * src_w), dtype=complex)
@@ -943,7 +1001,14 @@ class SplitStepEngine:
 
             # Symmetric (Strang) split: half the exact Kerr/Raman phase, the
             # full shock correction, then the trailing half phase.
-            A_state = A * np.exp(0.5j * gamma * P_NL * dz)
+            if self.conserving_shock:
+                assert P_inst is not None and P_del is not None  # narrowed above
+                half_phase = (
+                    0.5j * gamma * P_inst + 0.5j * abs(gamma) * P_del
+                ) * dz
+            else:
+                half_phase = 0.5j * gamma * P_NL * dz
+            A_state = A * np.exp(half_phase)
 
             # Substep so the shock-induced change per substep stays small.
             # Only the shock term is resolved; the stiff phase is analytic, so
@@ -954,11 +1019,27 @@ class SplitStepEngine:
             for _ in range(n_sub):
                 A_state = _rk4_shock(A_state, h_sub)
 
-            P_final = self._nl_intensity(np.abs(A_state) ** 2, h_R_fft)
-            A = A_state * np.exp(0.5j * gamma * P_final * dz)
+            P_final_int = np.abs(A_state) ** 2
+            if self.conserving_shock:
+                assert P_inst is not None and P_del is not None  # narrowed above
+                P_inst_f = (1.0 - fR0) * P_final_int
+                P_del_f = self._delayed_intensity(P_final_int, h_R_fft)
+                A = A_state * np.exp(
+                    0.5j * gamma * P_inst_f * dz
+                    + 0.5j * abs(gamma) * P_del_f * dz
+                )
+            else:
+                P_final = self._nl_intensity(P_final_int, h_R_fft)
+                A = A_state * np.exp(0.5j * gamma * P_final * dz)
         else:
             # Exact (unitary) Kerr/Raman phase rotation.
-            A = A * np.exp(1j * gamma * P_NL * dz)
+            if self.conserving_shock:
+                assert P_inst is not None and P_del is not None  # narrowed above
+                A = A * np.exp(
+                    1j * gamma * P_inst * dz + 1j * abs(gamma) * P_del * dz
+                )
+            else:
+                A = A * np.exp(1j * gamma * P_NL * dz)
 
         A, U_new = tpa_step(
             A, self.fiber, self.grid, dz, self.include_tpa, self._U, self.omega0
@@ -1426,6 +1507,7 @@ class GNLSESolver:
         step_size: Length | None = None,
         betas_unit: BetasUnit = "ps^k/m",
         tau_shock: float | None = None,
+        conserving_shock: bool = False,
     ):
         self.pulse = pulse
         self.fiber = fiber
@@ -1438,6 +1520,7 @@ class GNLSESolver:
         self.include_free_carriers = include_free_carriers
         self.check_phase_matching = check_phase_matching
         self.step_size = step_size
+        self.conserving_shock = bool(conserving_shock)
         if tau_shock is not None and not tau_shock > 0.0:
             raise ValueError(
                 f"tau_shock must be positive (seconds, SI), got {tau_shock!r}"
@@ -1474,6 +1557,7 @@ class GNLSESolver:
             include_self_steepening=self.include_self_steepening,
             include_tpa=self.include_tpa,
             include_free_carriers=self.include_free_carriers,
+            conserving_shock=self.conserving_shock,
             tau_shock=self.tau_shock,
             step_size=self.step_size,
         )
@@ -1697,6 +1781,15 @@ class TaperedGNLSESolver:
         self.pulse = pulse
         self.fiber = fiber
         self.betas_unit = _validate_betas_unit(betas_unit)
+        if betas_unit != "ps^k/m":
+            warnings.warn(
+                "TaperedGNLSESolver takes its dispersion from the"
+                " dispersion_profile in SI: `betas_unit` is validated against "
+                "the usual unit strings but does not rescale any "
+                "coefficient array here (inert flag; see REVIEW.md).",
+                UserWarning,
+                stacklevel=2,
+            )
         self.step_size = step_size
         self.dispersion_profile = dispersion_profile
         self.a_eff_fn = a_eff_fn
@@ -1976,6 +2069,7 @@ def plot_waterfall(
     """
     import matplotlib.pyplot as plt
     from matplotlib import cm
+    from matplotlib.transforms import ScaledTranslation
 
     if ax is None:
         fig, ax = plt.subplots(figsize=(10, 6))
@@ -1987,9 +2081,11 @@ def plot_waterfall(
     z_steps = solver.z_array
     t = solver.pulse.grid.t * 1e12  # ps
 
-    # Offset each trace by a uniform amount and colour it by propagation
-    # distance, instead of adding the absolute z value to the intensity
-    # (which made the y-axis physically meaningless and overlapping).
+    # True ridge/waterfall rendering: each trace is plotted at its own data
+    # values (not pre-offsetted numbers) and shifted vertically through
+    # per-artist transforms. The y axis therefore maps to *trace offset
+    # index* units consistently, and the z labels at the trace baselines
+    # come from the same offsets (ISSUES.md #4: ridge redraw).
     z_mm = z_steps * 1e3
     norm = plt.Normalize(float(z_mm.min()), float(z_mm.max())) if len(z_mm) else None
     cmap = plt.get_cmap("viridis")
@@ -2004,7 +2100,10 @@ def plot_waterfall(
             y = np.abs(envelope)
             y = y / max(y.max(), 1e-30)  # 0..1
         color = cmap(norm(z_mm[i])) if norm is not None else "b"
-        ax.plot(t, y + i * offset_scale, color=color, linewidth=0.5)
+        # Per-trace vertical offset through an artist transform: the data
+        # values stay untouched, so y-axis interpretation stays exact.
+        offset = ScaledTranslation(0.0, i * offset_scale, fig.dpi_scale_trans)
+        ax.plot(t, y, color=color, linewidth=0.5, transform=ax.transData + offset)
 
     if norm is not None:
         sm = cm.ScalarMappable(norm=norm, cmap=cmap)
@@ -2016,6 +2115,7 @@ def plot_waterfall(
     n_traces = len(solver.evolution)
     ax.set_yticks([i * offset_scale for i in range(n_traces)])
     ax.set_yticklabels([f"{z * 1e3:.2f} mm" for z in z_steps])
+    ax.set_ylim(-0.1, (n_traces - 1) * offset_scale + 1.1)
     ax.set_xlabel("Time (ps)")
     ax.set_ylabel("Propagation distance (z)")
     ax.set_title("Pulse Evolution Waterfall Plot")
@@ -2149,7 +2249,7 @@ def plot_temporal_evolution(
     cmap: str = "viridis",
     z_scale: str = "m",
     use_imshow: bool = True,
-    time_reversal: bool = True,
+    time_reversal: bool = False,
 ) -> plt.Figure:
     """Temporal evolution contour: time vs propagation distance.
 
@@ -2168,10 +2268,12 @@ def plot_temporal_evolution(
     z_scale : str
         ``"m"`` or ``"mm"`` for the distance axis.
     time_reversal : bool
-        If True (default) plot against the standard literature (Agrawal)
-        comoving time, where Raman-shifted solitons appear at positive delay.
-        The library's internal time grid has the opposite sign (chirp and
-        spectra are unaffected); set False for the raw internal time.
+        Kept for back-compatibility with pre-#0 notebooks; default False.
+        Post-ISSUES.md #0 the internal time grid ALREADY uses the standard
+        literature (Agrawal) comoving direction -- Raman-shifted solitons
+        appear at positive delay without any flip (chirp and spectra are
+        unaffected). Set True only to reproduce the historical (pre-#0)
+        mirrored axis.
 
     Returns
     -------
@@ -2260,7 +2362,7 @@ def _field_feature_labels(
     omega0: float,
     pump_nm: float,
     *,
-    time_reversal: bool = True,
+    time_reversal: bool = False,
     n_bands: int = 24,
     wl_range: tuple[float, float] = (400.0, 1400.0),
     floor_db: float = 40.0,
@@ -2579,7 +2681,7 @@ def plot_spectral_temporal_summary(
     dynamic_range_db: float = 40.0,
     cmap: str = "jet",
     z_scale: str = "m",
-    time_reversal: bool = True,
+    time_reversal: bool = False,
     height_ratios: tuple[float, float] = (1.0, 1.7),
     figsize: tuple[float, float] = (11.0, 9.0),
     n_points: int = 500,
@@ -2815,7 +2917,7 @@ def gnlse_spectrogram(
     snapshot: int = -1,
     wl_bounds: tuple[float, float] | None = None,
     n_wavelength: int = 500,
-    time_reversal: bool = True,
+    time_reversal: bool = False,
 ) -> tuple[NDArray, NDArray, NDArray]:
     """Cross-correlation spectrogram of a propagated field (GNLSE Eq. 4).
 
@@ -2851,11 +2953,11 @@ def gnlse_spectrogram(
     n_wavelength : int
         Number of samples on the uniform wavelength grid.
     time_reversal : bool
-        If True (default) the returned delay axis uses the standard
-        literature (Agrawal) comoving time ``T``.  The library's internal time
-        grid has the opposite sign (spectra and the Raman red-shift are
-        unaffected, only the temporal direction is mirrored); set False to get
-        the raw internal time.
+        Kept for back-compatibility with pre-#0 notebooks; default False.
+        Post-ISSUES.md #0 the internal time grid already uses the standard
+        literature (Agrawal) comoving time ``T`` (Raman red-shift -> positive
+        delay); spectra and the Raman red-shift are unaffected either way.
+        Set True only to reproduce the historical (pre-#0) mirrored axis.
 
     Returns
     -------
@@ -3000,7 +3102,7 @@ def plot_spectrogram(
     with_projections: bool = False,
     t_min: float | None = None,
     t_max: float | None = None,
-    time_reversal: bool = True,
+    time_reversal: bool = False,
     plotly: bool = False,
     annotate_features: bool = True,
 ) -> FigureLike:

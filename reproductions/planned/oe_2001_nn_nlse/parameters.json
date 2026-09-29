@@ -1,0 +1,72 @@
+{
+  "reference": "C. Monterola & C. Saloma, Solving the nonlinear Schrodinger equation with an unsupervised neural network, Opt. Express 9, 72 (2001), doi:10.1364/OE.9.000072",
+  "pde": {
+    "equation": "-j dPsi/dz + (beta/2) d2Psi/dt2 - gamma |Psi|^2 Psi = 0   (paper Eq. 4; t in units of the pulse width, z in units of the propagation length)",
+    "cases": {
+      "A_dispersion": {"beta": 1.0, "gamma": 0.0, "input": "exp(-t^2/2)"},
+      "B_spm": {"beta": 0.0, "gamma": 1.0, "input": "exp(-t^2/2)"},
+      "C_joint": {"beta": 1.0, "gamma": 1.0, "input": "exp(-t^2/2)"}
+    },
+    "analytic_solutions": {
+      "A": "Psi = (1 - j z)^(-1/2) exp[ -t^2 / (2 (1 - j z)) ]   (+j branch per paper Eq. 4 sign convention)",
+      "B": "Psi = exp(-t^2/2) exp( j z exp(-t^2) )",
+      "C": "no closed form; repepititious oracle = photonics_helper SplitStepEngine (float64)"
+    },
+    "input_pulses": "Gaussian Psi0 = exp(-t^2/2) (the sech soliton variant of the paper needs beta = -1, gamma = 1 and is NOT one of the paper's three NLSE cases; skipped)"
+  },
+  "paper_training": {
+    "grid_points": 300000,
+    "z_range": [0.0, 5.0],
+    "z_step": 0.05,
+    "t_core_range": [-3.0, 3.0],
+    "t_wings_range": [10.0, 27.0],
+    "t_step": 0.02,
+    "inputs_M": 3,
+    "hidden_H": 42,
+    "activation_hidden": "tanh",
+    "activation_output": "linear",
+    "training": "adaptive-eta gradient descent (rules in Sec. 4.1); energy function Eq. (7): |F|^2 + |C1|^2 + |C2|^2",
+    "quoted_results": {
+      "E_averaged_at_q200": {"beta1_gamma0": 4.3e-5, "beta0_gamma1": 8.3e-4, "beta1_gamma1": 1.3e-5},
+      "NMSE_xi": {"beta1_gamma0": 7.07e-5, "beta0_gamma1": 2.87e-6},
+      "note": "NMSE xi = sum |Psi - Psi^q|^2 / sum |Psi|^2 over 2e4 test datapoints (paper Sec. 4.2)"
+    }
+  },
+  "this_reproduction": {
+    "engine_mapping": {
+      "T0_s": 1.0e-12,
+      "L_D_m": 1.0,
+      "beta2_s2_per_m": 1.0e-24,
+      "gamma_per_W_m": 1.0,
+      "lambda0_nm": 1550.0,
+      "Aeff_m2": 1.216e-13,
+      "n2_m2_per_W": 3.0e-20,
+      "peak_power_W": 1.0,
+      "note": "normalized (t, z) -> (tau = t*T0, z = z*L) with T0 = 1 ps, L = 1 m; engine dispersion kernel exp(i*beta*k*Omega^k) reproduces Eq. (4) for beta2 > 0 with gamma > 0"
+    },
+    "pinn": {
+      "layers": 4,
+      "width": 42,
+      "collocation_points": 20000,
+      "adam_iters": 30000,
+      "float64": true,
+      "device_default": "cpu",
+      "seed": 20010702,
+      "trial_ansatz": "Psi = exp(-t^2/2) + z * N(z, t)  (initial condition enforced by construction; paper Sec. 2.2 energy terms C1 absorbed)",
+      "far_field_energy_term": "|Psi|^2 + |Psi_t|^2 at t = +-27 boundary lines (paper Eq. 6 / C2)",
+      "nmse_test_points": 20000
+    },
+    "assert_bands": {
+      "note": "the paper's NMSE benchmarks come from only 200 adaptive-gradient iterations; our Adam budget is 150x larger, so the same orders of magnitude are the target",
+      "A_nmse": 1e-4,
+      "B_nmse": 1e-4,
+      "C_rel_l2_vs_engine": 5e-3
+    }
+  },
+  "page_refs": {
+    "Eq. (4) NLSE + conventions": "PDF p-04",
+    "Sec. 4.1 training set / architecture": "PDF p-05",
+    "Sec. 4.2 NMSE definition": "PDF p-05",
+    "Sec. 4.3 analytic solutions + quoted numbers": "PDF p-06"
+  }
+}

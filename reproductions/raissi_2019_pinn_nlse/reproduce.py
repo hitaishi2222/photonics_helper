@@ -614,12 +614,13 @@ def _make_plots(H: np.ndarray, z_arr: np.ndarray, h_pred: np.ndarray,
     im = ax1.imshow(np.abs(h_pred), extent=ext, origin="lower", aspect="auto",
                     cmap="viridis")
     ax1.scatter(np.zeros_like(x0), x0, s=6, c="k", marker="x",
-                label=f"initial data (N0)")
+                label="initial data (N0)")
     ax1.scatter(tb, np.full_like(tb, 5.0), s=6, c="k", marker="x")
     ax1.scatter(tb, np.full_like(tb, -5.0), s=6, c="k", marker="x")
     for tc in (0.59, 0.79, 0.98):
         ax1.axvline(tc, c="w", lw=0.8, alpha=0.8)
-    ax1.set_xlabel("t"); ax1.set_ylabel("x")
+    ax1.set_xlabel("t")
+    ax1.set_ylabel("x")
     ax1.set_title("|h(t,x)| — PINN prediction + training data")
     fig.colorbar(im, ax=ax1)
     ax1.legend(loc="upper right", fontsize=7)
@@ -627,12 +628,14 @@ def _make_plots(H: np.ndarray, z_arr: np.ndarray, h_pred: np.ndarray,
     vmax = float(np.max(np.abs(h_pred.real))) or 1.0
     im_re = ax_re.imshow(h_pred.real, extent=ext, origin="lower",
                          aspect="auto", cmap="RdBu_r", vmin=-vmax, vmax=vmax)
-    ax_re.set_xlabel("t"); ax_re.set_title("Re h — PINN prediction", fontsize=10)
+    ax_re.set_xlabel("t")
+    ax_re.set_title("Re h — PINN prediction", fontsize=10)
     fig.colorbar(im_re, ax=ax_re)
     im_im = ax_im.imshow(h_pred.imag, extent=ext, origin="lower",
                          aspect="auto", cmap="RdBu_r",
                          vmin=-vmax, vmax=vmax)
-    ax_im.set_xlabel("t"); ax_im.set_title("Im h — PINN prediction", fontsize=10)
+    ax_im.set_xlabel("t")
+    ax_im.set_title("Im h — PINN prediction", fontsize=10)
     fig.colorbar(im_im, ax=ax_im)
     for ax, tc in zip(axes, (0.59, 0.79, 0.98)):
         c = trained["eval"]["cuts"][str(tc)]
@@ -654,7 +657,8 @@ def _make_plots(H: np.ndarray, z_arr: np.ndarray, h_pred: np.ndarray,
     fig, ax = plt.subplots(figsize=(7, 3.4))
     im = ax.imshow(np.abs(H), extent=ext, origin="lower", aspect="auto",
                    cmap="viridis")
-    ax.set_xlabel("t"); ax.set_ylabel("x")
+    ax.set_xlabel("t")
+    ax.set_ylabel("x")
     ax.set_title("|h(t,x)| — exact (SplitStepEngine, N=2 breather)")
     fig.colorbar(im, ax=ax)
     fig.tight_layout()
@@ -667,7 +671,8 @@ def _make_plots(H: np.ndarray, z_arr: np.ndarray, h_pred: np.ndarray,
     hist = trained["metrics"]["loss_history"]
     fig, ax = plt.subplots(figsize=(5.5, 3.4))
     ax.semilogy(hist, lw=0.8)
-    ax.set_xlabel("iteration"); ax.set_ylabel("MSE0 + MSE_b + MSE_f")
+    ax.set_xlabel("iteration")
+    ax.set_ylabel("MSE0 + MSE_b + MSE_f")
     ax.set_title("PINN training loss")
     fig.tight_layout()
     p = out_dir / "fig3_loss.png"

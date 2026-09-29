@@ -1,0 +1,133 @@
+{
+  "reference": {
+    "title": "Timing and energy stability of resonant dispersive wave emission in gas-filled hollow-core waveguides",
+    "authors": [
+      "Christian Brahms",
+      "John C. Travers"
+    ],
+    "arxiv": "2101.04014v2 (2021-04-22)",
+    "doi": null,
+    "gas_sellmeier_ref": "Boerzsoenyi et al., Appl. Opt. 47, 4856 (2008) [paper ref 23]",
+    "equation_of_state_ref": "CoolProp / helium EOS, paper ref [24]",
+    "accept_tolerances": {
+      "arrival_time_jitter": "absolute; hard assert < 300 as over the paper's parameter scans (Fig. 5 text)",
+      "energy_noise_trend": "trend-level (noise suppression at saturation vs amplification at low energy), tolerance stated per scan",
+      "simple_model_jitter": "Eq. (11) model vs simulated jitter: factor-2 (paper 'closely reproduces')",
+      "compression_length": "fission/compression length within ~20 % of the paper's white-dashed-line criterion (their Sec III B definition)"
+    }
+  },
+  "model": {
+    "paper_model": "carrier-resolved multi-mode UPPE, HE11-HE14, gas+waveguide dispersion (Marcatili-Schmeltzer capillary model), confinement loss, Kerr + photoionisation + plasma, THG on",
+    "reproduction_model": "single-mode (HE11) GNLSE-layer: pressure-scaled gas dispersion + capillary waveguide dispersion/loss, Kerr (+ self-steepening), Raman off (noble gas), NO photoionisation/plasma in v1 (recorded out-of-scope; the paper itself runs plasma-free comparisons)",
+    "ions": {
+      "photoionisation": "OUT OF SCOPE v1",
+      "plasma": "OUT OF SCOPE v1",
+      "THG": "OUT OF SCOPE v1 (belt at 100-3 um wavelengths; RDW band unaffected structurally)"
+    },
+    "integrator": "engine SplitStepEngine/RK4IP (paper: adaptive Dormand-Prince 4(5) in the interaction picture)"
+  },
+  "waveguides": [
+    {
+      "name": "hcf_125um",
+      "type": "hollow-capillary fibre (HCF)",
+      "core_radius_um": 125.0,
+      "radius_source": "paper text '125 um core radius' (Fig. 1 and everywhere)",
+      "length_m": 1.0,
+      "transmission_pct_at_800nm": 87.0,
+      "loss_anchor_note": "paper Fig. 8 text: transmission ~87 % at 800 nm; use as the Marcatili-loss sanity check"
+    },
+    {
+      "type": "hollow-core PCF (scaled-down small-core variant, paper Fig. 8)",
+      "core_radius_um": 25.0,
+      "pressures_bar": {
+        "2.1-bar-scaled": 53.8,
+        "3.2-bar-scaled": 80.7
+      },
+      "scaling-law": "pressure scales with a^-2 (with helium EOS corrections, paper text)"
+    }
+  ],
+  "gas": {
+    "species": "helium",
+    "sellmeier": "Boerzsoenyi 2008 inert-gas fits (paper ref 23), scaled via pressure-dependent number density (CoolProp EOS, ref 24)",
+    "constant_pressure_neighbors_bars_fig3a": [0.8, 1.5, 2.1, 3.0, 4.0],
+    "gradient_fill_p0_bars_fig3b": [1.2, 2.2, 3.2, 4.5, 6.0],
+    "pressure_profile_gradient": "p(z) = p0 * sqrt(1 - z/L)  (paper Eq. 3)",
+    "qualitative_wavelength_trend": "higher pressure -> longer RDW wavelength (paper abstract & Fig. 2 caption)"
+  },
+  "pump": {
+    "shape": "transform-limited Gaussian (sech2 for the fission-length formula Eq. 12)",
+    "wavelength_nm": 800.0,
+    "duration_fs": 7.5,
+    "energy_scan_uJ": [110, 210],
+    "fig1_example_energy_uJ": 225,
+    "noise_energy_pct": 2.0,
+    "noise_duration_pct_fig7": 1.0,
+    "cep": "uniformly random shot-to-shot",
+    "shot_noise": "one-photon-per-mode model (paper ref 10)"
+  },
+  "sampling": {
+    "resampling_method": {
+      "probe_energies": "800 uniformly spaced pump energies over the scan range",
+      "interpolant": "RDW energy/arrival-time/wavelength interpolants over pump energy (and duration for the Fig. 7 study)",
+      "samples": 10000,
+      "std": 0.02
+    },
+    "direct_method": {
+      "per_mean_energy": 500,
+      "note": "resampling validated against direct sampling (paper Fig. 2c/d); our ensemble uses direct/resampled approach per runtime budget (herdr background, batched)"
+    }
+  },
+  "rdw_extraction": {
+    "fixed_window_fig2_nm": [185, 265],
+    "variable_window": "15 % relative bandwidth centred on the RDW band (Fig. 3+)",
+    "arrival_time": "IFFT of the filtered frequency-domain field -> first moment (centre of mass)",
+    "rdw_energy": "integrated filtered spectral energy density, summed over modes (single mode here)",
+    "central_wavelength_jitter": "first moment of the filtered spectrum",
+    "grid_note": "paper grid: 100 nm - 3 um, 450 fs window, 4096 samples; our engine grid chosen to resolve the RDW band + pump (dt <= 55 as equivalent)"
+  },
+  "simple_model": {
+    "eq11": "tau = Lprop * [beta1(w_RDW) - beta1(w0)]",
+    "eq12_fission_length": "Lf = sqrt(T0^2 / (gamma * |beta2(w0)| * P0)), sech2 input",
+    "lprop": "L - Lf",
+    "validation_target": "reproduces the simulated jitter magnitude (paper Fig. 6)"
+  },
+  "anchors": {
+    "fig1": {
+      "system": "125 um / 1 m / 2.1 bar He / 225 uJ / 7.5 fs / 800 nm",
+      "rdw_wavelength_nm_window": 180.0,
+      "rdw_filter_rel_bw_pct": 15,
+      "status": "v1 target: reproduce the compression optimum + RDW spectrum position (within phase_matching tolerance)"
+    },
+    "fig2": {
+      "scan": "constant pressures, energies 110-210 uJ, RDW tuneability window",
+      "status": "v1: RDW central wavelength vs phase-matching root at the compression point per pressure"
+    },
+    "fig3": {
+      "energy_noise": "amplified at low pump energy; suppressed below the pumps own noise once saturated; gradient case suppresses to ~0",
+      "status": "v1 trend asserts"
+    },
+    "fig5": {
+      "timing_jitter_as": {"max_all_params": 300.0},
+      "proportionality": "jitter proportional to pump-energy noise over the full range",
+      "plasma_note": "0.8-bar exceptional stability needs plasma -> out of scope v1"
+    },
+    "fig7": "1 % duration noise gives similar-order timing jitter despite smaller relative noise (fission length sensitivity)",
+    "fig8": {
+      "pairs": [["125um, 2.1 bar", "25um, 53.8 bar"], ["125um, 3.2 bar", "25um, 80.7 bar"]],
+      "trend": "same noise characteristics when loss is switched off; the 1 m HCF transmission ~87 % explains the residual difference",
+      "status": "v1: reproduce the scaled pairs at no-loss setting (confinement loss optional toggle)"
+    },
+    "fig6": "Eq. (11) simple group-velocity/fission-length model reproduces jitter magnitude"
+  },
+  "engine_stack": {
+    "linear_step": "pressure-scaled He Sellmeier + Marcatili-Schmeltzer capillary beta(omega) & confinement loss alpha(omega) via TaperedGNLSESolver dispersion_profile(beta(w, z)) or loss hooks",
+    "steps_to_audit": [
+      "engine supports per-frequency loss (alpha(omega)) - check FiberProfile/GNLSESolver hooks",
+      "gamma of the gas-filled capillary: gamma0 = n2_He * omega0 / (c * Aeff) with Aeff ~ pi a^2 (capillary correction optional v1)"
+    ]
+  },
+  "runtime_notes": {
+    "deterministic_single_run": "TBD once the first engine compression run is timed (record here per house rule)",
+    "ensemble": "shard direct-sampling ensembles across herdr panes; resampling interpolants are cheap once the probe-scan is done"
+  }
+}

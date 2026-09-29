@@ -45,7 +45,9 @@ one-time planning cost is amortized over thousands of transforms.
 
 ``PHOTONICS_FFT_THREADS`` — threads per transform for FFTW3 and scipy,
 default ``1``. Multi-threading rarely pays off below ~2¹⁶ points; raise it for
-very large grids.
+very large grids. (Measured on the 65536-point wright deck: threads=2 is
+optimal; threads=4 regresses — context-switch overhead on the fine-grained
+per-call lock/roll pattern.)
 """
 
 from __future__ import annotations

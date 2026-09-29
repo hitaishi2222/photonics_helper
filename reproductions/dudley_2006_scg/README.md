@@ -34,6 +34,7 @@ with `R(t) = (1−f_R)δ(t) + f_R h_R(t)`, `f_R = 0.18`, and the PCF of Table I
 | **Fig. 8** | [`fig08_dispersive_wave.py`](fig08_dispersive_wave.py) | DW emission from the `j = 1` fundamental soliton, with/without Raman | DW 645 nm vs phase matching 663 nm (**2.6 %**) | ✅ |
 | **Fig. 9** | [`fig09_dw_energy.py`](fig09_dw_energy.py) | Mean soliton wavelength and DW energy fraction vs distance | Raman red-shift and reduced DW energy confirmed | ✅ |
 | **Fig. 10** | [`fig10_spectrogram.py`](fig10_spectrogram.py) | Output SC spectrogram (Eq. 4) projected on intensity/spectrum | DW and soliton bands separated by 2.8 ps in delay | ✅ |
+| **Fig. 19** | [`fig19_coherence.py`](fig19_coherence.py) | |g₁₂(λ)| coherence across the SC (20-realization noise ensemble) | pump/soliton band 0.91, far wings 0.03–0.13, blue wing 0.20; 0 ≤ g₁₂ ≤ 1 | ✅ |
 | **Fig. 23** | [`fig23_mi_gain.py`](fig23_mi_gain.py) | CW parametric/MI gain vs pump wavelength (500 W) | reconstructed ZDW **779.9 nm**; `g_max = 2γP`; anomalous peak 25.1 THz vs 25.6 THz classical | ✅ |
 
 ### Quantitative results
@@ -137,11 +138,13 @@ delay can carry both a Raman soliton and the blue dispersive wave. Cells more
 than 40 dB below the global peak are marked *low-level background*. This is a
 hover aid, not a replacement for the band-resolved analysis in Figs. 4 and 10.
 
-**Time convention.** The library stores the field on the raw internal time
-grid, where Raman-red-shifted solitons appear at *negative* delay. The plotting
-helpers default to `time_reversal=True`, i.e. the standard Agrawal/Dudley
-comoving time, so solitons appear at *positive* delay and the fan of light is
-right-shifted exactly as in the paper's Fig. 3(b). Spectra are unaffected.
+**Time convention (updated 2026-09-30, post-#0).** The engine's internal time
+time grid NOW uses the standard Agrawal/Dudley direction directly: the
+Raman-red-shifted soliton is slower (β₂ < 0 → dβ₁/dλ > 0) and appears at
+*positive* delay, matching Fig. 3(b) with no flip. The historical
+`time_reversal=True` compensation (for the pre-#0 mirrored dispersion
+operator) is retired: the plotting helpers default to `time_reversal=False`,
+and the flag is kept only for back-compatibility. Spectra are unaffected.
 
 Both `common.plot_spectral_evolution` and `common.plot_temporal_evolution`
 also accept `dynamic_range_db`, `cmap`, `z_scale`, and `plotly`, in addition to
@@ -165,9 +168,13 @@ also accept `dynamic_range_db`, `cmap`, `z_scale`, and `plotly`, in addition to
    paper's Fig. 3 uses single-shot simulations with noise, and Sec. VI.D
    analyses noise-driven decoherence. The library now ships the stochastic
    source (`step2-raman-noise-source`: one-photon-per-mode Γ_R with thermal
-   factor, `photonics_helper.noise`) — but the figures here (18–22, 28) are
-   still not reproduced in this folder, so the exact fine structure and
-   coherence figures remain **not** reproduced (the deterministic paths only).
+   factor, `photonics_helper.noise`) AND the first coherence figure has
+   landed: **Fig. 19 reproduced** (`fig19_coherence.py`, 20-realization
+   ensemble with Raman noise): |g₁₂| stays 0.91 in the pump/soliton band,
+   drops to 0.03–0.13 mean in the far wings (blue 0.20 at 690 nm), 0 ≤ g₁₂ ≤
+   1 — the noise-driven decoherence structure of the paper's Fig. 19.
+   Figs. 18/20–22/28 remain not reproduced (deterministic paths only;
+   re-run remains repro-work, no engine change pending).
 3. **Fig. 10 beat frequency.** The paper quotes ≈ 165 THz between the two
    beating spectrogram bands. The deterministic simulation gives a different
    beat (≈ 17 THz here). The script therefore validates the *method* and the
