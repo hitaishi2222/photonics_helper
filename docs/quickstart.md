@@ -33,5 +33,5 @@ solver.propagate(num_steps=200)
 
 ## Next steps
 
-- [API Reference](api.md) — one page per module, rendered from docstrings.
+- [API Reference](api/index.md) — one page per module, rendered from docstrings.
 - [Raman](api/raman.md) and [χ⁽²⁾](api/chi2.md) pages for those workflows.
