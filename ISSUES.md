@@ -101,7 +101,13 @@ e^{+i} kernel family as `TemporalGrid.fft`); fig06 fast validation passes
 fast suite passes 1128/1128. Any other site reading fields with a raw
 `np.fft` and mapping bins via `c/(ω₀+grid.w)` must be audited for the same
 mirror hazard (candidates: the spectrogram helper and the z=… interp path in
-the same `common.py`).
+the same `common.py`). AUDIT CLOSED 2026-09-30: both candidates are tone-
+probe-pinned in the suite (`test_dudley_common_analysis_channel_mirror_audit`
+— a physical-red tone `e^{+iΩ_m t}` lands red of the carrier through the
+engine kernel, the spectrogram helper, `Evolution.spectra`/sorted-wavelength
+path and the uniform-wavelength interpolation alike); the stale
+`time_reversal=True` default in `plot_temporal_evolution` was retired to
+`False`. No remaining raw-`np.fft`-with-λ-map analysis site in the folder.
 
 **Resolution addendum (2026-09-30, arrival-time channel).** Post-fix
 validation of the #0 family in the *arrival-time* channel landed with the
@@ -115,7 +121,11 @@ frame), so the RDW walk-off is reconstructed on the analysis side via the
 analytic β₁ propagation leg (Eq. 11/12 with the simulated RDW λ) — the raw
 engine-frame moment measures only the ≤ 0.2 fs envelope-frame imprint.
 Any future in-engine absolute-arrival observable needs a β₁-aware readout
-helper (queued as optional follow-up in the folder README).
+helper. SHIPPED 2026-09-30: `dw_timing_gas_hollowcore/arrival_beta1.py`
+(τ = ∫[β₁(ω_RDW;z) − β₁(ω₀;z)]dz on the engine's dispersion family,
+per-seed z_fission supported, machine-precision vs the closed form,
+regression test `test_dw_timing_beta1_arrival_helper`; see folder README
+note 5).
 
 **CLOSED 2026-09-30 (same-day re-audit).** The original failing symptom —
 the Renninger & Wise higher-mode blue-shift sign — was re-measured under
@@ -165,6 +175,32 @@ non-negative vs the standard +5–6 % drift; γ>0 reduction to the standard
 solution; SSFS red-sign preserved with the flag on) plus `docstring
 context` in `SplitStepEngine` docstring. The model-intrinsic standard-GNLSE
 drift note above remains the correct description of `conserving_shock=False`.
+
+**Independently validated (2026-09-30, P0 `huang_202x_pcgnlse_attractors`
+reproduction).** The source paper's own headline pathology is realized
+through the engine: with `include_self_steepening=True` + Raman, γ > 0
+gives identical redshift under both models, while γ < 0 makes the
+standard engine BLUEshift (unphysical) and `conserving_shock=True` keeps
+the pcGNLSE redshift. Also certified: (i) the signed-γ call site passes
+γ < 0 and (per the Huang SI sign bench) does not clamp; (ii) the dark-
+soliton supplement's structural identities (E = 2P₀B_d²ρ, M = M_core + ΩE
+with M_core = 2P₀(arcsin B_d − B_d√(1−B_d²)), Ω̃ = −M/E) close to 1e-14,
+after fixing a genuine double-Γ bug in `reproductions/huang_202x_pcgnlse
+_attractors/reproduce.py::dark_moments` (the momentum integral multiplied
+the phase gradient by the renormalization factor Γ twice — S44 gives
+M = ∫(P−P₀)φ′dτ). Recorded-not-asserted remainings live in the folder README.
+Status update 2026-09-30: the dark ODE machinery (S55/S63/S73/S81/S97 + all
+auxiliaries) is fully transcribed (clean pdftotext supplement export removes
+the "no clean text export" blocker) and implemented in
+`huang_202x_pcgnlse_attractors/diagnostics/dark_ode.py` with the
+printed-vs-derived ambiguities (S73 M-pairing, S63 GVD term) exposed behind a
+`variant` switch; the long-time overlay stays recorded-outstanding with a
+precise diagnosis (the dark ansatz is not periodic on an FFT grid — its two
+far-field phases differ by 2·Bd, an O(1) step at the seam — so np.fft
+propagation smears the seam and corrupts the defect moments; measured
+dE/dξ ≈ +79 at dxi=1e-4 vs exactly 0 analytic at σ=0). The bright Case III
+E-anchor reproduces at ξ≈105 (E → 0.517 vs paper 0.5); the Ω magnitude
+(−0.41 vs −2.3) is the recorded deviation (see folder README caveats 2–3).
 
 **Detailed write-up:** `reproductions/README.md` → "ISSUE detail — shock
 energy drift". Also touched: `REPORT.md` (2 annotated entries),
@@ -499,7 +535,9 @@ gives exactly that (+3.27 ps internal, red soliton = slower for
 β₂ < 0). Compensations retired (defaults now False); test rewritten.
 The fresh −20 dB span (437–2028 nm, fast grid) is broader than the
 README's full-run row (500–1257) — fast-grid artifact + stale-cache
-reading; full-run row to be re-recorded after a full re-run.
+reading. RESOLVED 2026-09-30 follow-up: the full-mode re-run reproduces
+the row exactly (499.9–1256.7 nm, ratio 2.514) on fresh caches; record
+confirmed in `dudley_2006_scg/README.md` → "Full-mode re-run record".
 - The RW FWHM/energy-drift pair WAS a real engine bug:
   `MultimodeSplitStepEngine._fwm_substep`'s "frequency-domain RK4" had
   been reduced to a **single explicit Euler step** in the 09-28 #11
@@ -517,17 +555,22 @@ slow path, 14 multimode-FWM tests).
 
 ---
 
-## 7. ROCm iGPU training crash guardrail (system-level)
+## 7. ROCm iGPU training crash guardrail (system-level) — SUPERSEDED BY CUDA
+
+**CLOSED 2026-09-30 (author decision).** CUDA is now implemented on this box;
+the amdgpu/ROCm training path is retired and never used for float64 PINN work
+again. The historical guardrail record is kept for provenance.
 
 **Found.** 2026-09-22 (earlier Raissi-PINN session; codified as a rule after
 the second near-miss).
 
-**Symptom.** Training the float64 PINN on the amdgpu (8060S iGPU) via the
-ROCm torch build **crashed the whole system** — a shared-memory float64
-second-derivative autograd spike takes the iGPU's shared system RAM down
-with it. Not an exception the process can catch: the machine dies.
+**Symptom (historical).** Training the float64 PINN on the amdgpu (8060S
+iGPU) via the ROCm torch build **crashed the whole system** — a
+shared-memory float64 second-derivative autograd spike takes the iGPU's
+shared system RAM down with it. Not an exception the process can catch: the
+machine dies.
 
-**Guardrails landed (do not regress).**
+**Guardrails that had landed (kept, do not regress).**
 - `--device {cpu,cuda,auto}` default **cpu**; `PH_PINN_DEVICE` env override.
 - `--nf-chunk N` rotating collocation subsample (4× smaller autograd graph).
 - Allocator cap `PH_GPU_CAP_FRAC` (default 0.6) + `empty_cache` every 200
@@ -551,9 +594,10 @@ and a user explicitly accepting the risk. A real fp64-capable card or ZLUDA
    then open the `openjournals/joss-reviews` submission issue.
    *(Tracked as the "Pending — author action" checklist in `ROADMAP.md`;
    reproduced here so no pending item is lost.)*
-2. **Fold the received PDFs (P1, P3, P4; P2 optional) into new reproduction
-   folders** — the only open items on the `PLAN.md` reproduction checklist
-   (P2 = Peregrine is blocked on PDF availability; see `PLAN.md` §4 for why).
+2. **Fold the received PDFs into new reproduction folders** — (P1/Peregrine:
+   **done 2026-09-30**, `reproductions/kibler_2010_peregrine/`). Still open:
+   P3 (Hult RK4IP) and P4 (Heidt adaptive step); P2 (Tomlinson) optional —
+   the derived-criterion reproduction is already validated (`PLAN.md` §1b).
 3. **`REPORT.md` / `REVIEW.md` reproduction tables** need a refresh at the
    end of each reproduction batch (`PLAN.md` checklist item, still unticked).
 

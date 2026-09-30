@@ -1,0 +1,11 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.12, pytest-9.0.3, pluggy-1.6.0
+rootdir: /home/hiti/Hiti/projects/photonics_helper
+configfile: pyproject.toml
+plugins: anyio-4.13.0, langsmith-0.8.15, dash-4.2.0, logfire-4.37.0, Faker-40.28.1, hypothesis-6.168.0
+collected 35 items / 34 deselected / 1 selected
+
+tests/test_reproductions.py .                                            [100%]
+
+================ 1 passed, 34 deselected in 1408.35s (0:23:28) =================
+EXIT=0

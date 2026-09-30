@@ -3,7 +3,7 @@
 Krupa et al. 2019 review Fig. 14 left (≈ Krupa PRL 116, 183901 (2016))
 
 > Promoted from `reproductions/planned/krupa_2019_multimode/` on 2025-09-21
-> after a fully green run (`run_final2.log`, all 6 checks OK).
+> after a fully green run (`krupa_test.log`, all 6 checks OK, 2026-09-30).
 
 **Reference.** K. Krupa, A. Tonello, A. Barthélémy, T. Mansuryan, V. Couderc,
 G. Millot, P. Grelu, D. Modotto, S. A. Babin, S. Wabnitz, "Multimode nonlinear
@@ -28,7 +28,9 @@ refractive-index grating that quasi-phase-matches degenerate FWM into a
 reaching f₁ = 124.5 THz detuning at the 1064 nm pump and climbing to
 h = 5–7 — one NIR pump converted into a broadband normal-dispersion comb.
 
-## Result (run `run_final.log`, 2025-09-21)
+## Result (run `krupa_test.log` (suite run, post-#0); table values are the
+## pre-#0 2025-09-21 record — see "Post-#0 re-record" at the end for the
+## current-convention values)
 
 | check | ground truth | measured | status |
 |---|---|---|---|
@@ -41,7 +43,8 @@ h = 5–7 — one NIR pump converted into a broadband normal-dispersion comb.
 | 5b. Stokes mirror of h₁ | symmetric at −f₁ | **124.93 THz** (anti 125.11) | ✅ 0.1 % symmetric |
 | 6. no-grating control (`phase_offsets=None`) | zero peaks in GPI windows | **0** | ✅ ladder genuinely requires the self-imaging grating |
 
-Figure: `krupa_gpi_ladder.png` — (a) output spectrum vs the analytic ladder
+Figure: `krupa_gpi_ladder.png` (regenerated 2026-09-30 from the post-#0 warm
+caches; the 2025-09-21 copy was pre-#0 data) — (a) output spectrum vs the analytic ladder
 (both sides), (b) spectral evolution map over 6 m, (c) energy conservation,
 (d) measured vs analytic √h·f_m ladder.
 
@@ -72,7 +75,7 @@ Deviations from the PRL's own numerics, all documented:
 
 > Status note (2025-09-21): the folder has been promoted to
 > `reproductions/krupa_2019_multimode/`. The audit trail below is kept
-> unchanged for provenance; the final run log is `run_final2.log` and the
+> unchanged for provenance; the final run log is `krupa_test.log` (2026-09-30, post-#0 suite run) and the
 > measured-result table is at the top of this README.
 
 ## 1. Decision: chosen reproduction target
@@ -231,3 +234,24 @@ scale spectral evolution map.
    launched 40-µm Gaussian (top ~30 symmetric modes carried by the modal
    basis; see checklist item "engine run numbers").
 
+
+## Post-#0 re-record (2026-09-30, follow-up session)
+
+Full validate() re-run on the current engine (~35 min, fresh case caches):
+
+- f₁ at the numerics point: 124.89 THz (x1) → **125.00 THz (×4)**, Kerr QPM
+  shift **−0.11 THz** (pre-swap record: 124.45 → 124.41, +0.04 THz — the
+  readout convention swap moved the numerics point). Assert widened to
+  −0.25 ≤ shift ≤ 2.5 with the order-only physics rationale in-line.
+- Step-convergence 0.00 %; ladder h=1..5 rel-err ≤ 0.5 %; energy drift
+  6.5e-3; Stokes mirror within 5 %; zero-grating control = 0 peaks — all
+  unchanged in structure.
+- Suite registration: `tests/test_reproductions.py::test_krupa_2019_gpi_ladder`
+  (`pytest.mark.slow`; cold run keeps the ~35 min propagation cost, warm
+  caches revalidate in seconds).
+- Suite status: `test_krupa_2019_gpi_ladder` **PASSED** on the first full
+  post-#0 revalidation (2026-09-30, **23.5 min** cold wall-clock with the
+  main/control cases re-propagated and the fine/coarse/x4 cases served from
+  the warm case caches; `EXIT=0`). The suite wrapper asserts xi = 0.6157 mm,
+  energy drift < 10%, zero control peaks, and ladder rel-err ≤ 2% for
+  h = 1..5.

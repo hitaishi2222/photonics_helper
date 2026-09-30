@@ -174,8 +174,12 @@ def dark_moments(u, tau, w, P0) -> dict:
     dphi = np.where(P > 1e-9, np.real(-1j * np.conj(u) * du / P), 0.0)
     Gamma = np.where(P > 1e-9, 1.0 - P0 / P, 0.0)
     Gamma = np.clip(Gamma, -1e6, 1e6)
-    # M = (i/2) int (u du* - u* du) Gamma dtau = int (P - P0) phi' dtau
-    M = float(((P - P0) * dphi * Gamma).sum() * dtau)
+    # M = (i/2) int (u du* - u* du) Gamma dtau = int (P-P0) phi' dtau
+    #    [paper Eq. (27)/(S44); 2026-09-30 fix: the earlier implementation
+    # multiplied by Gamma TWICE — S44 gives M = int P*(1-P0/P)*phi'
+    # = int (P-P0) phi', not int (P-P0)*Gamma*phi'. Sign aligns so the
+    # ansatz satisfies M = M_core + Omega*E (S104/S105) numerically.]
+    M = float(((P - P0) * dphi).sum() * dtau)
     t2 = float(((tau - eta) ** 2 * weight).sum() * dtau / E)
     rho = float(np.sqrt(t2 * 12 / np.pi**2))
     Jd = np.conj(u) * du - u * np.conj(du)
@@ -248,6 +252,12 @@ def ode_overlay(c: dict, states, tau, w) -> list[dict]:
 
 def run_case(c: dict, model: str, dark: bool) -> tuple[np.ndarray,
                                                        np.ndarray, list]:
+    if dark:
+        # 2026-09-30 transcription fix: paper Table II fixes E0 (and rho0,
+        # Bd); S48 (E = 2 P0 Bd^2 rho) then REQUIRES the background power.
+        # A hardcoded P0 = 1 broke the E anchor (E(0) = 1.62 vs the paper's
+        # 1.0) and doubled the Kerr/MI scale.
+        c = dict(c, P0=c["E0"] / (2.0 * c["Bd"] ** 2 * c["rho0"]))
     grid = DARK_GRID if dark else BRIGHT_GRID
     tau = (np.arange(grid["n_tau"]) - grid["n_tau"] / 2) * (
         2 * grid["tau_max"] / grid["n_tau"])
@@ -373,9 +383,9 @@ def validate() -> dict:
             # simulation setup detail); Cases I/II are the tight anchors.
             assert rel < ode_tol[name], (name, key, rel)
 
-    # --- dark cases ---
-    P0_BG = 1.0
+    # --- dark cases --- (P0 derived inside run_case from E0, S48/Table II)
     for case in PARAMS["dark_cases"]:
+        P0_BG = case["E0"] / (2.0 * case["Bd"] ** 2 * case["rho0"])
         tau, w, states = run_case(case, "pc", dark=True)
         traj = [{"xi": x, **dark_moments(u, tau, w, P0_BG)}
                 for x, u in states]

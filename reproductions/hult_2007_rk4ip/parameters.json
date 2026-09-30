@@ -1,0 +1,60 @@
+{
+  "reference": {
+    "title": "A Fourth-Order Runge-Kutta in the Interaction Picture Method for Supercontinuum Generation in Optical Fibers",
+    "author": "Johan Hult",
+    "journal": "Journal of Lightwave Technology 25(12), 3770 (2007)",
+    "doi": "10.1109/JLT.2007.909373",
+    "pdf_local": "JLT.2007.909373.pdf"
+  },
+  "soliton_deck": {
+    "source": "paper Sec. III.A, p. 3772 (printed)",
+    "beta2_ps2_per_m": -0.01,
+    "gamma_per_Wm": 0.01,
+    "T_FWHM_fs": 100.0,
+    "T0_fs": 56.7,
+    "P0_W": 1246.0,
+    "P0_formula": "P0 = N^2 |beta2| / (gamma T0^2), N = 2, paper prints 1.24 kW",
+    "N_order": 2,
+    "z_sol_m": 0.506,
+    "n_points": 4096,
+    "metric": "average relative intensity error epsilon (paper Eq. 13) after one soliton period; A_true = the input envelope (exact recurrence)",
+    "anchors": {
+      "convergence_order": -4,
+      "paper_quality": "epsilon ~ 1e-10 at Nsteps ~ 1000 (Fig. 1, floor)",
+      "fit_window": "log-log slope over the pre-floor band"
+    }
+  },
+  "scg_deck": {
+    "source": "paper Sec. III.B (from Dudley and Coen), Table I, p. 3773",
+    "central_wavelength_nm": 850.0,
+    "P0_W": 10000.0,
+    "T0_fs": 28.4,
+    "FWHM_fs": 50.0,
+    "fiber_length_m": 0.10,
+    "gamma_per_Wm": 0.045,
+    "betas_psN_per_m": [-1.276e-2, 8.119e-5, -1.321e-7, 3.032e-10, -4.196e-13, 2.570e-16],
+    "fR": 0.18,
+    "raman_response": "paper: Hollenbeck-Cantrell modal sum [Hult ref 21]; house engine: two-exponential Blow-Wood tau1 = 12.2 fs / tau2 = 32 fs — RECORDED DEVIATION",
+    "shock": "first-order (1 + (i/omega0) d/dT) as in paper Eq. (2)",
+    "n_points": 8192,
+    "N_soliton": "~5 (paper: 'around five')",
+    "anchors": {
+      "N": "0.5·sqrt(LD/LNL) within 25 % of 5 (paper 'around five')",
+      "fission": "the N-soliton fissions into fundamental solitons (multiple temporal peaks at exit)",
+      "redshift": "Raman self-frequency shift of ejected solitons to longer wavelengths",
+      "DW": "dispersive-wave spectral components on the short-wavelength side (Fig. 2a/b morphology)",
+      "convergence_order": -4,
+      "floor": "epsilon ~ 1e-6..1e-8 band at the finest coarseness of the ladder (paper Fig. 3 floor ~1e-8 at Nsteps ~ 3e4)"
+    }
+  },
+  "runtime": {
+    "soliton_ladder": "6 runs x (<= 640 steps x 4096 pts) ~ seconds",
+    "scg_ladder": "coarse ladder <= 4096 steps + one fine reference run (~40-90 s total)"
+  },
+  "accept_tolerances": {
+    "soliton_slope_abs": 0.35,
+    "soliton_best_epsilon": 1e-7,
+    "scg_slope_abs": 0.9,
+    "scg_best_epsilon": 5e-4
+  }
+}

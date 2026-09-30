@@ -810,7 +810,9 @@ def temporal_feature_labels(
         for b, mask in enumerate(band_masks):
             if not mask.any():
                 continue
-            profile = np.abs(np.fft.ifft(np.fft.ifftshift(spectrum * mask))) ** 2
+            profile = np.abs(np.fft.fftshift(np.conj(
+                np.fft.ifft(np.conj(np.fft.ifftshift(spectrum * mask))))
+            )) ** 2
             update = profile > best
             best[update] = profile[update]
             best_band[update] = b
@@ -1017,7 +1019,7 @@ def plot_temporal_evolution(
     dynamic_range_db: float = 40.0,
     cmap: str = "jet",
     z_scale: str = "cm",
-    time_reversal: bool = True,
+    time_reversal: bool = False,
     plotly: bool = False,
     annotate_features: bool = True,
 ):
@@ -1040,9 +1042,9 @@ def plot_temporal_evolution(
     z_scale : {"m", "cm", "mm"}
         Propagation-distance unit on the y axis.
     time_reversal : bool
-        Use the standard literature (Agrawal/Dudley) comoving time, where
-        Raman-red-shifted solitons appear at positive delay.  The internal
-        grid has the opposite sign; set False for the raw internal time.
+        Legacy back-compatibility flip (pre-#0 mirrored engine). Post-#0 the
+        internal grid already matches the literature comoving convention; all
+        current callers should leave this False.
     plotly : bool
         If True, return an interactive ``plotly.graph_objects.Figure`` whose
         hover labels each ``(t, z)`` cell as DW / SPM / Raman soliton.

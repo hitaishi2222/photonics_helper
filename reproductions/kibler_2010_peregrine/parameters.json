@@ -1,0 +1,20 @@
+{
+  "paper": "B. Kibler, J. Fatome, C. Finot, G. Millot, F. Dias, G. Genty, N. Akhmediev, J. M. Dudley, The Peregrine soliton in nonlinear fibre optics, Nat. Phys. 6, 790 (2010)",
+  "doi": "10.1038/nphys1740",
+  "description": "Breather-formalism excitation of the Peregrine soliton in an HNLF: the exact Akhmediev-breather (Eq. 2) family is propagated with the NLSE engine, its a->1/2 Peregrine limit (Eq. 3) is asserted, and the a=0.42 experimental deck (xi=2.5, P0=0.30 W, f_mod=241 GHz) is reproduced dimensionally.",
+  "central_wavelength_nm": 1550.0,
+  "beta2_ps2_per_m": -0.00885,
+  "gamma_per_Wm": 0.01,
+  "alpha_per_m": 0.0001335,
+  "hnlf_length_m": 900.0,
+  "modulation_frequency_GHz": 241.0,
+  "pump_power_W": 0.3,
+  "modulation_depth_a": 0.42,
+  "xi_target": 2.5,
+  "grid_N": 32768,
+  "grid_Tmax_ps": 100.0,
+  "deck_rel_l2_tolerance": 0.2,
+  "peak_ratio_tolerance": 0.15,
+  "profile_tolerance": 0.1,
+  "fwhm_tolerance": 0.15
+}
