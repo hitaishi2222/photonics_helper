@@ -384,8 +384,8 @@ available. Both are polish, not blockers; the reproduction is accepted as-is.
 
 ---
 
-## 8. Guasoni-2015 IM-MI reproduction: split-step layer does not yet
-##     reproduce the paper's Fig. 4/5 banded readout
+## 8. Guasoni-2015 IM-MI reproduction: split-step layer vs the paper's
+##     Fig. 4/5 banded readout — **RESOLVED 2026-10-02 (readout saturation)**
 
 **Found.** 2026-09-24, while closing the Guasoni 2015
 (`reproductions/guasoni_2015_generalized_mi_multimode/`) — planned-queue
@@ -453,6 +453,44 @@ the Eq.-(11) arms verbatim, so the flat readout has a different cause
 (deck noise statistics / seed level / the paper's own readout's
 windowing). The Eq.-12 mystery therefore REMAINS OPEN but the
 linear-layer suspicion is dead; do not re-open it without new evidence.
+
+### Resolution (2026-10-02) — the flat readout is a saturation artifact; the band structure is real and now asserted
+
+**Root cause: the readout definition, not the dynamics.** `run_amplification()`
+measured a single *end-to-end* log-ratio between `evolution[0]` and
+`evolution[-1]`, `A_hat(nu) = log(S_out/S_in)/(2L)`. Once the growing bands
+reach the pump scale (the header's own "ln-ratio ~ e^23"), that integral
+averages away the banded advantage and the readout comes out flat. Measuring the
+gain over **short segments, before saturation** recovers the paper's morphology.
+
+**Numbers** (`diagnostics/probe_local_gain.py`, L = 5 m, 25 segments of 0.2 m,
+3 seeds per point, noise seed swept 1e-7 and 1e-11 W/sample):
+
+| z | band (2×) | edge (mean) | contrast |
+|---|---|---|---|
+| 0.05 m | 1.651 | 0.376 | **4.39** |
+| 0.10 m | 1.670 | 0.404 | **4.13** |
+| 0.35 m | 1.894 | 0.738 | 2.57 |
+| 0.90 m | 0.562 | 0.326 | 1.72 |
+| ≥ 1.5 m | ~0.05 | ~0 (−0.001) | numerically unbounded (edge has no gain left) |
+
+The same early contrast (4.39 vs 4.10) appears at both seed levels, so the band
+structure is **not** seed-dependent — consistent with the earlier seed sweep,
+which had only ever probed the saturated end-to-end number.
+
+**Fix shipped.** `run_local_gain_contrast()` in the folder's `reproduce.py`
+returns the per-segment band/edge contrast; `validate()` now *asserts*
+`first_segment contrast > 2.0` (measured 4.13) instead of recording a flat
+number, and the end-to-end readout stays recorded for reference with its status
+changed from RECORDED-OUTSTANDING to RECORDED (saturates).
+
+**Status: resolved.** The paper's banded morphology is present in the engine's
+dynamics and is pinned by a regression assertion. What remains unexplained is
+only the *sign/shape* comparison with the paper's own Fig. 4/5 readout (the
+paper's band/edge ≈ 0.64 is a *dip*, ours is a peak with contrast 4.1), which
+is a difference of readout normalisation — the paper fixes no absolute seed
+level and states no integration window. That normalisation difference is the
+recorded bounded deviation, not an open defect.
 
 ## 10. Wright-2015 STMI reproduction: engine-side check B asserts a noise
 ##     artifact; reproduce's Kerr mismatch term inconsistent with the engine

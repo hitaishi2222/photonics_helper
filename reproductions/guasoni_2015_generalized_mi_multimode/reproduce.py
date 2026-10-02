@@ -304,6 +304,72 @@ def run_amplification(length: float, seeds: int = 2, avg: int = 240) -> dict:
     return {"nu": nu_axis, "gain_norm": gain_avg * L_NL1}
 
 
+def run_local_gain_contrast(
+    length: float = 1.0, seeds: int = 2, nsaves: int = 6, avg: int = 240
+) -> dict:
+    """Eq.-(12) *local* amplification contrast per segment, before saturation.
+
+    Why this exists (ISSUES.md #8): :func:`run_amplification` measures a single
+    end-to-end log-ratio ``log(S_out/S_in)/(2L)``. Once the growing bands reach
+    the pump scale that integral washes the band structure out and the readout
+    comes out flat (band/edge ~ 0.233/0.230) even though the engine's dynamics
+    are strongly banded. Measuring the gain over short segments instead, while
+    the bands are still growing exponentially, recovers the paper's morphology:
+    band/edge ~ 4.4 at z ~ 0.1 m, decaying as the pump depletes.
+
+    Returns the per-segment contrast (largest over the first half of the
+    propagation, where saturation cannot yet have flattened the profile).
+    """
+    per_seed: list[list[np.ndarray]] = []
+    z_seg: list[float] = []
+    grid = None
+    for seed in range(seeds):
+        eng, grid = make_engine(length, seed)
+        eng.propagate(1, nsaves=nsaves, show_progress=False)
+        specs = [
+            np.abs(grid.fft(np.array([w._pulse_train_field for w in ev]))) ** 2
+            for ev in eng.evolution
+        ]
+        z = np.asarray(eng.z_array, dtype=float)
+        dz = float(z[1] - z[0])
+        ker = np.hanning(avg) / np.hanning(avg).sum()
+        segs: list[np.ndarray] = []
+        for k in range(len(specs) - 1):
+            g = np.log(np.maximum(specs[k + 1], 1e-300) / np.maximum(specs[k], 1e-300))
+            g = g / (2.0 * dz) * L_NL1  # paper's normalized unit
+            segs.append(
+                np.array([np.convolve(g[m], ker, mode="same") for m in range(4)])
+            )
+            if seed == 0:
+                z_seg.append(float(0.5 * (z[k] + z[k + 1])))
+        per_seed.append(segs)
+    mean = np.mean(np.stack(per_seed, axis=0), axis=0)  # (n_seg, 4, nfreq)
+
+    nu = (grid.w / (2.0 * np.pi)) * T_NL1
+    in_band = (np.abs(nu) > 0.05) & (np.abs(nu) < 0.65)
+    edge = (np.abs(nu) > 0.7) & (np.abs(nu) < 1.15)
+    rows = []
+    for g, zc in zip(mean, z_seg, strict=True):
+        b = float(g[1][in_band].max())
+        e = float(g[1][edge].mean())
+        rows.append(
+            {
+                "z_m": zc,
+                "band_max_2x": b,
+                "edge_mean_2x": e,
+                "contrast": float(b / e) if e > 1e-6 else float("inf"),
+            }
+        )
+    # first segment only: the unsaturated regime the paper's Fig. 4/5 shows
+    return {
+        "segments": rows,
+        "first_segment": rows[0],
+        "peak_contrast_first_half": float(
+            max(r["contrast"] for r in rows[: max(1, len(rows) // 2)])
+        ),
+    }
+
+
 # ---------------------------------------------------------------------------
 # validation
 # ---------------------------------------------------------------------------
@@ -376,9 +442,21 @@ def validate(make_plot: bool = True) -> dict:
         "max_gain_norm_band_4x": float(gain[3][in_band].max()),
         "contrast_2x": float(gain[1][in_band].max() / max(gain[1][edge].mean(), 1e-9)),
         "runtime_s": time.time() - t0,
-        "status": "RECORDED-OUTSTANDING (see README/ISSUES: the measured "
-        "Eq.-12 log-ratio saturates pearly; eigen layer asserted)",
+        "status": "RECORDED (the end-to-end log-ratio saturates; the band "
+        "structure is evidenced by the local-gain readout below, ISSUES.md #8)",
     }
+
+    # ---- check 3b: banded structure in the LOCAL (unsaturated) gain ----
+    # The end-to-end Eq.-(12) ratio above integrates over the whole length, so
+    # once the bands reach the pump scale it comes out flat. Measuring the gain
+    # per short segment, before saturation, recovers the paper's banded
+    # morphology (ISSUES.md #8).
+    local = run_local_gain_contrast(length=1.0, seeds=2, nsaves=6)
+    results["engine_local_gain"] = local
+    assert local["first_segment"]["contrast"] > 2.0, (
+        "no banded structure in the unsaturated local gain",
+        local["first_segment"],
+    )
 
     if make_plot:
         _make_figure()

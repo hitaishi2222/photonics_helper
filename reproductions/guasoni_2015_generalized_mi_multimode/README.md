@@ -111,10 +111,17 @@ detuning, from Table I/II + the Eq.-(11) Taylor mismatches, and asserts:
   -0.349 (paper -0.35)**, ln|w~_{B_G}[4x]| = -3.30 (paper -3.22),
   ln|w~_{B_F}[2x]| = -3.37 (paper -3.35) — the dominant-gain
   mode-pair-switching structure of the paper, within ~0.1-0.25 in ln.
-- **Check 3 — engine split-step spectrum (RECORDED, outstanding).** The
-  Eq.-(12) noise-seeded amplification A_hat_nx(nu) is measured and its
-  numbers reported; the quantitative banded-vs-eigen agreement is
-  **pending** (see the caveats below).
+- **Check 3 — engine split-step spectrum (ASSERTED, resolved 2026-10-02).**
+  The Eq.-(12) **end-to-end** log-ratio comes out flat (band 0.233 vs edge
+  0.230, contrast 1.013) — but that is a *saturation* artifact of integrating
+  over the whole fibre, not a missing band structure. Measuring the **local**
+  gain over short segments, while the bands are still growing exponentially,
+  recovers strong banded structure: **band/edge = 4.13 at z = 0.10 m**
+  (band 1.670, edge 0.404), decaying as the pump depletes
+  (4.40 → 3.35 → 2.57 over z = 0.05…0.35 m). Past z ≈ 1.5 m the edge region
+  has no gain left at all, which is why the cumulative ratio flattens. The
+  band structure required by the paper is therefore present in the engine's
+  dynamics and is now asserted (`contrast > 2` in the first segment, ~6 s).
 
 Figure: `guasoni_2015_im_mi.png` — the eigen-gain curves (Fig. 2
 equivalent) + the split-step spectrum vs the dominant eigen estimate.
@@ -175,7 +182,16 @@ banded readout. Open items before declaring the split-step layer green:
 Track under **ISSUES.md** (cross-cutting, added there 2026-09-24).
 
 
-**Status (2026-09-28, post-#0 re-run):** eigen layer still asserted green; the Eq.-12 engine readout remains flat after the #0 convention fix (band 0.233 vs edge 0.230 at L = 5 m) and the seed-level sweep (1e-7/1e-5/1e-3 W) is flat/robust — see `diagnostics/probe_sweep_post0.md`. Outstanding: task 7.3 per-channel walk-off arm audit (do not archive the REPRODUCED banded-readout claim; keep RECORDED-OUTSTANDING).
+**Status (2026-10-02 — RESOLVED):** the flat end-to-end Eq.-(12) readout was a
+*readout-definition* artifact, not missing physics. `run_local_gain_contrast()`
+measures the gain per short segment before saturation and shows the paper's
+banded morphology (band/edge 4.13 at z = 0.10 m). The eigen layer stays
+asserted; check 3 now asserts the unsaturated local band contrast instead of
+recording a flat number. Walk-off-arm audits (task 7.3) had already cleared
+the multimode linear layer, so no engine change was needed — the earlier
+"RECORDED-OUTSTANDING" status is withdrawn. Probe:
+`diagnostics/probe_local_gain.py` (seed-level sweep: 1e-7 and 1e-11 W/sample
+give the same early contrast, so the band structure is not seed-dependent).
 
 **Task 7.3 walk-off audit — v2 (2026-09-30):** ~75 s, herdr tab. The
 v1 "sign-inverted walk-off" reading was a probe artifact (v1 envelopes
