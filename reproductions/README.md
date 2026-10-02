@@ -29,6 +29,7 @@ python -m pytest tests/test_reproductions.py
 | [`macleod_quarter_wave_dbr`](macleod_quarter_wave_dbr/) | Macleod, *Thin-Film Optical Filters*; Born & Wolf (textbook) | `dbr` TMM | ✅ peak reflectance matches exact closed form to <1e-6; stopband width within 7% |
 | [`shg_textbook`](shg_textbook/) | Boyd, *Nonlinear Optics* (3rd ed.), Ch. 2; Fejer et al., *IEEE JQE* **28**, 2631 (1992) · [10.1109/3.159513](https://doi.org/10.1109/3.159513) | `chi2` (RK4IP) | ✅ η matches `tanh²(κL)` to ≤8e-15; first-order QPM recovers `tanh²((2/π)κL)` to 0.12% |
 | [`gordon_1986_ssfs`](gordon_1986_ssfs/) | Gordon, *Opt. Lett.* **11**, 662 (1986) · [10.1364/OL.11.000662](https://doi.org/10.1364/OL.11.000662) | GNLSE + Raman + soliton | ✅ measured +1.08 nm / 20 m vs Gordon +0.91 nm (ratio 1.19); Stokes gain, red-shift |
+| [`shg_lnoi_shg`](shg_lnoi_shg/) | Wang et al., *Opt. Express* **25**(6), 6963 (2017) — *citation unverified, see folder README* | `chi2` mode-overlap (`shg_coupling_overlap`, `pgln_overlap`) + `materials.db` LiNbO₃ extraordinary Sellmeier | ⚠️ PARTIAL — overlap machinery exercised on the article geometry with **scalar toy modes**, so `g` = 203.4 vs article 77.4 and `g'` = 9.93 vs 34.5 are convention gaps, not physics failures; the Boyd-normalised plane-wave reference `σ` = 1331.3 matches the article anchor 1330.8 to 0.03 %. Source PDF not in the repo and the *Opt. Express* 25, 6963 page range is claimed by two papers — **author must confirm the citation**. Not in the test suite |
 | [`dudley_2006_cherenkov_dw`](dudley_2006_cherenkov_dw/) | Akhmediev & Karlsson, *Phys. Rev. A* **51**, 2602 (1995) · [10.1103/PhysRevA.51.2602](https://doi.org/10.1103/PhysRevA.51.2602) | phase_matching + GNLSE | ✅ `dispersive_wave_roots` = analytic 699.3 nm; GNLSE DW peak 702.3 nm (0.44%). *Linear two-term limit.* |
 | [`dudley_2006_scg`](dudley_2006_scg/) | Dudley, Genty & Coen, *Rev. Mod. Phys.* **78**, 1135 (2006) · [10.1103/RevModPhys.78.1135](https://doi.org/10.1103/RevModPhys.78.1135) | GNLSE + Raman + phase_matching + soliton | ✅ **9 figure scripts** (Figs. 3, 4, 5, 6, 7, 8, 9, 10, 23); Kodama–Hasegawa fission to 4%, DW phase matching to 2.6%, `z_sol` periodicity 0.998 |
 | [`kuznetsov_ma_2012_breather`](kuznetsov_ma_2012_breather/) | Kibler et al., *Sci. Rep.* **2**, 463 (2012) · [10.1038/srep00463](https://doi.org/10.1038/srep00463) | GNLSE (NLSE) + phase_matching | ✅ exact Kuznetsov–Ma soliton reproduced over one period: peak 7.6129 W vs 7.6130 W, intensity L2 9e-4, `T₀`/`z_p` exact |
@@ -41,8 +42,8 @@ python -m pytest tests/test_reproductions.py
 | [`mumtaz_2013_multimode_jlt`](mumtaz_2013_multimode_jlt/) | Mumtaz, Essiambre & Agrawal, *JLT* **31**, 398 (2013) · [10.1109/JLT.2012.2235414](https://doi.org/10.1109/JLT.2012.2235414) (spec source of v2 multimode Eq. 12/29) | `multimode_gnlse` (Manakov `xpm_weights`) + Eq. 6 stochastic harness | ✅ Table-II walk-offs exact (≤3e-6); SPM 1→8/9 at M=1 to 8.6e-4; M=2 ensemble-vs-generalized-Manakov: inter-mode XPM **2→4/3** confirmed (best-fit weight exactly 4/3, L2 2.9e-2 @ 32 seeds, 1/√N scaling); both sides energy-conserving to 1e-12; in the test suite (~9 s) |
 | [`wai_menyuk_1991_random_birefringence_solitons`](wai_menyuk_1991_random_birefringence_solitons/) | Wai, Menyuk & Chen, *Opt. Lett.* **16**, 1231 (1991) · [10.1364/OL.16.001231](https://doi.org/10.1364/OL.16.001231) | `vector_gnlse` (`RandomBirefringenceEngine`, Wai-1991 Eq.-(2) rotation law) | ✅ Fig. 1 shadow peak ratio 1.10 vs Eq. (5); Fig. 2 delay = δ·∫cos2θ dξ (corr 0.978, paper's "agreed quite well"); Fig. 3 widths bounded, no splitting at δ ≤ 5 to ~5 % (δ=7.5 caveat in folder README); Fig. 4 polarization budget 0.966/0.919/0.800/0.845/0.630; energy conserved to ≤6e-12; in the (local-only) test suite (~30 s) |
 | [`wright_2015_self_organized_instability`](wright_2015_self_organized_instability/) | Wright et al., *Nat. Photon.* **10**, 471 (2016 online 2015) · [10.1038/nphoton.2015.60](https://doi.org/10.1038/nphoton.2015.60) | `multimode_gnlse` (FWM Jacobian, `oam_l` gating) + `phase_offsets` | ✅ check A: analytic STMI ladder vs digitized Fig. 3d circles to −5.2/−0.9/−2.8 % (tol 15 %); check-B' probe: engine growth band = the corrected 2x2 band |dbar| < c for both orders, out-of-band |b2(z)| turnover at z ≈ π/xi_eff (Fig. `wright_2015_gain_ztraj.png`); full-parameter deck: MI peaks 0.024/0.021 % of the roots, gains 29x/263x above the floor. Corrected Kerr condition dbar = 0.5·sym − N·κ − γP0/3 (see `../ISSUES.md` #10). ~35 min slow path / ~15 min check-B' |
-| [`guasoni_2015_generalized_mi_multimode`](guasoni_2015_generalized_mi_multimode/)   | Guasoni, *Phys. Rev. A* **92**, 033849 (2015) · [10.1103/PhysRevA.92.033849](https://doi.org/10.1103/PhysRevA.92.033849) | `multimode_gnlse` (XPM-coupled deck) + Eq.-(8)/(9) eigen solver | ✅ Fig. 3 anchor to **0.7 %** (g₁ = 0.9071 / g₂ = 0.7070 vs paper 0.90 / 0.71); Fig. 3 inset eigenvectors to ~0.1 in ln (−0.349/−3.30/−3.37 vs −0.35/−3.22/−3.35); single-mode MI closed form to 1e-9. **Split-step layer recorded-outstanding** (see folder README + `../ISSUES.md` #7); ~90 s |
-| [`raissi_2019_pinn_nlse`](raissi_2019_pinn_nlse/) | Raissi, Perdikaris & Karniadakis, *J. Comput. Phys.* **378**, 686 (2019) · [10.1016/j.jcp.2018.10.045](https://doi.org/10.1016/j.jcp.2018.10.045) | reproduction-local PINN (torch float64, Adam + L-BFGS) + `SplitStepEngine` data | ✅ §I Schrödinger example: PINN rel-L2 **6.1e-3** vs paper 1.97e-3 (accepted ≤ 1e-2 per the folder plan's worst-case clause — see `ISSUES.md` #6); loss 1.24e-6; engine ground truth verified to 1e-12 energy drift; cut profiles at t = 0.59/0.79/0.98 overlay the exact solution. ~55 min CPU (Adam 25 k + L-BFGS, `--nf-chunk 5000`). Not in the test suite (heavy; data-validation + smoke-train test only) |
+| [`guasoni_2015_generalized_mi_multimode`](guasoni_2015_generalized_mi_multimode/)   | Guasoni, *Phys. Rev. A* **92**, 033849 (2015) · [10.1103/PhysRevA.92.033849](https://doi.org/10.1103/PhysRevA.92.033849) | `multimode_gnlse` (XPM-coupled deck) + Eq.-(8)/(9) eigen solver | ✅ Fig. 3 anchor to **0.7 %** (g₁ = 0.9071 / g₂ = 0.7070 vs paper 0.90 / 0.71); Fig. 3 inset eigenvectors to ~0.1 in ln (−0.349/−3.30/−3.37 vs −0.35/−3.22/−3.35); single-mode MI closed form to 1e-9. **Band structure asserted 2026-10-02**: the flat end-to-end Eq.-12 readout (contrast 1.013) is a saturation artifact — the *local* unsaturated gain gives band/edge **4.13** at z = 0.10 m (`../ISSUES.md` #8); ~96 s |
+| [`raissi_2019_pinn_nlse`](raissi_2019_pinn_nlse/) | Raissi, Perdikaris & Karniadakis, *J. Comput. Phys.* **378**, 686 (2019) · [10.1016/j.jcp.2018.10.045](https://doi.org/10.1016/j.jcp.2018.10.045) | reproduction-local PINN (torch float64, Adam + L-BFGS) + `SplitStepEngine` data | ✅ §I Schrödinger example: PINN rel-L2 **3.62e-3 on \|h\|** (the magnitude the paper's Fig. 2 plots) and **1.52e-3 on \|h\|²**, vs the paper's 1.97e-3; the previously reported 6.1e-3 is the *complex-field* convention, still recorded as the conservative number — the "3× gap" was a metric mismatch (`ISSUES.md` #6); loss 1.24e-6; engine ground truth verified to 1e-12 energy drift; cut profiles at t = 0.59/0.79/0.98 overlay the exact solution. ~55 min CPU (Adam + L-BFGS, `--nf-chunk 5000`). Not in the test suite (heavy; data-validation + smoke-train test only) |
 | [`dw_timing_gas_hollowcore`](dw_timing_gas_hollowcore/) | Brahms & Travers, arXiv:2101.04014 (2021) | `TaperedGNLSESolver` gas β(ω,z) (Marcatili–Schmeltzer + Boerzsoenyi He) + RDW arrival-time statistics | ✅ REPRODUCED 2026-09-30 (plasma-free subset): transmission 86.8 % vs paper ~87 %; ZDW 477.9 nm pressure-insensitive; τ(E) rising in all 10 decks (ρ ≥ 0.98, Fig. 1c mechanism); Fig. 5 jitter < 300 as in 9/10 decks (medians 99–129 as; 0.8-bar exception 371 as recorded); jitter ∝ pump noise (1 %/2 % median ratio 0.51–0.84); Δv_g(RDW) −0.85..−1.0 km/s vs Fig. 5c circles. Arrival time reconstructed via the analytic β₁ propagation leg (Eq. 11/12 with simulated RDW λ) — post-#0 time-direction validation; ionisation arm out of scope v1 |
 | [`kibler_2010_peregrine`](kibler_2010_peregrine/) | Kibler et al., *Nat. Phys.* **6**, 790 (2010) · [10.1038/nphys1740](https://doi.org/10.1038/nphys1740) | GNLSE (β₂-only) + `breathers` (`general_sfb` AB, `peregrine_soliton`) | ✅ REPRODUCED 2026-09-30: engine tracks the analytic AB pointwise over the growth leg (peak ≤ 2 %); a = 0.42 max-compression peak/background 8.166 vs analytic 8.026 (+1.7 %); compressed-train period rel err 1.6e-4; compressed FWHM 0.964 ps vs analytic 0.965 ps; Peregrine-limit (a = 0.495) ratio 8.944 (theory 9) with |ψ_PS|² shape overlay L2 0.0025. Real-cos eigenmode second-recurrence cycle recorded; paper-f_mod discrepancy (241 vs 74 GHz) recorded, not asserted. ~3 min |
 | [`hult_2007_rk4ip`](hult_2007_rk4ip/) | Hult, *JLT* **25**, 3770 (2007) · [10.1109/JLT.2007.909373](https://doi.org/10.1109/JLT.2007.909373) | `RK4IPIntegrator` + `GNLSEOperator` (from `heidt_adaptive.py`) | ✅ REPRODUCED 2026-10-01, both decks. Deck A (N=2 soliton): 4th-order slope **−3.97**, best ε = 5.0e-6. Deck B (SCG, Table-I PCF, 10 cm): fission into 24 temporal peaks, Raman red-shift **199.6 nm** (876 → 1076 nm), dispersive wave at **576 nm** (16 % of peak), −20 dB span 551–1179 nm; convergence ladder slope **−3.86** to ε = 2.9e-12. Found two load-bearing bugs in `heidt_adaptive.py` (Raman spectrum stored time-domain; β arrays converted from ps^0 not ps^2) — see folder README |
@@ -136,7 +137,11 @@ machine precision; only the combination *shock + evolving drive* drifts.
 Verified by `tests/test_gnlse_unitarity.py` and
 `tests/test_gnlse_shock_energy.py` (13 tests, all green).
 
-### Cause (established, with evidence)
+### Cause (SUPERSEDED 2026-10-02 — see "Measured cause" below)
+
+*The 2025-09-21 analysis attributed the drift to the shock model itself. The
+2026-10-02 measurement shows the multi-percent figure is produced by an
+under-resolved grid, not by the model's conservation law. Kept for the record.*
 
 The drift is a **property of the first-order shock model itself, not of the
 integrator**:
@@ -163,6 +168,38 @@ integrator**:
    arXiv:2607.05244, and references therein) exists precisely because the
    standard GNLSE with a shock term is not photon-conserving — restoring
    conservation requires modifying the *equation*, not the solver.
+
+### Measured cause (2026-10-02) — grid validity, not the conservation law
+
+The "+5–6 %" figure above was never pinned by a test (the conserving-shock
+tests use `betas = [0]`, so they never fission). Measured on a genuinely
+fissioning soliton deck (Hult/Dudley Table-I PCF parameters, T0 = 500 fs,
+N_sol ≈ 3, 49–51 peaks at the exit — a long pulse is required so the shock term
+is resolvable at all):
+
+| `τ_shock·Ω_max` | photon drift |
+|---|---|
+| 0.073 | **−0.002 … −0.28 %** (resolved) |
+| 0.145 | −3.14 % |
+| 0.290 | **−5.22 %** ← the "≈5–6 %" figure |
+| 0.581 | −2.73 % (non-monotone ⇒ numerical noise) |
+
+So the first-order expansion ω/ω₀ ≈ 1 + Ω·τ_shock is simply wrong once
+τ·Ω_max ≳ 0.15, and the drift tracks that breakdown. Two corollaries:
+
+- On the 28 fs SCG decks the shock term **cannot be run at all** — the engine's
+  Ω_max < ω₀ guard rejects it, and forcing it through needs τ·Ω_max ≈ 0.6
+  (the deviation the Hult folder already records).
+- `conserving_shock=True` does **not** rescue the under-resolved regime
+  (−6.53 % vs −5.22 % at τ·Ω_max = 0.29); it matches the standard engine where
+  the grid is resolved. It is a real, published model (Hernández, *J. Opt.*
+  2020, [10.1080/17455030.2020.1856970](https://doi.org/10.1080/17455030.2020.1856970),
+  exact pcGNLSE solitons), not a cure for under-resolution.
+
+**Shipped:** `_validate_shock_grid` now warns when `τ_shock·Ω_max` exceeds
+`_SHOCK_TAYLOR_LIMIT = 0.2`, naming these numbers and the fix (raise Tmax /
+reduce N / disable shock). Pinned by
+`tests/test_gnlse_shock_energy.py::test_fissioning_shock_drift_scales_with_grid_validity`.
 
 ### Solutions (ranked)
 

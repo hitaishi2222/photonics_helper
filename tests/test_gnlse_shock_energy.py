@@ -151,9 +151,15 @@ def test_energy_monitor_records_and_warns():
     eng2._energy_vs_z = [1.0, 1.0, 0.90]
     with pytest.warns(UserWarning, match="energy drift 10.00%"):
         eng2._emit_energy_drift_warning()
-    # No warning on a clean run.
+    # No warning on a clean run. This test's own grid (N = 4096 over 8 ps) is
+    # deliberately coarse and is *under-resolved* for the first-order shock
+    # expansion, so the new `_validate_shock_grid` resolution warning is
+    # filtered out here — the intent of this test is the energy-drift
+    # monitor, which is asserted separately in
+    # `test_shock_resolution_warns_only_when_under_resolved`.
     with warnings.catch_warnings():
         warnings.simplefilter("error")
+        warnings.filterwarnings("ignore", message="self-steepening is under-resolved")
         eng3 = SplitStepEngine(
             pulse=wave,
             fiber=fiber,
@@ -161,4 +167,108 @@ def test_energy_monitor_records_and_warns():
             include_self_steepening=True,
             step_size=Length(5e-5, "m"),
         )
-        eng3.propagate(10, nsaves=4)  # must not warn: drift ≪ 5%
+        eng3.propagate(10, nsaves=4)  # must not warn: drift  << 5%
+
+
+# ---------------------------------------------------------------------------
+# ISSUES.md #1 — the drift is a GRID-VALIDITY artifact, not a conservation-law
+# defect. Measured on the fissioning deck below (Hult/Dudley Table-I PCF
+# parameters, 500 fs pulse, N_sol ~ 3):
+#
+#     tau*Omega_max   photon drift
+#     0.073            -0.144 %
+#     0.145            -3.143 %
+#     0.290            -5.223 %   <- the familiar "5-6 %" figure
+#
+# i.e. the drift appears only once the first-order shock expansion
+# omega/omega_0 ~ 1 + Omega*tau_shock is no longer valid. These tests pin both
+# the guard and the scaling so the claim cannot silently rot again.
+# ---------------------------------------------------------------------------
+
+_SHOCK_DECK_B2 = -0.01276e-24  # ps^2/m -> s^2/m (Hult/Dudley Table-I PCF)
+_SHOCK_DECK_GAMMA = 0.045  # W^-1 m^-1
+_SHOCK_DECK_T0 = 500e-15
+_SHOCK_DECK_P0 = 40.0  # W  -> N_sol ~ 3
+_SHOCK_DECK_L = 100.0  # m
+
+
+def _fissioning_shock_engine(n_pts: int, tmax_s: float = 20e-12):
+    """Soliton-fissioning shock deck; ``n_pts`` sets tau_shock*Omega_max."""
+    grid = TemporalGrid(N=n_pts, Tmax=Time(tmax_s, "s"))
+    env = Envelope(
+        shape="sech",
+        peak_amplitude=np.sqrt(_SHOCK_DECK_P0),
+        pulse_width=Time(_SHOCK_DECK_T0, "s"),
+    )
+    wave = Wave(envelope=env, central_wavelength=Wavelength(850.0, "nm"), grid=grid)
+    fiber = FiberProfile.from_gamma(
+        gamma=_SHOCK_DECK_GAMMA,
+        n2=2.6e-20,
+        omega0=2 * np.pi * 3e8 / 850e-9,
+        alpha=0.0,
+        length=Length(_SHOCK_DECK_L, "m"),
+        raman_response=_raman_response_for(grid),
+    )
+    return SplitStepEngine(
+        pulse=wave,
+        fiber=fiber,
+        betas=np.array([_SHOCK_DECK_B2]),
+        include_raman=True,
+        include_self_steepening=True,
+    )
+
+
+def _raman_response_for(grid: TemporalGrid):
+    from photonics_helper.raman import RamanResponse, RamanSpec
+
+    return RamanResponse(
+        spec=RamanSpec(
+            name="Silica", raman_shift_cm=440.0, raman_linewidth_cm=45.0, fR=0.18
+        ),
+        fR=0.18,
+        tau1=12.2e-15,
+        tau2=32e-15,
+        grid=grid,
+    )
+
+
+def test_shock_resolution_warns_only_when_under_resolved():
+    """tau_shock*Omega_max above the Taylor limit must warn; below, stay quiet."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        eng = _fissioning_shock_engine(1024)  # tau*Om ~ 0.073 -> resolved
+    assert eng.tau_shock * float(eng.grid.omega_max) < 0.2
+
+    with pytest.warns(UserWarning, match="under-resolved"):
+        _fissioning_shock_engine(4096)  # tau*Om ~ 0.29 -> under-resolved
+
+
+def test_fissioning_shock_drift_scales_with_grid_validity():
+    """The +5-6 % drift only appears once the shock expansion is invalid.
+
+    This is the measurement behind ISSUES.md #1's closure: on a resolved grid
+    the engine is photon-conserving to a few tenths of a percent even through
+    genuine soliton fission, so the residual is a grid artifact rather than a
+    property of the first-order Blow-Wood model.
+    """
+    from scipy.signal import find_peaks
+
+    drifts, peaks = {}, {}
+    for n_pts, resolved in ((1024, True), (4096, False)):
+        eng = _fissioning_shock_engine(n_pts)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            eng.propagate(num_steps=4000, nsaves=3)
+        z = np.asarray(eng.energy_vs_z, dtype=float)
+        drifts[n_pts] = float(100.0 * (z[-1] / z[0] - 1.0))
+        a = np.asarray(eng.evolution[-1].envelope_field, dtype=complex)
+        S = np.abs(eng.grid.fft(a)) ** 2
+        pks, _ = find_peaks(S, height=S.max() * 0.05, distance=8)
+        peaks[n_pts] = int(pks.size)
+
+    # the deck really does fission, otherwise this proves nothing
+    assert peaks[1024] > 3
+    # resolved grid: small drift
+    assert abs(drifts[1024]) < 0.5, drifts
+    # under-resolved grid: the multi-percent drift of ISSUES.md #1
+    assert abs(drifts[4096]) > 2.0, drifts

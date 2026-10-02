@@ -21,6 +21,14 @@ from photonics_helper.base import C_MS, Area, Length, Time
 BetasUnit = Literal["ps^k/m", "s^k/m", "SI"]
 _BETAS_UNITS: tuple[str, ...] = ("ps^k/m", "s^k/m", "SI")
 
+# Validity limit for the first-order shock expansion ω/ω₀ ≈ 1 + Ω·τ_shock.
+# Beyond it the Taylor form is no longer accurate and the engine's
+# photon-number drift is a grid artifact (measured: ≤0.3 % at 0.073, −3.1 % at
+# 0.145, −5.2 % at 0.29 — see ISSUES.md #1). Exceeding this warns; it does not
+# raise, because the shock term is still well defined up to the harder
+# Ω_max < ω₀ condition checked in `SplitStepEngine._validate_shock_grid`.
+_SHOCK_TAYLOR_LIMIT = 0.2
+
 
 def _validate_betas_unit(betas_unit: str) -> str:
     """Return *betas_unit* if it is an accepted unit string, else raise."""
@@ -700,6 +708,16 @@ class SplitStepEngine:
         factor ``1 + Ω·τ_shock`` has no physical meaning; the historical code
         clamped them to zero, which silently corrupted the shock physics.
         Failing loudly is the honest alternative (design decision D2).
+
+        A second, independent validity condition is checked here as a warning:
+        the *Taylor* validity of ``ω/ω₀ ≈ 1 + Ω·τ_shock`` needs
+        ``τ_shock·Ω_max`` small (see ``_SHOCK_TAYLOR_LIMIT``). Measured on a
+        fissioning soliton deck (Hult/Dudley Table-I PCF parameters, 500 fs
+        pulse, N_sol ≈ 3, ISSUES.md #1): the photon-number drift is ≤ 0.3 % at
+        ``τ·Ω_max = 0.073`` but rises to −3.1 % at 0.145 and −5.2 % at 0.29.
+        The familiar "≈5–6 % shock drift" is therefore a *grid-validity*
+        artifact, not an integrator or conservation-law defect — so the honest
+        response is to tell the caller, not to silently absorb the error.
         """
         omega_max = float(self.grid.omega_max)
         omega0 = float(self.omega0)
@@ -714,6 +732,24 @@ class SplitStepEngine:
                 f"increasing the time window Tmax by at least {ratio:.3f}× "
                 "(equivalently reducing N for the same Tmax), or by disabling "
                 "self-steepening."
+            )
+        tau_omega = float(self.tau_shock) * omega_max
+        if tau_omega > _SHOCK_TAYLOR_LIMIT:
+            fix = tau_omega / _SHOCK_TAYLOR_LIMIT
+            warnings.warn(
+                "self-steepening is under-resolved on this grid: "
+                f"τ_shock·Ω_max = {tau_omega:.3f} exceeds the first-order "
+                f"ω/ω₀ expansion limit of {_SHOCK_TAYLOR_LIMIT:g}. The "
+                "Taylor form ω/ω₀ ≈ 1 + Ω·τ_shock is no longer accurate, and "
+                "the resulting photon-number drift is a grid artifact, not a "
+                "property of the model: measured on a fissioning soliton deck "
+                "(ISSUES.md #1) the drift is ≤0.3 % at τ·Ω_max = 0.073, "
+                "−3.1 % at 0.145 and −5.2 % at 0.29. Fix by increasing "
+                f"Tmax by at least {fix:.2f}× (equivalently reducing N), by "
+                "disabling self-steepening, or by using conserving_shock=True "
+                "if you need the pcGNLSE operator.",
+                UserWarning,
+                stacklevel=3,
             )
 
     def _linear_step(self, A: NDArray, dz: float) -> NDArray:

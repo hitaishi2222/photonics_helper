@@ -35,6 +35,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Raman spectrum stored in the time domain** where the shared operator layer
   expected a frequency-domain spectrum (`heidt_adaptive.py`).
+- **Self-steepening drift is a grid-validity artifact, not a model defect
+  (`ISSUES.md` #1).** The "≈5–6 % photon drift" was never pinned by a test (the
+  conserving-shock tests run with `betas = [0]`, so they never fission). Measured
+  on a genuinely fissioning soliton deck (Hult/Dudley Table-I PCF parameters,
+  500 fs pulse, N_sol ≈ 3, 49–51 peaks at the exit) the drift is **−0.002 to
+  −0.28 %** at `τ_shock·Ω_max = 0.073`, −3.1 % at 0.145 and **−5.2 % at 0.29** —
+  i.e. the familiar figure is exactly what an *under-resolved* first-order shock
+  expansion produces, while the model conserves where the expansion is valid.
+  Two corollaries: the 28 fs SCG decks cannot run the shock term at all
+  (`Ω_max < ω₀` guard rejects it; forcing it needs `τ·Ω_max ≈ 0.6`), and
+  `conserving_shock=True` does **not** rescue the under-resolved regime (−6.5 %
+  vs −5.2 %) — it matches the standard engine where the grid is resolved.
+  `SplitStepEngine._validate_shock_grid` now warns when `τ_shock·Ω_max` exceeds
+  `_SHOCK_TAYLOR_LIMIT = 0.2`, naming the measured values and the remedies.
+  Regression: `tests/test_gnlse_shock_energy.py` gains
+  `test_shock_resolution_warns_only_when_under_resolved` and
+  `test_fissioning_shock_drift_scales_with_grid_validity`.
+- **Guasoni-2015 Eq.-(12) readout: saturation, not missing band structure
+  (`ISSUES.md` #8).** The amplification was read as a single end-to-end
+  log-ratio, which flattens once the growing bands reach the pump scale
+  (band/edge 1.013). Measuring the **local** gain over short segments recovers
+  the paper's banded morphology: **band/edge = 4.13 at z = 0.10 m**, decaying as
+  the pump depletes, and identical at noise seeds 1e-7 and 1e-11 W/sample. New
+  `run_local_gain_contrast()` in the reproduction; `validate()` now asserts
+  `first_segment contrast > 2.0` instead of recording a flat number.
+- **Raissi-2019 PINN: the "3× the paper" gap was a metric-definition mismatch
+  (`ISSUES.md` #6).** The reproduction measured rel-L2 on the **complex** field;
+  the paper's Fig. 2 plots the **magnitude** `|h| = sqrt(u²+v²)`, where phase
+  errors cancel. Recomputed from one checkpoint (seen by only 2 000 of the
+  15 000 L-BFGS closures): complex `h` 6.84e-3 (3.47× paper), real/imag
+  5.21e-3 / 8.89e-3, **magnitude `|h|` 3.62e-3 (1.84×)**, **intensity `|h|²`
+  1.52e-3 (0.77×)**. The protocol itself was re-verified against the paper PDF
+  first (5×100 tanh, N0 = Nb = 50, Nf = 20 000, Latin Hypercube, unweighted
+  `MSE0+ MSEb + MSEf`, periodic `h` and `h_x`, residual `i h_t + 0.5 h_xx +
+  |h|²h = 0`) and every item already matched. The companion claim that torch's
+  L-BFGS "wastes" the closure budget is withdrawn — the loss falls
+  monotonically through the budget — and the phase now records
+  `metrics.lbfgs_accounting` (closures vs accepted iterations vs budget).
+  `evaluate_pinn` records `rel_l2_magnitude` and `rel_l2_intensity` alongside
+  the complex/real/imag numbers.
 - **`ruff check .` is green again.** CI's lint gate had been failing on `main`
   with 13 pre-existing errors in reproduction scripts; all are fixed in place
   (dead locals and unused imports removed, ambiguous `I`/`l` names renamed) rather

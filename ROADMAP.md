@@ -162,10 +162,11 @@ stability contract (Phase 3 rules apply).
   DOI. To be done once the project reaches a suitable milestone.
 - [ ] Mint the Zenodo DOI and add it to `CITATION.cff` (`identifiers:`) and the
   README once the archive exists.
-- *2026-09-30 status note:* the reproduction count now stands at **13
-  validated studies** (11 atomic papers + 12 Dudley figure scripts), all green
-  in the local test suite — a natural milestone for the Zenodo release if the
-  author wants one now.
+- *2026-10-02 status note:* the reproduction count now stands at **24 validated
+  studies** in the main table of `reproductions/README.md` (plus one partial
+  deck, `shg_lnoi_shg`, registered with recorded caveats), all green in the
+  local test suite — a natural milestone for the Zenodo release if the author
+  wants one now.
 - [x] Material database backend relocated to the foundation layer
   (2026-09-20): `photonics_helper/core/data.py` now owns ``materials.db``
   (path resolution, schema, generic queries) as ``MaterialsDatabase``;
