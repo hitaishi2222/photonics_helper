@@ -187,7 +187,20 @@ jitter statistics reproduced by the paper's own resampling method
    (interpolants + 10 000 Gaussian samples of the pump energy), not the
    direct N-simulation ensemble (their Fig. 2c/d validation used 500
    sims/point). The direct-method jitter channel requires per-run β₁
-   post-processing identical to note 1; queued as an optional follow-up.
+   post-processing identical to note 1.
+5. *β₁-aware readout helper (SHIPPED 2026-09-30).* The optional follow-up
+   "in-engine absolute-arrival readout helper" is now in
+   [`arrival_beta1.py`](arrival_beta1.py):
+   `absolute_arrival_time_fs(beta1_fn, length_m, z_fission_m, omega0,
+   omega_rdw)` integrates
+   τ = ∫_{z_f}^{L} [β₁(ω_RDW; z) − β₁(ω₀; z)] dz on the same dispersion
+   profile family the engine used, with the RDW frequency taken from the
+   engine-measured spectral centroid and a per-seed `z_fission`
+   supported. Machine-precision vs the closed form
+   (L−z_f)·Δβ₁ (regression test `test_dw_timing_beta1_arrival_helper`);
+   τ ≈ +10 fs for the 2.1-bar UV deck (215 nm). Direct-method per-run
+   statistics can now call this helper instead of the Eq.-11/12
+   reconstruction.
 
 **Runtime record:** deterministic Fig. 1 anchor ~25 s (dz = 2.5e-5 m);
 scan point ~10 s at dz = 5e-5 m (convergence: RDW λ shift 1.5 nm / energy

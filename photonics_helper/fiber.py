@@ -315,8 +315,7 @@ class PropagationConstant:
         beta = np.asarray(self.values, dtype=float)
         if len(om) < 2:
             raise ValueError(
-                "beta(omega) requires at least 2 tabulated points, got "
-                f"{len(om)}"
+                f"beta(omega) requires at least 2 tabulated points, got {len(om)}"
             )
         order = np.argsort(om)
         spline = make_splrep(om[order], beta[order])
@@ -341,8 +340,7 @@ class PropagationConstant:
         beta = np.asarray(self.values, dtype=float)
         if len(omega) < 4:
             raise ValueError(
-                "beta2 requires at least 4 tabulated points, got "
-                f"{len(omega)}"
+                f"beta2 requires at least 4 tabulated points, got {len(omega)}"
             )
         order = np.argsort(omega)
         spline = make_splrep(omega[order], beta[order])
@@ -385,9 +383,7 @@ class PropagationConstant:
         return cls(values=betas, x_values=omega)
 
 
-def _read_table(
-    path: str | Path, delimiter: str, skiprows: int
-) -> NDArray:
+def _read_table(path: str | Path, delimiter: str, skiprows: int) -> NDArray:
     """Read a delimited numeric table with an optional header row.
 
     Blank lines and ``#`` comments are ignored; ``skiprows`` counts raw lines
@@ -397,9 +393,7 @@ def _read_table(
     with open(path) as fh:
         lines = fh.readlines()
     data_lines = [
-        ln
-        for ln in lines[skiprows:]
-        if ln.strip() and not ln.lstrip().startswith("#")
+        ln for ln in lines[skiprows:] if ln.strip() and not ln.lstrip().startswith("#")
     ]
     if not data_lines:
         raise ValueError(f"no data rows found in {path}")
@@ -520,7 +514,10 @@ class WaveguideMode:
     def neff_at(self, wavelength: Wavelength) -> float:
         """Interpolated ``n_eff`` at ``wavelength`` within the tabulated range."""
         wl_um = wavelength.as_um
-        lo, hi = float(self.wavelengths.as_um.min()), float(self.wavelengths.as_um.max())
+        lo, hi = (
+            float(self.wavelengths.as_um.min()),
+            float(self.wavelengths.as_um.max()),
+        )
         if not (lo <= wl_um <= hi):
             raise ValueError(
                 f"n_eff available only between {lo:.4f} and {hi:.4f} um, "
@@ -606,9 +603,7 @@ class WaveguideMode:
                 )
         return cls(
             neff=np.asarray(data[neff_key], dtype=float),
-            wavelengths=WavelengthArray(
-                np.asarray(data[wl_key], dtype=float), "um"
-            ),
+            wavelengths=WavelengthArray(np.asarray(data[wl_key], dtype=float), "um"),
             central_wavelength=central_wavelength,
             ng=None if ng_key is None else np.asarray(data[ng_key], dtype=float),
         )

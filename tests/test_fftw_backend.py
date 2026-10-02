@@ -28,9 +28,7 @@ _HAS_PYFFTW = importlib.util.find_spec("pyfftw") is not None
 _BACKEND_PARAMS = [
     pytest.param(
         "fftw",
-        marks=pytest.mark.skipif(
-            not _HAS_PYFFTW, reason="pyfftw not installed"
-        ),
+        marks=pytest.mark.skipif(not _HAS_PYFFTW, reason="pyfftw not installed"),
     ),
     "scipy",
     "numpy",

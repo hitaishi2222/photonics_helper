@@ -21,13 +21,15 @@ Probes (all short, N=8192):
   C. eigen-growth at the corrected root over L=1 m vs cosh(cL)=11.5.
   D. off-resonance control (+/-0.06 THz): growth ~ 1, g_analytic ~ 0.
 """
+
 import importlib.util
 from math import factorial
 
 import numpy as np
 
 spec = importlib.util.spec_from_file_location(
-    "rep", "reproductions/planned/wright_2015_self_organized_instability/reproduce.py")
+    "rep", "reproductions/planned/wright_2015_self_organized_instability/reproduce.py"
+)
 rep = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(rep)
 
@@ -50,36 +52,52 @@ phi = np.zeros_like(om)
 for k, b in enumerate(BETAS, start=2):
     phi += (b * 1e12**k) * om**k / factorial(k)
 sym_engine = 2 * phi
-sym_true = np.array([rep.beta0(rep.PUMP_THZ + f) + rep.beta0(rep.PUMP_THZ - f)
-                     - 2 * rep.beta0(rep.PUMP_THZ) for f in f_check])
+sym_true = np.array(
+    [
+        rep.beta0(rep.PUMP_THZ + f)
+        + rep.beta0(rep.PUMP_THZ - f)
+        - 2 * rep.beta0(rep.PUMP_THZ)
+        for f in f_check
+    ]
+)
 err = sym_engine - sym_true
-print(f"[A] betas_taylor sym error: max|d| = {np.max(np.abs(err)):.3e} rad/m "
-      f"(typical |Xi| scale ~ 3-10 rad/m)")
+print(
+    f"[A] betas_taylor sym error: max|d| = {np.max(np.abs(err)):.3e} rad/m "
+    f"(typical |Xi| scale ~ 3-10 rad/m)"
+)
 bad = f_check[np.abs(err) > 0.5]
 if bad.size:
     print("    THz points with |err|>1:", bad)
 
 # ------------------------------------------------------- analytic targets
-f_old = rep.stmi_shift_thz(2)          # old (wrong-Kerr) condition
+f_old = rep.stmi_shift_thz(2)  # old (wrong-Kerr) condition
 f_new = 0.5 * (rep.stmi_shift_thz(2) + f_old)  # placeholder, computed below
 
 
 def sym_at(f_thz: float) -> float:
-    return rep.beta0(rep.PUMP_THZ + f_thz) + rep.beta0(rep.PUMP_THZ - f_thz) \
+    return (
+        rep.beta0(rep.PUMP_THZ + f_thz)
+        + rep.beta0(rep.PUMP_THZ - f_thz)
         - 2 * rep.beta0(rep.PUMP_THZ)
+    )
 
 
 from scipy.optimize import brentq
 
-f_new = brentq(lambda f: 0.5 * sym_at(f) - NORD * rep.KAPPA - GAMMA * P0 / 3,
-               f_old - 1.0, f_old + 1.0)
+f_new = brentq(
+    lambda f: 0.5 * sym_at(f) - NORD * rep.KAPPA - GAMMA * P0 / 3,
+    f_old - 1.0,
+    f_old + 1.0,
+)
 print(f"    old root (reproduce's Kerr term) f = {f_old:.3f} THz")
 print(f"    corrected root (0.5 sym = N k + gP0/3) f = {f_new:.3f} THz")
 
 xi_old = C - sym_at(f_old) + 2 * NORD * rep.KAPPA
 xi_new = C - sym_at(f_new) + 2 * NORD * rep.KAPPA
-print(f"[B] predicted engine Xi at OLD root = {xi_old:+.3f} rad/m "
-      "(previous session z-osc probe measured 10.4)")
+print(
+    f"[B] predicted engine Xi at OLD root = {xi_old:+.3f} rad/m "
+    "(previous session z-osc probe measured 10.4)"
+)
 
 
 def xi_model(f_thz: float) -> float:
@@ -91,7 +109,9 @@ def g_model(f_thz: float) -> float:
     return float(np.sqrt(max(C * C - (x / 2) ** 2, 0.0)))
 
 
-print(f"    Xi(corrected root) = {xi_new:+.2e}; g_model(root) = {g_model(f_new):.3f} /m")
+print(
+    f"    Xi(corrected root) = {xi_new:+.2e}; g_model(root) = {g_model(f_new):.3f} /m"
+)
 
 # ---------------------------------------------------------------- engine
 from photonics_helper.base import Area, Length, Wavelength
@@ -110,10 +130,15 @@ def engine(fwm, s1, s2, f_thz, off, L_m=L, dz=DZ):
     tone = np.exp(1j * omp * tt)
     waves = []
     for ch in range(3):
-        ww = Wave(grid=grid, envelope=Envelope(
-            shape="gaussian", peak_amplitude=AP,
-            pulse_width=rep.Time(WIN * 1e-12 / 4.0, "s")),
-            central_wavelength=Wavelength(rep.LAMBDA0_NM, "nm"))
+        ww = Wave(
+            grid=grid,
+            envelope=Envelope(
+                shape="gaussian",
+                peak_amplitude=AP,
+                pulse_width=rep.Time(WIN * 1e-12 / 4.0, "s"),
+            ),
+            central_wavelength=Wavelength(rep.LAMBDA0_NM, "nm"),
+        )
         if ch == 0:
             field = np.full(N, AP, dtype=complex)
         elif ch == 1:
@@ -121,13 +146,21 @@ def engine(fwm, s1, s2, f_thz, off, L_m=L, dz=DZ):
         else:
             field = s2 * np.conj(tone)
         waves.append(ww.with_field(np.asarray(field, complex)))
-    fiber = FiberProfile(n2=rep.N2, alpha=0.0, A_eff=Area(rep.A_EFF, "m^2"),
-                         length=Length(L_m, "m"))
+    fiber = FiberProfile(
+        n2=rep.N2, alpha=0.0, A_eff=Area(rep.A_EFF, "m^2"), length=Length(L_m, "m")
+    )
     return MultimodeSplitStepEngine(
-        waves, fiber, betas=[BETAS] * 3, betas_unit="s^k/m",
+        waves,
+        fiber,
+        betas=[BETAS] * 3,
+        betas_unit="s^k/m",
         phase_offsets=[0.0, -off * rep.KAPPA, -off * rep.KAPPA],
-        oam_l=[0, 0, 0], coef_model="lp_degenerate", include_fwm=fwm,
-        fwm_pump_depletion=fwm, step_size=Length(dz, "m"))
+        oam_l=[0, 0, 0],
+        coef_model="lp_degenerate",
+        include_fwm=fwm,
+        fwm_pump_depletion=fwm,
+        step_size=Length(dz, "m"),
+    )
 
 
 def bin_amps(eng, f_thz):
@@ -155,8 +188,7 @@ def eigen_growth(f_thz, off, verbose=True):
     e.propagate(K, nsaves=2)
     sB = bin_amps(e, f_thz)
     drift = max(driftA, e.energy_vs_z[-1] / e.energy_vs_z[0])
-    G = np.array([[sA[0] / a, sB[0] / a],
-                  [sA[3] / a, sB[3] / a]], dtype=complex)
+    G = np.array([[sA[0] / a, sB[0] / a], [sA[3] / a, sB[3] / a]], dtype=complex)
     G[0, 0] *= np.exp(-1j * np.angle(r1[0] / a))
     G[0, 1] *= np.exp(-1j * np.angle(r2[0] / a))
     G[1, 0] *= np.exp(-1j * np.angle(r1[3] / a))
@@ -164,9 +196,11 @@ def eigen_growth(f_thz, off, verbose=True):
     ev = np.linalg.eigvals(G)
     mu = float(np.max(np.log(np.abs(np.maximum(ev, 1e-300)))) / L)
     if verbose:
-        print(f"    f={f_thz:7.3f} off={off:+d}: |eig|="
-              f"{[abs(x) for x in ev]}  mu={mu:+.3f}/m  "
-              f"g_model={g_model(f_thz):.3f}  E-ratio={drift:.8f}")
+        print(
+            f"    f={f_thz:7.3f} off={off:+d}: |eig|="
+            f"{[abs(x) for x in ev]}  mu={mu:+.3f}/m  "
+            f"g_model={g_model(f_thz):.3f}  E-ratio={drift:.8f}"
+        )
     return mu
 
 
@@ -175,7 +209,9 @@ for f in [f_new - 0.06, f_new - 0.03, f_new, f_new + 0.03, f_new + 0.06]:
     eigen_growth(f, NORD)
 print("[D] control at old root (should be near-gainless):")
 eigen_growth(f_old, NORD)
-print(f"    g_model(old root) = {g_model(f_old):.4f} /m -> "
-      f"cosh({g_model(f_old)*L:.2f}) = {np.cosh(g_model(f_old)*L):.3f}")
+print(
+    f"    g_model(old root) = {g_model(f_old):.4f} /m -> "
+    f"cosh({g_model(f_old) * L:.2f}) = {np.cosh(g_model(f_old) * L):.3f}"
+)
 
-print(f"\ntheory check: c = {C:.4f} /m;  cosh(c*L) = {np.cosh(C*L):.2f} at root")
+print(f"\ntheory check: c = {C:.4f} /m;  cosh(c*L) = {np.cosh(C * L):.2f} at root")

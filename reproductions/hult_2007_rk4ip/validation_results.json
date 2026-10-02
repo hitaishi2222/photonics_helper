@@ -1,0 +1,36 @@
+{
+ "fast": false,
+ "scg_scales": {
+  "L_D_cm": 6.321003134796238,
+  "L_NL_mm": 2.2222222222222223,
+  "N": 5.333339864154831,
+  "z_sol_cm": 9.929008505796958
+ },
+ "soliton": {
+  "slope": -3.968992310518259,
+  "pre_floor_steps": 3,
+  "best_epsilon": 5.003752161607828e-06,
+  "z_sol_m": 0.506,
+  "L_D_m": 0.32148900000000014,
+  "N_order": 2.001437718241565
+ },
+ "scg_physics": {
+  "input_red_edge_nm": 876.0814669752434,
+  "raman_soliton_peak_nm": 1075.6931286516517,
+  "raman_redshift_nm": 199.6116616764083,
+  "dw_side_nm": 576.0287840616866,
+  "dw_side_power_rel": 0.16381367782522063,
+  "n_temporal_peaks": 24,
+  "span_minus20dB_nm": [
+   551.3961872336777,
+   1179.3705153878377
+  ],
+  "span_ratio": 2.138880432424951
+ },
+ "scg_convergence": {
+  "slope": -3.8630335462514496,
+  "length_m": 0.02,
+  "reference_steps": 40960,
+  "best_epsilon_ref": 2.868305452778249e-12
+ }
+}

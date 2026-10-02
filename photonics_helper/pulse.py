@@ -940,9 +940,7 @@ class Wave:
         """
         if self._effective_area is None:
             return None
-        return (
-            0.5 * self.refractive_index * C_MS * EPS_0 * self._effective_area.as_m2
-        )
+        return 0.5 * self.refractive_index * C_MS * EPS_0 * self._effective_area.as_m2
 
     def _warn_normalized(self, method: str) -> None:
         """Emit a one-time warning that ``method`` is in normalized units."""

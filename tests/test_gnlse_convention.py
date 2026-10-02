@@ -34,7 +34,9 @@ from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
 OMEGA0 = 2 * np.pi * 3e8 / (835e-9)  # rad/s
 
-BETAS_PS = np.array([-0.02, 0.1])  # β₂, β₃ in ps²/m, ps³/m (odd term present, strong signal)
+BETAS_PS = np.array(
+    [-0.02, 0.1]
+)  # β₂, β₃ in ps²/m, ps³/m (odd term present, strong signal)
 
 
 def _dense_reference_linear(A_t, grid, betas_ps, dz_m):
@@ -67,7 +69,9 @@ def _dense_reference_linear(A_t, grid, betas_ps, dz_m):
 def _dudley_wave(n=1024, tmax_s=10e-12):
     grid = TemporalGrid(N=n, Tmax=Time(tmax_s, "s"))
     envelope = Envelope.from_fwhm("sech", peak_amplitude=1e3, fwhm=Time(50e-15, "s"))
-    return Wave(grid=grid, envelope=envelope, central_wavelength=Wavelength(835.0, "nm"))
+    return Wave(
+        grid=grid, envelope=envelope, central_wavelength=Wavelength(835.0, "nm")
+    )
 
 
 def _linear_engine(betas_ps, wave=None, step_size=None):

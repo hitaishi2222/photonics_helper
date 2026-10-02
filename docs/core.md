@@ -18,7 +18,7 @@ matplotlib, no plotly, no dash, and none of the solver modules.
 
 ```python
 # a fresh interpreter
-import photonics_helper.core   # fast, no plotting stack
+import photonics_helper.core  # fast, no plotting stack
 ```
 
 This is enforced by tests (`tests/test_core.py`, `tests/test_import_budget.py`),
@@ -39,8 +39,8 @@ not just documented.
 from photonics_helper.core import units
 
 wl = units.Wavelength(1550, "nm")
-wl.to_freq().as_THz      # 193.41...
-wl.to_energy().as_eV     # 0.799...
+wl.to_freq().as_THz  # 193.41...
+wl.to_energy().as_eV  # 0.799...
 ```
 
 ### Grids
@@ -49,8 +49,8 @@ wl.to_energy().as_eV     # 0.799...
 from photonics_helper.core import grids, units
 
 grid = grids.TemporalGrid(N=4096, Tmax=units.Time(10, "ps"))
-A_w = grid.fft(A_t)      # FFT(A) * dt, fftshifted
-A_t = grid.ifft(A_w)     # paired inverse, / dt
+A_w = grid.fft(A_t)  # FFT(A) * dt, fftshifted
+A_t = grid.ifft(A_w)  # paired inverse, / dt
 ```
 
 ### Materials
@@ -62,9 +62,9 @@ concrete implementation backed by the bundled database.
 from photonics_helper.core.materials import OpticalMaterial, material
 
 silica = material("Silica")
-isinstance(silica, OpticalMaterial)   # True
-silica.n_func(1.55)                   # n at 1.55 um
-silica.source                         # provenance string
+isinstance(silica, OpticalMaterial)  # True
+silica.n_func(1.55)  # n at 1.55 um
+silica.source  # provenance string
 ```
 
 You can also type your own material against the protocol:
@@ -72,8 +72,8 @@ You can also type your own material against the protocol:
 ```python
 from photonics_helper.core.materials import OpticalMaterial
 
-def group_index(mat: OpticalMaterial, wavelength_um: float) -> float:
-    ...
+
+def group_index(mat: OpticalMaterial, wavelength_um: float) -> float: ...
 ```
 
 ## Stable core, evolving satellites
@@ -95,6 +95,7 @@ A minimal external tool only needs the foundation:
 
 ```python
 """A tiny free-space propagator built on core primitives."""
+
 import numpy as np
 from photonics_helper.core import constants, grids, units
 

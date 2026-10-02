@@ -5,6 +5,49 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Heidt (2009) adaptive step-size reproduction**
+  (`reproductions/heidt_2009_adaptive_step/`): a reproduction-local adaptive
+  layer (`heidt_adaptive.py` — `SSFIntegrator`/`RK4IPIntegrator`,
+  `LocalErrorStepper`/`CQEStepper`, counted-FFT cost model) driving the
+  paper's full 10 cm supercontinuum and 400 km two-soliton-collision decks,
+  **all 16 checks green in 290 s**. Both original failure symptoms turned out
+  to be a shared-layer unit bug (`betas_si` built from ps⁰ instead of ps², i.e.
+  `ps²/km` read as `ps²/m`), not solver physics: deck A's spurious 5e-4 error
+  plateau is the chaos floor at eps ≈ 7e-6 (measured local orders 4.36/4.40),
+  and deck B's two solitons now collide at 200 km exactly as Fig. 3(b) requires
+  and pass through cleanly (energy +0.07 %). Recorded deviations: both decks run
+  shock-free because the CQE controller needs an exactly conserved invariant
+  (paper Eq. 16), which also makes SSF-CQE blind; the eps ladder is chaos-limited
+  to ≥ 1e-5.
+- **Hult (2007) RK4IP deck B** (`reproductions/hult_2007_rk4ip/`): the 10 cm SCG
+  deck in the paper's Table-I PCF now reproduces — 24 fission peaks, 199.6 nm
+  Raman red-shift, dispersive wave at 576 nm (16.4 % of peak), −20 dB span
+  551–1179 nm, convergence ladder slope −3.86 — **without** porting
+  Hollenbeck–Cantrell; the house two-exponential silica Raman response is
+  demonstrably not the limiting factor. The deck drives `heidt_adaptive.py`'s
+  `RK4IPIntegrator` directly, since `SplitStepEngine` has no RK4IP path.
+
+### Fixed
+
+- **Raman spectrum stored in the time domain** where the shared operator layer
+  expected a frequency-domain spectrum (`heidt_adaptive.py`).
+- **`ruff check .` is green again.** CI's lint gate had been failing on `main`
+  with 13 pre-existing errors in reproduction scripts; all are fixed in place
+  (dead locals and unused imports removed, ambiguous `I`/`l` names renamed) rather
+  than silenced with new lint ignores.
+
+### Changed
+
+- `pyproject.toml`: registered the `slow` pytest marker that
+  `tests/test_reproductions.py` uses for the heavy decks
+  (`pytest -m "not slow"` → 33 tests / 241 s instead of 37 / 735 s).
+- Docs: `docs/reproductions.md` now carries the full 24-study inventory with a
+  ✅/⚠️ outcome marker and a legend, instead of a 9-row subset.
+
 ## [0.1.9] - 2026-09-20 (completion of the 0.1.9 line)
 
 ### Added (2026-09-20 — Phase-4 extensions on top of the 0.1.9 physics release)

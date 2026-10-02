@@ -45,8 +45,12 @@ OMEGA0 = 2 * np.pi * 3e8 / (WL0_NM * 1e-9)
 def _dudley_wave(n: int = 8192, tmax_s: float = 14e-12) -> Wave:
     """Fig. 3 input: 50 fs (FWHM) sech, 10 kW, grid satisfying Ω_max < ω₀."""
     grid = TemporalGrid(N=n, Tmax=Time(tmax_s, "s"))
-    envelope = Envelope.from_fwhm("sech", peak_amplitude=np.sqrt(10e3), fwhm=Time(50e-15, "s"))
-    return Wave(grid=grid, envelope=envelope, central_wavelength=Wavelength(WL0_NM, "nm"))
+    envelope = Envelope.from_fwhm(
+        "sech", peak_amplitude=np.sqrt(10e3), fwhm=Time(50e-15, "s")
+    )
+    return Wave(
+        grid=grid, envelope=envelope, central_wavelength=Wavelength(WL0_NM, "nm")
+    )
 
 
 def _dudley_fiber(wave: Wave, raman: bool = False) -> FiberProfile:
@@ -61,7 +65,9 @@ def _dudley_fiber(wave: Wave, raman: bool = False) -> FiberProfile:
 
 
 def _dudley_raman(grid: TemporalGrid) -> RamanResponse:
-    spec = RamanSpec(name="Silica", raman_shift_cm=440.0, raman_linewidth_cm=45.0, fR=0.18)
+    spec = RamanSpec(
+        name="Silica", raman_shift_cm=440.0, raman_linewidth_cm=45.0, fR=0.18
+    )
     return RamanResponse(spec=spec, fR=0.18, tau1=12.2e-15, tau2=32e-15, grid=grid)
 
 
@@ -95,7 +101,9 @@ def test_guard_rejects_grid_beyond_omega0():
     wave = _dudley_wave(n=4096)
     # Tmax = 3 ps with N = 4096 gives Ω_max ≈ 4.29e15 > ω₀ ≈ 2.26e15.
     grid3 = TemporalGrid(N=4096, Tmax=Time(3e-12, "s"))
-    bad = Wave(grid=grid3, envelope=wave.envelope, central_wavelength=wave.central_wavelength)
+    bad = Wave(
+        grid=grid3, envelope=wave.envelope, central_wavelength=wave.central_wavelength
+    )
     with pytest.raises(ValueError) as exc_info:
         SplitStepEngine(
             pulse=bad,
@@ -164,7 +172,9 @@ def test_integrator_fidelity():
 
     def full_rhs(a: np.ndarray) -> np.ndarray:
         p = engine._nl_intensity(np.abs(a) ** 2, engine._get_h_R_fft())
-        return np.asarray(engine.grid.ifft((1j * gamma + kernel) * engine.grid.fft(p * a)))
+        return np.asarray(
+            engine.grid.ifft((1j * gamma + kernel) * engine.grid.fft(p * a))
+        )
 
     dz = 1e-4
     # --- fully-resolved reference: 4000 classical RK4 substeps of the full flow
@@ -191,7 +201,9 @@ def test_photon_number_conserved_constant_drive():
     """Constant P_NL (Shock-only, betas=0, no Raman) conserves N to < 1e-6."""
     # 1 kW keeps the evolution within the exactly-conservative regime.
     grid = TemporalGrid(N=2048, Tmax=Time(7e-12, "s"))
-    env = Envelope.from_fwhm("sech", peak_amplitude=np.sqrt(1e3), fwhm=Time(50e-15, "s"))
+    env = Envelope.from_fwhm(
+        "sech", peak_amplitude=np.sqrt(1e3), fwhm=Time(50e-15, "s")
+    )
     wave = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(WL0_NM, "nm"))
     engine = SplitStepEngine(
         pulse=wave,
@@ -249,7 +261,10 @@ def test_raman_shock_matches_pre_change_physics():
     engine.propagate(100, nsaves=2)  # 2 cm — fission onset
     A = np.asarray(engine.evolution[-1].envelope_field)
     w = engine.grid.w
-    centroid = float(np.sum(np.abs(engine.grid.fft(A)) ** 2 * w) / np.sum(np.abs(engine.grid.fft(A)) ** 2))
+    centroid = float(
+        np.sum(np.abs(engine.grid.fft(A)) ** 2 * w)
+        / np.sum(np.abs(engine.grid.fft(A)) ** 2)
+    )
     # Raman pushes the soliton band to *lower* frequencies (red shift).
     assert centroid < -1e11
 
@@ -268,8 +283,12 @@ def test_blue_skew_preserved():
     ratios = {}
     for shock in (False, True):
         grid = TemporalGrid(N=2048, Tmax=Time(7e-12, "s"))
-        env = Envelope.from_fwhm("sech", peak_amplitude=np.sqrt(10e3), fwhm=Time(50e-15, "s"))
-        wave = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(WL0_NM, "nm"))
+        env = Envelope.from_fwhm(
+            "sech", peak_amplitude=np.sqrt(10e3), fwhm=Time(50e-15, "s")
+        )
+        wave = Wave(
+            grid=grid, envelope=env, central_wavelength=Wavelength(WL0_NM, "nm")
+        )
         engine = SplitStepEngine(
             pulse=wave,
             fiber=_dudley_fiber(wave),

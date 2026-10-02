@@ -405,17 +405,19 @@ class TestMI:
         from photonics_helper.phase_matching import mi_gain_spectrum_extended
 
         beta2 = -2.1e-26  # s²/m (−21 ps²/km, the ISSUES #2 demonstration case)
+
         def domega(w):
             return 0.5 * beta2 * w**2  # β₁ cancels analytically in Δ
+
         expected_cutoff = np.sqrt(-4 * gamma * P_pump / beta2)
 
         # Δ(Ω) = β~(Ω) + β~(−Ω) = β₂Ω² for the pure-β₂ reference:
-        assert np.isclose(
-            domega(1.68e12) + domega(-1.68e12), -0.056, atol=5e-3
-        ), "documented case 1 not reproduced by the reference formula"
-        assert np.isclose(
-            domega(4.19e12) + domega(-4.19e12), -0.352, atol=2.5e-2
-        ), "documented case 2 not reproduced (pure-β₂ ref: −0.369; ISSUES quotes −0.352 incl. β₄)"
+        assert np.isclose(domega(1.68e12) + domega(-1.68e12), -0.056, atol=5e-3), (
+            "documented case 1 not reproduced by the reference formula"
+        )
+        assert np.isclose(domega(4.19e12) + domega(-4.19e12), -0.352, atol=2.5e-2), (
+            "documented case 2 not reproduced (pure-β₂ ref: −0.369; ISSUES quotes −0.352 incl. β₄)"
+        )
 
         ext = mi_gain_spectrum_extended(
             domega,
@@ -433,7 +435,9 @@ class TestMI:
 
         beta2 = -21e-24
         omega0 = 2 * PI * C_MS / 1550e-9
-        with pytest.warns(DeprecationWarning, match="cancellation|round-off|betas=|detuning"):
+        with pytest.warns(
+            DeprecationWarning, match="cancellation|round-off|betas=|detuning"
+        ):
             mi_gain_spectrum_extended(
                 lambda w: 0.5 * beta2 * (w - omega0) ** 2,
                 omega0,
@@ -1239,9 +1243,7 @@ class TestPropagationConstantBeta:
 
         omegas = omega0 + np.linspace(-3e12, 3e12, 9)
         n_eff = 2.14 + 1e-4 * np.arange(9)
-        pc = PC.beta_from_neff(
-            n_eff, AngularFrequencyArray(omegas, "rad/s")
-        )
+        pc = PC.beta_from_neff(n_eff, AngularFrequencyArray(omegas, "rad/s"))
         result = pc.beta(omega0)
         assert isinstance(result, float)
         assert not isinstance(result, np.ndarray)
@@ -1264,8 +1266,9 @@ class TestPropagationConstantBeta:
         from photonics_helper.fiber import PropagationConstant as PC
 
         omegas = omega0 + np.linspace(-3e12, 3e12, 9)
-        pc = PC.beta_from_neff(2.0 + 0.0 * omegas,
-                               AngularFrequencyArray(omegas, "rad/s"))
+        pc = PC.beta_from_neff(
+            2.0 + 0.0 * omegas, AngularFrequencyArray(omegas, "rad/s")
+        )
         with pytest.raises(ValueError, match="outside the stored table"):
             pc.beta(omega0 - 9e12)
 
@@ -1280,8 +1283,10 @@ class TestPropagationConstantBeta:
         )
 
         omegas = omega0 + np.linspace(-3e12, 3e12, 9)
-        pc_ = PC(values=omegas * 2.14 / 299792458.0,
-                 x_values=AngularFrequencyArray(omegas, "rad/s"))
+        pc_ = PC(
+            values=omegas * 2.14 / 299792458.0,
+            x_values=AngularFrequencyArray(omegas, "rad/s"),
+        )
         adaptor = PropagationConstantAdaptor(pc_)
         for w in np.linspace(omegas[0] + 1e11, omegas[-1] - 1e11, 25):
             assert float(pc_.beta(float(w))) == pytest.approx(

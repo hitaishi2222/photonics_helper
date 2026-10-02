@@ -67,10 +67,14 @@ The runtime helper is `photonics_helper._deprecation`:
 ```python
 from photonics_helper._deprecation import deprecated
 
-@deprecated("Use spectral_grid() instead.", replacement="spectral_grid",
-            since="0.1.7", removed_in="0.3.0")
-def old_grid(*args, **kwargs):
-    ...
+
+@deprecated(
+    "Use spectral_grid() instead.",
+    replacement="spectral_grid",
+    since="0.1.7",
+    removed_in="0.3.0",
+)
+def old_grid(*args, **kwargs): ...
 ```
 
 Nothing in the library is deprecated today; the machinery exists so the next

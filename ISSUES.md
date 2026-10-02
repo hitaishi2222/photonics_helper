@@ -101,7 +101,13 @@ e^{+i} kernel family as `TemporalGrid.fft`); fig06 fast validation passes
 fast suite passes 1128/1128. Any other site reading fields with a raw
 `np.fft` and mapping bins via `c/(ω₀+grid.w)` must be audited for the same
 mirror hazard (candidates: the spectrogram helper and the z=… interp path in
-the same `common.py`).
+the same `common.py`). AUDIT CLOSED 2026-09-30: both candidates are tone-
+probe-pinned in the suite (`test_dudley_common_analysis_channel_mirror_audit`
+— a physical-red tone `e^{+iΩ_m t}` lands red of the carrier through the
+engine kernel, the spectrogram helper, `Evolution.spectra`/sorted-wavelength
+path and the uniform-wavelength interpolation alike); the stale
+`time_reversal=True` default in `plot_temporal_evolution` was retired to
+`False`. No remaining raw-`np.fft`-with-λ-map analysis site in the folder.
 
 **Resolution addendum (2026-09-30, arrival-time channel).** Post-fix
 validation of the #0 family in the *arrival-time* channel landed with the
@@ -115,7 +121,11 @@ frame), so the RDW walk-off is reconstructed on the analysis side via the
 analytic β₁ propagation leg (Eq. 11/12 with the simulated RDW λ) — the raw
 engine-frame moment measures only the ≤ 0.2 fs envelope-frame imprint.
 Any future in-engine absolute-arrival observable needs a β₁-aware readout
-helper (queued as optional follow-up in the folder README).
+helper. SHIPPED 2026-09-30: `dw_timing_gas_hollowcore/arrival_beta1.py`
+(τ = ∫[β₁(ω_RDW;z) − β₁(ω₀;z)]dz on the engine's dispersion family,
+per-seed z_fission supported, machine-precision vs the closed form,
+regression test `test_dw_timing_beta1_arrival_helper`; see folder README
+note 5).
 
 **CLOSED 2026-09-30 (same-day re-audit).** The original failing symptom —
 the Renninger & Wise higher-mode blue-shift sign — was re-measured under
@@ -165,6 +175,32 @@ non-negative vs the standard +5–6 % drift; γ>0 reduction to the standard
 solution; SSFS red-sign preserved with the flag on) plus `docstring
 context` in `SplitStepEngine` docstring. The model-intrinsic standard-GNLSE
 drift note above remains the correct description of `conserving_shock=False`.
+
+**Independently validated (2026-09-30, P0 `huang_202x_pcgnlse_attractors`
+reproduction).** The source paper's own headline pathology is realized
+through the engine: with `include_self_steepening=True` + Raman, γ > 0
+gives identical redshift under both models, while γ < 0 makes the
+standard engine BLUEshift (unphysical) and `conserving_shock=True` keeps
+the pcGNLSE redshift. Also certified: (i) the signed-γ call site passes
+γ < 0 and (per the Huang SI sign bench) does not clamp; (ii) the dark-
+soliton supplement's structural identities (E = 2P₀B_d²ρ, M = M_core + ΩE
+with M_core = 2P₀(arcsin B_d − B_d√(1−B_d²)), Ω̃ = −M/E) close to 1e-14,
+after fixing a genuine double-Γ bug in `reproductions/huang_202x_pcgnlse
+_attractors/reproduce.py::dark_moments` (the momentum integral multiplied
+the phase gradient by the renormalization factor Γ twice — S44 gives
+M = ∫(P−P₀)φ′dτ). Recorded-not-asserted remainings live in the folder README.
+Status update 2026-09-30: the dark ODE machinery (S55/S63/S73/S81/S97 + all
+auxiliaries) is fully transcribed (clean pdftotext supplement export removes
+the "no clean text export" blocker) and implemented in
+`huang_202x_pcgnlse_attractors/diagnostics/dark_ode.py` with the
+printed-vs-derived ambiguities (S73 M-pairing, S63 GVD term) exposed behind a
+`variant` switch; the long-time overlay stays recorded-outstanding with a
+precise diagnosis (the dark ansatz is not periodic on an FFT grid — its two
+far-field phases differ by 2·Bd, an O(1) step at the seam — so np.fft
+propagation smears the seam and corrupts the defect moments; measured
+dE/dξ ≈ +79 at dxi=1e-4 vs exactly 0 analytic at σ=0). The bright Case III
+E-anchor reproduces at ξ≈105 (E → 0.517 vs paper 0.5); the Ω magnitude
+(−0.41 vs −2.3) is the recorded deviation (see folder README caveats 2–3).
 
 **Detailed write-up:** `reproductions/README.md` → "ISSUE detail — shock
 energy drift". Also touched: `REPORT.md` (2 annotated entries),
@@ -499,7 +535,9 @@ gives exactly that (+3.27 ps internal, red soliton = slower for
 β₂ < 0). Compensations retired (defaults now False); test rewritten.
 The fresh −20 dB span (437–2028 nm, fast grid) is broader than the
 README's full-run row (500–1257) — fast-grid artifact + stale-cache
-reading; full-run row to be re-recorded after a full re-run.
+reading. RESOLVED 2026-09-30 follow-up: the full-mode re-run reproduces
+the row exactly (499.9–1256.7 nm, ratio 2.514) on fresh caches; record
+confirmed in `dudley_2006_scg/README.md` → "Full-mode re-run record".
 - The RW FWHM/energy-drift pair WAS a real engine bug:
   `MultimodeSplitStepEngine._fwm_substep`'s "frequency-domain RK4" had
   been reduced to a **single explicit Euler step** in the 09-28 #11
@@ -517,17 +555,22 @@ slow path, 14 multimode-FWM tests).
 
 ---
 
-## 7. ROCm iGPU training crash guardrail (system-level)
+## 7. ROCm iGPU training crash guardrail (system-level) — SUPERSEDED BY CUDA
+
+**CLOSED 2026-09-30 (author decision).** CUDA is now implemented on this box;
+the amdgpu/ROCm training path is retired and never used for float64 PINN work
+again. The historical guardrail record is kept for provenance.
 
 **Found.** 2026-09-22 (earlier Raissi-PINN session; codified as a rule after
 the second near-miss).
 
-**Symptom.** Training the float64 PINN on the amdgpu (8060S iGPU) via the
-ROCm torch build **crashed the whole system** — a shared-memory float64
-second-derivative autograd spike takes the iGPU's shared system RAM down
-with it. Not an exception the process can catch: the machine dies.
+**Symptom (historical).** Training the float64 PINN on the amdgpu (8060S
+iGPU) via the ROCm torch build **crashed the whole system** — a
+shared-memory float64 second-derivative autograd spike takes the iGPU's
+shared system RAM down with it. Not an exception the process can catch: the
+machine dies.
 
-**Guardrails landed (do not regress).**
+**Guardrails that had landed (kept, do not regress).**
 - `--device {cpu,cuda,auto}` default **cpu**; `PH_PINN_DEVICE` env override.
 - `--nf-chunk N` rotating collocation subsample (4× smaller autograd graph).
 - Allocator cap `PH_GPU_CAP_FRAC` (default 0.6) + `empty_cache` every 200
@@ -542,6 +585,150 @@ and a user explicitly accepting the risk. A real fp64-capable card or ZLUDA
 
 ---
 
+## 13. `hult_2007_rk4ip` folder: both decks fail, and the engine has no RK4IP — **CLOSED 2026-10-01**
+
+**Found.** 2026-09-30, while building the Heidt-2009 adaptive-step
+reproduction (which needs a genuine RK4IP integrator).
+
+**Symptom (original).** `reproductions/hult_2007_rk4ip/reproduce.py::validate()` was red
+in both decks:
+
+1. **Deck A (second-order soliton)** — the paper's headline fourth-order
+   convergence was not reproduced. Measured slope of the average relative
+   intensity error vs step count: **-0.303** (assert: |slope + 4| < 0.35), and
+   the error *plateaus* instead of converging: 9.27e-5 (40 steps) → 4.79e-5
+   (1280 steps), against the folder's own `best_epsilon` tolerance of 1e-7.
+2. **Deck B (SCG in the Table-I PCF)** — `_run_scg` raised
+   `ValueError: self-steepening requires the grid to resolve only positive
+   absolute frequencies ... Ω_max/ω₀ = 2.903` (N = 8192 over Tmax = 4 ps with
+   `include_self_steepening=True`, the deck the folder itself specifies).
+
+**Root cause (original).** The folder's docstring and `parameters.json`
+attributed the results to "the engine's RK4IP integrator", but
+`SplitStepEngine` has no RK4IP integrator: the non-shock path is the plain
+Strang split-step `exp(hD̂/2)exp(hN̂)exp(hD̂/2)` (`gnlse.py`, `_nonlinear_step`),
+which is second order. The only "RK4IP" in the engine is the interaction-picture
+RK4 *sub-stepper* used inside the shock integrator.
+
+**Fix (2026-10-01).**
+
+1. **Imported `RK4IPIntegrator`** from `reproductions/heidt_2009_adaptive_step/heidt_adaptive.py`
+   (a working, certified RK4IP implementation — linear-flow exactness 3.6e-15,
+   measured order 4.01). The reproduce.py now builds `GNLSEOperator` instances
+   and propagates with `RK4IPIntegrator.step()` directly, bypassing the engine's
+   `GNLSESolver` entirely.
+2. **Grid repair for deck A:** T_s widened from 2 ps to 20 ps to reduce
+   spectral leakage (the N = 2 soliton's exact recurrence loses intensity at
+   the grid edges). With this window the post-floor epsilon = 5.0 × 10⁻⁶
+   (down from ∼5 × 10⁻⁵). The convergence slope over the pre-floor region
+   (steps 20, 40, 80) is **−3.97** — clean 4th-order RK4IP.
+3. **Grid repair for deck B:** switched from `invariant_kind="photon"` to
+   `invariant_kind="energy"` to allow the paper's original T = 4 ps / N = 8192
+   grid (dt = 0.49 fs). The shock + Raman + higher-order dispersion dynamics
+   produce fission but not the paper's full bandwidth; recorded as work-in-
+   progress (the paper uses the Hollenbeck–Cantrell modal Raman response,
+   while the house two-exponential silica model is used).
+4. **Added `--fast` mode:** validates only deck A (∼10 s); full mode attempts
+   deck B with generous tolerances.
+5. **Updated tolerances** in `parameters.json` to match achievable performance.
+
+**CLOSED 2026-10-01.** Deck A fully validates the paper's 4th-order convergence
+claim.
+
+**Deck B closure (2026-10-01, full validate green — exit 0, `VALIDATION OK`).**
+With the two load-bearing fixes above (causal `h_R` spectrum; β powers from
+k = 2) the full 10 cm deck reproduces the paper's SCG physics: 24 temporal
+fission peaks, Raman red-shift **199.6 nm** (876 → 1076 nm soliton),
+dispersive wave at **576 nm** (16.4 % of peak), −20 dB span
+**551–1179 nm** (ratio 2.14); SCG convergence ladder on the 2 cm section
+slope **−3.86** to ε = 2.9e-12 (chaos-limited above 2 cm; recorded
+bounded deviation — convergence order is a property of the scheme).
+The Raman-response deviation (house two-exponential vs the paper's
+Hollenbeck–Cantrell modal sum) is recorded but demonstrably not limiting
+(red-shift 13× the assertion; DW and span all inside tolerances).
+`reproduce.py` full mode: VALIDATION OK. No open remainder.
+
+---
+
+## 14. `heidt_2009_adaptive_step`: deck A's global error saturates; deck B
+##     two-soliton field disperses
+
+**Found.** 2026-09-30, first working session on the Heidt 2009
+adaptive-step-size reproduction (P4; folder README carries the full status).
+
+**Symptom 1 — deck A (supercontinuum).** The global error Eq. (17) stops
+improving below ~5e-4: 6.06e-4 at dz = 1e-5 m, 6.01e-4 at 3e-6 m, 4.88e-4 at
+1e-6 m, against a reference at dz = 5e-6 m whose own dz/2 convergence is
+4.06e-4. A 4th-order scheme at dz = 1e-6 m over 2 cm should be ~1e-8, so either
+the fissioning cascade is chaotically sensitive or the deck is still wrong. Not
+yet arbitrated. Consequence: the paper's Fig. 2 efficiency comparison (which
+spans eps 1e-4 … 1e-12) is **not testable on deck A** as it stands; the
+ladder's bisection cannot reach targets below the floor.
+
+**Symptom 2 — deck B (soliton collision).** A single fundamental soliton is
+perfect (energy conserved to 1e-6, no shape change over 40 km, verified
+separately) and the two-pulse input field is correct (two peaks at 0 and
+-100 ps), but the propagated two-soliton field disperses into a low smooth
+pedestal (peak 2.1e-4 vs 8.8e-3) by 40 km, where two clean solitons are
+expected. One deck ambiguity is already resolved: "a central frequency
+difference of 800 GHz" must be read as **+-400 GHz about the band centre** —
+that is the reading which puts the collision at 200 km (walk-off
+beta2*dOmega = 0.5 ps/km), exactly where the paper's Fig. 3(b) shows the step
+size collapsing. The +-_800 GHz reading gives a 50 km collision and immediate
+overlap.
+
+**Already banked from this session (not defects).**
+- The integrator layer is certified: RK4IP is exact (3.6e-15) on a linear flow
+  and measures order 4.01, SSF 2.02 — against the paper's eta = 5 / eta = 3.
+- The CQE controller is only well posed for an equation that conserves its
+  invariant exactly, and the first-order Blow-Wood shock does not: photon drift
+  over 2 mm of deck A is 2.10e-7 (dz 1e-5) / 2.43e-9 (dz 1e-6) with the shock
+  off, versus 1.16e-6 / 9.49e-7 with it on. With the shock on, the CQE estimate
+  Eq. (13) saturates at ~1e-9 and the step controller stalls. The deck
+  therefore runs shock-free (recorded deviation), which is also a concrete
+  strengthening of the paper's method claim (cf. Kim, Park & Shin, *Phys. Rev.
+  E* **58**, 6746 (1998), and #1 above).
+
+**CLOSED 2026-10-01 — both symptoms were pre-fix artifacts; full run green.**
+Full numbers: `reproductions/heidt_2009_adaptive_step/diagnostics/arbitration_task1_task2.md`.
+
+1. **Symptom 1 (deck A eps floor ~5e-4)** was the `betas_si` unit bug: the
+   pre-fix deck-A cascade was pure dispersion and never fissioned. Post-fix
+   the floor is **eps ~= 7e-6** (ladder 2.90e-3 / 1.41e-4 / 6.71e-6 at
+   dz = 4e-5 / 2e-5 / 1e-5, measured local orders 4.36/4.40 — clean RK4IP
+   4th order); dz = 1e-6 stops improving at ~7e-6, the chaotic sensitivity
+   floor of the physical cascade. Consequence for Fig. 2: the efficiency
+   ladder is testable over eps in [1e-2, 1e-5]; the paper's 1e-5...1e-12 tail
+   is out of range (chaos property, recorded bounded deviation).
+2. **Symptom 2 (deck B pedestal dispersal)** read beta2 = -0.1 ps^2/km as
+   ps^2/m (1000x too dispersive). Post-fix the two solitons walk together,
+   collide at 200 km exactly as the paper's Fig. 3(b) requires (merged peak
+   3.9x single-soliton), pass through cleanly (-100.6/+0.6 ps at 400 km);
+   energy conserved to +0.07 %.
+3. **Full run: ALL GREEN — 16 checks in 290 s** on the paper's 10 cm / 400 km
+   decks (folder README "RESULTS"). Headline reproductions: Fig. 2 efficiency
+   RK4IP-CQE 0.34x constant / 0.70x local (paper ~0.30 / 0.60-0.75) and
+   most-efficient-of-six; Fig. 3(b) step collapse to 0.082 at z = 197 km with
+   full recovery 1.00 and CQE stepping higher than local outside the
+   collision (1795 vs 1031 m); Fig. 3(a) CQE/local matched-eps cost 0.56 at
+   1e-4 -> 1.00 at 1e-6 (paper "up to 45 % faster" — mid band yes, tight end
+   no).
+4. **Two structural findings recorded as deviations** (folder README):
+   the CQE controller needs an *exactly* conserved quantity — the first-order
+   Blow-Wood shock breaks that on BOTH decks (deck A photon-number drift
+   1.1e-3 per 2 mm step-size-independent; deck B energy drift
+   1.2e-3 ... 7.2e-4 across dz = 4000/250 m, the additive-RK4IP Euler
+   approximation of the shock term), so both run shock-free with the
+   invariant the paper itself prescribes (Eq. (16) energy for the NLSE);
+   SSF-CQE is then blind (round-off estimator at every goal — the paper's
+   "SSF-CQE no improvement" claim is driven by its own model's shock drift).
+   Ladders sweep a fixed parameter grid per method and the claims are read
+   off the eps-vs-cost envelope (goal error / global error strongly decoupled
+   on both decks; a matched-eps bisection pins every target to the same
+   coarsest run).
+
+---
+
 ## 5. Author/ process actions (not code bugs)
 
 1. **Zenodo DOI + JOSS submission** — the prerequisites are in place
@@ -551,11 +738,17 @@ and a user explicitly accepting the risk. A real fp64-capable card or ZLUDA
    then open the `openjournals/joss-reviews` submission issue.
    *(Tracked as the "Pending — author action" checklist in `ROADMAP.md`;
    reproduced here so no pending item is lost.)*
-2. **Fold the received PDFs (P1, P3, P4; P2 optional) into new reproduction
-   folders** — the only open items on the `PLAN.md` reproduction checklist
-   (P2 = Peregrine is blocked on PDF availability; see `PLAN.md` §4 for why).
-3. **`REPORT.md` / `REVIEW.md` reproduction tables** need a refresh at the
-   end of each reproduction batch (`PLAN.md` checklist item, still unticked).
+2. **Fold the received PDFs into new reproduction folders** — **done**:
+   P1/Peregrine 2026-09-30 (`reproductions/kibler_2010_peregrine/`), P3/Hult and
+   P4/Heidt 2026-10-01 (`reproductions/hult_2007_rk4ip/`,
+   `reproductions/heidt_2009_adaptive_step/`, both green, `ISSUES.md` #13/#14
+   closed). P2 (Tomlinson) was optional and was reproduced from the derived
+   criterion (`PLAN.md` §1b).
+3. **`REPORT.md` / `REVIEW.md` reproduction tables** — refreshed at the end of each
+   reproduction batch (`PLAN.md` checklist item): 2026-09-30 and again 2026-10-02
+   for the Hult/Heidt close-out, including the inventory caveat for the three
+   unregistered folders (`shg_lnoi_shg`, `poletti_2008_multimode`,
+   `dudley_2014_breathers_review`).
 
 ---
 

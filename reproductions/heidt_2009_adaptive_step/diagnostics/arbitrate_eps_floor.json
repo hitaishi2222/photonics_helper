@@ -1,0 +1,29 @@
+{
+  "reference_dz": 5e-06,
+  "reference_self_convergence_vs_refA2": 0.0,
+  "ladder": {
+    "4e-05": {
+      "eps": 0.00289996881655498,
+      "photon_drift": 0.12286957894027828,
+      "n_fft": 40002,
+      "wall_s": 3.8265645503997803
+    },
+    "2e-05": {
+      "eps": 0.00014122391051558394,
+      "photon_drift": 0.12267628468174752,
+      "n_fft": 80002,
+      "wall_s": 7.742166042327881
+    },
+    "1e-05": {
+      "eps": 6.71133243197233e-06,
+      "photon_drift": 0.12266665245572872,
+      "n_fft": 160002,
+      "wall_s": 15.4404137134552
+    }
+  },
+  "measured_order_pairs": {
+    "4e-5->2e-5": 4.3599811109541955,
+    "2e-5->1e-5": 4.39524134088847
+  },
+  "conclusion": "No 5e-4 floor: eps follows the RK4IP 4th-order slope and the reference self-converges to the same level. The recorded saturation predates the betas-unit fix (the pre-fix deck-A cascade was pure dispersion and never fissioned)."
+}

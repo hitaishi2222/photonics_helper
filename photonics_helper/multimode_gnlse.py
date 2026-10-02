@@ -187,18 +187,12 @@ class MultimodeSplitStepEngine:
             raise ValueError("oam_l must match the channel count exactly.")
         if group_delays is not None:
             if len(group_delays) != self._n:
-                raise ValueError(
-                    "group_delays must match the channel count exactly."
-                )
+                raise ValueError("group_delays must match the channel count exactly.")
             if abs(group_delays[0]) > 0:
-                raise ValueError(
-                    "group_delays[0] must be 0 (the reference frame)."
-                )
+                raise ValueError("group_delays[0] must be 0 (the reference frame).")
         if phase_offsets is not None:
             if len(phase_offsets) != self._n:
-                raise ValueError(
-                    "phase_offsets must match the channel count exactly."
-                )
+                raise ValueError("phase_offsets must match the channel count exactly.")
         if fiber.length.as_m <= 0:
             raise ValueError(f"fiber.length must be positive, got {fiber.length!r}")
         if step_size is not None and step_size.as_m <= 0:
@@ -212,8 +206,7 @@ class MultimodeSplitStepEngine:
             w = np.asarray(xpm_weights, dtype=float)
             if w.shape != (self._n, self._n):
                 raise ValueError(
-                    f"xpm_weights must be ({self._n}, {self._n}), got "
-                    f"{w.shape}."
+                    f"xpm_weights must be ({self._n}, {self._n}), got {w.shape}."
                 )
             if not np.all(np.isfinite(w)):
                 raise ValueError("xpm_weights must be finite.")
@@ -231,7 +224,11 @@ class MultimodeSplitStepEngine:
 
         # betas: one shared array broadcast to every channel, or a list
         # with one array per channel.
-        if isinstance(betas, list) and betas and isinstance(betas[0], (list, tuple, np.ndarray)):
+        if (
+            isinstance(betas, list)
+            and betas
+            and isinstance(betas[0], (list, tuple, np.ndarray))
+        ):
             if len(betas) != self._n:
                 raise ValueError(
                     "betas list must match the channel count exactly, or "
@@ -245,14 +242,16 @@ class MultimodeSplitStepEngine:
         self.waves = waves
         self.fiber = fiber
         self.group_delays = None if group_delays is None else list(group_delays)
-        self.phase_offsets = (
-            None if phase_offsets is None else list(phase_offsets)
-        )
+        self.phase_offsets = None if phase_offsets is None else list(phase_offsets)
         self.coef_model: CoeffModel = coef_model
         self.include_fwm = include_fwm
         self.oam_l = None if oam_l is None else list(oam_l)
-        self.xpm_weights = None if xpm_weights is None else np.asarray(xpm_weights, dtype=float).copy()
-        self.fwm_weights = None if fwm_weights is None else np.asarray(fwm_weights, dtype=float).copy()
+        self.xpm_weights = (
+            None if xpm_weights is None else np.asarray(xpm_weights, dtype=float).copy()
+        )
+        self.fwm_weights = (
+            None if fwm_weights is None else np.asarray(fwm_weights, dtype=float).copy()
+        )
         self.fwm_pump_depletion = fwm_pump_depletion
         self.step_size = step_size
 
@@ -263,8 +262,7 @@ class MultimodeSplitStepEngine:
             f = np.asarray(w.envelope_field, dtype=complex)
             if self.A and f.shape != self.A[0].shape:
                 raise ValueError(
-                    f"channel field shapes differ: {self.A[0].shape} vs "
-                    f"{f.shape}."
+                    f"channel field shapes differ: {self.A[0].shape} vs {f.shape}."
                 )
             self.A.append(f)
 
@@ -300,7 +298,7 @@ class MultimodeSplitStepEngine:
         arrays are small (1 float array) and the multiply kernels let numpy
         pick the pairing.
         """
-        phi_base = self._phi_base(m)      # Σ β_k ω^k / k! (+ group delay), 1/ length units
+        phi_base = self._phi_base(m)  # Σ β_k ω^k / k! (+ group delay), 1/ length units
         f_w = self.grid.fft(field)
         phi = phi_base * dz
         if self.phase_offsets is not None:
@@ -437,10 +435,9 @@ class MultimodeSplitStepEngine:
                     rhs[m] = rhs[m] + 1j * gamma * f_m * pump_sq * np.conj(A[q])
                     rhs[q] = rhs[q] + 1j * gamma * f_q * pump_sq * np.conj(A[m])
                     if self.fwm_pump_depletion:
-                        rhs[n] = (
-                            rhs[n]
-                            + 2j * gamma * np.conj(f_m) * A[m] * A[q] * np.conj(A[n])
-                        )
+                        rhs[n] = rhs[n] + 2j * gamma * np.conj(f_m) * A[m] * A[
+                            q
+                        ] * np.conj(A[n])
         return rhs
 
     _FWM_SUBSTEP_CAP = 200
@@ -504,9 +501,7 @@ class MultimodeSplitStepEngine:
         n_acc = min(self._FWM_SUBSTEP_CAP, int(np.ceil(rate * dz / 0.05)))
         return int(max(1, max(n_stab, n_acc)))
 
-    def _coupled_nonlinear_step(
-        self, A: list[NDArray], dz: float
-    ) -> list[NDArray]:
+    def _coupled_nonlinear_step(self, A: list[NDArray], dz: float) -> list[NDArray]:
         """Coupled nonlinear step for every channel, at ``self._current_z``.
 
         SPM/XPM advance exactly (unitary phase rotation per channel). With
@@ -593,8 +588,7 @@ class MultimodeSplitStepEngine:
                 from tqdm import tqdm
             except ImportError as exc:
                 raise ImportError(
-                    "show_progress=True requires tqdm. Install with: pip "
-                    "install tqdm)"
+                    "show_progress=True requires tqdm. Install with: pip install tqdm)"
                 ) from exc
             step_iter = tqdm(range(n_steps), desc="multimode GNLSE", unit="step")
         else:
@@ -615,9 +609,7 @@ class MultimodeSplitStepEngine:
                 wm._pulse_train_field = self.A[m].copy()
                 snaps.append(wm)
             self.evolution.append(snaps)
-            total = sum(
-                float(np.sum(np.abs(Ai) ** 2)) * self.grid.dt for Ai in self.A
-            )
+            total = sum(float(np.sum(np.abs(Ai) ** 2)) * self.grid.dt for Ai in self.A)
             assert self._energy_vs_z is not None
             self._energy_vs_z.append(total)
 
@@ -690,7 +682,9 @@ class MultimodeSplitStepEngine:
     def fields_vs_z(self) -> list[NDArray]:
         """Complex field histories: one ``(n_saves, N)`` array per channel."""
         return [
-            np.array([snaps[m].envelope_field for snaps in self.evolution], dtype=complex)
+            np.array(
+                [snaps[m].envelope_field for snaps in self.evolution], dtype=complex
+            )
             for m in range(self._n)
         ]
 

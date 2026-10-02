@@ -15,6 +15,7 @@ Methodology caveats baked in (do not regress these either):
   sign, which is what v1's audit measured before its own probes were
   corrected.
 """
+
 import numpy as np
 import pytest
 
@@ -23,7 +24,7 @@ from photonics_helper.gnlse import FiberProfile
 from photonics_helper.multimode_gnlse import MultimodeSplitStepEngine
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
-BETA2_PS2_PER_M = 21.7e-3   # ps^2/m
+BETA2_PS2_PER_M = 21.7e-3  # ps^2/m
 BETA3_PS3_PER_M = -89.5e-6  # ps^3/m (mode-0 values, ps^k/m units)
 
 
@@ -36,25 +37,29 @@ def test_multimode_group_delays_centroid_walkoff():
     n, T_ps = 8192, 400.0
     grid = TemporalGrid(N=n, Tmax=Time(T_ps * 1e-12, "s"))
     tt = np.asarray(grid.t.as_s if hasattr(grid.t, "as_s") else grid.t)
-    envelope = np.exp(-(tt / (20e-12)) ** 2)  # centered at t=0, NOT the seam
+    envelope = np.exp(-((tt / (20e-12)) ** 2))  # centered at t=0, NOT the seam
 
     waves = []
     for m in range(4):
         wv = Wave(
             grid=grid,
-            envelope=Envelope(shape="gaussian", peak_amplitude=1.0,
-                              pulse_width=Time(1.0, "s")),
+            envelope=Envelope(
+                shape="gaussian", peak_amplitude=1.0, pulse_width=Time(1.0, "s")
+            ),
             central_wavelength=Wavelength(1064.0, "nm"),
         )
         waves.append(wv.with_field(np.asarray(1e-3 * envelope, complex)))
 
-    fiber = FiberProfile(n2=1e-9, alpha=0.0, A_eff=Area(1.0, "m^2"),
-                         length=Length(0.5, "m"))
+    fiber = FiberProfile(
+        n2=1e-9, alpha=0.0, A_eff=Area(1.0, "m^2"), length=Length(0.5, "m")
+    )
     eng = MultimodeSplitStepEngine(
-        waves, fiber,
+        waves,
+        fiber,
         betas=[[BETA2_PS2_PER_M, BETA3_PS3_PER_M]] * 4,
         betas_unit="ps^k/m",
-        coef_model="isotropic", include_fwm=False,
+        coef_model="isotropic",
+        include_fwm=False,
         step_size=Length(1e-3, "m"),
         group_delays=[0.0, 10.8e-12, 0.0, 0.0],
     )
@@ -71,28 +76,33 @@ def test_multimode_group_delays_sign_flips_with_gvm():
     n, T_ps = 8192, 400.0
     grid = TemporalGrid(N=n, Tmax=Time(T_ps * 1e-12, "s"))
     tt = np.asarray(grid.t.as_s if hasattr(grid.t, "as_s") else grid.t)
-    envelope = np.exp(-(tt / (20e-12)) ** 2)
+    envelope = np.exp(-((tt / (20e-12)) ** 2))
     waves = []
     for m in range(4):
         wv = Wave(
             grid=grid,
-            envelope=Envelope(shape="gaussian", peak_amplitude=1.0,
-                              pulse_width=Time(1.0, "s")),
+            envelope=Envelope(
+                shape="gaussian", peak_amplitude=1.0, pulse_width=Time(1.0, "s")
+            ),
             central_wavelength=Wavelength(1064.0, "nm"),
         )
         waves.append(wv.with_field(np.asarray(1e-3 * envelope, complex)))
-    fiber = FiberProfile(n2=1e-9, alpha=0.0, A_eff=Area(1.0, "m^2"),
-                         length=Length(0.5, "m"))
+    fiber = FiberProfile(
+        n2=1e-9, alpha=0.0, A_eff=Area(1.0, "m^2"), length=Length(0.5, "m")
+    )
     eng_neg = MultimodeSplitStepEngine(
-        waves, fiber,
+        waves,
+        fiber,
         betas=[[BETA2_PS2_PER_M, BETA3_PS3_PER_M]] * 4,
-        betas_unit="ps^k/m", coef_model="isotropic", include_fwm=False,
+        betas_unit="ps^k/m",
+        coef_model="isotropic",
+        include_fwm=False,
         step_size=Length(1e-3, "m"),
-        group_delays=[0.0, -10.8e-12, 0.0, 0.0])
+        group_delays=[0.0, -10.8e-12, 0.0, 0.0],
+    )
 
     L = 0.5
     ref = eng_neg._linear_step(np.asarray(1e-3 * envelope, complex), L, 0)
-    d = eng_neg._linear_step(
-        np.asarray(1e-3 * envelope, complex), L, 1)
+    d = eng_neg._linear_step(np.asarray(1e-3 * envelope, complex), L, 1)
     delta = (_centroid(d, tt) - _centroid(ref, tt)) * 1e12
     assert delta == pytest.approx(-10.8e-12 * L * 1e12, abs=1e-6), delta

@@ -39,7 +39,9 @@ def _engine(
     length_m: float = 0.1,
 ) -> tuple[Wave, SplitStepEngine]:
     grid = TemporalGrid(N=2048, Tmax=Time(5e-12, "s"))
-    env = Envelope.from_fwhm("sech", peak_amplitude=np.sqrt(peak), fwhm=Time(50e-15, "s"))
+    env = Envelope.from_fwhm(
+        "sech", peak_amplitude=np.sqrt(peak), fwhm=Time(50e-15, "s")
+    )
     wave = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(1550.0, "nm"))
     fiber = FiberProfile.from_gamma(
         gamma=0.05,
@@ -84,8 +86,14 @@ def test_carrier_lifetime_limits_accumulation():
     """Shorter τ_c ⇒ smaller N(t) ⇒ less FCA loss for the same input."""
     outcomes = {}
     for tau_c in (1e-12, 1e-6):
-        _, eng = _engine(beta_tpa=1.0, sigma_fca=1e-12, tau_c=tau_c,
-                         peak=1e3, length_m=0.05, nsteps=500)
+        _, eng = _engine(
+            beta_tpa=1.0,
+            sigma_fca=1e-12,
+            tau_c=tau_c,
+            peak=1e3,
+            length_m=0.05,
+            nsteps=500,
+        )
         eng.propagate(500, nsaves=2)
         outcomes[tau_c] = (
             float(np.max(eng._N)),
@@ -103,8 +111,9 @@ def test_carrier_lifetime_limits_accumulation():
 
 def test_time_resolved_carrier_profile_is_peaked():
     """A pulse-like generation term leaves a peaked N(t) grid state."""
-    _, engine = _engine(beta_tpa=1.0, sigma_fca=0.0, peak=1e3, length_m=0.05,
-                        nsteps=500)
+    _, engine = _engine(
+        beta_tpa=1.0, sigma_fca=0.0, peak=1e3, length_m=0.05, nsteps=500
+    )
     engine.propagate(500, nsaves=2)
     n = engine._N
     assert n is not None
@@ -115,12 +124,21 @@ def test_time_resolved_differs_from_legacy_averaged():
     """Time-resolved output differs from the legacy spatially-averaged model
     on the same TPA+σ configuration (the legacy model applies the *mean*
     intensity-driven attenuation uniformly)."""
+
     def run(**kw):
-        _, engine = _engine(beta_tpa=1.0, sigma_fca=1e-12, tau_c=1e-9,
-                            peak=1e3, length_m=0.05, nsteps=500, **kw)
+        _, engine = _engine(
+            beta_tpa=1.0,
+            sigma_fca=1e-12,
+            tau_c=1e-9,
+            peak=1e3,
+            length_m=0.05,
+            nsteps=500,
+            **kw,
+        )
         engine.propagate(500, nsaves=2)
         A = np.asarray(engine.evolution[-1].envelope_field)
         return np.asarray(engine.grid.fft(A))
+
     sp_time = run(include_free_carriers=True, include_tpa=False)
     sp_avg = run(include_free_carriers=False, include_tpa=True)
     rel = float(np.max(np.abs(sp_time - sp_avg)) / np.max(np.abs(sp_avg)))
@@ -133,16 +151,24 @@ def test_time_resolved_differs_from_legacy_averaged():
 def test_legacy_tpa_path_untouched():
     """``include_tpa`` still runs the legacy spatially-averaged model."""
     grid = TemporalGrid(N=512, Tmax=Time(2e-12, "s"))
-    env = Envelope.from_fwhm("sech", peak_amplitude=np.sqrt(1e3), fwhm=Time(50e-15, "s"))
+    env = Envelope.from_fwhm(
+        "sech", peak_amplitude=np.sqrt(1e3), fwhm=Time(50e-15, "s")
+    )
     wave = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(1550.0, "nm"))
     fiber = FiberProfile.from_gamma(
-        gamma=0.05, n2=3e-20, omega0=float(wave.central_frequency),
-        length=Length(0.05, "m"), sigma_tpa=1e13,
+        gamma=0.05,
+        n2=3e-20,
+        omega0=float(wave.central_frequency),
+        length=Length(0.05, "m"),
+        sigma_tpa=1e13,
         carrier_lifetime=Time(1e-9, "s"),
     )
     engine = SplitStepEngine(
-        pulse=wave, fiber=fiber, betas=np.array([0.0]),
-        include_tpa=True, step_size=Length(1e-4, "m"),
+        pulse=wave,
+        fiber=fiber,
+        betas=np.array([0.0]),
+        include_tpa=True,
+        step_size=Length(1e-4, "m"),
     )
     engine.propagate(500, nsaves=2)
     A = np.asarray(engine.evolution[-1].envelope_field)
@@ -153,17 +179,26 @@ def test_legacy_tpa_path_untouched():
 def test_free_carrier_step_fca_only_limit():
     """FCA-only: with no TPA source and a prescribed N, loss = exp(−σ N z/2)."""
     grid = TemporalGrid(N=256, Tmax=Time(2e-12, "s"))
-    env = Envelope.from_fwhm("sech", peak_amplitude=np.sqrt(100.0), fwhm=Time(50e-15, "s"))
+    env = Envelope.from_fwhm(
+        "sech", peak_amplitude=np.sqrt(100.0), fwhm=Time(50e-15, "s")
+    )
     wave = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(1550.0, "nm"))
     fiber = FiberProfile.from_gamma(
-        gamma=0.05, n2=3e-20, omega0=float(wave.central_frequency),
-        length=Length(0.05, "m"), beta_tpa=0.0, sigma_fca=1e-14,
-        carrier_lifetime=Time(1e-9, "s"), group_velocity=None,
+        gamma=0.05,
+        n2=3e-20,
+        omega0=float(wave.central_frequency),
+        length=Length(0.05, "m"),
+        beta_tpa=0.0,
+        sigma_fca=1e-14,
+        carrier_lifetime=Time(1e-9, "s"),
+        group_velocity=None,
     )
     N0 = np.full(grid.N, 1e12)
     dz = 1e-3
     A = np.array(wave.envelope_field, dtype=complex)
-    A2, _ = free_carrier_step(A.copy(), fiber, grid, dz, N0, float(wave.central_frequency))
+    A2, _ = free_carrier_step(
+        A.copy(), fiber, grid, dz, N0, float(wave.central_frequency)
+    )
     # Exact closed form: N⁺ = N·e^{−dz/L} (no TPA source), loss exp(−σ·N⁺·dz/2).
     tau_c = 1e-9
     L = tau_c * 2.99792458e8  # group_velocity=None → C_MS

@@ -27,6 +27,7 @@ circles) and the two headline claims:
 Outputs `dw_timing_fig56.png` + `stats_fig56.json` (crash-safe, one per
 pressure).
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -50,9 +51,9 @@ CONST = [(p, False) for p in rep.P_CONST]
 GRAD = [(p, True) for p in rep.P_GRAD_FILL]
 
 
-
-def tau_total_fs(lam_rdw_nm: np.ndarray, pressure_bar: float,
-                 energy_uJ_arr: np.ndarray) -> np.ndarray:
+def tau_total_fs(
+    lam_rdw_nm: np.ndarray, pressure_bar: float, energy_uJ_arr: np.ndarray
+) -> np.ndarray:
     """Eq. (11) with the SIMULATED RDW wavelength per energy.
 
     Two legs (paper Sec. III):
@@ -64,13 +65,18 @@ def tau_total_fs(lam_rdw_nm: np.ndarray, pressure_bar: float,
          absolute offset is not fixed by the engine frame).
     """
     w_rdw = 2 * np.pi * rep.C_MS / (np.asarray(lam_rdw_nm) * 1e-9)
-    tau_prop = np.array([float(rep.eq11_tau_fs(np.array([w]), pressure_bar, e)[0])
-                         for w, e in zip(w_rdw, np.asarray(energy_uJ_arr))])
+    tau_prop = np.array(
+        [
+            float(rep.eq11_tau_fs(np.array([w]), pressure_bar, e)[0])
+            for w, e in zip(w_rdw, np.asarray(energy_uJ_arr))
+        ]
+    )
     return tau_prop
 
 
-def envelope_tau_fs(sc: dict, lam_rdw_nm: np.ndarray,
-                    pressure_bar: float) -> np.ndarray:
+def envelope_tau_fs(
+    sc: dict, lam_rdw_nm: np.ndarray, pressure_bar: float
+) -> np.ndarray:
     """Leg 2: raw engine-frame moment, HIGH-PASS cleaned. The raw scan
     arrival times contain a smooth envelope-frame contribution (chirp /
     self-steepening-family delay) that does NOT gate on fission; only its
@@ -78,6 +84,7 @@ def envelope_tau_fs(sc: dict, lam_rdw_nm: np.ndarray,
     by subtracting a wide Savitzky-Golay trend (window ~ 150 points =
     ~27 uJ, well wider than the jitter-scale structure)."""
     from scipy.signal import savgol_filter
+
     tau_raw = np.asarray(sc["tau"])
     trend = savgol_filter(tau_raw, 151, 2)
     return tau_raw - trend
@@ -90,7 +97,7 @@ def delta_vg_ms(lam_rdw_nm: np.ndarray, pressure_bar: float) -> np.ndarray:
     ws = np.concatenate([w, [w0]])
     _, b1, _ = rep.differentiate_beta(ws, pressure_bar)
     vg = 1.0 / b1
-    return (vg[-1] * 0 + (vg[:-1] - vg[-1]))  # m/s
+    return vg[-1] * 0 + (vg[:-1] - vg[-1])  # m/s
 
 
 def analyse_one(pressure_bar: float, gradient: bool) -> dict:
@@ -98,6 +105,7 @@ def analyse_one(pressure_bar: float, gradient: bool) -> dict:
     # dedupe (0.8 and 2.1 bar were run twice at different step sizes):
     # average by binned energy (5 uJ bins) to guarantee a per-bin unique array
     from collections import defaultdict
+
     bins = defaultdict(list)
     for ee, la, tt, erd_ in zip(sc["e"], sc["lam"], sc["tau"], sc["e_rdw"]):
         bins[round(ee, 1)].append((la, tt, erd_))
@@ -109,6 +117,7 @@ def analyse_one(pressure_bar: float, gradient: bool) -> dict:
     # 1-6 nm per 0.2 uJ; the paper's Fig. 5/6 curves are smooth on this
     # scale). SavGol window 21 pts = 3.7 uJ, order 2 — disclosed in README.
     from scipy.signal import savgol_filter
+
     lam_s = savgol_filter(lam, 21, 2)
     erd_s = savgol_filter(erd, 21, 2)
     tau_env = savgol_filter(tau0, 21, 2)
@@ -117,25 +126,52 @@ def analyse_one(pressure_bar: float, gradient: bool) -> dict:
 
     # Fig. 5 grid: mean energies = the scan's own points (normalised later)
     means = e_u
-    out = {"pressure_bar": pressure_bar, "gradient": gradient,
-           "energies_uJ": e_u.tolist(),
-           "tau_prop_fs": tau_prop.tolist(),
-           "tau_env_fs": tau_env.tolist(),
-           "tau_total_fs": (tau_prop + tau_env).tolist(),
-           "lam_rdw_nm": lam_s.tolist(),
-           "delta_vg_ms": dvg.tolist(),
-           "means_uJ": [], "sigma_tau_as": [], "sigma_lam_nm": []}
+    out = {
+        "pressure_bar": pressure_bar,
+        "gradient": gradient,
+        "energies_uJ": e_u.tolist(),
+        "tau_prop_fs": tau_prop.tolist(),
+        "tau_env_fs": tau_env.tolist(),
+        "tau_total_fs": (tau_prop + tau_env).tolist(),
+        "lam_rdw_nm": lam_s.tolist(),
+        "delta_vg_ms": dvg.tolist(),
+        "means_uJ": [],
+        "sigma_tau_as": [],
+        "sigma_lam_nm": [],
+    }
     for mu in means:
-        rs = rep.resample_scan({"e": e_u, "lam": lam_s, "tau": tau_prop + tau_env,
-                                "e_rdw": erd_s}, mu, SIGMA_REL, N_SAMPLES)
+        rs = rep.resample_scan(
+            {"e": e_u, "lam": lam_s, "tau": tau_prop + tau_env, "e_rdw": erd_s},
+            mu,
+            SIGMA_REL,
+            N_SAMPLES,
+        )
         out["means_uJ"].append(round(float(mu), 1))
         out["sigma_tau_as"].append(round(float(np.std(rs["tau"])) * 1e3, 2))
         out["sigma_lam_nm"].append(round(float(np.std(rs["lam"])), 3))
     # 1 % noise run at 1/8 of the means for the proportionality check
     out["sigma_tau_1pct_as"] = [
-        round(float(np.std(rep.resample_scan(
-            {"e": e_u, "lam": lam_s, "tau": tau_prop + tau_env, "e_rdw": erd_s},
-            mu, 0.01, N_SAMPLES)["tau"])) * 1e3, 2) for mu in means[::8]]
+        round(
+            float(
+                np.std(
+                    rep.resample_scan(
+                        {
+                            "e": e_u,
+                            "lam": lam_s,
+                            "tau": tau_prop + tau_env,
+                            "e_rdw": erd_s,
+                        },
+                        mu,
+                        0.01,
+                        N_SAMPLES,
+                    )["tau"]
+                )
+            )
+            * 1e3,
+            2,
+        )
+        for mu in means[::8]
+    ]
     out["means_1pct"] = [round(float(mu), 1) for mu in means[::8]]
     return out
 
@@ -146,20 +182,22 @@ def main() -> None:
         out = analyse_one(p, gr)
         all_out.append(out)
         mx = max(out["sigma_tau_as"])
-        print(f"p={p} bar grad={gr}: max sigma_tau = {mx:.1f} as, "
-              f"tau range {min(out['tau_total_fs']):.2f}..{max(out['tau_total_fs']):.2f} fs, "
-              f"dvg range {min(out['delta_vg_ms']):.0f}..{max(out['delta_vg_ms']):.0f} m/s")
+        print(
+            f"p={p} bar grad={gr}: max sigma_tau = {mx:.1f} as, "
+            f"tau range {min(out['tau_total_fs']):.2f}..{max(out['tau_total_fs']):.2f} fs, "
+            f"dvg range {min(out['delta_vg_ms']):.0f}..{max(out['delta_vg_ms']):.0f} m/s"
+        )
     (HERE / "stats_fig5.json").write_text(json.dumps(all_out, indent=1))
     print("wrote stats_fig5.json")
     make_fig()
 
 
-
-
 def make_fig() -> None:
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+
     d = json.load(open(HERE / "stats_fig5.json"))
     e_max = 220.0
     fig, ax = plt.subplots(1, 3, figsize=(13, 4))
@@ -168,9 +206,14 @@ def make_fig() -> None:
         lbl = f"{o['pressure_bar']} bar" + (" grad" if o["gradient"] else "")
         (ax[0] if not o["gradient"] else ax[1]).plot(e, o["sigma_tau_as"], label=lbl)
         ax[2].plot(e, o["tau_total_fs"], label=lbl)
-    for a, t in zip(ax, ["Fig. 5(a): sigma_tau, constant p",
-                         "Fig. 5(b): sigma_tau, gradient",
-                         "tau(E) = Lprop*dbeta1 (Eq. 11, sim RDW lam)"]):
+    for a, t in zip(
+        ax,
+        [
+            "Fig. 5(a): sigma_tau, constant p",
+            "Fig. 5(b): sigma_tau, gradient",
+            "tau(E) = Lprop*dbeta1 (Eq. 11, sim RDW lam)",
+        ],
+    ):
         a.set_xlabel("normalised pump energy")
         a.set_title(t)
     ax[0].axhline(300, ls="--", c="k", lw=0.8)

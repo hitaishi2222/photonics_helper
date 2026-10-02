@@ -134,16 +134,13 @@ def fit_two_wave(
     ratios_a = np.asarray(ratios, dtype=float)
     if len(z) != len(ratios_a) or len(z) < 3:
         raise ValueError(
-            "z_samples and ratios must be equal-length sequences of at "
-            "least 3 samples."
+            "z_samples and ratios must be equal-length sequences of at least 3 samples."
         )
     if np.any(np.diff(z) <= 0):
         raise ValueError("z_samples must be strictly increasing.")
     length = float(z.max())
     if length <= 0:
-        raise ValueError(
-            f"z_samples must span a positive length, got max {length}"
-        )
+        raise ValueError(f"z_samples must span a positive length, got max {length}")
 
     spb = sigma_P0_bounds if sigma_P0_bounds is not None else (1e-4, 100.0)
     dkl, dku = delta_k_bounds if delta_k_bounds is not None else (-200.0, 200.0)
@@ -151,8 +148,7 @@ def fit_two_wave(
     upper = np.array([kappa_bounds[1], spb[1], dku])
     if np.any(lower >= upper):
         raise ValueError(
-            f"bounds must satisfy lower < upper element-wise; got {lower} "
-            f"vs {upper}."
+            f"bounds must satisfy lower < upper element-wise; got {lower} vs {upper}."
         )
 
     n_evals = [0]
@@ -185,9 +181,7 @@ def fit_two_wave(
     kappa_starts = [
         lower[0] * (upper[0] / lower[0]) ** fr for fr in (0.0, 0.42, 0.78, 1.0)
     ]
-    dk_starts = [
-        lower[2] + i * (upper[2] - lower[2]) / 8.0 for i in range(9)
-    ]
+    dk_starts = [lower[2] + i * (upper[2] - lower[2]) / 8.0 for i in range(9)]
     best = None
     for k0 in kappa_starts:
         for dk0 in dk_starts:
@@ -395,8 +389,7 @@ def fit_shg_autodiff(
     eta_data = np.asarray(ratios, dtype=float)
     if len(z) != len(eta_data) or len(z) < 3:
         raise ValueError(
-            "z_samples and ratios must be equal-length sequences of at "
-            "least 3 samples."
+            "z_samples and ratios must be equal-length sequences of at least 3 samples."
         )
     if np.any(np.diff(z) <= 0):
         raise ValueError("z_samples must be strictly increasing.")
@@ -426,10 +419,7 @@ def fit_shg_autodiff(
         else np.array([delta_k0])
     )
     grid0 = [
-        (s0, p0, dk0)
-        for s0 in sigma_starts
-        for p0 in P0_starts
-        for dk0 in dk_starts
+        (s0, p0, dk0) for s0 in sigma_starts for p0 in P0_starts for dk0 in dk_starts
     ]
     B = len(grid0)
     log_sig = torch.log(torch.tensor([p[0] for p in grid0], dtype=torch_d))
@@ -506,5 +496,5 @@ def fit_shg_autodiff(
         cost=cost,
         converged=True,
         n_evals=int(n_iter) * B,
-        residual_norm=float(cost ** 0.5),
+        residual_norm=float(cost**0.5),
     )

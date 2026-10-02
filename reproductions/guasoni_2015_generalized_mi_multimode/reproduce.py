@@ -112,31 +112,33 @@ LAMBDA0 = 1550e-9
 C_MS = 299792458.0
 
 # --- Table I (SI per metre; read back from pages/p-05.png) --------------
-GVM_S_PER_M = np.array([0.0, 10.8e-12, 7.1e-12, 13.6e-12])      # s/m
-BETA2_S2_PER_M = np.array([21.7, -147.7, 36.3, -3.5]) * 1e-27   # ps^2/km
+GVM_S_PER_M = np.array([0.0, 10.8e-12, 7.1e-12, 13.6e-12])  # s/m
+BETA2_S2_PER_M = np.array([21.7, -147.7, 36.3, -3.5]) * 1e-27  # ps^2/km
 BETA3_S3_PER_M = np.array([89.5, -7361.1, -169.9, -2128.7]) * 1e-42  # fs^3/mm
 
 # --- Table II (C_kn / C_11), C_11 = 10 W^-1 km^-1 — pages/p-05 ---------
-C_NORM = np.array([
-    [1.00, 0.73, 0.66, 0.45],
-    [0.73, 0.96, 0.37, 0.33],
-    [0.66, 0.37, 1.04, 0.61],
-    [0.45, 0.33, 0.61, 0.92],
-])
-GAMMA = 10.0e-3                       # W^-1 m^-1 = C_11
+C_NORM = np.array(
+    [
+        [1.00, 0.73, 0.66, 0.45],
+        [0.73, 0.96, 0.37, 0.33],
+        [0.66, 0.37, 1.04, 0.61],
+        [0.45, 0.33, 0.61, 0.92],
+    ]
+)
+GAMMA = 10.0e-3  # W^-1 m^-1 = C_11
 C_MAT = C_NORM * GAMMA
 
-B_S, B_PAR = 1.0, 2.0                 # Eq. (3) coefficients, x sector
-P_MODE = 1000.0                       # W per mode (4000 W total)
-L_NL1 = 0.1                           # m (p-05: 1/L_NL,1 = 10 m^-1)
+B_S, B_PAR = 1.0, 2.0  # Eq. (3) coefficients, x sector
+P_MODE = 1000.0  # W per mode (4000 W total)
+L_NL1 = 0.1  # m (p-05: 1/L_NL,1 = 10 m^-1)
 T_NL1 = float(np.sqrt(abs(BETA2_S2_PER_M[0]) * L_NL1 / 2.0))  # ~32.94 fs
-NU_TO_OMEGA = 2.0 * np.pi / T_NL1     # rad/s per unit nu
+NU_TO_OMEGA = 2.0 * np.pi / T_NL1  # rad/s per unit nu
 
-NOISE_POWER_W = 1e-7                  # per-sample seed (see header caveat)
+NOISE_POWER_W = 1e-7  # per-sample seed (see header caveat)
 
-GRID_N = 65536                        # 2^16; dt ~ 12 fs -> 41 THz Nyquist
-GRID_T_S = 800e-12                    # s; covers 16 m x 13.6 ps/m walk-off
-STEP_M = 0.01                         # m per split step
+GRID_N = 65536  # 2^16; dt ~ 12 fs -> 41 THz Nyquist
+GRID_T_S = 800e-12  # s; covers 16 m x 13.6 ps/m walk-off
+STEP_M = 0.01  # m per split step
 
 NU_ANCHOR = -0.43
 B_G_PAPER, B_F_PAPER = 0.71, 0.90
@@ -153,8 +155,8 @@ def kappa_n(n: int, om: float) -> float:
     om = float(om)
     return (
         GVM_S_PER_M[n] * om
-        + BETA2_S2_PER_M[n] * om ** 2 / 2.0
-        + BETA3_S3_PER_M[n] * om ** 3 / 6.0
+        + BETA2_S2_PER_M[n] * om**2 / 2.0
+        + BETA3_S3_PER_M[n] * om**3 / 6.0
     )
 
 
@@ -223,8 +225,8 @@ def single_mode_g(nu: float) -> float:
         d = -(kappa_n(n, -om) + B_S * C_MAT[n, n] * P_MODE)
         f = B_S * C_MAT[n, n] * P_MODE
         tr = a + d
-        det = a * d + f ** 2
-        inside = det - tr ** 2 / 4.0
+        det = a * d + f**2
+        inside = det - tr**2 / 4.0
         if abs(np.imag(inside)) < 1e-9 and float(np.real(inside)) > 0:
             best = max(best, float(np.sqrt(np.real(inside))) * L_NL1)
     return float(best if best > 0 else 0.0)
@@ -239,37 +241,38 @@ def make_engine(length: float, seed: int):
     """Library engine deck for the paper's fiber + pump (Tables I/II)."""
     grid = TemporalGrid(N=GRID_N, Tmax=Time(GRID_T_S, "s"))
     # engine betas in ps^k/m: 1 ps^2/m = 1e-24 s^2/m; 1 ps^3/m = 1e-36 s^3/m
-    betas = [
-        [BETA2_S2_PER_M[m] * 1e24, BETA3_S3_PER_M[m] * 1e36]
-        for m in range(4)
-    ]
+    betas = [[BETA2_S2_PER_M[m] * 1e24, BETA3_S3_PER_M[m] * 1e36] for m in range(4)]
     waves = []
     for m in range(4):
         wv = Wave(
             grid=grid,
-            envelope=Envelope(shape="gaussian", peak_amplitude=1.0,
-                              pulse_width=Time(1.0, "s")),
+            envelope=Envelope(
+                shape="gaussian", peak_amplitude=1.0, pulse_width=Time(1.0, "s")
+            ),
             central_wavelength=Wavelength(LAMBDA0 * 1e9, "nm"),
         )
         rng = np.random.default_rng(seed * 17 + m)
-        noise = (
-            rng.normal(size=GRID_N) + 1j * rng.normal(size=GRID_N)
-        ) * np.sqrt(NOISE_POWER_W / 2.0)
-        # cw pump sqrt(1000 W) + white Gaussian noise (ASE-like) per sample
-        wv._pulse_train_field = (
-            np.full(GRID_N, np.sqrt(P_MODE), dtype=complex) + noise
+        noise = (rng.normal(size=GRID_N) + 1j * rng.normal(size=GRID_N)) * np.sqrt(
+            NOISE_POWER_W / 2.0
         )
+        # cw pump sqrt(1000 W) + white Gaussian noise (ASE-like) per sample
+        wv._pulse_train_field = np.full(GRID_N, np.sqrt(P_MODE), dtype=complex) + noise
         waves.append(wv)
     fiber = FiberProfile(
         n2=1.0, alpha=0.0, A_eff=Area(1.0, "m^2"), length=Length(length, "m")
     )
     eng = MultimodeSplitStepEngine(
-        waves, fiber, betas=betas, betas_unit="ps^k/m",
+        waves,
+        fiber,
+        betas=betas,
+        betas_unit="ps^k/m",
         group_delays=list(GVM_S_PER_M),
-        coef_model="isotropic", xpm_weights=xpm_weights(),
-        include_fwm=False, step_size=Length(STEP_M, "m"),
+        coef_model="isotropic",
+        xpm_weights=xpm_weights(),
+        include_fwm=False,
+        step_size=Length(STEP_M, "m"),
     )
-    eng.fiber.n2 = GAMMA * C_MS / eng.omega0   # -> engine gamma == GAMMA
+    eng.fiber.n2 = GAMMA * C_MS / eng.omega0  # -> engine gamma == GAMMA
     return eng, grid
 
 
@@ -281,18 +284,23 @@ def run_amplification(length: float, seeds: int = 2, avg: int = 240) -> dict:
     for seed in range(seeds):
         eng, grid = make_engine(length, seed)
         eng.propagate(1, nsaves=3, show_progress=True)
-        spec_in = np.abs(grid.fft(np.array(
-            [w._pulse_train_field for w in eng.evolution[0]]))) ** 2
-        spec_out = np.abs(grid.fft(np.array(
-            [w._pulse_train_field for w in eng.evolution[-1]]))) ** 2
+        spec_in = (
+            np.abs(grid.fft(np.array([w._pulse_train_field for w in eng.evolution[0]])))
+            ** 2
+        )
+        spec_out = (
+            np.abs(
+                grid.fft(np.array([w._pulse_train_field for w in eng.evolution[-1]]))
+            )
+            ** 2
+        )
         ratio = spec_out / spec_in
-        gain = np.log(ratio) / (2.0 * length)   # Eq. (12), per metre
+        gain = np.log(ratio) / (2.0 * length)  # Eq. (12), per metre
         acc_spec = gain if acc_spec is None else acc_spec + gain
     gain = acc_spec / seeds
-    nu_axis = (grid.w / (2.0 * np.pi)) * T_NL1   # nu = f T_NL,1 (signed)
+    nu_axis = (grid.w / (2.0 * np.pi)) * T_NL1  # nu = f T_NL,1 (signed)
     ker = np.hanning(avg) / np.hanning(avg).sum()
-    gain_avg = np.array([np.convolve(gain[m], ker, mode="same")
-                         for m in range(4)])
+    gain_avg = np.array([np.convolve(gain[m], ker, mode="same") for m in range(4)])
     return {"nu": nu_axis, "gain_norm": gain_avg * L_NL1}
 
 
@@ -314,13 +322,21 @@ def validate(make_plot: bool = True) -> dict:
         g_iso = norm_gains(nu_n, keep_offdiag=False)[0].max()
         tgt = single_mode_g(nu_n)
         assert abs(g_iso - tgt) < 1e-9, (nu_n, g_iso, tgt)
-    nu_pk = float(np.sqrt(
-        2.0 * C_MAT[1, 1] * P_MODE / abs(BETA2_S2_PER_M[1])) / NU_TO_OMEGA)
-    assert abs(norm_gains(nu_pk, keep_offdiag=False)[0].max()
-               - C_MAT[1, 1] * P_MODE * L_NL1) < 5e-3, "MI peak misplaced"
+    nu_pk = float(
+        np.sqrt(2.0 * C_MAT[1, 1] * P_MODE / abs(BETA2_S2_PER_M[1])) / NU_TO_OMEGA
+    )
+    assert (
+        abs(
+            norm_gains(nu_pk, keep_offdiag=False)[0].max()
+            - C_MAT[1, 1] * P_MODE * L_NL1
+        )
+        < 5e-3
+    ), "MI peak misplaced"
     results["single_mode_mi"] = {
-        "peak_nu": nu_pk, "peak_g_norm": single_mode_g(nu_pk),
-        "g_max_norm": float(C_MAT[1, 1] * P_MODE * L_NL1)}
+        "peak_nu": nu_pk,
+        "peak_g_norm": single_mode_g(nu_pk),
+        "g_max_norm": float(C_MAT[1, 1] * P_MODE * L_NL1),
+    }
 
     # ---- check 1: Fig. 3 anchor at nu = -0.43 --------------------------
     g, vec = norm_gains(NU_ANCHOR)
@@ -358,11 +374,10 @@ def validate(make_plot: bool = True) -> dict:
         "max_gain_norm_band_2x": float(gain[1][in_band].max()),
         "edge_mean_mode_2x": float(gain[1][edge].mean()),
         "max_gain_norm_band_4x": float(gain[3][in_band].max()),
-        "contrast_2x": float(gain[1][in_band].max()
-                            / max(gain[1][edge].mean(), 1e-9)),
+        "contrast_2x": float(gain[1][in_band].max() / max(gain[1][edge].mean(), 1e-9)),
         "runtime_s": time.time() - t0,
         "status": "RECORDED-OUTSTANDING (see README/ISSUES: the measured "
-                  "Eq.-12 log-ratio saturates pearly; eigen layer asserted)",
+        "Eq.-12 log-ratio saturates pearly; eigen layer asserted)",
     }
 
     if make_plot:
@@ -377,7 +392,7 @@ def _make_figure() -> None:
     nu_axis = np.linspace(-1.1, 1.1, 240)
     curves = np.array([norm_gains(float(nui))[0] for nui in nu_axis])
     for k in range(3):
-        axes[0].plot(nu_axis, curves[:, k], lw=0.9, label=f"gain order {k+1}")
+        axes[0].plot(nu_axis, curves[:, k], lw=0.9, label=f"gain order {k + 1}")
     axes[0].set(xlabel="detuning nu (30.1 THz)", ylabel="normalized gain")
     axes[0].set_title("Guasoni 2015: eigen gain curves (Fig. 2 equiv.)")
     axes[0].set_ylim(0, 1.6)
@@ -389,8 +404,14 @@ def _make_figure() -> None:
     for mode, lab in ((1, "2x"), (3, "4x")):
         axes[1].plot(nu[m], gm[mode][m], lw=0.8, label=f"{lab} measured")
     dom_curve = np.array([norm_gains(float(nui))[0].max() for nui in nu[m]])
-    axes[1].plot(nu[m], dom_curve, lw=0.9, ls="--", c="k",
-                 label="dominant eigen gain (Fig. 4 est.)")
+    axes[1].plot(
+        nu[m],
+        dom_curve,
+        lw=0.9,
+        ls="--",
+        c="k",
+        label="dominant eigen gain (Fig. 4 est.)",
+    )
     axes[1].set(xlabel="detuning nu (30.1 THz)", ylabel="normalized A_hat")
     axes[1].set_title("split-step spectrum vs eigen estimate (L = 5 m)")
     axes[1].legend(fontsize=7)

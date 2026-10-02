@@ -94,10 +94,10 @@ The pattern is always the same — construct in any unit, read out in any unit:
 ```python
 from photonics_helper.base import Wavelength
 
-wl = Wavelength(1550, "nm")   # constructed in nm
-wl.as_um                       # 1.55      -> view in μm
-wl.as_m                        # 1.55e-06  -> internally stored in SI (m)
-wl.to_freq().as_THz            # 193.41    -> convert and read out in THz
+wl = Wavelength(1550, "nm")  # constructed in nm
+wl.as_um  # 1.55      -> view in μm
+wl.as_m  # 1.55e-06  -> internally stored in SI (m)
+wl.to_freq().as_THz  # 193.41    -> convert and read out in THz
 ```
 
 Internally everything is normalised to SI on construction, so downstream
@@ -126,8 +126,8 @@ pydantic** — no matplotlib, plotly, dash, or solver modules. The package itsel
 is imported lazily (PEP 562), so `import photonics_helper` costs nothing extra.
 
 ```python
-import photonics_helper          # lazy: loads nothing heavy
-from photonics_helper import Wavelength   # imports only .base
+import photonics_helper  # lazy: loads nothing heavy
+from photonics_helper import Wavelength  # imports only .base
 ```
 
 Every existing import path is preserved: `photonics_helper.base`, 
@@ -226,8 +226,8 @@ To get physical units, attach an effective mode area:
 from photonics_helper import Area, Frequency, Wavelength, Time
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
-A0 = 2.0          # envelope peak amplitude (V/m)
-T0 = 50e-15       # pulse width
+A0 = 2.0  # envelope peak amplitude (V/m)
+T0 = 50e-15  # pulse width
 env = Envelope(shape="gaussian", peak_amplitude=A0, pulse_width=Time(T0, "s"))
 grid = TemporalGrid(N=2**14, Tmax=Time(20 * T0, "s"))
 wave = Wave(
@@ -239,9 +239,9 @@ wave = Wave(
 
 wave = wave.with_effective_area(Area(80, "um^2"))
 
-wave.peak_power()                          # W = ½·n·c·ε₀·A_eff·A₀²
-wave.pulse_energy()                        # J = ∫ P dt
-wave.average_power(Frequency(80, "MHz"))   # W
+wave.peak_power()  # W = ½·n·c·ε₀·A_eff·A₀²
+wave.pulse_energy()  # J = ∫ P dt
+wave.average_power(Frequency(80, "MHz"))  # W
 ```
 
 For one-shot conversions without a `Wave`, use
@@ -278,18 +278,19 @@ wavelength_um, neff
 
 ```python
 import numpy as np
+
 np.savez("mode.npz", wavelength_um=wl_um, neff=neff, central_wavelength_nm=1550.0)
 ```
 
 ```python
 from photonics_helper import WaveguideMode, Wavelength
 
-mode = WaveguideMode.from_csv("mode.csv")   # or .from_npz("mode.npz")
-pc = mode.to_propagation_constant()         # β = n_eff·ω/c
-D = mode.to_dispersion()                    # D(λ) = -λ/c · d²n_eff/dλ²
+mode = WaveguideMode.from_csv("mode.csv")  # or .from_npz("mode.npz")
+pc = mode.to_propagation_constant()  # β = n_eff·ω/c
+D = mode.to_dispersion()  # D(λ) = -λ/c · d²n_eff/dλ²
 
-mode.neff_at(Wavelength(1550, "nm"))        # interpolated n_eff
-pc.beta2(Wavelength(1550, "nm"))            # d²β/dω² (s²/m)
+mode.neff_at(Wavelength(1550, "nm"))  # interpolated n_eff
+pc.beta2(Wavelength(1550, "nm"))  # d²β/dω² (s²/m)
 ```
 
 The table is validated on load: a finite, positive, strictly increasing
@@ -434,9 +435,9 @@ Sellmeier equations — with its wavelength range, DOI and licence:
 ```python
 from photonics_helper import material_catalog, print_material_catalog
 
-print_material_catalog("sil")       # rich table, case-insensitive name filter
+print_material_catalog("sil")  # rich table, case-insensitive name filter
 
-rows = material_catalog("LiNbO3")   # programmatic: MaterialDataset objects
+rows = material_catalog("LiNbO3")  # programmatic: MaterialDataset objects
 for d in rows:
     print(d.material, d.kind, d.axis, d.wavelength_range_um, d.doi, d.license)
 ```
@@ -473,7 +474,8 @@ fiber = FiberProfile(
 
 # Run GNLSE
 solver = GNLSESolver(
-    pulse, fiber,
+    pulse,
+    fiber,
     betas=np.array([-0.2, 0.001]),  # β₂=-0.2 ps²/m, β₃=0.001 ps³/m
     include_raman=True,
 )
@@ -485,7 +487,7 @@ analyzer = SolitonAnalyzer(
 )
 print(f"Soliton order: {analyzer.soliton_order():.2f}")
 print(f"Fission length: {analyzer.fission_length():.2f} mm")
-print(f"DW wavelength: {analyzer.dispersive_wave_wavelength()*1e9:.1f} nm")
+print(f"DW wavelength: {analyzer.dispersive_wave_wavelength() * 1e9:.1f} nm")
 
 # Plot results
 fig = plot_soliton_trajectories(solver)
@@ -517,15 +519,15 @@ from photonics_helper.pulse import TemporalGrid
 
 # SMF-28 at 1550 nm, 0.7 W background (Kibler et al. 2012 parameters)
 sob = SolitonOnBackground(beta2=-21.8e-27, gamma=1.3e-3, P0=0.7)
-print(f"L_NL = {sob.L_NL:.1f} m, T0 = {sob.T0*1e12:.3f} ps")
-print(f"KM period = {sob.spatial_period_m(0.66)/1e3:.3f} km")
+print(f"L_NL = {sob.L_NL:.1f} m, T0 = {sob.T0 * 1e12:.3f} ps")
+print(f"KM period = {sob.spatial_period_m(0.66) / 1e3:.3f} km")
 print(f"KM peak   = {sob.peak_power(0.66):.3f} W")
 
 grid = TemporalGrid(N=4096, Tmax=Time(80e-12, "s"))
-wave = sob.initial_wave(grid, a=0.66)          # exact Kuznetsov-Ma field
+wave = sob.initial_wave(grid, a=0.66)  # exact Kuznetsov-Ma field
 
 # Or use the dimensionless solutions directly:
-psi = peregrine_soliton(xi=0.0, tau=grid.t / sob.T0)   # peak |psi|^2 = 9
+psi = peregrine_soliton(xi=0.0, tau=grid.t / sob.T0)  # peak |psi|^2 = 9
 psi_ab = akhmediev_breather(xi=0.0, tau=grid.t / sob.T0, a=0.25)
 psi_any = general_sfb(xi=0.0, tau=grid.t / sob.T0, a=0.66)
 ```
@@ -538,9 +540,9 @@ supercontinuum coherence studies:
 ```python
 from photonics_helper.noise import add_noise, add_ase_noise, complex_gaussian_noise
 
-noisy = add_noise(cw_wave, rms_relative=0.01, seed=1)       # ~1 % amplitude noise
-seeded = add_ase_noise(cw_wave, level_dB=-50.0, seed=1)     # -50 dB ASE background
-n = complex_gaussian_noise(grid, rms=1e-3, seed=0)          # raw time-domain noise
+noisy = add_noise(cw_wave, rms_relative=0.01, seed=1)  # ~1 % amplitude noise
+seeded = add_ase_noise(cw_wave, level_dB=-50.0, seed=1)  # -50 dB ASE background
+n = complex_gaussian_noise(grid, rms=1e-3, seed=0)  # raw time-domain noise
 ```
 
 `add_ase_noise` handles the `TemporalGrid.fft`/`ifft` `dt` scaling internally, so
@@ -574,19 +576,19 @@ from photonics_helper.structured import (
     beam_waist,
 )
 
-w0, lam = 1e-3, 1064e-9                      # 1 mm waist at 1064 nm
+w0, lam = 1e-3, 1064e-9  # 1 mm waist at 1064 nm
 lg01 = LaguerreGaussianMode(p=0, l=1, w0=w0, wavelength=lam)  # OAM = hbar
 lg02 = LaguerreGaussianMode(p=0, l=2, w0=w0, wavelength=lam)
 
-print(overlap(lg01, lg01))                    # 1.0  (normalized)
-print(overlap(lg01, lg02))                    # ~ 0  (orthogonal OAM)
+print(overlap(lg01, lg01))  # 1.0  (normalized)
+print(overlap(lg01, lg02))  # ~ 0  (orthogonal OAM)
 
-z_r = rayleigh_range(w0, lam)                 # pi w0^2 / lambda
-print(beam_waist(w0, z_r, lam))               # sqrt(2) * w0
+z_r = rayleigh_range(w0, lam)  # pi w0^2 / lambda
+print(beam_waist(w0, z_r, lam))  # sqrt(2) * w0
 
-field = lg01.structured()                     # StructuredField on (x, y)
+field = lg01.structured()  # StructuredField on (x, y)
 print(field.power, field.second_moment_radius())
-fig = field.plot()                            # intensity + phase panels
+fig = field.plot()  # intensity + phase panels
 ```
 
 ``plot_transverse_profile`` mirrors the pulse backend pattern
@@ -664,9 +666,9 @@ against analytic ground truth (details and derivations: `docs/gnlse-physics.md`)
 from photonics_helper import convergence_study, check_soliton, ValidationFailure
 
 report = convergence_study(
-    build,                       # your solver factory → propagated solver
+    build,  # your solver factory → propagated solver
     refinements=[
-        {"N": 8192,  "Tmax_s": 8e-12, "num_steps": 1000},
+        {"N": 8192, "Tmax_s": 8e-12, "num_steps": 1000},
         {"N": 16384, "Tmax_s": 8e-12, "num_steps": 2000},
         {"N": 32768, "Tmax_s": 8e-12, "num_steps": 2000},
     ],
@@ -720,7 +722,7 @@ One Dash app hosts both the Raman explorer and a GNLSE result viewer:
 ```python
 from photonics_helper.dashboard import app
 
-app().run(debug=False, port=8050)   # Raman Explorer | GNLSE Viewer
+app().run(debug=False, port=8050)  # Raman Explorer | GNLSE Viewer
 ```
 
 Requires the `webapp` (Dash) and `plotting` (Plotly) extras; see

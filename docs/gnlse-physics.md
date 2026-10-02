@@ -125,9 +125,9 @@ Example:
 from photonics_helper import convergence_study
 
 report = convergence_study(
-    build,                      # your factory → propagated GNLSESolver
+    build,  # your factory → propagated GNLSESolver
     refinements=[
-        {"N": 8192,  "Tmax_s": 8e-12, "num_steps": 1000},
+        {"N": 8192, "Tmax_s": 8e-12, "num_steps": 1000},
         {"N": 16384, "Tmax_s": 8e-12, "num_steps": 2000},
         {"N": 32768, "Tmax_s": 8e-12, "num_steps": 2000},
     ],

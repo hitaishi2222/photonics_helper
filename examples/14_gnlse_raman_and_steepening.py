@@ -41,9 +41,7 @@ def make_pulse(wavelength_nm=1064, T0_fs=50):
     return pulse
 
 
-def make_high_power_pulse(
-    wavelength_nm=1064, T0_fs=50, peak_power_W=10000, grid=None
-):
+def make_high_power_pulse(wavelength_nm=1064, T0_fs=50, peak_power_W=10000, grid=None):
     """Create a high-power pulse for nonlinear effects.
 
     The self-steepening substep requires the grid's Nyquist offset to stay

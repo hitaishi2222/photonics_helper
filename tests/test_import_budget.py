@@ -62,7 +62,9 @@ def _cold_import(statement: str) -> tuple[float, list[str]]:
 def test_base_import_does_not_load_plotting() -> None:
     elapsed, heavy = _cold_import("import photonics_helper.base")
     assert heavy == [], f"importing photonics_helper.base loaded {heavy}"
-    assert elapsed < IMPORT_BUDGET_S, f"photonics_helper.base import took {elapsed:.2f}s"
+    assert elapsed < IMPORT_BUDGET_S, (
+        f"photonics_helper.base import took {elapsed:.2f}s"
+    )
 
 
 def test_package_import_does_not_load_plotting() -> None:

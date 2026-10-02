@@ -1,0 +1,91 @@
+{
+  "reference": {
+    "title": "A Fourth-Order Runge-Kutta in the Interaction Picture Method for Supercontinuum Generation in Optical Fibers",
+    "author": "Johan Hult",
+    "journal": "Journal of Lightwave Technology 25(12), 3770 (2007)",
+    "doi": "10.1109/JLT.2007.909373",
+    "pdf_local": "JLT.2007.909373.pdf"
+  },
+  "soliton_deck": {
+    "source": "paper Sec. III.A, p. 3772 (printed)",
+    "beta2_ps2_per_m": -0.01,
+    "gamma_per_Wm": 0.01,
+    "T_FWHM_fs": 100.0,
+    "T0_fs": 56.7,
+    "P0_W": 1246.0,
+    "P0_formula": "P0 = N^2 |beta2| / (gamma T0^2), N = 2, paper prints 1.24 kW",
+    "N_order": 2,
+    "z_sol_m": 0.506,
+    "Tmax_s": 2e-11,
+    "n_points": 4096,
+    "ladder_steps": [
+      20,
+      40,
+      80,
+      160,
+      320,
+      640,
+      1280
+    ],
+    "metric": "avg rel intensity error (paper Eq. 13) after one soliton period; A_true = input envelope. Grid widened to Tmax=20ps (from paper's 2ps) to reduce spectral leakage.",
+    "anchors": {
+      "convergence_order": -4,
+      "paper_quality": "epsilon ~ 1e-10 at Nsteps ~ 1000 (Fig. 1, floor)",
+      "fit_window": "first 3 ladder points (steps 20,40,80) give slope -4; later points hit the spectral-leakage floor"
+    }
+  },
+  "scg_deck": {
+    "source": "paper Sec. III.B (from Dudley and Coen), Table I, p. 3773",
+    "central_wavelength_nm": 850.0,
+    "P0_W": 10000.0,
+    "T0_fs": 28.4,
+    "FWHM_fs": 50.0,
+    "fiber_length_m": 0.1,
+    "gamma_per_Wm": 0.045,
+    "betas_psN_per_m": [
+      -0.01276,
+      8.119e-05,
+      -1.321e-07,
+      3.032e-10,
+      -4.196e-13,
+      2.57e-16
+    ],
+    "fR": 0.18,
+    "raman_response": "paper: Hollenbeck-Cantrell modal sum [Hult ref 21]; house engine: two-exponential Blow-Wood tau1 = 12.2 fs / tau2 = 32 fs \u2014 RECORDED DEVIATION",
+    "shock": "first-order (1 + (i/omega0) d/dT) as in paper Eq. (2) -- DISABLED, see reproduce.py::_build_scg_op: explicit IP-RK treatment of the unbounded shock derivative is unstable on any grid that resolves a 28.4 fs pulse (tau*Omega_max <~ 0.1 required, incompatible with dt ~ 1 fs). Recorded deviation.",
+    "Tmax_s": 4e-12,
+    "n_points": 8192,
+    "N_soliton": "~5 (paper: 'around five')",
+    "anchors": {
+      "N": "0.5\u00b7sqrt(LD/LNL) within 25 % of 5 (paper 'around five')",
+      "fission": "the N-soliton fissions into fundamental solitons (multiple temporal peaks at exit)",
+      "redshift": "Raman self-frequency shift of ejected solitons to longer wavelengths",
+      "DW": "dispersive-wave spectral components on the short-wavelength side (Fig. 2a/b morphology)",
+      "convergence_order": -4,
+      "floor": "epsilon ~ 1e-6..1e-8 band at the finest coarseness of the ladder (paper Fig. 3 floor ~1e-8 at Nsteps ~ 3e4)"
+    },
+    "ladder_steps": [
+      160,
+      320,
+      640,
+      1280,
+      2560,
+      5120,
+      10240,
+      20480
+    ],
+    "ladder_length_m": 0.02,
+    "ladder_note": "convergence ladder on a 2 cm section (past fission onset); the full 10 cm cascade is chaotically sensitive and admits no single fitted order"
+  },
+  "runtime": {
+    "soliton_ladder": "6 runs x (<= 640 steps x 4096 pts) ~ seconds",
+    "scg_ladder": "8 ladder points + one 40960-step reference on 8192 pts x 2 cm (~4 min)"
+  },
+  "accept_tolerances": {
+    "soliton_slope_abs": 0.35,
+    "soliton_best_epsilon": 2e-05,
+    "scg_slope_abs": 0.35,
+    "scg_best_epsilon": 1e-10,
+    "scg_min_redshift_nm": 50.0
+  }
+}

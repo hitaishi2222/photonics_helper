@@ -740,7 +740,9 @@ def print_material_catalog(name: str | None = None) -> None:
 
     for dataset in rows:
         wl_range = dataset.wavelength_range_um
-        wavelength = f"{wl_range[0]:.3f}\u2013{wl_range[1]:.3f}" if wl_range else "\u2014"
+        wavelength = (
+            f"{wl_range[0]:.3f}\u2013{wl_range[1]:.3f}" if wl_range else "\u2014"
+        )
         table.add_row(
             dataset.material,
             f"{dataset.kind} ({dataset.axis})" if dataset.axis else dataset.kind,

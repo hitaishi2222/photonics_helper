@@ -54,7 +54,10 @@ def _member_shape(member: Any, owner: type) -> dict[str, Any]:
     if isinstance(member, (property, functools.cached_property)):
         return {"kind": "property"}
     if isinstance(member, (classmethod, staticmethod)):
-        return {"kind": "callable", "params": _param_shape(getattr(owner, member.__func__.__name__))}
+        return {
+            "kind": "callable",
+            "params": _param_shape(getattr(owner, member.__func__.__name__)),
+        }
     if callable(member):
         return {"kind": "callable", "params": _param_shape(member)}
     return {"kind": "value"}

@@ -84,7 +84,9 @@ def test_shg_coupling_boyd_anchor():
     1550 nm, d_eff = d33 = 27 pm/V, n = 2.14, A_eff = 0.52 µm² →
     σ = 1330.8 (√W·m)⁻¹ (Wang et al. plane-wave / Boyd normalisation).
     """
-    sigma = shg_coupling(Wavelength(1550, "nm"), 27e-12, n=2.14, A_eff=Area(0.52, "um^2"))
+    sigma = shg_coupling(
+        Wavelength(1550, "nm"), 27e-12, n=2.14, A_eff=Area(0.52, "um^2")
+    )
     assert sigma == pytest.approx(1330.8217, rel=1e-3)
 
 
@@ -111,7 +113,9 @@ def test_shg_coupling_independent_maxwell_derivation():
     ]:
         Z0 = 1.0 / (EPS_0 * C_MS)
         w = 2 * np.pi * C_MS / (lam * 1e-9)
-        kappa_expected = (w * d / C_MS) * np.sqrt(2.0 * Z0 / (n**3 * (a_um * 1e-12)))  # = (w*d/(n*C_MS))*sqrt(2*Z0/(n*A))
+        kappa_expected = (w * d / C_MS) * np.sqrt(
+            2.0 * Z0 / (n**3 * (a_um * 1e-12))
+        )  # = (w*d/(n*C_MS))*sqrt(2*Z0/(n*A))
         kappa_helper = shg_coupling(
             Wavelength(lam, "nm"), d, n=n, A_eff=Area(a_um, "um^2")
         )
@@ -261,8 +265,9 @@ def test_chi2_result_efficiency_zero_pump():
 def test_solve_shg_zero_loss_bit_identical():
     """Loss-free argument must produce the exact pre-loss solver output."""
     sigma = _sigma()
-    kwargs = dict(length=2e-3, P0=0.05, sigma=sigma, n_steps=800,
-                  delta_k=1e3, qpm_period=6.283e-6)
+    kwargs = dict(
+        length=2e-3, P0=0.05, sigma=sigma, n_steps=800, delta_k=1e3, qpm_period=6.283e-6
+    )
     r_old = solve_shg(**kwargs)
     r_new = solve_shg(**kwargs, loss_db_per_cm=(0.0, 0.0))
     np.testing.assert_array_equal(r_old.A, r_new.A)
@@ -286,7 +291,10 @@ def test_solve_shg_pump_loss_analytic():
     alpha_f = np.log(10.0) / 10.0 * 100.0 * 3.0  # 3.0 dB/cm → 1/m
     L = 0.02
     res = solve_shg(
-        length=L, P0=P0, sigma=sigma, n_steps=4000,
+        length=L,
+        P0=P0,
+        sigma=sigma,
+        n_steps=4000,
         loss_db_per_cm=(3.0, 0.0),
     )
     expected = sigma**2 * P0**2 * (1.0 - np.exp(-alpha_f * L)) ** 2 / alpha_f**2
@@ -310,7 +318,10 @@ def test_solve_shg_loss_both_fields_analytic():
     if degenerate < 1e-12:
         return
     res = solve_shg(
-        length=L, P0=P0, sigma=sigma, n_steps=8000,
+        length=L,
+        P0=P0,
+        sigma=sigma,
+        n_steps=8000,
         loss_db_per_cm=(3.0, 63.5),
     )
     expected_abs = (
@@ -330,8 +341,9 @@ def test_solve_shg_loss_both_fields_analytic():
 def test_solve_shg_loss_heavy_stability():
     """Worst-case loss from the article (13.5 dB/cm pump) stays finite."""
     sigma = _sigma()
-    res = solve_shg(length=4e-3, P0=0.1, sigma=sigma, n_steps=2000,
-                    loss_db_per_cm=(13.5, 63.5))
+    res = solve_shg(
+        length=4e-3, P0=0.1, sigma=sigma, n_steps=2000, loss_db_per_cm=(13.5, 63.5)
+    )
     assert np.all(np.isfinite(res.powers))
     assert np.min(res.powers) >= 0.0
 
@@ -366,12 +378,16 @@ def test_overlap_uniform_matches_plane_wave():
     E_s = np.ones((N, N), dtype=complex)
     a_m = (N * dx) ** 2
     g = shg_coupling_overlap(
-        E_p, E_s, dx, dx, wavelength=WAVELENGTH, d=27e-12,
-        n_pump=2.14, n_sh=2.14,
+        E_p,
+        E_s,
+        dx,
+        dx,
+        wavelength=WAVELENGTH,
+        d=27e-12,
+        n_pump=2.14,
+        n_sh=2.14,
     )
-    sigma = shg_coupling(
-        WAVELENGTH, 27e-12, n=2.14, A_eff=Area(a_m * 1e12, "um^2")
-    )
+    sigma = shg_coupling(WAVELENGTH, 27e-12, n=2.14, A_eff=Area(a_m * 1e12, "um^2"))
     assert g == pytest.approx(sigma, rel=1e-6)
 
 
@@ -379,9 +395,7 @@ def test_overlap_scale_invariance():
     """Any absolute field scaling (and common phase) collapses to one g."""
     p, s = _modes(preset="gauss")
     g1 = shg_coupling_overlap(p, s, 2e-9, 2e-9, wavelength=WAVELENGTH)
-    g2 = shg_coupling_overlap(
-        p * 3.2j, s * 0.17, 2e-9, 2e-9, wavelength=WAVELENGTH
-    )
+    g2 = shg_coupling_overlap(p * 3.2j, s * 0.17, 2e-9, 2e-9, wavelength=WAVELENGTH)
     assert g1 == pytest.approx(g2, rel=1e-12)
 
 
@@ -397,8 +411,9 @@ def test_overlap_trilobe_suppression():
 def test_overlap_validation():
     p, s = _modes(preset="gauss")
     with pytest.raises(ValueError):
-        shg_coupling_overlap(np.zeros((4, 4), dtype=complex), s,
-                             1e-9, 1e-9, wavelength=WAVELENGTH)
+        shg_coupling_overlap(
+            np.zeros((4, 4), dtype=complex), s, 1e-9, 1e-9, wavelength=WAVELENGTH
+        )
     with pytest.raises(ValueError):
         shg_coupling_overlap(p, s, -1e-9, 1e-9, wavelength=WAVELENGTH)
     with pytest.raises(ValueError):
@@ -409,9 +424,18 @@ def test_pgln_zero_modulation_vanishes():
     """Δε₁ = 0 and d^(1) = 0 → all PGLN correction terms vanish."""
     p, s = _modes(preset="gauss")
     N = p.shape[0]
-    r = pgln_overlap(p, s, 2e-9, 2e-9, wavelength=WAVELENGTH,
-                     d0=27e-12, d1=np.zeros((N, N)),
-                     delta_eps1_pump=0.0, delta_eps1_sh=0.0, delta_k=1e5)
+    r = pgln_overlap(
+        p,
+        s,
+        2e-9,
+        2e-9,
+        wavelength=WAVELENGTH,
+        d0=27e-12,
+        d1=np.zeros((N, N)),
+        delta_eps1_pump=0.0,
+        delta_eps1_sh=0.0,
+        delta_k=1e5,
+    )
     assert r["g_L_w"] == 0.0
     assert r["g_L_2w"] == 0.0
     assert r["g_eff"] == 0.0
@@ -422,9 +446,18 @@ def test_pgln_gnl1_first_order_matches_uniform_shape():
     |g_NL^(1)| equals the uniform-guide overlap factor·(1/π, 2 form)."""
     p, s = _modes(preset="gauss")
     N = p.shape[0]
-    r0 = pgln_overlap(p, s, 2e-9, 2e-9, wavelength=WAVELENGTH,
-                      d0=27e-12, d1=np.full((N, N), 27e-12),
-                      delta_eps1_pump=0.0, delta_eps1_sh=0.0, delta_k=1e5)
+    r0 = pgln_overlap(
+        p,
+        s,
+        2e-9,
+        2e-9,
+        wavelength=WAVELENGTH,
+        d0=27e-12,
+        d1=np.full((N, N), 27e-12),
+        delta_eps1_pump=0.0,
+        delta_eps1_sh=0.0,
+        delta_k=1e5,
+    )
     # d^(1) = d^(0) everywhere → D1 == D0 → g_NL^(1) == g_NL^(0)
     assert r0["g_nl_1"] == pytest.approx(r0["g_nl_0"], rel=1e-12)
 
@@ -433,4 +466,3 @@ def test_pgln_bessel_identity():
     """J₀(x)+J₂(x) = 2 J₁(x)/x — the identity used in Eq. (5)."""
     x = 0.7
     assert np.isclose(jn(0, x) + jn(2, x), 2 * jn(1, x) / x)
-

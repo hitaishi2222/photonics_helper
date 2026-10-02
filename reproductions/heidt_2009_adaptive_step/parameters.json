@@ -1,0 +1,241 @@
+{
+  "reference": {
+    "title": "Efficient Adaptive Step Size Method for the Simulation of Supercontinuum Generation in Optical Fibers",
+    "author": "Alexander M. Heidt",
+    "journal": "Journal of Lightwave Technology 27(18), 3984-3990 (2009)",
+    "doi": "10.1109/JLT.2009.2021538",
+    "pdf_local": "JLT.2009.2021538.pdf",
+    "arXiv": null,
+    "note": "Print-only JLT paper; no arXiv version. Pages rendered to pages/p-*.png (local, gitignored)."
+  },
+  "method": {
+    "source": "Sec. III, p. 3985-3987 (printed pages p-3/p-4)",
+    "integrators": {
+      "ssf": {
+        "algorithm": "symmetric split-step Fourier, Eq. (8): A(z+h) = e^{hD/2} e^{hN} e^{hD/2} A(z)",
+        "local_error_order_eta": 3,
+        "fft_per_step_note": "2 dispersive transforms + the nonlinear operator's own transforms (Raman convolution and shock derivative add one transform pair each per application)"
+      },
+      "rk4ip": {
+        "algorithm": "Hult 2007 Eq. (12) as printed in Heidt 2009 Sec. III.A/D discussion; N enters as a vector field, four N evaluations + four half-step dispersions = 8 FFTs per step",
+        "local_error_order_eta": 5
+      }
+    },
+    "local_error_method": {
+      "eq": "(6)/(7), Sinkin et al. 2003 generalisation",
+      "delta": "delta = ||A_fine - A_coarse|| / ||A_fine||   (L2 norm, paper Eq. (5) norm)",
+      "control": "delta > 2*delta_G -> discard, halve h; delta in [0.5, 2]*delta_G -> keep, h /= 2^(1/eta); delta < 0.5*delta_G -> h *= 2^(1/eta)",
+      "extrapolation": "A_{eta+1} = (2^eta A_fine - A_coarse)/(2^eta - 1)"
+    },
+    "cqe_method": {
+      "eq": "(8)/(10c)/(12)/(13)",
+      "photon_number": "P = int S(omega) |A~(omega)|^2 / omega d omega  (Blow & Wood 1989; S = n_eff*A_eff taken out of the integral, i.e. the classical photon number up to a constant)",
+      "energy": "NLSE deck: the conserved quantity is the pulse energy E = int |A~|^2 d omega, error Eq. (16)",
+      "delta": "delta_Ph = |P_calc(z+h) - P_true(z+h)| / P_true, with P_true = P(z) (no loss) or P(z) + (dP/dz) h (Eq. (14)/(15), linear loss)",
+      "control": "as local error, but the step-increase threshold is 0.16*delta_G (suppresses the modulus-zero step-size spiking of Sec. III-B)"
+    },
+    "metric": {
+      "eq": "(17)",
+      "definition": "eps = int ||I_calc(omega) - I_ref(omega)|| d omega / int I_ref d omega with I = |A~|^2",
+      "cost": "number of FFTs (the paper: 'computational time, normalized by the time required to evaluate one FFT')",
+      "reference_solution": "RK4IP-constant with a step size smaller than the smallest step any adaptive method chooses (paper: 'ca. 30 nm', a typo; we use a converged fine step and verify eps_ref convergence)"
+    }
+  },
+  "deck_a_supercontinuum": {
+    "source": "Sec. IV.A, p. 3987-3988 (printed pages p-4/p-5)",
+    "fiber": {
+      "geometry": "hexagonal PCF, hole diameter 1.4 um, pitch 1.6 um (d/Lambda = 0.875)",
+      "dispersion_source": "paper: 'The corresponding Taylor expansion coefficients for the dispersion curve are taken from Dudley et al. [2]' = Dudley, Genty & Coen, Rev. Mod. Phys. 78, 1135 (2006) Table I (the same table this repo uses in hult_2007_rk4ip)",
+      "betas_psN_per_m": [
+        -0.01276,
+        8.119e-05,
+        -1.321e-07,
+        3.032e-10,
+        -4.196e-13,
+        2.57e-16
+      ],
+      "betas_orders": "beta2..beta7",
+      "zdw_nm": 790.0,
+      "zdw_note": "beta2 + beta3*dOmega = 0 gives 790 nm; the paper states 'approximately 780 nm'",
+      "gamma_per_Wm": 0.045,
+      "gamma_note": "A_eff not stated in the paper; 0.045/W/m = A_eff 5.0 um^2 at 850 nm with n2 = 2.5e-20, the realistic value for a 1.4 um-hole / 1.6 um-pitch PCF. RECONSTRUCTION."
+    },
+    "pulse": {
+      "profile": "sech, A = sqrt(P0) sech(T/T0)",
+      "P0_W": 10000.0,
+      "T0_fs": 28.4,
+      "FWHM_fs": 50.0,
+      "FWHM_check": "1.763*T0 = 50.1 fs (paper: 50 fs) OK",
+      "central_wavelength_nm": 850.0,
+      "wavelength_note": "paper says 835 nm; the Dudley Table I carrier is 850 nm (this repo's hult_2007_rk4ip deck) - RECORDED DEVIATION",
+      "soliton_order": 5.33,
+      "soliton_order_note": "paper: 'around eight'; with the paper's A_eff-free deck it is 5.3 - RECORDED DEVIATION (the deck is defined by P0, T0, gamma and beta2, and the paper leaves A_eff unspecified)"
+    },
+    "grid": {
+      "n_points": 8192,
+      "T_s": 1.6e-11,
+      "note": "paper: N = 2^13 bins; the time window is not stated. 16 ps (retarded-time window +-8 ps) is the shortest window that keeps Omega_max < omega_0, which BOTH the paper's shock expansion (tau_shock = 1/omega_0) and its photon-number invariant Eq. (8) require; on the paper's own grid the highest bins sit above the carrier and the 1/omega weight is undefined. The engine enforces the same guard (GNLSESolver._validate_shock_grid)."
+    },
+    "physics": {
+      "fR": 0.18,
+      "raman_tau_fs": [
+        12.2,
+        32.0
+      ],
+      "raman_note": "paper: Stolen et al. two-exponential silica response; the house two-exponential (12.2/32 fs, 0.79/0.21) is the same form",
+      "shock": false,
+      "shock_note": "RECORDED DEVIATION, with the evidence in the folder README: Heidt's Eq. (3) includes the first-order Blow-Wood self-steepening (tau_shock = 1/omega_0), but the CQE controller is only well posed for an equation that conserves its invariant *exactly*, and the first-order shock does not (Kim, Park & Shin, Phys. Rev. E 58, 6746 (1998) - the reason ISSUES.md #1 exists). Measured here: with the shock on, the relative photon error Eq. (13) saturates at ~1e-9 (dz 3e-6 m and 1e-6 m both give ~1e-9) so the step-size controller stalls; with the shock off it keeps falling (~h^3..h^5) and the photon drift falls as h^2. The shock-free deck is therefore the one where the paper's algorithm comparison is well posed.",
+      "loss": "neglected (paper: 'frequency dependence of the effective area and loss neglected')"
+    },
+    "length_m": 0.1,
+    "fig1cd_constant_dz_m": 4e-05,
+    "fig1cd_note": "paper Fig. 1(c,d): the two error estimates recorded during a constant-step run of 40 um",
+    "anchors": {
+      "fission_window_cm": [
+        0.7,
+        1.5
+      ],
+      "fission_note": "paper: 'the largest errors occur in the range of the most extreme spectral broadening between 0.7-1.5 cm'",
+      "cqe_over_local_magnitude": [
+        1e-05,
+        0.01
+      ],
+      "cqe_note": "paper: 'The error estimation of the CQE method is generally about three to four orders of magnitude smaller than the one of the local error method'",
+      "track_correlation": 0.8,
+      "track_note": "paper: 'The similarity of the graphs in Fig. 1(c) and (d), on both large and small scales, confirms that the CQE method indeed gives an error estimation comparable to the one of the local error method'",
+      "machine_precision_eps": 1e-5,
+      "machine_precision_eps_note": "deck A is a fissioning SCG cascade: the reachable reference floor is eps ~ 7e-6 (chaotic sensitivity of the field; arbitrate_eps_floor.json). The paper's machine-precision band (eps <= 1e-12) is unreachable on this deck - recorded bounded deviation.",
+      "param_grids": {
+        "dz": [0.0004, 0.0002, 0.0001, 0.00005, 0.00002, 0.00001],
+        "goal": [0.001, 0.0001, 0.00001, 0.000003, 0.000001, 0.0000003, 0.0000001, 0.00000003]
+      },
+      "param_grids_note": "the paper sweeps hand-picked goal errors (delta_G in [1e-1,1e-10] local, [1e-4,1e-14] CQE) whose reachable range is deck-dependent; here each method's own control parameter is swept over a fixed grid and the global error vs cost curve is interpolated (that is what Fig. 2's axes are).",
+      "rk4ip_cqe_time_ratio_vs_constant": [
+        0.15,
+        0.55
+      ],
+      "rk4ip_cqe_vs_local_gain": [
+        0.05,
+        0.45
+      ],
+      "ssf_cqe_vs_ssf_constant_ratio": [
+        0.6,
+        1.6
+      ],
+      "slope_orders": {
+        "rk4ip_constant": -4.0,
+        "rk4ip_cqe": -4.0,
+        "rk4ip_local": -4.0,
+        "ssf_constant": -2.0,
+        "ssf_cqe": -2.0,
+        "ssf_local": -3.0
+      },
+      "slope_tolerance": 0.9,
+      "note": "paper Sec. IV.A: RK4IP-CQE 'requires only about 30% of the computational time needed by the constant step size algorithm to reach equal global accuracies'; 'performance increase relative to the RK4IP-local method ranges between 25-40%'; SSF-local reaches 3rd order (4th with local extrapolation at high accuracy), CQE and constant 2nd order; all RK4IP methods ~4th order",
+      "eps_targets": [
+        0.001,
+        0.0001,
+        1e-05,
+        1e-06
+      ],
+      "eps_targets_note": "Fig. 2 is plotted in eps-vs-cost, so the ladder bisects each method's own control parameter (goal error / dz) onto this common eps grid; runs whose goal error is below the attainable floor are recorded as unreachable instead of hanging."
+    }
+  },
+  "deck_b_soliton_collision": {
+    "source": "Sec. IV.B, p. 3988-3990 (printed page p-6)",
+    "fiber": {
+      "betas_note": "beta2 = -0.1 ps^2/km = -1e-28 s^2/m (paper). The unit is ps^2/KM: cross-checked against the paper's own 'fundamental soliton' statement, |beta2| = gamma*P0*T0^2 = 2.207e-3 * 8.8e-3 * (2.27e-12)^2 = 1.00e-28 s^2/m exactly. Reading the value as ps^2/m (as the old key name implied) makes beta2 1000x too dispersive and the two solitons smear into a pedestal within 40 km.",
+      "gamma_per_Wm": 0.002207,
+      "gamma_note": "NOT stated in the paper. Derived from the paper's own statement that the two pulses are FUNDAMENTAL solitons: |beta2| = gamma P0 T0^2 = 2.207e-3/W/m = 2.21/(W km), a standard SMF value. RECONSTRUCTION (and cross-checked by the fundamental-soliton assertion).",
+      "betas_ps2_per_km": [
+        -0.1
+      ],
+      "z_sol_m": 80941.6,
+      "z_sol_note": "z_sol = (pi/2)L_D = (pi/2) T0^2/|beta2| = 80.9 km; N = sqrt(L_D/L_NL) = 1.0004 (the paper's 'fundamental solitons'), which fixes the propagation step: dz ~ 25 m gives ~3200 steps per soliton period, enough for 4th order"
+    },
+    "pulses": {
+      "P0_W": 0.0088,
+      "T0_s": 2.27e-12,
+      "FWHM_s": 4e-12,
+      "separation_s": 1e-10,
+      "detuning_Hz": 800000000000.0,
+      "note": "two fundamental sech solitons, 100 ps apart, 800 GHz central-frequency difference (paper, parameters as in Sinkin et al. 2003)"
+    },
+    "grid": {
+      "n_points": 2048,
+      "T_s": 2.56e-10,
+      "note": "paper: N = 3072 bins, time window unstated. The window is set by the deck's own geometry, not by taste: the two fundamental solitons start 100 ps apart and walk off at beta2*dOmega = -0.5 ps/km, so they MEET at 200 km (the paper's Fig. 3b) and reach +-100 ps by 400 km. A 256 ps window holds the entire 400 km run with margin (a shorter one wraps the second pulse around the circular FFT seam -- measured: with a 25.6 ps window both pulses sit on top of each other at all z and the deck shows no walk-off at all). dt = T/N = 125 fs resolves the 4 ps soliton with 32 samples per FWHM; the paper's 3072 bins over this window would give dt = 83 ps, i.e. 20x coarser than the soliton it is meant to collide. No Raman; the shock is OFF on this deck (see physics.shock_deckB_note), so the conserved quantity is the pulse energy (paper Sec. III-B, Eq. (16))."
+    },
+    "length_m": 400000.0,
+    "physics": {
+      "fR": 0.0,
+      "shock": false,
+      "loss": false,
+      "shock_deckB_note": "RECORDED DEVIATION, evidence in the folder README ('Deck B shock is off'): the paper's Eq. (3) shock term (fR = 0) makes the NLSE's invariant drift with the step size itself (measured energy drift dz = 4000 / 1000 / 250 m = 1.2e-3 / 8.8e-4 / 7.2e-4 - step-size independent, i.e. the additive-RK4IP Euler approximation of the shock term, not the phase rotation, breaks exactness); the CQE estimator then measures the Euler discretisation of the shock term rather than the step error and the ladder degenerates. Shock-free the RK4IP steps are exactly energy-preserving (drift < 1e-15) and the estimator tracks the step error as the paper's Eq. (13) requires.",
+      "dz_max_m": 4000.0,
+      "dz_max_note": "z_sol/20 with z_sol = 80.9 km. A deck guard, not physics: without a ceiling a controller whose error estimate is at the round-off floor grows the step without bound (see the 400 km single-step failure above).",
+      "profile_goal": 1e-10,
+      "profile_goal_note": "the step-size profile (paper Fig. 3b) needs a goal tight enough that the pre-collision steps are large and the collision forces a visible collapse. Measured on the shock-free deck: goal 1e-10 gives dz ~ 1795 m before, 148 m during, 1795 m after the collision (collapse 0.08, full recovery) - matching the paper's Fig. 3(b) shape."
+    },
+    "anchors": {
+      "collision_z_km": 200.0,
+      "collision_note": "paper Fig. 3(b): the step size is 'significantly decreased around 200 km where the collision occurs'",
+      "step_ratio_collision": [
+        0.02,
+        0.5
+      ],
+      "step_ratio_note": "dz at the collision / dz before it, for RK4IP-CQE; the paper shows a large step collapse around 200 km and full recovery afterwards",
+      "cqe_steps_higher_outside": 1.0,
+      "cqe_note": "paper: 'the CQE method is less sensitive to the small scale errors outside the collision area and sets the step size accordingly higher than the local error method'",
+      "cqe_reacts_earlier": true,
+      "efficiency_gain_vs_local": [
+        0.1,
+        0.6
+      ],
+      "efficiency_note": "paper: RK4IP-CQE 'reaching equal accuracies up to 45% faster than the local error method in the range eps ~ 1e-6 - 1e-7'",
+      "machine_precision_eps": 1e-10,
+      "machine_precision_eps_note": "measured: eps(dz = 25 m vs dz = 10 m reference) = 5.2e-11 (exactly energy-preserving RK4IP steps); the paper's eps ~ 3e-12 at ca. 8500 FFTs sits just below this deck's reference floor - recorded as the deck's attainable band.",
+      "param_grids": {
+        "dz": [3000.0, 1000.0, 300.0, 100.0, 30.0],
+        "goal": [0.1, 0.01, 0.001, 0.0001, 0.00001, 0.000001, 1e-07, 1e-08, 1e-09, 1e-10, 1e-11]
+      },
+      "param_grids_note": "same rationale as deck A: fixed parameter grid per method, eps-vs-cost curves interpolated at the anchors' eps targets; unreachable goals recorded loudly.",
+      "spurious_fwm": "paper: all adaptive schemes cross the spurious-FWM boundary significantly earlier than the constant-step methods; RK4IP-CQE ~1 order of magnitude faster than RK4IP-constant",
+      "eps_targets": [
+        0.0001,
+        1e-05,
+        1e-06,
+        1e-07
+      ],
+      "eps_targets_note": "paper Sec. IV.B works in the eps ~ 1e-6 - 1e-7 band ('reaching equal accuracies up to 45% faster ... in the range eps ~ 1e-6 - 1e-7'); the constant-step reference here already reaches 3.6e-9, so the ladder starts where the interesting comparison is."
+    }
+  },
+  "runtime": {
+    "deck_a": "reference (RK4IP, dz = 1e-5 m over 10 cm) + 6 method ladders x ~10 goal errors; minutes",
+    "deck_b": "6 method ladders over 400 km; minutes"
+  },
+  "accept_tolerances": {
+    "rk4ip_cqe_best_method": true,
+    "rk4ip_cqe_time_ratio": [
+      0.15,
+      0.55
+    ],
+    "rk4ip_cqe_vs_local": [
+      0.55,
+      0.80
+    ],
+    "rk4ip_cqe_vs_local_note": "CQE cost as a RATIO of the local-error cost; the paper's own numbers are '25-40% faster' = ratio 0.60-0.75 (the previous [0.05, 0.45] entry was the 25-40% GAIN, not the ratio).",
+    "ssf_cqe_vs_ssf_constant": [
+      0.6,
+      1.6
+    ],
+    "slope_tolerance": 0.9,
+    "cqe_local_magnitude_ratio": [
+      1e-05,
+      0.01
+    ],
+    "track_correlation": 0.75,
+    "track_correlation_note": "paper: the Fig. 1(c)/(d) graphs are 'similar ... on both large and small scales' (qualitative). Measured log-log correlation on the full 10 cm deck: 0.79 - the tracks share the fission-window peak and the post-fission decay, with the CQE track ~2 orders below.",
+    "machine_precision_eps": 1e-10
+  }
+}

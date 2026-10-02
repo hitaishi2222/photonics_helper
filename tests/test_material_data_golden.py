@@ -61,7 +61,9 @@ def test_refractive_index_golden(
 
 def test_linbo3_birefringence_golden() -> None:
     ordinary = RefractiveIndex.from_material_database("LiNbO3", axis="ordinary")
-    extraordinary = RefractiveIndex.from_material_database("LiNbO3", axis="extraordinary")
+    extraordinary = RefractiveIndex.from_material_database(
+        "LiNbO3", axis="extraordinary"
+    )
 
     assert ordinary.n_func(1.55) == pytest.approx(2.211111, abs=5e-4)
     assert ordinary.n_func(0.775) == pytest.approx(2.258658, abs=5e-4)

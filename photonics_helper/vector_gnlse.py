@@ -198,9 +198,7 @@ class VectorSplitStepEngine:
                 "Provide a RamanResponse or set include_raman=False."
             )
         if fiber.length.as_m <= 0.0:
-            raise ValueError(
-                f"fiber.length must be positive, got {fiber.length!r}"
-            )
+            raise ValueError(f"fiber.length must be positive, got {fiber.length!r}")
         if step_size is not None and step_size.as_m <= 0.0:
             raise ValueError(f"step_size must be positive, got {step_size!r}")
 
@@ -358,7 +356,7 @@ class VectorSplitStepEngine:
             float(np.max(np.abs(mix_y) * np.abs(Ax * Ay))),
             1e-30,
         )
-        dbeta_rate = 2.0 * abs(self.delta_beta)   # mismatch phase rate (rad/m)
+        dbeta_rate = 2.0 * abs(self.delta_beta)  # mismatch phase rate (rad/m)
         n_sub = int(
             min(
                 2000,
@@ -449,11 +447,8 @@ class VectorSplitStepEngine:
             assert self._energy_vs_z is not None
             self.evolution_x.append(wx)
             self.evolution_y.append(wy)
-            total = (
-                float(
-                    np.sum(np.abs(self.A_x) ** 2 + np.abs(self.A_y) ** 2)
-                    * self.grid.dt
-                )
+            total = float(
+                np.sum(np.abs(self.A_x) ** 2 + np.abs(self.A_y) ** 2) * self.grid.dt
             )
             self._energy_vs_z.append(total)
 
@@ -468,9 +463,7 @@ class VectorSplitStepEngine:
             self.A_y = self._linear_step_channel(
                 self.A_y, dz / 2, self.betas_y, apply_walkoff=True
             )
-            self.A_x, self.A_y = self._coupled_nonlinear_step(
-                self.A_x, self.A_y, dz
-            )
+            self.A_x, self.A_y = self._coupled_nonlinear_step(self.A_x, self.A_y, dz)
             self.A_x = self._linear_step_channel(
                 self.A_x, dz / 2, self.betas_x, apply_walkoff=False
             )
@@ -692,8 +685,7 @@ class RandomBirefringenceEngine(VectorSplitStepEngine):
             self.evolution_y.append(wy)
             self._energy_vs_z.append(
                 float(
-                    np.sum(np.abs(self.A_x) ** 2 + np.abs(self.A_y) ** 2)
-                    * self.grid.dt
+                    np.sum(np.abs(self.A_x) ** 2 + np.abs(self.A_y) ** 2) * self.grid.dt
                 )
             )
 
@@ -717,7 +709,12 @@ class RandomBirefringenceEngine(VectorSplitStepEngine):
             local_y = r10 * self.A_x + r11 * self.A_y
             local_x, local_y = self._coupled_nonlinear_step(local_x, local_y, dz)
             # rotate back: the inverse of an SU(2) matrix is its adjoint
-            c00, c01, c10, c11 = (r00.conjugate(), r10.conjugate(), r01.conjugate(), r11.conjugate())
+            c00, c01, c10, c11 = (
+                r00.conjugate(),
+                r10.conjugate(),
+                r01.conjugate(),
+                r11.conjugate(),
+            )
             new_x = c00 * local_x + c01 * local_y
             new_y = c10 * local_x + c11 * local_y
             self.A_x, self.A_y = new_x, new_y

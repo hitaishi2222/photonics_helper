@@ -6,8 +6,8 @@
 from photonics_helper import Wavelength
 
 wl = Wavelength(1550, "nm")
-print(wl.to_freq().as_THz)      # 193.4 THz
-print(wl.to_energy().as_eV)     # 0.8 eV
+print(wl.to_freq().as_THz)  # 193.4 THz
+print(wl.to_energy().as_eV)  # 0.8 eV
 ```
 
 ## GNLSE propagation
@@ -21,12 +21,14 @@ from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 grid = TemporalGrid(N=2**12, Tmax=Time(5e-12, "s"))
 pulse = Wave(
     grid=grid,
-    envelope=Envelope(shape="sech", peak_amplitude=np.sqrt(1000.0),
-                      pulse_width=Time(50, "fs")),
+    envelope=Envelope(
+        shape="sech", peak_amplitude=np.sqrt(1000.0), pulse_width=Time(50, "fs")
+    ),
     central_wavelength=Wavelength(1550, "nm"),
 )
-fiber = FiberProfile(n2=2.6e-20, alpha=0.0, A_eff=Area(80e-12, "m^2"),
-                     length=Length(0.1, "m"))
+fiber = FiberProfile(
+    n2=2.6e-20, alpha=0.0, A_eff=Area(80e-12, "m^2"), length=Length(0.1, "m")
+)
 solver = GNLSESolver(pulse=pulse, fiber=fiber, betas=np.array([-0.02, 1e-4]))
 solver.propagate(num_steps=200)
 ```

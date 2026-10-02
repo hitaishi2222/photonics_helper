@@ -164,10 +164,7 @@ def overlap_weights(w0: float, nmode: int = N_MODES):
     area = np.pi * w0**2 / 2.0
     S = np.array(
         [
-            [
-                np.trapezoid(f[i] ** 2 * f[j] ** 2, MFD_X) * area
-                for j in range(nmode)
-            ]
+            [np.trapezoid(f[i] ** 2 * f[j] ** 2, MFD_X) * area for j in range(nmode)]
             for i in range(nmode)
         ]
     )
@@ -184,9 +181,7 @@ def overlap_weights(w0: float, nmode: int = N_MODES):
 
 def mode_phase_offsets(a: float) -> NDArray:
     """db0^(p)(a) = beta_p(omega0; a) - beta_0(omega0; a) (rad/m)."""
-    return np.array(
-        [beta_p(OMEGA0, p, a) - beta_p(OMEGA0, 0, a) for p in range(3)]
-    )
+    return np.array([beta_p(OMEGA0, p, a) - beta_p(OMEGA0, 0, a) for p in range(3)])
 
 
 def mode_radius_moments(w0: float, nmode: int = N_MODES) -> NDArray:
@@ -195,8 +190,7 @@ def mode_radius_moments(w0: float, nmode: int = N_MODES) -> NDArray:
     return np.array(
         [
             [
-                (np.pi * w0**4 / 4.0)
-                * np.trapezoid(MFD_X * f[p] * f[q], MFD_X)
+                (np.pi * w0**4 / 4.0) * np.trapezoid(MFD_X * f[p] * f[q], MFD_X)
                 for q in range(nmode)
             ]
             for p in range(nmode)
@@ -208,7 +202,7 @@ def seed_fractions(w0: float) -> NDArray:
     """Energy fractions of the 3 symmetric modes under a 1.5*w0 Gaussian."""
     area = np.pi * w0**2 / 2.0
     rho = np.sqrt(MFD_X * w0**2 / 2.0)
-    fg = np.exp(-rho**2 / (SEED_FACTOR * w0) ** 2)
+    fg = np.exp(-(rho**2) / (SEED_FACTOR * w0) ** 2)
     num = np.array([np.trapezoid(f * fg, MFD_X) * area for f in radial_modes(w0)])
     norm = np.trapezoid(fg**2, MFD_X) * area
     e = num**2 / norm
@@ -368,9 +362,9 @@ def validate(*, fast: bool = False, make_plot: bool = True) -> dict:
     # The walk-off db1_p carries the factor x(a) ∝ 1/(k a)², so it scales
     # QUADRATICALLY with the core radius (16.31 measured vs 4² model, the
     # 2 % residue is the sqrt-series curvature of the Eq.-(2) paraxial model).
-    assert abs(db1_end[1] / db1_0[1] / (a0 / a_end) ** 2 - 1.0) < 0.03, (
-        results["analytic"]["walkoff_scaling_ratio"]
-    )
+    assert abs(db1_end[1] / db1_0[1] / (a0 / a_end) ** 2 - 1.0) < 0.03, results[
+        "analytic"
+    ]["walkoff_scaling_ratio"]
     assert abs(l_si0 / l_si_end - a0 / a_end) < 1e-6
 
     # --- 2. engine, linear chunked taper ------------------------------------
@@ -380,10 +374,7 @@ def validate(*, fast: bool = False, make_plot: bool = True) -> dict:
     eng, z_arr, mfd_arr, fields = propagate_taper(E_PULSE, False, grid)
 
     energy_in = float(
-        sum(
-            float(np.sum(np.abs(f) ** 2)) * grid.dt
-            for f in sech_fields(grid, E_PULSE)
-        )
+        sum(float(np.sum(np.abs(f) ** 2)) * grid.dt for f in sech_fields(grid, E_PULSE))
     )
     energy_out = float(
         sum(float(np.sum(np.abs(fields[p]) ** 2)) * grid.dt for p in range(3))
@@ -400,8 +391,7 @@ def validate(*, fast: bool = False, make_plot: bool = True) -> dict:
     def _win_mean_L_si(lo: float, hi: float) -> float:
         zw = np.linspace(lo * TAPER_L, hi * TAPER_L, 2001)
         return float(
-            np.trapezoid(self_imaging_period(core_radius(zw)), zw)
-            / (zw[-1] - zw[0])
+            np.trapezoid(self_imaging_period(core_radius(zw)), zw) / (zw[-1] - zw[0])
         )
 
     per_start = dominant_period(
@@ -422,9 +412,9 @@ def validate(*, fast: bool = False, make_plot: bool = True) -> dict:
     results["acceleration_ratio_measured"] = round(per_start / per_end, 3)
     results["acceleration_ratio_window_model"] = round(acceleration_model, 3)
     results["acceleration_ratio_pointwise_a0_over_aend"] = round(R0 / R_END, 3)
-    assert abs(per_start / per_end / acceleration_model - 1.0) < 0.05, (
-        results["acceleration_ratio_measured"]
-    )
+    assert abs(per_start / per_end / acceleration_model - 1.0) < 0.05, results[
+        "acceleration_ratio_measured"
+    ]
     # and the window model itself must bracket the pointwise x4 claim
     # (windows average over finite spans of a(z), so the window ratio sits
     # below the pointwise a0/a_end = 4)
@@ -474,7 +464,7 @@ def validate(*, fast: bool = False, make_plot: bool = True) -> dict:
 
     print("Eftekhar et al. (2019) accelerated GRIN taper: validation passed")
     print(
-        f"  L_si: {l_si0*1e6:.1f} -> {l_si_end*1e6:.1f} um "
+        f"  L_si: {l_si0 * 1e6:.1f} -> {l_si_end * 1e6:.1f} um "
         f"(measured x{results['acceleration_ratio_measured']} vs window-model "
         f"x{results['acceleration_ratio_window_model']}); "
         f"model walk-off integral p1 "
@@ -497,8 +487,13 @@ def _plot(results, z_arr, mfd_arr, tt, fields, eng, fields_sol) -> None:
         w = np.asarray(eng.grid.w, float)
         lam = 2 * np.pi * C_MS / (OMEGA0 + w) * 1e9
         ok = (lam > 1100) & (lam < 2600)
-        ax.plot(lam[ok], 10 * np.log10(spec[ok] / spec[ok].max()), colr,
-                lw=0.7, label=f"mode {p}")
+        ax.plot(
+            lam[ok],
+            10 * np.log10(spec[ok] / spec[ok].max()),
+            colr,
+            lw=0.7,
+            label=f"mode {p}",
+        )
     ax.set_xlabel("wavelength (nm)")
     ax.set_ylabel("rel. intensity (dB)")
     ax.set_title("(b) output of the linear taper")

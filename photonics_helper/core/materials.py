@@ -106,9 +106,7 @@ class Material:
         return self.index.group_index(wavelength)
 
 
-def _lookup_metadata(
-    name: str, axis: str | None
-) -> tuple[str | None, str | None]:
+def _lookup_metadata(name: str, axis: str | None) -> tuple[str | None, str | None]:
     """Best-effort ``(source, license)`` lookup in the bundled database.
 
     Returns ``(None, None)`` when no row (or no provenance string) is found;
@@ -122,8 +120,12 @@ def _lookup_metadata(
         # A tabulated key ("material-author") is itself a provenance source
         # key, so look it up directly first.
         direct = db.get_provenance(name)
-        direct_source = str(direct["citation"]) if direct and direct.get("citation") else None
-        direct_license = str(direct["license"]) if direct and direct.get("license") else None
+        direct_source = (
+            str(direct["citation"]) if direct and direct.get("citation") else None
+        )
+        direct_license = (
+            str(direct["license"]) if direct and direct.get("license") else None
+        )
 
         candidates = [name]
         if axis is not None:
@@ -161,9 +163,7 @@ def _lookup_metadata(
         return None, None
 
 
-def material(
-    name: str, *, axis: str | None = None, n_points: int = 200
-) -> Material:
+def material(name: str, *, axis: str | None = None, n_points: int = 200) -> Material:
     """Load a material from the bundled database.
 
     Parameters

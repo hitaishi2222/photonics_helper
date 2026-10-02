@@ -29,8 +29,6 @@ def _nk_browser_style(layer: str) -> dict:
     return {"display": "block" if layer == "layer-7-nk" else "none"}
 
 
-
-
 def _import_dash():
     """Import Dash lazily and return the pieces the app needs."""
     try:
@@ -266,7 +264,6 @@ def build_layout(*, dcc, html):
             ),
         ]
     )
-
 
 
 def register_callbacks(dash_app, *, dcc, html, Input, Output, State):
@@ -567,7 +564,6 @@ def register_callbacks(dash_app, *, dcc, html, Input, Output, State):
             ),
             "\n".join(info_lines),
         )
-
 
 
 def app() -> dash.Dash:  # type: ignore[valid-type]

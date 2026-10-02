@@ -624,7 +624,9 @@ class SplitStepEngine:
         conserving_shock: bool = False,
         tau_shock: float | None = None,
         step_size: Length | None = None,
-        dispersion_profile: ZDependentDispersion | Callable[[NDArray, float], NDArray] | None = None,
+        dispersion_profile: (
+            ZDependentDispersion | Callable[[NDArray, float], NDArray] | None
+        ) = None,
         a_eff_fn: Callable[[float], float] | None = None,
         alpha_fn: Callable[[float], float] | None = None,
         gamma_fn: Callable[[float], float] | None = None,
@@ -983,10 +985,9 @@ class SplitStepEngine:
                     # |γ|τ on the SS–Raman (delayed) cross arm.
                     i_state = (1.0 - fR0) * np.abs(A_state) ** 2
                     d_state = self._delayed_intensity(np.abs(A_state) ** 2, h_R_fft)
-                    rhs = (
-                        shock_kernel * self.grid.fft(i_state * A_state)
-                        + shock_kernel_pc * self.grid.fft(d_state * A_state)
-                    )
+                    rhs = shock_kernel * self.grid.fft(
+                        i_state * A_state
+                    ) + shock_kernel_pc * self.grid.fft(d_state * A_state)
                     return np.asarray(self.grid.ifft(rhs), dtype=complex)
                 p_nl = self._nl_intensity(np.abs(A_state) ** 2, h_R_fft)
                 src_w = self.grid.fft(p_nl * A_state)
@@ -1007,9 +1008,7 @@ class SplitStepEngine:
             half_phase: NDArray
             if self.conserving_shock:
                 assert P_inst is not None and P_del is not None  # narrowed above
-                half_phase = (
-                    0.5j * gamma * P_inst + 0.5j * abs(gamma) * P_del
-                ) * dz
+                half_phase = (0.5j * gamma * P_inst + 0.5j * abs(gamma) * P_del) * dz
             else:
                 half_phase = 0.5j * gamma * P_NL * dz
             A_state: NDArray = np.asarray(A * np.exp(half_phase), dtype=complex)
@@ -1029,8 +1028,7 @@ class SplitStepEngine:
                 P_inst_f = (1.0 - fR0) * P_final_int
                 P_del_f = self._delayed_intensity(P_final_int, h_R_fft)
                 A = A_state * np.exp(
-                    0.5j * gamma * P_inst_f * dz
-                    + 0.5j * abs(gamma) * P_del_f * dz
+                    0.5j * gamma * P_inst_f * dz + 0.5j * abs(gamma) * P_del_f * dz
                 )
             else:
                 P_final = self._nl_intensity(P_final_int, h_R_fft)
@@ -1039,9 +1037,7 @@ class SplitStepEngine:
             # Exact (unitary) Kerr/Raman phase rotation.
             if self.conserving_shock:
                 assert P_inst is not None and P_del is not None  # narrowed above
-                A = A * np.exp(
-                    1j * gamma * P_inst * dz + 1j * abs(gamma) * P_del * dz
-                )
+                A = A * np.exp(1j * gamma * P_inst * dz + 1j * abs(gamma) * P_del * dz)
             else:
                 A = A * np.exp(1j * gamma * P_NL * dz)
 

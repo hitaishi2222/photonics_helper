@@ -55,7 +55,12 @@ def test_building_on_core_guide_exists() -> None:
 
 def test_contributing_guide_covers_setup_and_gates() -> None:
     text = (ROOT / "CONTRIBUTING.md").read_text()
-    for required in ("ruff check", "mypy photonics_helper", "pytest", "update_api_snapshot.py"):
+    for required in (
+        "ruff check",
+        "mypy photonics_helper",
+        "pytest",
+        "update_api_snapshot.py",
+    ):
         assert required in text, f"CONTRIBUTING.md does not mention {required!r}"
     assert "seed_db.py" in text  # data regeneration procedure
 
@@ -71,7 +76,9 @@ def test_citation_cff_parses_with_required_fields() -> None:
     assert data["repository-code"].startswith("https://github.com/")
     assert data["version"]
     assert data["authors"], "CITATION.cff has no authors"
-    assert data["authors"][0].get("given-names") and data["authors"][0].get("family-names")
+    assert data["authors"][0].get("given-names") and data["authors"][0].get(
+        "family-names"
+    )
 
 
 def test_citation_version_matches_package_version() -> None:

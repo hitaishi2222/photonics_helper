@@ -129,9 +129,7 @@ def n_silica(f_thz: float) -> float:
     """Fused-silica refractive index at frequency f (THz)."""
     wl_um = C_THZ / f_thz
     l2 = wl_um**2
-    return float(
-        np.sqrt(1.0 + sum(b * l2 / (l2 - c) for b, c in zip(SL_B, SL_C)))
-    )
+    return float(np.sqrt(1.0 + sum(b * l2 / (l2 - c) for b, c in zip(SL_B, SL_C))))
 
 
 def beta0(f_thz: float) -> float:
@@ -154,12 +152,12 @@ def beta2_silica(lambda_nm: float) -> float:
     """beta2 (s^2/m) numerically from Sellmeier at lambda (nm)."""
     lam_um = lambda_nm / 1000.0
     h = 2e-3  # um
-    dom = 2.0 * np.pi * C_MS * (
-        1.0 / ((lam_um - h) * 1e-6) - 1.0 / ((lam_um + h) * 1e-6)
+    dom = (
+        2.0 * np.pi * C_MS * (1.0 / ((lam_um - h) * 1e-6) - 1.0 / ((lam_um + h) * 1e-6))
     )  # rad/s, NEGATIVE for lambda increasing (red)
-    db1_dlam = (
-        beta1_silica(lam_um + h) - beta1_silica(lam_um - h)
-    ) / (2.0 * h)  # s/m per um (beta1 decreases toward blue)
+    db1_dlam = (beta1_silica(lam_um + h) - beta1_silica(lam_um - h)) / (
+        2.0 * h
+    )  # s/m per um (beta1 decreases toward blue)
     # dom = omega(lam-h) - omega(lam+h) over 2h  ->  d omega/d lambda = -dom/(2h)
     return float(-(2.0 * h) * db1_dlam / dom)  # d beta1 / d omega
 
@@ -180,10 +178,7 @@ def delta_kappa(om_thz: float, n_ord: int) -> float:
     Delta = 0.5*(symmetric material sum) - N kappa + gamma_f P0
     (the phase-matching condition is the pairwise sum + 2 gamma_f P0).
     """
-    sym = (
-        beta0(PUMP_THZ + om_thz) + beta0(PUMP_THZ - om_thz)
-        - 2.0 * beta0(PUMP_THZ)
-    )
+    sym = beta0(PUMP_THZ + om_thz) + beta0(PUMP_THZ - om_thz) - 2.0 * beta0(PUMP_THZ)
     return 0.5 * sym - n_ord * KAPPA + gamma_eff() * P0_W
 
 
@@ -200,9 +195,7 @@ def stmi_shift_thz_corrected(n_ord: int, om_lo=0.5, om_hi=270.0) -> float:
     tmp = gamma_full * P0_W / 3.0
 
     def f(om: float) -> float:
-        sym = (
-            beta0(PUMP_THZ + om) + beta0(PUMP_THZ - om) - 2.0 * beta0(PUMP_THZ)
-        )
+        sym = beta0(PUMP_THZ + om) + beta0(PUMP_THZ - om) - 2.0 * beta0(PUMP_THZ)
         return 0.5 * sym - n_ord * KAPPA - tmp
 
     xs = np.linspace(om_lo, om_hi, 60000)
@@ -242,7 +235,7 @@ def check_b_deterministic(n_ord: int, L: float = 0.1, n_grid: int = 32768):
         b2_off = float(res_off["cols_a1"][1])
         assert err < 0.20, (
             f"check B' growth mismatch: measured |b2|/a = {b2_meas:.4f}, "
-            f"analytic sinh(gL) = {b2_analytic:.4f} ({err*100:.1f} %)"
+            f"analytic sinh(gL) = {b2_analytic:.4f} ({err * 100:.1f} %)"
         )
         assert b2_off < 0.05 * b2_meas, (
             f"off-resonance control not suppressed: |b2|/a = {b2_off:.4f}"
@@ -260,6 +253,7 @@ def check_b_deterministic(n_ord: int, L: float = 0.1, n_grid: int = 32768):
         }
     finally:
         N_GRID = old_n
+
 
 def stmi_shift_thz(n_ord: int) -> float:
     """Positive phase-matched detuning |Omega| (THz) for ladder order N."""
@@ -306,12 +300,14 @@ def betas_taylor(orders: int = 4) -> list[float]:
     (+-6.27 rad/m).  Root cause of the failed check B of the earlier
     session.
     """
-    f_grid = np.linspace(60.0, 200.0, 14)          # THz; covers all assert roots
-    om = 2.0 * np.pi * f_grid                      # rad/ps
-    sym_vals = np.array([
-        beta0(PUMP_THZ + f) + beta0(PUMP_THZ - f) - 2.0 * beta0(PUMP_THZ)
-        for f in f_grid
-    ])
+    f_grid = np.linspace(60.0, 200.0, 14)  # THz; covers all assert roots
+    om = 2.0 * np.pi * f_grid  # rad/ps
+    sym_vals = np.array(
+        [
+            beta0(PUMP_THZ + f) + beta0(PUMP_THZ - f) - 2.0 * beta0(PUMP_THZ)
+            for f in f_grid
+        ]
+    )
     om_max = float(om[-1])
     om_n = om / om_max
     cols = np.power.outer(om_n, 2.0 * np.arange(1, orders + 1))
@@ -319,9 +315,9 @@ def betas_taylor(orders: int = 4) -> list[float]:
     out: list[float] = []
     for m, a_m in enumerate(coefs, start=1):
         k = 2 * m
-        beta_ps = a_m / om_max**k * factorial(k) / 2.0   # ps^k/m
-        out.append(float(beta_ps / 1e12**k))             # s^k/m
-        out.append(0.0)                                  # odd order (cancels)
+        beta_ps = a_m / om_max**k * factorial(k) / 2.0  # ps^k/m
+        out.append(float(beta_ps / 1e12**k))  # s^k/m
+        out.append(0.0)  # odd order (cancels)
     return out
 
 
@@ -352,9 +348,7 @@ def build_engine(
             field = np.full(N_GRID, a_pump, dtype=complex)
         else:
             sig = noise_rms * a_pump / np.sqrt(2.0)
-            field = rng.normal(0.0, sig, N_GRID) + 1j * rng.normal(
-                0.0, sig, N_GRID
-            )
+            field = rng.normal(0.0, sig, N_GRID) + 1j * rng.normal(0.0, sig, N_GRID)
         wave = wave.with_field(field)
         waves.append(wave)
 
@@ -443,8 +437,7 @@ def probe_gain(n_ord: int, f_thz: float | None = None, L: float = 0.5) -> dict:
         )
         eng.propagate(half_steps, nsaves=2)
         a1_abs, a2_abs = A_proj(eng, grid, tone)
-        drift = float(100.0 * abs(
-            eng.energy_vs_z[-1] / eng.energy_vs_z[0] - 1.0))
+        drift = float(100.0 * abs(eng.energy_vs_z[-1] / eng.energy_vs_z[0] - 1.0))
         return a1_abs / a_sig, a2_abs / a_sig, drift
 
     def A_proj(eng, grid, tone):
@@ -454,14 +447,14 @@ def probe_gain(n_ord: int, f_thz: float | None = None, L: float = 0.5) -> dict:
         )
         return a1, a2
 
-    proj1 = one_run((1.0, 0.0))   # seed a1 tone only
-    proj2 = one_run((0.0, 1.0))   # seed a2 tone only
+    proj1 = one_run((1.0, 0.0))  # seed a1 tone only
+    proj2 = one_run((0.0, 1.0))  # seed a2 tone only
     _drift_pct = max(proj1[2], proj2[2])
     proj1, proj2 = proj1[:2], proj2[:2]
     return {
         "f_thz": float(f_thz),
         "L_m": L,
-        "cols_a1": proj1,          # (|b1 out|/a_sig, |b2 out|/a_sig)
+        "cols_a1": proj1,  # (|b1 out|/a_sig, |b2 out|/a_sig)
         "cols_a2": proj2,
         "energy_drift_pct": float(_drift_pct),
     }
@@ -473,9 +466,7 @@ def run_order(n_ord: int) -> tuple[MultimodeSplitStepEngine, dict]:
         step_m, num_steps = STEP_M_BASE, NUM_STEPS_BASE
     else:
         step_m, num_steps = STEP_M_LADDER, NUM_STEPS_LADDER
-    eng = build_engine(
-        n_ord=n_ord, length_m=step_m * num_steps, step_m=step_m
-    )
+    eng = build_engine(n_ord=n_ord, length_m=step_m * num_steps, step_m=step_m)
     spec0 = np.abs(eng.grid.fft(np.asarray(eng.A[1], dtype=complex))) ** 2
     eng.propagate(num_steps, nsaves=min(num_steps, 33))
     freq_thz = np.abs(eng.grid.w) / (2.0 * np.pi * 1e12)
@@ -543,15 +534,11 @@ def validate(*, fast: bool = False, make_plot: bool = True) -> dict:
     roots = {n: stmi_shift_thz(n) for n in orders}
     results["analytic_roots_thz"] = {n: round(v, 2) for n, v in roots.items()}
     errs = {
-        n: abs(roots[n] - PAPER_CIRCLES[n]) / PAPER_CIRCLES[n]
-        for n in orders
-        if n != 1
+        n: abs(roots[n] - PAPER_CIRCLES[n]) / PAPER_CIRCLES[n] for n in orders if n != 1
     }
     results["errors_vs_paper_pct"] = {n: round(e * 100, 2) for n, e in errs.items()}
     assert max(errs.values()) < 0.15, errs
-    results["order1_stokes_residual_thz"] = float(
-        roots[1] - PAPER_CIRCLES[1]
-    )
+    results["order1_stokes_residual_thz"] = float(roots[1] - PAPER_CIRCLES[1])
 
     # --- engine ---------------------------------------------------------------
     numeric = {}
@@ -605,10 +592,19 @@ def _make_fig(results, roots, runs) -> None:
     ax.plot(ns, om, "b-", label="this work (analytic ladder)")
     ax.plot(ns, -om, "b--")
     _px = [n for n in roots if n != 1]
-    ax.plot([5, 4], [-188, -165], "o", ms=9, mfc="none", color="k", label="paper Fig. 3d")
+    ax.plot(
+        [5, 4], [-188, -165], "o", ms=9, mfc="none", color="k", label="paper Fig. 3d"
+    )
     ax.plot([2, 1], [110, 65], "o", ms=9, mfc="none", color="k")
-    ax.plot([-1], [PAPER_STOKES_ORDER1_THZ], "s", ms=8, mfc="none", color="r",
-            label="paper Stokes-pump point (not on ladder)")
+    ax.plot(
+        [-1],
+        [PAPER_STOKES_ORDER1_THZ],
+        "s",
+        ms=8,
+        mfc="none",
+        color="r",
+        label="paper Stokes-pump point (not on ladder)",
+    )
     ax.axhline(0, color="0.8", lw=0.5)
     ax.set_xlabel("ladder order N (paper MI order)")
     ax.set_ylabel("sideband shift (THz)")
@@ -627,7 +623,7 @@ def _make_fig(results, roots, runs) -> None:
     ax.set_yscale("log")
     ax.set_xlabel("shift (THz)")
     ax.set_ylabel("spectral intensity (norm.)")
-    ax.set_title(f"(b) engine sideband order 2 (peak at {numeric_peak(runs,2)} THz)")
+    ax.set_title(f"(b) engine sideband order 2 (peak at {numeric_peak(runs, 2)} THz)")
     ax.legend(fontsize=8)
 
     # (c) engine spectrum, order 1
@@ -641,7 +637,7 @@ def _make_fig(results, roots, runs) -> None:
     ax.axvline(PAPER_CIRCLES[1], color="k", ls=":", lw=1.0, label="paper circle")
     ax.set_yscale("log")
     ax.set_xlabel("shift (THz)")
-    ax.set_title(f"(c) engine sideband order 1 (peak at {numeric_peak(runs,1)} THz)")
+    ax.set_title(f"(c) engine sideband order 1 (peak at {numeric_peak(runs, 1)} THz)")
     fig.suptitle(
         "Wright et al. 2015 — STMI sideband phase matching (fibre a=13 um, Delta=0.0064, 532 nm)"
     )

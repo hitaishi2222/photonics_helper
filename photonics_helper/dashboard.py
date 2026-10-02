@@ -88,7 +88,9 @@ def _gnlse_viewer(dcc, html):
                     html.Div(
                         [
                             html.Label("Length (m)"),
-                            dcc.Input(id="g-length", type="number", value=0.1, step=0.01),
+                            dcc.Input(
+                                id="g-length", type="number", value=0.1, step=0.01
+                            ),
                         ],
                         style=field_style,
                     ),
@@ -102,7 +104,9 @@ def _gnlse_viewer(dcc, html):
                     html.Div(
                         [
                             html.Label("γ (1/W/m)"),
-                            dcc.Input(id="g-gamma", type="number", value=0.01, step=0.005),
+                            dcc.Input(
+                                id="g-gamma", type="number", value=0.01, step=0.005
+                            ),
                         ],
                         style=field_style,
                     ),

@@ -68,8 +68,8 @@ assert isinstance(CauchyGlass(), OpticalMaterial)
 ```
 
 Alternatively, load a bundled material with
-`photonics_helper.core.materials.material("Silica")` — note that the *bundled
-database* is read through the Raman SQLite backend today (a naming holdover),
+`photonics_helper.core.materials.material("Silica")` — note that the _bundled
+database_ is read through the Raman SQLite backend today (a naming holdover),
 so the protocol path above is what keeps an external tool free of that
 dependency.
 
@@ -86,16 +86,16 @@ from photonics_helper.core import constants, units
 def group_velocity_dispersion(material, wavelength) -> float:
     omega0 = wavelength.to_freq().to_omega().as_rad_s
 
-    def beta(omega):                       # beta(omega) = n(omega) * omega / c
+    def beta(omega):  # beta(omega) = n(omega) * omega / c
         wavelength_um = (2 * math.pi * constants.C_MS / omega) * 1e6
         return material.n_func(wavelength_um) * omega / constants.C_MS
 
-    step = omega0 * 1e-3                   # central finite difference
+    step = omega0 * 1e-3  # central finite difference
     return (beta(omega0 + step) - 2 * beta(omega0) + beta(omega0 - step)) / step**2
 
 
 beta2 = group_velocity_dispersion(CauchyGlass(), units.Wavelength(1550, "nm"))
-print(f"beta2 = {beta2 * 1e27:.2f} ps^2/km")   # -> 24.27 ps^2/km
+print(f"beta2 = {beta2 * 1e27:.2f} ps^2/km")  # -> 24.27 ps^2/km
 ```
 
 ## Step 3 — propagate on a core grid
@@ -110,7 +110,7 @@ from photonics_helper.core import grids, units
 
 grid = grids.TemporalGrid(N=1 << 14, Tmax=units.Time(20, "ps"))
 t0 = units.Time(50, "fs").as_s
-field = np.exp(-grid.t**2 / (2 * t0**2)).astype(complex)
+field = np.exp(-(grid.t**2) / (2 * t0**2)).astype(complex)
 
 dispersion_length = t0**2 / abs(beta2)
 
@@ -139,10 +139,10 @@ form. The script prints:
 
 ## What you get, and what you don't
 
-| From the core | Not from the core |
-|---|---|
-| Typed units and constants | The GNLSE / solver stack |
-| `TemporalGrid` + FFT conventions | Plotting, dashboards |
+| From the core                                           | Not from the core                                             |
+| ------------------------------------------------------- | ------------------------------------------------------------- |
+| Typed units and constants                               | The GNLSE / solver stack                                      |
+| `TemporalGrid` + FFT conventions                        | Plotting, dashboards                                          |
 | The `OpticalMaterial` protocol and the bundled database | The specific physics of your problem — that is yours to write |
 
 That is the point: the core removes the unit/numerics/data plumbing so your code
@@ -151,5 +151,5 @@ is about your physics.
 ## Next
 
 - [Stability contract](stability.md) — what you can rely on and for how long.
-- [Foundation core](core.md) — the full surface.
+- [Foundation core](./core.md) — the full surface.
 - [API reference](api/core.md).

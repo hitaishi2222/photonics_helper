@@ -293,9 +293,7 @@ def raman_noise_field(
         generator.standard_normal(grid.N) + 1j * generator.standard_normal(grid.N)
     ) / np.sqrt(2.0)
     spec = (
-        np.sqrt(
-            hbar * float(omega0) / 2.0 * gain * thermal * (2.0 * np.pi / dw)
-        )
+        np.sqrt(hbar * float(omega0) / 2.0 * gain * thermal * (2.0 * np.pi / dw))
         * gauss
     )
     return np.asarray(grid.ifft(spec), dtype=complex)

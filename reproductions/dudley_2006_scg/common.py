@@ -288,7 +288,12 @@ class Evolution:
         """
         out = np.empty(self.fields.shape, dtype=float)
         for i, u in enumerate(self.fields):
-            out[i] = np.abs(np.fft.fftshift(np.conj(np.fft.fft(np.conj(np.fft.ifftshift(u)))))) ** 2
+            out[i] = (
+                np.abs(
+                    np.fft.fftshift(np.conj(np.fft.fft(np.conj(np.fft.ifftshift(u)))))
+                )
+                ** 2
+            )
         return out
 
     def wavelength_nm(self) -> np.ndarray:
@@ -414,7 +419,7 @@ def spectrogram(
         # Same analysis kernel family as the engine pair (ISSUES.md #0):
         # a raw np.fft (e^{−i}) mirrors the ω-axis assignment of complex
         # fields and rotates the spectrogram trace in λ.
-        S[i] = (np.fft.fftshift(np.conj(np.fft.fft(np.conj(np.fft.ifftshift(gated))))))
+        S[i] = np.fft.fftshift(np.conj(np.fft.fft(np.conj(np.fft.ifftshift(gated)))))
         S[i] = np.abs(S[i]) ** 2
     return delays * 1e12, omega, S
 
@@ -804,13 +809,22 @@ def temporal_feature_labels(
     for iz, snapshot in enumerate(evo.fields):
         # Engine-consistent e^{+i} kernel (ISSUES.md #0 resolution addendum):
         # a raw np.fft.fft mirrors the bins of complex snapshot fields.
-        spectrum = np.fft.fftshift(np.conj(np.fft.fft(np.conj(np.fft.ifftshift(snapshot)))))
+        spectrum = np.fft.fftshift(
+            np.conj(np.fft.fft(np.conj(np.fft.ifftshift(snapshot))))
+        )
         best = np.full(n_t, -np.inf)
         best_band = np.zeros(n_t, dtype=int)
         for b, mask in enumerate(band_masks):
             if not mask.any():
                 continue
-            profile = np.abs(np.fft.ifft(np.fft.ifftshift(spectrum * mask))) ** 2
+            profile = (
+                np.abs(
+                    np.fft.fftshift(
+                        np.conj(np.fft.ifft(np.conj(np.fft.ifftshift(spectrum * mask))))
+                    )
+                )
+                ** 2
+            )
             update = profile > best
             best[update] = profile[update]
             best_band[update] = b
@@ -1017,7 +1031,7 @@ def plot_temporal_evolution(
     dynamic_range_db: float = 40.0,
     cmap: str = "jet",
     z_scale: str = "cm",
-    time_reversal: bool = True,
+    time_reversal: bool = False,
     plotly: bool = False,
     annotate_features: bool = True,
 ):
@@ -1040,9 +1054,9 @@ def plot_temporal_evolution(
     z_scale : {"m", "cm", "mm"}
         Propagation-distance unit on the y axis.
     time_reversal : bool
-        Use the standard literature (Agrawal/Dudley) comoving time, where
-        Raman-red-shifted solitons appear at positive delay.  The internal
-        grid has the opposite sign; set False for the raw internal time.
+        Legacy back-compatibility flip (pre-#0 mirrored engine). Post-#0 the
+        internal grid already matches the literature comoving convention; all
+        current callers should leave this False.
     plotly : bool
         If True, return an interactive ``plotly.graph_objects.Figure`` whose
         hover labels each ``(t, z)`` cell as DW / SPM / Raman soliton.

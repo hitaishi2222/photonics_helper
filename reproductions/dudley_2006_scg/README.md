@@ -27,7 +27,7 @@ with `R(t) = (1−f_R)δ(t) + f_R h_R(t)`, `f_R = 0.18`, and the PCF of Table I
 | Figure | Script | What it shows | Validation | Status |
 |---|---|---|---|---|
 | **Fig. 3** | [`fig03_basic_scg.py`](fig03_basic_scg.py) | Basic SCG: spectral/temporal evolution + density plots, all processes on | `N = 8.66`, `z_sol = 10.7 cm`; −20 dB output span 500–1257 nm (ratio 2.51) | ✅ |
-| **Fig. 4** | [`fig04_output_features.py`](fig04_output_features.py) | Output temporal/spectral detail; DW (C) and Raman solitons (A, B) | DW 535 nm, Raman soliton 944 nm; bandpass features at τ = −3.35 / −0.76 ps | ✅ |
+| **Fig. 4** | [`fig04_output_features.py`](fig04_output_features.py) | Output temporal/spectral detail; DW (C) and Raman solitons (A, B) | DW 535 nm, Raman soliton 944 nm; bandpass features at τ = **+3.35 / +0.76 ps** (re-recorded 2026-09-30 after the #0 mirror fix in the bandpass synthesis kernel; the negative-delay values were the e^{−i}-synthesis time-reversal artifact) | ✅ |
 | **Fig. 5** | [`fig05_ideal_soliton_period.py`](fig05_ideal_soliton_period.py) | Ideal `N = 3` higher-order soliton (β₂ only, `f_R = 0`) over 2 periods | periodicity overlap at `z_sol` = **0.998**; peak compression 6.3× | ✅ |
 | **Fig. 6** | [`fig06_raman_fission.py`](fig06_raman_fission.py) | Raman-induced fission of the `N = 3` soliton (β₂ + Raman) | `L_fiss = 2.23 cm`; ejected soliton 3612 W / 10.8 fs vs Kodama–Hasegawa 3472 W / 10.0 fs | ✅ |
 | **Fig. 7** | [`fig07_fission_detail.py`](fig07_fission_detail.py) | Fission onset + first ejected soliton vs Kodama–Hasegawa | sech field overlap **0.997**; power 4.0 %, FWHM 8.3 % | ✅ |
@@ -173,8 +173,17 @@ also accept `dynamic_range_db`, `cmap`, `z_scale`, and `plotly`, in addition to
    ensemble with Raman noise): |g₁₂| stays 0.91 in the pump/soliton band,
    drops to 0.03–0.13 mean in the far wings (blue 0.20 at 690 nm), 0 ≤ g₁₂ ≤
    1 — the noise-driven decoherence structure of the paper's Fig. 19.
-   Figs. 18/20–22/28 remain not reproduced (deterministic paths only;
-   re-run remains repro-work, no engine change pending).
+   Figs. 18, 20–22, 28 **reproduced 2026-09-30** (ensemble scripts):
+   `fig20_coherence_evolution.py` (Fig. 20 spectra + |g₁₂|-vs-z for the
+   100/150 fs 10 kW decks over 10 cm — near-unity coherent-seeding band
+   112 nm (100 fs) vs 1.1 nm (150 fs); Fig. 18(c) = the 150 fs output
+   coherence, Fig. 18(d) = the per-branch pump-λ phase trajectories from
+   the same ensemble), `fig21_coherence_vs_pump.py` (Fig. 21a avg |g₁₂| +
+   −20 dB width vs pump λ; narrative asserts RECORDED — measured β(λ)
+   still needed), `fig22_coherence_vs_N.py` (Fig. 22 scatter: N ≈ 5–11 →
+   |g₁₂| 0.94–0.98, N ≥ 26 → ~0.20 — the paper's transition band),
+   `fig28_picosecond_coherence.py` (Fig. 28: 20 ps/500 W deck — coherent
+   only at the pump, smooth mean spectrum, far wings |g₁₂| ~ 0.2).
 3. **Fig. 10 beat frequency.** The paper quotes ≈ 165 THz between the two
    beating spectrogram bands. The deterministic simulation gives a different
    beat (≈ 17 THz here). The script therefore validates the *method* and the
@@ -201,3 +210,22 @@ figures against analytic references; they are not pixel-level digitised
 reproductions. Where the paper's exact curve depends on unstated choices
 (noise realisation, corrected shock time, full GVD table) this is called out
 under **ISSUES** rather than hidden behind a loose tolerance.
+
+## Full-mode re-run record (2026-09-30, follow-up session)
+
+All seven slow-path figures (Figs. 3, 5–10) re-run at `fast=False` on the
+current engine (post-#0 swap + post-FWM-RK4 fix), fresh npz caches written:
+
+- **Fig. 3 row RE-CONFIRMED**: fresh full-mode −20 dB span = **499.9–1256.7 nm**
+  (ratio **2.514**), N = 8.66, z_sol = 10.71 cm — identical to the recorded
+  row; the earlier "broader span was a fast-grid/stale-cache artifact"
+  suspicion is resolved (the row stands as measured, now from a fresh cache).
+- Fig. 8: DW 645.4 nm vs phase-matching 662.8 nm (**2.63 %**), DW energy
+  fraction 0.092 (no Raman) → 0.019 (Raman) — unchanged on fresh caches.
+- Fig. 6: ejected j=1 3612 W / 10.84 fs vs KH 3472/10.01; mean λ 835 →
+  **1250.7 nm** — unchanged.
+- `common.py` audit (raw-`np.fft` mirror follow-up): the spectrogram helper
+  and the sorted-wavelength interpolation path were tone-probe-checked in
+  the suite (`test_dudley_common_analysis_channel_mirror_audit`); the
+  legacy `time_reversal=True` default in `plot_temporal_evolution` is
+  retired to `False` (post-#0 internal time already matches the literature).

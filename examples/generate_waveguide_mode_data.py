@@ -54,7 +54,9 @@ def _group_index(wl_um: np.ndarray, neff: np.ndarray) -> np.ndarray:
     return neff - wl_um * np.gradient(neff, wl_um)
 
 
-def _write_export(stem: str, wl_um: np.ndarray, neff: np.ndarray, ng: np.ndarray) -> None:
+def _write_export(
+    stem: str, wl_um: np.ndarray, neff: np.ndarray, ng: np.ndarray
+) -> None:
     """Write one solver's table as CSV (with header) and NPZ."""
     DATA.mkdir(parents=True, exist_ok=True)
     csv_path = DATA / f"{stem}.csv"
@@ -145,21 +147,29 @@ def run_tidy3d() -> tuple[np.ndarray, np.ndarray, np.ndarray]:
 
 def main() -> None:
     print("Generating waveguide n_eff(λ) export data")
-    print(f"  geometry: Si {W_CORE_UM}×{H_CORE_UM} µm strip, n_Si={N_SI}, n_SiO2={N_SIO2}")
-    print(f"  grid: {len(WAVELENGTHS_UM)} wavelengths, {WAVELENGTHS_UM[0]}–{WAVELENGTHS_UM[-1]} µm\n")
+    print(
+        f"  geometry: Si {W_CORE_UM}×{H_CORE_UM} µm strip, n_Si={N_SI}, n_SiO2={N_SIO2}"
+    )
+    print(
+        f"  grid: {len(WAVELENGTHS_UM)} wavelengths, {WAVELENGTHS_UM[0]}–{WAVELENGTHS_UM[-1]} µm\n"
+    )
 
     print("femwell:")
     t0 = time.time()
     wl, neff_fw = run_femwell()
     ng_fw = _group_index(wl, neff_fw)
     _write_export("si_strip_femwell", wl, neff_fw, ng_fw)
-    print(f"  n_eff(1550 nm) = {np.interp(1.55, wl, neff_fw):.6f}  ({time.time() - t0:.1f}s)\n")
+    print(
+        f"  n_eff(1550 nm) = {np.interp(1.55, wl, neff_fw):.6f}  ({time.time() - t0:.1f}s)\n"
+    )
 
     print("tidy3d:")
     t0 = time.time()
     _, neff_td, ng_td = run_tidy3d()
     _write_export("si_strip_tidy3d", wl, neff_td, ng_td)
-    print(f"  n_eff(1550 nm) = {np.interp(1.55, wl, neff_td):.6f}  ({time.time() - t0:.1f}s)\n")
+    print(
+        f"  n_eff(1550 nm) = {np.interp(1.55, wl, neff_td):.6f}  ({time.time() - t0:.1f}s)\n"
+    )
 
     max_dev = float(np.max(np.abs(neff_fw - neff_td) / neff_td))
     meta = {

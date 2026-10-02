@@ -155,9 +155,9 @@ def overlap_weights(w0: float, nmode: int = 3) -> tuple[NDArray, NDArray, float]
         for j in range(nmode):
             for k in range(nmode):
                 for ell in range(nmode):
-                    g[i, j, k, ell] = np.trapezoid(
-                        f[i] * f[j] * f[k] * f[ell], x
-                    ) * area
+                    g[i, j, k, ell] = (
+                        np.trapezoid(f[i] * f[j] * f[k] * f[ell], x) * area
+                    )
     return S / S[0, 0], g / S[0, 0], 1.0 / S[0, 0]
 
 
@@ -182,7 +182,7 @@ def seed_fractions(w0: float) -> NDArray:
     f = radial_modes(x, w0, 3)
     area = np.pi * w0**2 / 2.0
     rho = np.sqrt(x * w0**2 / 2.0)
-    fg = np.exp(-rho**2 / SEED_WAIST**2)
+    fg = np.exp(-(rho**2) / SEED_WAIST**2)
     num = np.array([np.trapezoid(f[p] * fg, x) * area for p in range(3)])
     norm = np.trapezoid(fg**2, x) * area
     e = num**2 / norm
@@ -234,9 +234,7 @@ def mode_mfd_direct(
     return _mfd_from_fields(list(fields_at_z), grid, moments)
 
 
-def _mfd_from_fields(
-    a: list[NDArray], grid: TemporalGrid, moments: NDArray
-) -> float:
+def _mfd_from_fields(a: list[NDArray], grid: TemporalGrid, moments: NDArray) -> float:
     dt = grid.dt
     denom = 0.0
     num = 0.0
@@ -297,9 +295,7 @@ def run(nonlinear: bool, nsaves: int = N_SAVES):
     return engine
 
 
-def run_si_direct(
-    db0: NDArray, z_span: float, step: float, nsaves: int
-):
+def run_si_direct(db0: NDArray, z_span: float, step: float, nsaves: int):
     """Short linear run WITH `phase_offsets` (paper Eq. 3 i*db0^(p) term).
 
     Fine steps (20 um << 408 um self-imaging period) resolve the fast modal
@@ -326,7 +322,9 @@ def run_si_direct(
         for p in range(3)
     ]
     fiber = FiberProfile(
-        n2=1e-30, alpha=0.0, A_eff=Area(aeff, "m^2"),
+        n2=1e-30,
+        alpha=0.0,
+        A_eff=Area(aeff, "m^2"),
         length=Length(z_span, "m"),
     )
     engine = MultimodeSplitStepEngine(
@@ -363,9 +361,7 @@ def validate(*, fast: bool = False, make_plot: bool = True) -> dict:
     fractions = seed_fractions(w0)
     xpm, fwm, aeff = overlap_weights(w0)
 
-    rel_walk = np.abs(
-        delays[1:] / (PAPER_WALKOFF_FS_PER_M * 1e-15) - 1.0
-    )
+    rel_walk = np.abs(delays[1:] / (PAPER_WALKOFF_FS_PER_M * 1e-15) - 1.0)
     assert rel_walk.max() < 0.03, f"walk-off vs paper: {delays} (rel {rel_walk})"
     frac_pct = 100.0 * fractions
     assert np.max(np.abs(frac_pct - PAPER_FRACTIONS)) < 0.1, frac_pct
@@ -376,7 +372,7 @@ def validate(*, fast: bool = False, make_plot: bool = True) -> dict:
     #   db1^(p) + beta2 * dw = 0  ->  dw = -db1^(p)/beta2
     # dw > 0 for db1 > 0, beta2 < 0  ->  physically BLUE, dl < 0 in wavelength;
     # magnitudes ~1.5 / 4.6 nm for p = 1, 2.
-    dw_required = -delays / BETA2                       # rad/s, p = 0..2
+    dw_required = -delays / BETA2  # rad/s, p = 0..2
     dlam_required_nm = (-dw_required * (LAMBDA0**2) / (2 * np.pi * C_MS)) * 1e9
     results["required_shift_nm"] = dlam_required_nm.tolist()
     results["required_shift_rad_s"] = dw_required.tolist()
@@ -435,9 +431,7 @@ def validate(*, fast: bool = False, make_plot: bool = True) -> dict:
 
     # higher-order modes blue-shifted (Fig. 2c)
     omega = eng_nl.grid.w
-    spectra_nl = [
-        np.abs(eng_nl.grid.fft(fields_nl[p][-1])) ** 2 for p in range(3)
-    ]
+    spectra_nl = [np.abs(eng_nl.grid.fft(fields_nl[p][-1])) ** 2 for p in range(3)]
     centres = [spectral_centroid_nm(omega, s) for s in spectra_nl]
     # The paper reports the higher-order modes blue-shifted (Fig. 2c).  The
     # output spectra here are strongly structured by dispersive radiation, so
@@ -453,7 +447,9 @@ def validate(*, fast: bool = False, make_plot: bool = True) -> dict:
     # asserted (locked-carrier compromise at 7.2 %/0.56 % seed fractions).
     rel_shifts = [centres[1] - centres[0], centres[2] - centres[0]]
     assert rel_shifts[0] < 0 and rel_shifts[1] < 0, (
-        "higher-mode locking shifts must be blue (paper Fig. 2c)", rel_shifts)
+        "higher-mode locking shifts must be blue (paper Fig. 2c)",
+        rel_shifts,
+    )
 
     # total energy conservation along z (both runs)
     energy_lin = eng_lin.energy_vs_z
@@ -491,18 +487,26 @@ def validate(*, fast: bool = False, make_plot: bool = True) -> dict:
     # omitted beta0 phase restored analytically (kept as a cross-check).
     z_short = np.linspace(0.0, 4e-3, 801)
     fields_at_0 = [fields_lin[p][0] for p in range(3)]
-    mfd = np.array([
-        mode_mfd(fields_at_0, eng_lin.grid, moments, db0, z) for z in z_short
-    ]) * 1e6
+    mfd = (
+        np.array(
+            [mode_mfd(fields_at_0, eng_lin.grid, moments, db0, z) for z in z_short]
+        )
+        * 1e6
+    )
 
     eng_si = run_si_direct(db0, z_span=4e-3, step=20e-6, nsaves=801)
     fields_si = eng_si.fields_vs_z()
-    mfd_direct = np.array([
-        mode_mfd_direct(
-            [fields_si[p][k] for p in range(3)], eng_si.grid, moments
+    mfd_direct = (
+        np.array(
+            [
+                mode_mfd_direct(
+                    [fields_si[p][k] for p in range(3)], eng_si.grid, moments
+                )
+                for k in range(fields_si[0].shape[0])
+            ]
         )
-        for k in range(fields_si[0].shape[0])
-    ]) * 1e6
+        * 1e6
+    )
 
     def _dominant_period(mfd_curve: NDArray, z_axis: NDArray) -> float:
         spectrum = np.abs(np.fft.rfft(mfd_curve - mfd_curve.mean())) ** 2
@@ -514,7 +518,8 @@ def validate(*, fast: bool = False, make_plot: bool = True) -> dict:
     assert abs(period_um / (l_si * 1e6) - 1.0) < 0.05, (period_um, l_si * 1e6)
     period_direct_um = _dominant_period(mfd_direct, eng_si.z_array)
     assert abs(period_direct_um / (l_si * 1e6) - 1.0) < 0.05, (
-        period_direct_um, l_si * 1e6,
+        period_direct_um,
+        l_si * 1e6,
     )
     results["mfd_oscillation_period_um"] = period_um
     results["mfd_direct_oscillation_period_um"] = period_direct_um
@@ -659,8 +664,9 @@ def _plot(result: dict) -> None:
     # (f) self-imaging MFD: post-processing vs direct phase_offsets run
     ax = axes[1, 2]
     ax.plot(d["z_short"] * 1e3, d["mfd"], "k-", label="phase restored")
-    ax.plot(d["z_direct"] * 1e3, d["mfd_direct"], "C1--",
-            label="direct (phase_offsets)")
+    ax.plot(
+        d["z_direct"] * 1e3, d["mfd_direct"], "C1--", label="direct (phase_offsets)"
+    )
     ax.axhline(2 * mode_w0() * 1e6, color="r", ls=":", label=r"$2w_0$")
     ax.set_xlabel("z (mm)")
     ax.set_ylabel("MFD (um)")

@@ -50,9 +50,13 @@ def _fission_build(N: int, Tmax_s: float, num_steps: int) -> GNLSESolver:
     gamma = 2.0
     peak = 9.0 * abs(BETA2) / (gamma * t0**2)  # soliton order N = 3
     length = 2.0 * (np.pi / 2) * t0**2 / abs(BETA2)
-    envelope = Envelope(shape="sech", peak_amplitude=np.sqrt(peak), pulse_width=Time(t0, "s"))
+    envelope = Envelope(
+        shape="sech", peak_amplitude=np.sqrt(peak), pulse_width=Time(t0, "s")
+    )
     pulse = Wave(grid=grid, envelope=envelope, central_wavelength=Wavelength(WL0, "m"))
-    fiber = FiberProfile.from_gamma(gamma=gamma, n2=2.6e-20, omega0=OMEGA0, length=Length(length, "m"))
+    fiber = FiberProfile.from_gamma(
+        gamma=gamma, n2=2.6e-20, omega0=OMEGA0, length=Length(length, "m")
+    )
     solver = GNLSESolver(
         pulse=pulse,
         fiber=fiber,
@@ -122,9 +126,23 @@ def test_observables_are_caller_selected():
 
     custom = convergence_study(
         _fission_build,
-        observables={"max_minus_two": lambda r: float(np.max(np.abs(
-            (r.evolution[-1].envelope_field if hasattr(r, "evolution") else r.envelope_field)
-        )) ** 2) - 2.0},
+        observables={
+            "max_minus_two": lambda r: (
+                float(
+                    np.max(
+                        np.abs(
+                            (
+                                r.evolution[-1].envelope_field
+                                if hasattr(r, "evolution")
+                                else r.envelope_field
+                            )
+                        )
+                    )
+                    ** 2
+                )
+                - 2.0
+            )
+        },
         **shared,
     )
     assert [o.name for o in custom.observables] == ["max_minus_two"]
@@ -135,7 +153,9 @@ def test_observables_are_caller_selected():
 
 def test_convergence_study_requires_two_refinements():
     with pytest.raises(ValueError, match="at least two refinements"):
-        convergence_study(_fission_build, refinements=[{"N": 1024, "Tmax_s": 8e-12, "num_steps": 64}])
+        convergence_study(
+            _fission_build, refinements=[{"N": 1024, "Tmax_s": 8e-12, "num_steps": 64}]
+        )
     with pytest.raises(ValueError, match="tolerance"):
         convergence_study(
             _fission_build,
@@ -201,9 +221,14 @@ def test_check_mi_matches_linear_stability():
         probe_omega=2 * np.pi * 1.0e12,
         grid=grid,
     )
-    assert abs(metrics["g_measured"] - metrics["g_reference"]) / metrics["g_reference"] < 0.15
+    assert (
+        abs(metrics["g_measured"] - metrics["g_reference"]) / metrics["g_reference"]
+        < 0.15
+    )
     # the validated power-gain convention: g_max = 2γP
-    assert mi_gain_of(BETA2, 1.0, 1.0, 9759000729485.332) == pytest.approx(2.0, rel=1e-3)
+    assert mi_gain_of(BETA2, 1.0, 1.0, 9759000729485.332) == pytest.approx(
+        2.0, rel=1e-3
+    )
 
 
 def test_check_mi_rejects_normal_dispersion():
@@ -235,15 +260,22 @@ def test_check_soliton_detects_slight_drift():
     grid = TemporalGrid(N=16384, Tmax=Time(8e-12, "s"))
     with pytest.raises(ValidationFailure):
         check_soliton(
-            beta2=BETA2, gamma=1.0, t0=1e-12, wavelength_m=WL0, grid=grid,
-            periods=1.0, tolerance=0.0,
+            beta2=BETA2,
+            gamma=1.0,
+            t0=1e-12,
+            wavelength_m=WL0,
+            grid=grid,
+            periods=1.0,
+            tolerance=0.0,
         )
 
 
 def test_check_gordon_ssfs_matches_gordon():
     """Raman SSFS rate vs Gordon's analytic law (Gordon 1986)."""
     grid = TemporalGrid(N=8192, Tmax=Time(14e-12, "s"))
-    spec = RamanSpec(name="Silica", raman_shift_cm=440.0, raman_linewidth_cm=45.0, fR=0.18)
+    spec = RamanSpec(
+        name="Silica", raman_shift_cm=440.0, raman_linewidth_cm=45.0, fR=0.18
+    )
     response = RamanResponse(spec=spec, fR=0.18, tau1=12.2e-15, tau2=32e-15, grid=grid)
     beta2 = -7.0e-27
     gamma = 0.11
@@ -265,7 +297,11 @@ def test_check_gordon_ssfs_matches_gordon():
 
 def test_gordon_ssfs_rate_guards():
     with pytest.raises(ValueError, match="anomalous"):
-        gordon_ssfs_rate(beta2=1e-27, gamma=1.0, peak_power=1.0, t0=1e-12, t_raman=1e-15)
+        gordon_ssfs_rate(
+            beta2=1e-27, gamma=1.0, peak_power=1.0, t0=1e-12, t_raman=1e-15
+        )
     # soliton-order assertion: γP₀T₀²/|β₂| = 1 required
     with pytest.raises(ValueError, match="fundamental soliton"):
-        gordon_ssfs_rate(beta2=-21e-27, gamma=1.0, peak_power=1.0, t0=1e-12, t_raman=1e-15)
+        gordon_ssfs_rate(
+            beta2=-21e-27, gamma=1.0, peak_power=1.0, t0=1e-12, t_raman=1e-15
+        )

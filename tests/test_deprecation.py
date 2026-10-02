@@ -91,7 +91,9 @@ def test_keyword_call_is_preserved():
 
 def test_warn_deprecated_helper():
     with pytest.warns(DeprecationWarning) as record:
-        warn_deprecated("legacy", replacement="modern", since="0.1.7", removed_in="0.3.0")
+        warn_deprecated(
+            "legacy", replacement="modern", since="0.1.7", removed_in="0.3.0"
+        )
     message = str(record[0].message)
     assert "legacy" in message and "modern" in message and "0.3.0" in message
 
