@@ -4,11 +4,10 @@ Modal overlap coupling ``g`` (uniform waveguide) and periodically-grooved LN
 ``g'`` (PGLN), evaluated with the :mod:`photonics_helper.chi2` mode-overlap
 APIs (``shg_coupling_overlap`` / ``pgln_overlap``).
 
-``_n_e`` below is a placeholder interpolation between the article-validated
-LiNbO₃ extraordinary-index anchors; the openspec change
-``fix-shg-replication-gaps`` (Group 4) seeds the real birefringent Sellmeier
-curve in ``materials.db`` and this module then reads it via
-``RefractiveIndex.from_material_database("LiNbO3", axis="extraordinary")``.
+``_n_e`` reads the birefringent Sellmeier curve seeded in ``materials.db`` by
+the openspec change ``fix-shg-replication-gaps`` (Group 4) via
+``RefractiveIndex.from_material_database("LiNbO3", axis="extraordinary")``, and
+falls back to the article-validated anchors below if the database row is absent.
 """
 
 from __future__ import annotations
@@ -20,6 +19,7 @@ import numpy as np
 
 from photonics_helper.base import Area, Wavelength
 from photonics_helper.chi2 import pgln_overlap, shg_coupling, shg_coupling_overlap
+from photonics_helper.materials import RefractiveIndex
 
 RESULTS = Path(__file__).parent / "results.json"
 WL_PUMP = Wavelength(1550, "nm")
@@ -38,14 +38,23 @@ _N_E_ANCHORS = ((0.775, 2.187), (1.55, 2.139))  # Edwards & Lawrence, n_e
 
 
 def _n_e(wl_um: float) -> float:
-    """Extraordinary index of x-cut LiNbO₃ near the working band (see note)."""
-    return float(
-        np.interp(
-            wl_um,
-            [a[0] for a in _N_E_ANCHORS],
-            [a[1] for a in _N_E_ANCHORS],
+    """Extraordinary index of x-cut LiNbO₃ near the working band.
+
+    Preferred source is the packaged database curve; the anchor interpolation is
+    a fallback so the deck still runs on a materials.db without LiNbO₃.
+    """
+    try:
+        curve = RefractiveIndex.from_material_database("LiNbO3", axis="extraordinary")
+        wl_m = np.asarray(curve.wl.as_m, dtype=float)
+        return float(np.interp(wl_um * 1e-6, wl_m, np.asarray(curve.n, dtype=float)))
+    except (KeyError, ValueError, FileNotFoundError):
+        return float(
+            np.interp(
+                wl_um,
+                [a[0] for a in _N_E_ANCHORS],
+                [a[1] for a in _N_E_ANCHORS],
+            )
         )
-    )
 
 
 def main() -> dict:
