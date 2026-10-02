@@ -272,7 +272,6 @@ def _method_runs(d: dict, A_ref: np.ndarray) -> dict:
     A0 = deck_a_field(deck_a_operator(d), d)
     length = float(d["length_m"])
     a = d["anchors"]
-    targets = a["eps_targets"]
     out: dict = {}
     methods = (
         ("rk4ip-cqe", "rk4ip", CQEStepper, "goal"),

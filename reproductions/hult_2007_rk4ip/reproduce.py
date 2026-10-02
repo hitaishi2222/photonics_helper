@@ -265,8 +265,8 @@ def scg_physics() -> dict:
     dw_lam, dw_v = strongest_peak_in_band(lam, psd, 400.0, dw_band_floor)
     from scipy.signal import find_peaks
 
-    I = np.abs(A1) ** 2
-    pks, _ = find_peaks(I, height=I.max() * 0.02, distance=8)
+    spec_t = np.abs(A1) ** 2
+    pks, _ = find_peaks(spec_t, height=spec_t.max() * 0.02, distance=8)
     mask20 = psd >= peak * 0.01
     return {
         "input_red_edge_nm": red_input,
@@ -302,7 +302,6 @@ def scg_ladder(length_m: float | None = None) -> dict:
         if length_m is None
         else length_m
     )
-    T_s = d.get("Tmax_s", 4e-12)
     op = _build_scg_op()
     A0 = np.sqrt(d["P0_W"]) / np.cosh(op.grid.t / (d["T0_fs"] * 1e-15))
     steps = d["ladder_steps"]

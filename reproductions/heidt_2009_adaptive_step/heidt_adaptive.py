@@ -257,19 +257,19 @@ class GNLSEOperator:
     def invariant(self, A: np.ndarray) -> float:
         """Photon number (paper Eq. (8), with S(ω) = n_eff A_eff factored out)
         or the pulse energy for the NLSE."""
-        I = np.abs(self.fft(A)) ** 2
+        spec = np.abs(self.fft(A)) ** 2
         if self.invariant_kind == "photon":
-            return float(np.sum(I * self._inv_omega) * self.grid.dw)
-        return float(np.sum(I) * self.grid.dw)
+            return float(np.sum(spec * self._inv_omega) * self.grid.dw)
+        return float(np.sum(spec) * self.grid.dw)
 
     def invariant_rate(self, A: np.ndarray) -> float:
         """dP/dz at the current field (paper Eq. (14): −∫α π dω)."""
         if self.alpha == 0.0:
             return 0.0
-        I = np.abs(self.fft(A)) ** 2
+        spec = np.abs(self.fft(A)) ** 2
         if self.invariant_kind == "photon":
-            return float(-self.alpha * np.sum(I * self._inv_omega) * self.grid.dw)
-        return float(-self.alpha * np.sum(I) * self.grid.dw)
+            return float(-self.alpha * np.sum(spec * self._inv_omega) * self.grid.dw)
+        return float(-self.alpha * np.sum(spec) * self.grid.dw)
 
 
 # --------------------------------------------------------------------------

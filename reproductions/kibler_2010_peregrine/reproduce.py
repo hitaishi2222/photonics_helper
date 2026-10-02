@@ -59,7 +59,6 @@ import numpy as np
 from scipy.signal import find_peaks
 
 from photonics_helper.breathers import (
-    akhmediev_breather,
     general_sfb,
     peregrine_soliton,
     sfb_peak_ratio,
@@ -80,12 +79,12 @@ def _fwhm(t: np.ndarray, y: np.ndarray) -> float:
     """FWHM via linear-interpolated half-max crossings around the global peak."""
     i0 = int(np.argmax(y))
     half = y[i0] / 2.0
-    l = i0
-    while l > 0 and y[l] > half:
-        l -= 1
-    if l <= 0:
+    left = i0
+    while left > 0 and y[left] > half:
+        left -= 1
+    if left <= 0:
         return float("nan")
-    fL = t[l] + (t[l + 1] - t[l]) * (half - y[l]) / (y[l + 1] - y[l])
+    fL = t[left] + (t[left + 1] - t[left]) * (half - y[left]) / (y[left + 1] - y[left])
     r = i0
     while r < len(y) - 1 and y[r] > half:
         r += 1
@@ -147,7 +146,6 @@ def _propagate_modulated_cw(
         include_self_steepening=False,
     )
     z_end = length if L_fiber is None else min(length, xi_end * L_NL)
-    n_steps = max(int(np.ceil(n_z * z_end / (xi_end * L_NL))), n_z)
     solver.propagate(
         num_steps=int(np.ceil(n_z * (z_end if L_fiber is None else 1.0))), nsaves=n_z
     )
@@ -161,7 +159,6 @@ def validate(params: dict | None = None, make_plot: bool = True) -> dict:
     lam0 = params["central_wavelength_nm"] * 1e-9
     P0 = params["pump_power_W"]
     a_deck = params["modulation_depth_a"]
-    f_deck = params["modulation_frequency_GHz"] * 1e9
     xi_deck = params["xi_target"]
 
     L_NL = 1.0 / (gamma * P0)
@@ -303,8 +300,6 @@ def validate(params: dict | None = None, make_plot: bool = True) -> dict:
     # |psi_PS(0, tau)|^2 rescaled.
     # ------------------------------------------------------------------
     a_lim = 0.495
-    nu_l = 2.0 * np.sqrt(1 - 2 * a_lim)
-    T_mod = 2.0 * np.pi / nu_l * T0
     psi0_l = general_sfb(-6.0, grid.t / T0, a_lim) * np.sqrt(P0)
     env_l = _cos_envelope(
         np.asarray(psi0_l), grid, float(np.sqrt(P0) * (1 + 4 * a_lim)), float(T0)

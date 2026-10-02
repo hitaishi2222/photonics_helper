@@ -24,7 +24,6 @@ Validation (structural, quick- and full-grid):
 
 from __future__ import annotations
 
-from math import pi
 from pathlib import Path
 
 import numpy as np
@@ -132,7 +131,6 @@ def validate(fast: bool = True, make_plot: bool = True) -> dict:
         import matplotlib.pyplot as plt
 
         fig, ax = plt.subplots(figsize=(7, 4.5))
-        Ns = [r["N"] for r in rows]
         gs = [r["g12_avg"] for r in rows]
         ax.scatter(
             [r["N"] for r in rows],
