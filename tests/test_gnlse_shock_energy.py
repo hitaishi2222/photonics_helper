@@ -250,6 +250,13 @@ def test_fissioning_shock_drift_scales_with_grid_validity():
     the engine is photon-conserving to a few tenths of a percent even through
     genuine soliton fission, so the residual is a grid artifact rather than a
     property of the first-order Blow-Wood model.
+
+    The bounds are deliberately loose and only pin the ORDER OF MAGNITUDE:
+    measured resolved/under-resolved drift is -0.28 % / -5.2 % with the FFTW3
+    backend and -0.64 % / -6.1 % with the scipy/numpy fallback, so the threshold
+    has to hold on both CI legs (with- and without-pyfftw). What is being
+    asserted is the separation — roughly an order of magnitude — not a
+    backend-independent number to three digits.
     """
     from scipy.signal import find_peaks
 
@@ -268,7 +275,9 @@ def test_fissioning_shock_drift_scales_with_grid_validity():
 
     # the deck really does fission, otherwise this proves nothing
     assert peaks[1024] > 3
-    # resolved grid: small drift
-    assert abs(drifts[1024]) < 0.5, drifts
+    # resolved grid: sub-percent drift
+    assert abs(drifts[1024]) < 1.0, drifts
     # under-resolved grid: the multi-percent drift of ISSUES.md #1
     assert abs(drifts[4096]) > 2.0, drifts
+    # ...and the separation between the two is the actual claim
+    assert abs(drifts[4096]) > 5.0 * abs(drifts[1024]), drifts
