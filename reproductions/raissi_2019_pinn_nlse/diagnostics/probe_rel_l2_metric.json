@@ -1,0 +1,13 @@
+{
+  "checkpoint": "/tmp/ck_mid.pt",
+  "checkpoint_stage": "lbfgs-mid",
+  "checkpoint_loss": 1.326906557356655e-05,
+  "paper_rel_l2": 0.00197,
+  "metrics": {
+    "complex": 0.006839896609919754,
+    "magnitude": 0.0036154663766059694,
+    "real": 0.005211304544235262,
+    "imag": 0.008889634804025033,
+    "intensity": 0.0015157153942440633
+  }
+}

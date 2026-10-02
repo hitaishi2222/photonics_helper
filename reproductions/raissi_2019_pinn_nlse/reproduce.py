@@ -561,6 +561,7 @@ def train_pinn(
         print("  Adam skipped (LBFGS/pre-eval resume): checkpoint net kept")
 
     if lbfgs_iters:
+        metrics_lbfgs: dict = {}
         pbar = tqdm(total=lbfgs_iters, desc="LBFGS", unit="iter")
         opt2 = torch.optim.LBFGS(
             params_nn,
@@ -605,6 +606,16 @@ def train_pinn(
         opt2.step(closure)
         pbar.close()
         print(f"  LBFGS done in {time.time() - t0:.0f}s, final loss {hist[-1]:.3e}")
+        metrics_lbfgs = {
+            "closures": count[0],
+            "torch_n_iter": int(opt2.state[params_nn[0]].get("n_iter", -1)),
+            "budget": lbfgs_iters,
+        }
+        print(
+            f"  LBFGS accounting: {count[0]} closure evaluations, "
+            f"{metrics_lbfgs['torch_n_iter']} accepted iterations, budget "
+            f"{lbfgs_iters} (torch LBFGS counts closures, not accepted steps)"
+        )
         if device != "cpu":
             torch.cuda.empty_cache()
 
@@ -613,6 +624,7 @@ def train_pinn(
         "loss_final": hist[-1],
         "loss_history": hist,
         "train_seconds": time.time() - t0,
+        **({"lbfgs_accounting": metrics_lbfgs} if lbfgs_iters else {}),
     }
     if lam is not None:
         metrics["lambda_recovered"] = float(lam.detach())
@@ -664,6 +676,15 @@ def evaluate_pinn(trained: dict, H: np.ndarray, z_arr: np.ndarray) -> dict:
     out = {"rel_l2_full": rel_l2(h_pred - H, H)}
     out["rel_l2_real"] = rel_l2(h_pred.real - H.real, H.real)
     out["rel_l2_imag"] = rel_l2(h_pred.imag - H.imag, H.imag)
+    # The paper's Fig. 2 top panel plots the *magnitude* |h| = sqrt(u^2+v^2),
+    # and its text measures "the relative L2-norm" of the prediction against
+    # the test data. Because phase errors cancel on the magnitude, that
+    # convention gives a legitimately smaller number than the complex-field
+    # one — which is the whole of the apparent ~3x gap in ISSUES.md #6. All
+    # conventions are recorded so the reproduction states which one it means.
+    mag_p, mag_e = np.abs(h_pred), np.abs(H)
+    out["rel_l2_magnitude"] = rel_l2(mag_p - mag_e, mag_e)
+    out["rel_l2_intensity"] = rel_l2(mag_p**2 - mag_e**2, mag_e**2)
     # cut profiles at the paper's instants (nearest snapshot; spacing pi/2/200)
     cuts = {}
     for tc in (0.59, 0.79, 0.98):
@@ -868,6 +889,8 @@ def validate(
     results["pinn"]["rel_l2_full"] = ev["rel_l2_full"]
     results["pinn"]["rel_l2_real"] = ev["rel_l2_real"]
     results["pinn"]["rel_l2_imag"] = ev["rel_l2_imag"]
+    results["pinn"]["rel_l2_magnitude"] = ev["rel_l2_magnitude"]
+    results["pinn"]["rel_l2_intensity"] = ev["rel_l2_intensity"]
     results["pinn"]["cuts_rel_l2"] = {k: c["rel_l2"] for k, c in ev["cuts"].items()}
     results["pinn"]["paper_rel_l2"] = params["reference"]["paper_rel_l2"]
 
