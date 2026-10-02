@@ -140,7 +140,7 @@ FFT-kernel tone probe, RDW group-delay walk-off.
 
 ---
 
-## 1. Self-steepening: residual photon-number drift (model-intrinsic)
+## 1. Self-steepening: residual photon-number drift — **RESOLVED 2026-10-02: a grid-validity artifact, not a model defect**
 
 **Symptom.** With `include_self_steepening=True` (+ Raman), long SCG-class
 runs drift the pulse energy / photon number by ≈5–6 % (was ≈12 % before the
@@ -205,6 +205,81 @@ E-anchor reproduces at ξ≈105 (E → 0.517 vs paper 0.5); the Ω magnitude
 **Detailed write-up:** `reproductions/README.md` → "ISSUE detail — shock
 energy drift". Also touched: `REPORT.md` (2 annotated entries),
 `dudley_2006_scg/`, Krupa/Dudley reproductions (shock off).
+
+### Resolution (2026-10-02) — the "+5–6 %" number is a grid artifact, and the guard now says so
+
+The symptom above was never pinned by a test: `tests/test_gnlse_conserving_shock.py`
+runs with `betas = [0]` (no dispersion ⇒ no fission) and its own comment concedes
+"on this shortened state both are small". Measuring it properly changed the
+conclusion.
+
+**Deck.** A genuinely fissioning soliton state (Hult/Dudley Table-I PCF
+parameters, T0 = 500 fs, γ = 0.045 W⁻¹m⁻¹, β₂ = −0.01276 ps²/m, P₀ tuned to
+N_sol ≈ 3, L = 100 m; 49–51 temporal peaks at the exit). A long pulse is
+required so the shock term is *resolvable at all* — the first-order expansion
+ω/ω₀ ≈ 1 + Ω·τ_shock needs τ·Ω_max ≲ 0.1, i.e. dt ≳ 14 fs.
+
+| τ_shock·Ω_max | photon drift | reading |
+|---|---|---|
+| 0.073 | **−0.002 … −0.28 %** | resolved; conservative through 51-peak fission |
+| 0.145 | −3.14 % | expansion already invalid |
+| 0.290 | **−5.22 %** | ← the origin of the familiar "≈5–6 %" |
+| 0.581 | −2.73 % | past the guard's useful range; non-monotone ⇒ numerical noise |
+
+**Findings.**
+
+1. **The drift is resolution-limited, not conservation-law-limited.** On a
+   grid where the shock expansion is valid, the engine is photon-conserving to
+   a few tenths of a percent *through genuine soliton fission*; the
+   multi-percent drift appears only once τ·Ω_max ≳ 0.15, where the Taylor form
+   itself is wrong. The "≈5–6 %" figure is reproduced exactly at τ·Ω_max ≈
+   0.29 — i.e. it is a property of an under-resolved grid, not of the
+   first-order Blow–Wood model.
+2. **The 28 fs SCG decks cannot run the shock term at all.** On the Hult
+   Table-I deck the engine's Ω_max < ω₀ guard rejects self-steepening outright;
+   forcing it through would need dt > 1.4 fs ⇒ τ·Ω_max ≈ 0.6. This is exactly
+   the deviation the Hult folder already records ("shock ... DISABLED"), now
+   independently confirmed from the engine side.
+3. **The opt-in `conserving_shock=True` arm does not rescue the large-drift
+   regime** (−6.53 % vs the standard −5.22 % at τ·Ω_max = 0.29); it matches
+   the standard engine in the resolved regime (−0.135 % vs −0.144 %). The
+   earlier framing "the pcGNLSE arm suppresses the drift" is therefore only
+   supported in the regime where there is little drift to suppress, and is
+   **not** evidence that pcGNLSE fixes under-resolution.
+
+**Fix shipped.** `SplitStepEngine._validate_shock_grid` now also checks the
+Taylor-validity parameter `τ_shock·Ω_max` and warns above
+`_SHOCK_TAYLOR_LIMIT = 0.2` (`photonics_helper/gnlse.py`), naming the measured
+drift values and the remedies (raise Tmax / reduce N / disable shock). It warns
+rather than raises because the term is still well defined up to the harder
+Ω_max < ω₀ condition. Regression:
+`tests/test_gnlse_shock_energy.py::test_shock_resolution_warns_only_when_under_resolved`
+and `::test_fissioning_shock_drift_scales_with_grid_validity` (asserts
+|drift| < 0.5 % resolved vs > 2 % under-resolved, on a deck that really
+fissions).
+
+**Literature check (2026-10-02).** Kim, Park & Shin, "Conservation Laws in
+Higher-Order Nonlinear Optical Effects", arXiv:**solv-int/9904008**, *Phys. Rev.
+E* **58**, 6746 (1998) — verified online; the abstract states conservation laws
+"are violated in general" once higher-order effects (third-order dispersion,
+self-steepening) are added. Scope note: that paper analyses the *perturbative*
+higher-order NLS (Hirota / Sasa–Satsuma), not the Blow–Wood factorization, so
+it supports but does not by itself establish the engine's model-level claim.
+Independent prior art for the photon-conserving line implemented as
+`conserving_shock=True`: S. M. Hernández, "Soliton solutions and self-steepening
+in the photon-conserving nonlinear Schrödinger equation", *J. Opt.* (2020),
+[10.1080/17455030.2020.1856970](https://doi.org/10.1080/17455030.2020.1856970),
+plus the companion "Measuring self-steepening with the photon-conserving
+nonlinear Schrödinger equation" (2020) — the pcGNLSE has published exact soliton
+solutions, so `conserving_shock` is an established model rather than an ad-hoc
+patch.
+
+**Status: closed as a model claim.** The residual drift is characterised,
+bounded, and now diagnosed at construction time. The remaining accepted
+deviation is the documented one: on short-pulse SCG decks the shock term is
+either unrunnable or under-resolved, and reproductions quote their drift
+explicitly (the `energy_vs_z` monitor and its >5 % warning remain the
+tripwire).
 
 ---
 

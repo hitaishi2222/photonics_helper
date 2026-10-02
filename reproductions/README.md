@@ -137,7 +137,11 @@ machine precision; only the combination *shock + evolving drive* drifts.
 Verified by `tests/test_gnlse_unitarity.py` and
 `tests/test_gnlse_shock_energy.py` (13 tests, all green).
 
-### Cause (established, with evidence)
+### Cause (SUPERSEDED 2026-10-02 — see "Measured cause" below)
+
+*The 2025-09-21 analysis attributed the drift to the shock model itself. The
+2026-10-02 measurement shows the multi-percent figure is produced by an
+under-resolved grid, not by the model's conservation law. Kept for the record.*
 
 The drift is a **property of the first-order shock model itself, not of the
 integrator**:
@@ -164,6 +168,38 @@ integrator**:
    arXiv:2607.05244, and references therein) exists precisely because the
    standard GNLSE with a shock term is not photon-conserving — restoring
    conservation requires modifying the *equation*, not the solver.
+
+### Measured cause (2026-10-02) — grid validity, not the conservation law
+
+The "+5–6 %" figure above was never pinned by a test (the conserving-shock
+tests use `betas = [0]`, so they never fission). Measured on a genuinely
+fissioning soliton deck (Hult/Dudley Table-I PCF parameters, T0 = 500 fs,
+N_sol ≈ 3, 49–51 peaks at the exit — a long pulse is required so the shock term
+is resolvable at all):
+
+| `τ_shock·Ω_max` | photon drift |
+|---|---|
+| 0.073 | **−0.002 … −0.28 %** (resolved) |
+| 0.145 | −3.14 % |
+| 0.290 | **−5.22 %** ← the "≈5–6 %" figure |
+| 0.581 | −2.73 % (non-monotone ⇒ numerical noise) |
+
+So the first-order expansion ω/ω₀ ≈ 1 + Ω·τ_shock is simply wrong once
+τ·Ω_max ≳ 0.15, and the drift tracks that breakdown. Two corollaries:
+
+- On the 28 fs SCG decks the shock term **cannot be run at all** — the engine's
+  Ω_max < ω₀ guard rejects it, and forcing it through needs τ·Ω_max ≈ 0.6
+  (the deviation the Hult folder already records).
+- `conserving_shock=True` does **not** rescue the under-resolved regime
+  (−6.53 % vs −5.22 % at τ·Ω_max = 0.29); it matches the standard engine where
+  the grid is resolved. It is a real, published model (Hernández, *J. Opt.*
+  2020, [10.1080/17455030.2020.1856970](https://doi.org/10.1080/17455030.2020.1856970),
+  exact pcGNLSE solitons), not a cure for under-resolution.
+
+**Shipped:** `_validate_shock_grid` now warns when `τ_shock·Ω_max` exceeds
+`_SHOCK_TAYLOR_LIMIT = 0.2`, naming these numbers and the fix (raise Tmax /
+reduce N / disable shock). Pinned by
+`tests/test_gnlse_shock_energy.py::test_fissioning_shock_drift_scales_with_grid_validity`.
 
 ### Solutions (ranked)
 
