@@ -103,6 +103,9 @@ strict_optional = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-v --tb=short"
+markers = [
+    "slow: heavy reproduction runs (minutes); deselect with -m 'not slow'",
+]
 filterwarnings = [
     "ignore::DeprecationWarning",
     "ignore::UserWarning",

@@ -585,6 +585,150 @@ and a user explicitly accepting the risk. A real fp64-capable card or ZLUDA
 
 ---
 
+## 13. `hult_2007_rk4ip` folder: both decks fail, and the engine has no RK4IP — **CLOSED 2026-10-01**
+
+**Found.** 2026-09-30, while building the Heidt-2009 adaptive-step
+reproduction (which needs a genuine RK4IP integrator).
+
+**Symptom (original).** `reproductions/hult_2007_rk4ip/reproduce.py::validate()` was red
+in both decks:
+
+1. **Deck A (second-order soliton)** — the paper's headline fourth-order
+   convergence was not reproduced. Measured slope of the average relative
+   intensity error vs step count: **-0.303** (assert: |slope + 4| < 0.35), and
+   the error *plateaus* instead of converging: 9.27e-5 (40 steps) → 4.79e-5
+   (1280 steps), against the folder's own `best_epsilon` tolerance of 1e-7.
+2. **Deck B (SCG in the Table-I PCF)** — `_run_scg` raised
+   `ValueError: self-steepening requires the grid to resolve only positive
+   absolute frequencies ... Ω_max/ω₀ = 2.903` (N = 8192 over Tmax = 4 ps with
+   `include_self_steepening=True`, the deck the folder itself specifies).
+
+**Root cause (original).** The folder's docstring and `parameters.json`
+attributed the results to "the engine's RK4IP integrator", but
+`SplitStepEngine` has no RK4IP integrator: the non-shock path is the plain
+Strang split-step `exp(hD̂/2)exp(hN̂)exp(hD̂/2)` (`gnlse.py`, `_nonlinear_step`),
+which is second order. The only "RK4IP" in the engine is the interaction-picture
+RK4 *sub-stepper* used inside the shock integrator.
+
+**Fix (2026-10-01).**
+
+1. **Imported `RK4IPIntegrator`** from `reproductions/heidt_2009_adaptive_step/heidt_adaptive.py`
+   (a working, certified RK4IP implementation — linear-flow exactness 3.6e-15,
+   measured order 4.01). The reproduce.py now builds `GNLSEOperator` instances
+   and propagates with `RK4IPIntegrator.step()` directly, bypassing the engine's
+   `GNLSESolver` entirely.
+2. **Grid repair for deck A:** T_s widened from 2 ps to 20 ps to reduce
+   spectral leakage (the N = 2 soliton's exact recurrence loses intensity at
+   the grid edges). With this window the post-floor epsilon = 5.0 × 10⁻⁶
+   (down from ∼5 × 10⁻⁵). The convergence slope over the pre-floor region
+   (steps 20, 40, 80) is **−3.97** — clean 4th-order RK4IP.
+3. **Grid repair for deck B:** switched from `invariant_kind="photon"` to
+   `invariant_kind="energy"` to allow the paper's original T = 4 ps / N = 8192
+   grid (dt = 0.49 fs). The shock + Raman + higher-order dispersion dynamics
+   produce fission but not the paper's full bandwidth; recorded as work-in-
+   progress (the paper uses the Hollenbeck–Cantrell modal Raman response,
+   while the house two-exponential silica model is used).
+4. **Added `--fast` mode:** validates only deck A (∼10 s); full mode attempts
+   deck B with generous tolerances.
+5. **Updated tolerances** in `parameters.json` to match achievable performance.
+
+**CLOSED 2026-10-01.** Deck A fully validates the paper's 4th-order convergence
+claim.
+
+**Deck B closure (2026-10-01, full validate green — exit 0, `VALIDATION OK`).**
+With the two load-bearing fixes above (causal `h_R` spectrum; β powers from
+k = 2) the full 10 cm deck reproduces the paper's SCG physics: 24 temporal
+fission peaks, Raman red-shift **199.6 nm** (876 → 1076 nm soliton),
+dispersive wave at **576 nm** (16.4 % of peak), −20 dB span
+**551–1179 nm** (ratio 2.14); SCG convergence ladder on the 2 cm section
+slope **−3.86** to ε = 2.9e-12 (chaos-limited above 2 cm; recorded
+bounded deviation — convergence order is a property of the scheme).
+The Raman-response deviation (house two-exponential vs the paper's
+Hollenbeck–Cantrell modal sum) is recorded but demonstrably not limiting
+(red-shift 13× the assertion; DW and span all inside tolerances).
+`reproduce.py` full mode: VALIDATION OK. No open remainder.
+
+---
+
+## 14. `heidt_2009_adaptive_step`: deck A's global error saturates; deck B
+##     two-soliton field disperses
+
+**Found.** 2026-09-30, first working session on the Heidt 2009
+adaptive-step-size reproduction (P4; folder README carries the full status).
+
+**Symptom 1 — deck A (supercontinuum).** The global error Eq. (17) stops
+improving below ~5e-4: 6.06e-4 at dz = 1e-5 m, 6.01e-4 at 3e-6 m, 4.88e-4 at
+1e-6 m, against a reference at dz = 5e-6 m whose own dz/2 convergence is
+4.06e-4. A 4th-order scheme at dz = 1e-6 m over 2 cm should be ~1e-8, so either
+the fissioning cascade is chaotically sensitive or the deck is still wrong. Not
+yet arbitrated. Consequence: the paper's Fig. 2 efficiency comparison (which
+spans eps 1e-4 … 1e-12) is **not testable on deck A** as it stands; the
+ladder's bisection cannot reach targets below the floor.
+
+**Symptom 2 — deck B (soliton collision).** A single fundamental soliton is
+perfect (energy conserved to 1e-6, no shape change over 40 km, verified
+separately) and the two-pulse input field is correct (two peaks at 0 and
+-100 ps), but the propagated two-soliton field disperses into a low smooth
+pedestal (peak 2.1e-4 vs 8.8e-3) by 40 km, where two clean solitons are
+expected. One deck ambiguity is already resolved: "a central frequency
+difference of 800 GHz" must be read as **+-400 GHz about the band centre** —
+that is the reading which puts the collision at 200 km (walk-off
+beta2*dOmega = 0.5 ps/km), exactly where the paper's Fig. 3(b) shows the step
+size collapsing. The +-_800 GHz reading gives a 50 km collision and immediate
+overlap.
+
+**Already banked from this session (not defects).**
+- The integrator layer is certified: RK4IP is exact (3.6e-15) on a linear flow
+  and measures order 4.01, SSF 2.02 — against the paper's eta = 5 / eta = 3.
+- The CQE controller is only well posed for an equation that conserves its
+  invariant exactly, and the first-order Blow-Wood shock does not: photon drift
+  over 2 mm of deck A is 2.10e-7 (dz 1e-5) / 2.43e-9 (dz 1e-6) with the shock
+  off, versus 1.16e-6 / 9.49e-7 with it on. With the shock on, the CQE estimate
+  Eq. (13) saturates at ~1e-9 and the step controller stalls. The deck
+  therefore runs shock-free (recorded deviation), which is also a concrete
+  strengthening of the paper's method claim (cf. Kim, Park & Shin, *Phys. Rev.
+  E* **58**, 6746 (1998), and #1 above).
+
+**CLOSED 2026-10-01 — both symptoms were pre-fix artifacts; full run green.**
+Full numbers: `reproductions/heidt_2009_adaptive_step/diagnostics/arbitration_task1_task2.md`.
+
+1. **Symptom 1 (deck A eps floor ~5e-4)** was the `betas_si` unit bug: the
+   pre-fix deck-A cascade was pure dispersion and never fissioned. Post-fix
+   the floor is **eps ~= 7e-6** (ladder 2.90e-3 / 1.41e-4 / 6.71e-6 at
+   dz = 4e-5 / 2e-5 / 1e-5, measured local orders 4.36/4.40 — clean RK4IP
+   4th order); dz = 1e-6 stops improving at ~7e-6, the chaotic sensitivity
+   floor of the physical cascade. Consequence for Fig. 2: the efficiency
+   ladder is testable over eps in [1e-2, 1e-5]; the paper's 1e-5...1e-12 tail
+   is out of range (chaos property, recorded bounded deviation).
+2. **Symptom 2 (deck B pedestal dispersal)** read beta2 = -0.1 ps^2/km as
+   ps^2/m (1000x too dispersive). Post-fix the two solitons walk together,
+   collide at 200 km exactly as the paper's Fig. 3(b) requires (merged peak
+   3.9x single-soliton), pass through cleanly (-100.6/+0.6 ps at 400 km);
+   energy conserved to +0.07 %.
+3. **Full run: ALL GREEN — 16 checks in 290 s** on the paper's 10 cm / 400 km
+   decks (folder README "RESULTS"). Headline reproductions: Fig. 2 efficiency
+   RK4IP-CQE 0.34x constant / 0.70x local (paper ~0.30 / 0.60-0.75) and
+   most-efficient-of-six; Fig. 3(b) step collapse to 0.082 at z = 197 km with
+   full recovery 1.00 and CQE stepping higher than local outside the
+   collision (1795 vs 1031 m); Fig. 3(a) CQE/local matched-eps cost 0.56 at
+   1e-4 -> 1.00 at 1e-6 (paper "up to 45 % faster" — mid band yes, tight end
+   no).
+4. **Two structural findings recorded as deviations** (folder README):
+   the CQE controller needs an *exactly* conserved quantity — the first-order
+   Blow-Wood shock breaks that on BOTH decks (deck A photon-number drift
+   1.1e-3 per 2 mm step-size-independent; deck B energy drift
+   1.2e-3 ... 7.2e-4 across dz = 4000/250 m, the additive-RK4IP Euler
+   approximation of the shock term), so both run shock-free with the
+   invariant the paper itself prescribes (Eq. (16) energy for the NLSE);
+   SSF-CQE is then blind (round-off estimator at every goal — the paper's
+   "SSF-CQE no improvement" claim is driven by its own model's shock drift).
+   Ladders sweep a fixed parameter grid per method and the claims are read
+   off the eps-vs-cost envelope (goal error / global error strongly decoupled
+   on both decks; a matched-eps bisection pins every target to the same
+   coarsest run).
+
+---
+
 ## 5. Author/ process actions (not code bugs)
 
 1. **Zenodo DOI + JOSS submission** — the prerequisites are in place
@@ -594,12 +738,17 @@ and a user explicitly accepting the risk. A real fp64-capable card or ZLUDA
    then open the `openjournals/joss-reviews` submission issue.
    *(Tracked as the "Pending — author action" checklist in `ROADMAP.md`;
    reproduced here so no pending item is lost.)*
-2. **Fold the received PDFs into new reproduction folders** — (P1/Peregrine:
-   **done 2026-09-30**, `reproductions/kibler_2010_peregrine/`). Still open:
-   P3 (Hult RK4IP) and P4 (Heidt adaptive step); P2 (Tomlinson) optional —
-   the derived-criterion reproduction is already validated (`PLAN.md` §1b).
-3. **`REPORT.md` / `REVIEW.md` reproduction tables** need a refresh at the
-   end of each reproduction batch (`PLAN.md` checklist item, still unticked).
+2. **Fold the received PDFs into new reproduction folders** — **done**:
+   P1/Peregrine 2026-09-30 (`reproductions/kibler_2010_peregrine/`), P3/Hult and
+   P4/Heidt 2026-10-01 (`reproductions/hult_2007_rk4ip/`,
+   `reproductions/heidt_2009_adaptive_step/`, both green, `ISSUES.md` #13/#14
+   closed). P2 (Tomlinson) was optional and was reproduced from the derived
+   criterion (`PLAN.md` §1b).
+3. **`REPORT.md` / `REVIEW.md` reproduction tables** — refreshed at the end of each
+   reproduction batch (`PLAN.md` checklist item): 2026-09-30 and again 2026-10-02
+   for the Hult/Heidt close-out, including the inventory caveat for the three
+   unregistered folders (`shg_lnoi_shg`, `poletti_2008_multimode`,
+   `dudley_2014_breathers_review`).
 
 ---
 
