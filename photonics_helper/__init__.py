@@ -325,101 +325,242 @@ __all__ = [
 # not a chain of ifs. Every name in __all__ must appear here (tested).
 _LAZY_MODULES: dict[str, str] = {
     # .base — constants + unit types
-    **{n: ".base" for n in (
-        "C_MS", "EPS_0", "H_PLANCK", "HBAR", "MU_0", "PI",
-        "AngularFrequency", "AngularFrequencyArray", "Area", "Energy",
-        "Frequency", "FrequencyArray", "Length", "PeakPower", "Permeability",
-        "Permittivity", "Power", "Time", "Wavelength", "WavelengthArray",
-        "Wavenumber", "WavenumberArray",
-    )},
+    **{
+        n: ".base"
+        for n in (
+            "C_MS",
+            "EPS_0",
+            "H_PLANCK",
+            "HBAR",
+            "MU_0",
+            "PI",
+            "AngularFrequency",
+            "AngularFrequencyArray",
+            "Area",
+            "Energy",
+            "Frequency",
+            "FrequencyArray",
+            "Length",
+            "PeakPower",
+            "Permeability",
+            "Permittivity",
+            "Power",
+            "Time",
+            "Wavelength",
+            "WavelengthArray",
+            "Wavenumber",
+            "WavenumberArray",
+        )
+    },
     # .breathers
-    **{n: ".breathers" for n in (
-        "SolitonOnBackground", "akhmediev_breather", "general_sfb",
-        "kuznetsov_ma", "peregrine_soliton", "sfb_peak_ratio",
-        "sfb_spatial_period", "sfb_temporal_period",
-    )},
+    **{
+        n: ".breathers"
+        for n in (
+            "SolitonOnBackground",
+            "akhmediev_breather",
+            "general_sfb",
+            "kuznetsov_ma",
+            "peregrine_soliton",
+            "sfb_peak_ratio",
+            "sfb_spatial_period",
+            "sfb_temporal_period",
+        )
+    },
     # .chi2
-    **{n: ".chi2" for n in (
-        "Chi2Result", "Lambda_qpm", "delta_k_shg", "qpm_grating",
-        "shg_coupling", "solve_cascaded_shg", "solve_dfg", "solve_sfg",
-        "solve_shg", "solve_three_wave",
-    )},
+    **{
+        n: ".chi2"
+        for n in (
+            "Chi2Result",
+            "Lambda_qpm",
+            "delta_k_shg",
+            "qpm_grating",
+            "shg_coupling",
+            "solve_cascaded_shg",
+            "solve_dfg",
+            "solve_sfg",
+            "solve_shg",
+            "solve_three_wave",
+        )
+    },
     # .inverse_design — Phase 4 item 5 (inverse-design layer)
-    **{n: ".inverse_design" for n in (
-        "FitResult", "design_efficiency", "fit_two_wave",
-    )},
+    **{
+        n: ".inverse_design"
+        for n in (
+            "FitResult",
+            "design_efficiency",
+            "fit_two_wave",
+        )
+    },
     "dashboard_app": ".dashboard",
     # .dbr
-    **{n: ".dbr" for n in (
-        "TMM", "Block", "Material", "Pattern", "plot_2d", "plot_index",
-    )},
+    **{
+        n: ".dbr"
+        for n in (
+            "TMM",
+            "Block",
+            "Material",
+            "Pattern",
+            "plot_2d",
+            "plot_index",
+        )
+    },
     # .fiber
-    **{n: ".fiber" for n in (
-        "Dispersion", "PropagationConstant", "WaveguideMode", "ZDependentDispersion",
-    )},
+    **{
+        n: ".fiber"
+        for n in (
+            "Dispersion",
+            "PropagationConstant",
+            "WaveguideMode",
+            "ZDependentDispersion",
+        )
+    },
     # .gnlse
-    **{n: ".gnlse" for n in (
-        "FiberProfile", "GNLSESolver", "SplitStepEngine", "TaperedGNLSESolver",
-    )},
+    **{
+        n: ".gnlse"
+        for n in (
+            "FiberProfile",
+            "GNLSESolver",
+            "SplitStepEngine",
+            "TaperedGNLSESolver",
+        )
+    },
     # .gnlse_validation — convergence + analytical checks
-    **{n: ".gnlse_validation" for n in (
-        "DEFAULT_OBSERVABLES", "ConvergenceReport", "ObservableReport",
-        "ValidationFailure", "convergence_study", "check_spm", "check_mi",
-        "check_soliton", "check_gordon_ssfs", "gordon_ssfs_rate", "mi_gain_of",
-    )},
+    **{
+        n: ".gnlse_validation"
+        for n in (
+            "DEFAULT_OBSERVABLES",
+            "ConvergenceReport",
+            "ObservableReport",
+            "ValidationFailure",
+            "convergence_study",
+            "check_spm",
+            "check_mi",
+            "check_soliton",
+            "check_gordon_ssfs",
+            "gordon_ssfs_rate",
+            "mi_gain_of",
+        )
+    },
     # .multimode_gnlse — few-mode coupled GNLSE
-    **{n: ".multimode_gnlse" for n in (
-        "CoeffModel", "MultimodeSplitStepEngine",
-    )},
+    **{
+        n: ".multimode_gnlse"
+        for n in (
+            "CoeffModel",
+            "MultimodeSplitStepEngine",
+        )
+    },
     # .vector_gnlse — polarization-coupled GNLSE
-    **{n: ".vector_gnlse" for n in (
-        "Coupling", "RandomBirefringenceEngine", "VectorSplitStepEngine",
-    )},
+    **{
+        n: ".vector_gnlse"
+        for n in (
+            "Coupling",
+            "RandomBirefringenceEngine",
+            "VectorSplitStepEngine",
+        )
+    },
     "RefractiveIndex": ".materials",
     "MaterialDataset": ".materials",
     "material_catalog": ".materials",
     "print_material_catalog": ".materials",
     # .noise
-    **{n: ".noise" for n in (
-        "add_ase_noise", "add_noise", "ase_noise_field", "complex_gaussian_noise",
-    )},
+    **{
+        n: ".noise"
+        for n in (
+            "add_ase_noise",
+            "add_noise",
+            "ase_noise_field",
+            "complex_gaussian_noise",
+        )
+    },
     # .phase_matching
-    **{n: ".phase_matching" for n in (
-        "DispersionAdaptor", "DispersionModel", "DispersiveWaveResult",
-        "PhaseMatchResult", "PropagationConstantAdaptor",
-        "SimulationReadinessReport", "ValidationReport",
-        "ZDependentDispersionAdaptor", "assess_simulation_readiness",
-        "compare_spectrum_to_phase_matching", "dispersive_wave_roots",
-        "fwm_delta_beta_degenerate", "fwm_delta_beta_general", "fwm_efficiency",
-        "fwm_idler_frequency", "mi_gain_spectrum", "mi_gain_spectrum_extended",
-        "mi_sideband_frequencies", "plot_fwm_efficiency", "plot_mi_gain",
-        "plot_readiness_report", "plot_spectrum_with_pm_overlay", "scan_fwm_detuning",
-    )},
+    **{
+        n: ".phase_matching"
+        for n in (
+            "DispersionAdaptor",
+            "DispersionModel",
+            "DispersiveWaveResult",
+            "PhaseMatchResult",
+            "PropagationConstantAdaptor",
+            "SimulationReadinessReport",
+            "ValidationReport",
+            "ZDependentDispersionAdaptor",
+            "assess_simulation_readiness",
+            "compare_spectrum_to_phase_matching",
+            "dispersive_wave_roots",
+            "fwm_delta_beta_degenerate",
+            "fwm_delta_beta_general",
+            "fwm_efficiency",
+            "fwm_idler_frequency",
+            "mi_gain_spectrum",
+            "mi_gain_spectrum_extended",
+            "mi_sideband_frequencies",
+            "plot_fwm_efficiency",
+            "plot_mi_gain",
+            "plot_readiness_report",
+            "plot_spectrum_with_pm_overlay",
+            "scan_fwm_detuning",
+        )
+    },
     # .phonon
     **{n: ".phonon" for n in ("PHONON_MATERIALS", "PhononMode", "PhononResponse")},
     # .pulse
-    **{n: ".pulse" for n in (
-        "Envelope", "FROGTrace", "TemporalGrid", "Wave", "fidelity",
-        "generate_trace", "retrieve",
-    )},
+    **{
+        n: ".pulse"
+        for n in (
+            "Envelope",
+            "FROGTrace",
+            "TemporalGrid",
+            "Wave",
+            "fidelity",
+            "generate_trace",
+            "retrieve",
+        )
+    },
     # .raman
-    **{n: ".raman" for n in (
-        "COMMON_COMPARISONS", "RAMAN_MATERIALS", "MaterialComparison",
-        "PumpWavelengthExplorer", "RamanDatabase", "RamanFrequencyResponse",
-        "RamanPulseInteraction", "RamanResponse", "RamanSpec", "app",
-    )},
+    **{
+        n: ".raman"
+        for n in (
+            "COMMON_COMPARISONS",
+            "RAMAN_MATERIALS",
+            "MaterialComparison",
+            "PumpWavelengthExplorer",
+            "RamanDatabase",
+            "RamanFrequencyResponse",
+            "RamanPulseInteraction",
+            "RamanResponse",
+            "RamanSpec",
+            "app",
+        )
+    },
     "SolitonAnalyzer": ".soliton",
     # .structured
-    **{n: ".structured" for n in (
-        "LaguerreGaussianMode", "StructuredField", "beam_waist", "gouy_phase",
-        "overlap", "plot_transverse_profile", "radius_of_curvature", "rayleigh_range",
-    )},
+    **{
+        n: ".structured"
+        for n in (
+            "LaguerreGaussianMode",
+            "StructuredField",
+            "beam_waist",
+            "gouy_phase",
+            "overlap",
+            "plot_transverse_profile",
+            "radius_of_curvature",
+            "rayleigh_range",
+        )
+    },
     # .wave_breaking
-    **{n: ".wave_breaking" for n in (
-        "WaveBreaking", "detect_oscillation_onset", "detect_steepening_onset",
-        "dispersion_length", "edge_steepness", "gaussian_edge_steepness",
-        "nonlinear_length", "wave_breaking_distance",
-    )},
+    **{
+        n: ".wave_breaking"
+        for n in (
+            "WaveBreaking",
+            "detect_oscillation_onset",
+            "detect_steepening_onset",
+            "dispersion_length",
+            "edge_steepness",
+            "gaussian_edge_steepness",
+            "nonlinear_length",
+            "wave_breaking_distance",
+        )
+    },
 }
 
 # Exports whose public name differs from the attribute in the defining module.

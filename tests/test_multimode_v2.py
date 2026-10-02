@@ -82,7 +82,9 @@ class TestPumpDepletion:
         e = eng.energy_vs_z
         assert e[-1] == pytest.approx(e[0], rel=2e-3)  # Strang + RK4 floor
         # finer steps: energy must approach machine-level conservation
-        eng2 = _engine(grid, _fiber(5.0), [5.0, 5.0, 0.05], dz=0.005, fwm_pump_depletion=True)
+        eng2 = _engine(
+            grid, _fiber(5.0), [5.0, 5.0, 0.05], dz=0.005, fwm_pump_depletion=True
+        )
         eng2.propagate(1000)
         e2 = eng2.energy_vs_z
         assert abs(e2[-1] / e2[0] - 1.0) < 1e-5
@@ -91,9 +93,7 @@ class TestPumpDepletion:
         """Engine vs dense RK4 of the exact Manley-Rowe RHS (<5%)."""
         grid = _grid()
         fiber = _fiber(5.0)
-        eng = _engine(
-            grid, fiber, [5.0, 0.05, 0.05], fwm_pump_depletion=True
-        )
+        eng = _engine(grid, fiber, [5.0, 0.05, 0.05], fwm_pump_depletion=True)
         eng.propagate(250)
         f0, f1, f2 = eng.fields_vs_z()
         zs = np.array([0.0, 2.0, 5.0])
@@ -102,9 +102,7 @@ class TestPumpDepletion:
 
         def deriv(s):
             a0, a1, a2 = s
-            diag = gamma * (
-                abs(a0) ** 2 + abs(a1) ** 2 + abs(a2) ** 2
-            )
+            diag = gamma * (abs(a0) ** 2 + abs(a1) ** 2 + abs(a2) ** 2)
             # creation arms: pump n drives both pair arms (+i γ A_n² A_*)
             # back-conversion: pump loses with Manley-Rowe factor 2
             arms = [
@@ -207,7 +205,12 @@ class TestOverlapWeights:
         for m in range(3):
             for n in range(3):
                 for q in range(3):
-                    if m != n and q != n and q != m and oam[m] == oam[n] + oam[n] - oam[q]:
+                    if (
+                        m != n
+                        and q != n
+                        and q != m
+                        and oam[m] == oam[n] + oam[n] - oam[q]
+                    ):
                         w[m, n, n, q] = 1.0
                         w[q, n, n, m] = 1.0
         eng_weight = _engine(grid, _fiber(5.0), peaks, fwm_weights=w)
@@ -224,12 +227,12 @@ class TestOverlapWeights:
         with pytest.raises(ValueError):
             _engine(grid, fiber, [1.0, 2.0], xpm_weights=np.ones((2, 2, 2)))
         with pytest.raises(ValueError):
-            _engine(
-                grid, fiber, [1.0, 2.0, 3.0], fwm_weights=np.ones((3, 3, 3))
-            )
+            _engine(grid, fiber, [1.0, 2.0, 3.0], fwm_weights=np.ones((3, 3, 3)))
         with pytest.raises(ValueError):
             _engine(
-                grid, fiber, [1.0, 2.0],
+                grid,
+                fiber,
+                [1.0, 2.0],
                 include_fwm=False,
                 fwm_pump_depletion=True,
             )

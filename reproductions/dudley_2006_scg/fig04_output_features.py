@@ -68,13 +68,17 @@ def _band_temporal_delay(
     mask = np.abs(lam - center_nm) <= half_width_nm
     # Engine-consistent e^{+i} kernel so the mask lands on the correct
     # sideband under the c/(ω₀+grid.w) λ map (ISSUES.md #0 addendum).
-    spectrum = np.fft.fftshift(np.conj(np.fft.fft(np.conj(np.fft.ifftshift(evo.fields[-1])))))
+    spectrum = np.fft.fftshift(
+        np.conj(np.fft.fft(np.conj(np.fft.ifftshift(evo.fields[-1]))))
+    )
     # Synthesis kernel = the pair inverse of the analysis kernel above:
     # (SH2∘C∘F∘C∘SH1)^{-1} = fftshift∘conj∘ifft∘conj∘ifftshift — a plain
     # np.fft.ifft here reuses the e^{−i} synthesis and time-reverses
     # asymmetric masks (the tested τ = −3.35/−0.76 ps features were this
     # mirror artifact).
-    filtered = np.fft.fftshift(np.conj(np.fft.ifft(np.conj(np.fft.ifftshift(spectrum * mask)))))
+    filtered = np.fft.fftshift(
+        np.conj(np.fft.ifft(np.conj(np.fft.ifftshift(spectrum * mask))))
+    )
     intensity = np.abs(filtered) ** 2
     return float(evo.t[int(np.argmax(intensity))] * 1e12), float(intensity.max())
 

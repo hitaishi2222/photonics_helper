@@ -98,7 +98,7 @@ class TestReductionContracts:
         fiber = _fiber(10.0)
         betas = np.array([-21.8])
         ax0 = np.sqrt(4.0)
-        ay_field = 0.5 * ax0 * np.exp(-((grid.t) / 5e-12) ** 2)
+        ay_field = 0.5 * ax0 * np.exp(-(((grid.t) / 5e-12) ** 2))
         vec = VectorSplitStepEngine(
             _sech_wave(grid, 4.0, 5.0),
             _zero_wave(grid, _sech_wave(grid, 4.0, 5.0)).with_field(ay_field),
@@ -120,9 +120,7 @@ class TestReductionContracts:
         mm.propagate(100)
         for mms, attr in ((0, "x"), (1, "y")):
             mine = mm.fields_vs_z()[mms][-1, :]
-            ref = (vec.evolution_x if mms == 0 else vec.evolution_y)[
-                -1
-            ].envelope_field
+            ref = (vec.evolution_x if mms == 0 else vec.evolution_y)[-1].envelope_field
             assert np.max(np.abs(mine - ref)) < 1e-12
 
 
@@ -225,9 +223,7 @@ class TestInterModalFWMHeavy:
                 include_fwm=True,
                 step_size=Length(0.02, "m"),
             )
-        probe = MultimodeSplitStepEngine(
-            [_cw_wave(grid, peak)], fiber, np.array([0.0])
-        )
+        probe = MultimodeSplitStepEngine([_cw_wave(grid, peak)], fiber, np.array([0.0]))
         gamma = probe._gamma_v()
         engine.propagate(250)
         f0, f1, f2 = engine.fields_vs_z()

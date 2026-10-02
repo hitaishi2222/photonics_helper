@@ -84,8 +84,8 @@ lookup in `core.materials`) do not touch the file until they need data.
 ```python
 from photonics_helper.raman import RamanDatabase
 
-db = RamanDatabase()          # no filesystem access
-db.list_provenance()          # first use: schema ensured, then the query
+db = RamanDatabase()  # no filesystem access
+db.list_provenance()  # first use: schema ensured, then the query
 ```
 
 ## Discovering the data
@@ -96,10 +96,10 @@ Sellmeier equations together — with the columns you need to choose one:
 ```python
 from photonics_helper import material_catalog, print_material_catalog
 
-print_material_catalog()          # rich table: material, type, λ range, DOI, licence
-print_material_catalog("sil")     # case-insensitive name filter
+print_material_catalog()  # rich table: material, type, λ range, DOI, licence
+print_material_catalog("sil")  # case-insensitive name filter
 
-rows = material_catalog()         # programmatic: list[MaterialDataset]
+rows = material_catalog()  # programmatic: list[MaterialDataset]
 ```
 
 Each `MaterialDataset` carries `material`, `kind` (`"tabulated"` or

@@ -86,27 +86,27 @@ LAMBDA0 = 1550e-9
 OMEGA0 = 2.0 * np.pi * C_MS / LAMBDA0
 
 # fiber (paper section IV)
-GAMMA = 1.4e-3            # W^-1 m^-1 (1.4 W^-1 km^-1)
+GAMMA = 1.4e-3  # W^-1 m^-1 (1.4 W^-1 km^-1)
 DMGD_S_PER_M = {"LP01": 0.0, "LP11": 6.5e-12, "LP02": 9.9e-12, "LP21": 12e-12}
 D_S_PER_M2 = {"LP01": 25e-6, "LP11": 27.3e-6, "LP02": -2.3e-6, "LP21": 20.8e-6}
 BETA2 = {m: -(LAMBDA0**2) * d / (2 * np.pi * C_MS) for m, d in D_S_PER_M2.items()}
 BETA2_PS2_PER_M = {m: b * 1e24 for m, b in BETA2.items()}  # engine unit (ps^k/m)
 
 # signal stand-in (field-level; paper: 114 Gb/s PDM-QPSK @ 7 dBm/mode)
-P_PEAK = 5e-3             # W (7 dBm) per spatial mode
-T_FWHM = 100e-12          # s
-T0 = T_FWHM / 1.665       # gaussian
-L_WALKOFF = 150           # m (check 1 span; 12e-12 s/m x 150 m = 1.8 ns,
-                          # fits the +/-2 ns grid half-window — at 100 km the
-                          # pulse wraps ~325 times around the periodic grid
-                          # and the centroid is meaningless)
-L_NL = 100e3              # m (checks 2-3 span; paper: 1000 km)
-SEGMENT = 1e3             # m birefringence segment
+P_PEAK = 5e-3  # W (7 dBm) per spatial mode
+T_FWHM = 100e-12  # s
+T0 = T_FWHM / 1.665  # gaussian
+L_WALKOFF = 150  # m (check 1 span; 12e-12 s/m x 150 m = 1.8 ns,
+# fits the +/-2 ns grid half-window — at 100 km the
+# pulse wraps ~325 times around the periodic grid
+# and the centroid is meaningless)
+L_NL = 100e3  # m (checks 2-3 span; paper: 1000 km)
+SEGMENT = 1e3  # m birefringence segment
 N_SEEDS = 32
 N_GRID = 4096
-WINDOW = 2e-9             # s (2 ns >> 100 ps pulses; << ns-scale nonlinear scales)
+WINDOW = 2e-9  # s (2 ns >> 100 ps pulses; << ns-scale nonlinear scales)
 
-THRESH = 0.05             # ensemble-vs-Manakov rel-L2 tolerance (planned README)
+THRESH = 0.05  # ensemble-vs-Manakov rel-L2 tolerance (planned README)
 
 
 # ---------------------------------------------------------------------------
@@ -160,8 +160,8 @@ def mumtaz_cubic(A: NDArray, gamma: float) -> NDArray:
     models the AVERAGED nonlinearity where the coherent arm has washed out —
     for the stochastic harness the full cubic is the correct model.
     """
-    G = np.sum(A, axis=0)                                   # (2, N)
-    G2 = np.sum(np.abs(G) ** 2, axis=0)                     # (N,) = G†G
+    G = np.sum(A, axis=0)  # (2, N)
+    G2 = np.sum(np.abs(G) ** 2, axis=0)  # (N,) = G†G
     return (1j * gamma / 3.0) * ((G * G) * np.conj(G) + 2.0 * G2 * G)
 
 
@@ -180,7 +180,7 @@ def stochastic_run(
     # SI spectral axis for the Agrawal linear step: phi = beta2*Omega^2/2*L
     # with beta2 in s^2/m and Omega in rad/s (grid.w*1e-12 is rad/ps and
     # would be off by 1e24).
-    w = grid.w                             # rad/s (library axis)
+    w = grid.w  # rad/s (library axis)
     phi_lin = np.exp(1j * beta2 * w**2 / 2 * segment)
     rng = np.random.default_rng(seed)
     A = A0.copy()
@@ -193,8 +193,8 @@ def stochastic_run(
         # spurious time-domain quadratic mask every segment, cumulatively
         # shredding the spectrum; with segment=L_NL it was a near-flat mask
         # and the bug stayed hidden).
-        A = grid.ifft(grid.fft(A) * phi_lin)     # linear (dispersion per segment)
-        for _ in range(n_sub):              # RK4 of the cubic (physical gamma)
+        A = grid.ifft(grid.fft(A) * phi_lin)  # linear (dispersion per segment)
+        for _ in range(n_sub):  # RK4 of the cubic (physical gamma)
             k1 = mumtaz_cubic(A, gamma=GAMMA)
             k2 = mumtaz_cubic(A + 0.5 * dz * k1, gamma=GAMMA)
             k3 = mumtaz_cubic(A + 0.5 * dz * k2, gamma=GAMMA)
@@ -212,9 +212,7 @@ def stochastic_run(
 # ---------------------------------------------------------------------------
 
 
-def engine_manakov_run(
-    A0: NDArray, beta2: float, length: float, xpm: NDArray
-):
+def engine_manakov_run(A0: NDArray, beta2: float, length: float, xpm: NDArray):
     """Deterministic generalized Manakov (Eq. 29) through the library engine.
 
     `xpm[i, j]` multiplies |A_j|^2 entering channel i (i == j is the SPM
@@ -227,8 +225,9 @@ def engine_manakov_run(
         for s in range(2):
             wv = Wave(
                 grid=grid,
-                envelope=Envelope(shape="gaussian", peak_amplitude=1.0,
-                                  pulse_width=Time(T0, "s")),
+                envelope=Envelope(
+                    shape="gaussian", peak_amplitude=1.0, pulse_width=Time(T0, "s")
+                ),
                 central_wavelength=Wavelength(LAMBDA0 * 1e9, "nm"),
             )
             wv._pulse_train_field = A0[m, s].copy()
@@ -286,18 +285,22 @@ def check1_table2(results: dict) -> None:
     for i, m in enumerate(modes):
         wv = Wave(
             grid=grid,
-            envelope=Envelope(shape="gaussian", peak_amplitude=1.0,
-                              pulse_width=Time(T0, "s")),
+            envelope=Envelope(
+                shape="gaussian", peak_amplitude=1.0, pulse_width=Time(T0, "s")
+            ),
             central_wavelength=Wavelength(LAMBDA0 * 1e9, "nm"),
         )
         wv._pulse_train_field = gauss_channel(grid, 1e-6, t0=0.0)
         waves.append(wv)
     fiber = FiberProfile(
-        n2=1e-30, alpha=0.0, A_eff=Area(80e-12, "m^2"),
+        n2=1e-30,
+        alpha=0.0,
+        A_eff=Area(80e-12, "m^2"),
         length=Length(L_WALKOFF, "m"),
     )
     eng = MultimodeSplitStepEngine(
-        waves, fiber,
+        waves,
+        fiber,
         betas=[[BETA2_PS2_PER_M[m]] for m in modes],
         betas_unit="ps^k/m",
         group_delays=delays,
@@ -307,8 +310,9 @@ def check1_table2(results: dict) -> None:
     t = grid.t
     fields = eng.fields_vs_z()
     cents = [
-        float(np.sum(t * np.abs(fields[i][-1]) ** 2)
-              / np.sum(np.abs(fields[i][-1]) ** 2))
+        float(
+            np.sum(t * np.abs(fields[i][-1]) ** 2) / np.sum(np.abs(fields[i][-1]) ** 2)
+        )
         for i in range(3)
     ]
     measured = [cents[i] - cents[0] for i in (1, 2)]
@@ -338,9 +342,11 @@ def ensemble_moments(grid: TemporalGrid, A0: NDArray, beta2: float, segment: flo
     """Run the stochastic Eq. 12 ensemble and average *intensities and
     spectra* per spatial mode (not complex amplitudes — the SU(2) frames
     decorrelate the pol phases seed-to-seed, while |A|² is frame-invariant)."""
+
     def one(seed: int):
         A = stochastic_run(A0, beta2, L_NL, segment, seed)
         return mode_intensity(A), mode_spectrum(grid, A)
+
     runs = [one(s) for s in range(N_SEEDS)]
     I_ens = np.mean([r[0] for r in runs], axis=0)
     S_ens = np.mean([r[1] for r in runs], axis=0)
@@ -410,12 +416,14 @@ def check3_manakov_m2(results: dict) -> None:
     I_ens, S_ens = ensemble_moments(grid, A0, BETA2["LP01"], SEGMENT)
     t_sto = time.perf_counter() - t0
 
-    xpm = np.array([
-        [8 / 9, 8 / 9, 4 / 3, 4 / 3],
-        [8 / 9, 8 / 9, 4 / 3, 4 / 3],
-        [4 / 3, 4 / 3, 8 / 9, 8 / 9],
-        [4 / 3, 4 / 3, 8 / 9, 8 / 9],
-    ])
+    xpm = np.array(
+        [
+            [8 / 9, 8 / 9, 4 / 3, 4 / 3],
+            [8 / 9, 8 / 9, 4 / 3, 4 / 3],
+            [4 / 3, 4 / 3, 8 / 9, 8 / 9],
+            [4 / 3, 4 / 3, 8 / 9, 8 / 9],
+        ]
+    )
     t0 = time.perf_counter()
     I_man, S_man = engine_moments(grid, A0, BETA2["LP01"], xpm)
     t_man = time.perf_counter() - t0
@@ -425,15 +433,19 @@ def check3_manakov_m2(results: dict) -> None:
     I_fixed = mode_intensity(fixed)
 
     err_t = rel_l2(I_ens, I_man)
-    err_f = max(
-        rel_l2(S_ens[m], S_man[m]) for m in range(I_ens.shape[0])
-    )
+    err_f = max(rel_l2(S_ens[m], S_man[m]) for m in range(I_ens.shape[0]))
     err_fixed = rel_l2(I_fixed, I_man)
     # hard invariant: total energy conservation in both models
-    E_tot_ens = float(np.sum(I_ens)) * grid.dt / float(np.sum(np.abs(A0) ** 2) * grid.dt)
-    E_tot_man = float(np.sum(I_man)) * grid.dt / float(np.sum(np.abs(A0) ** 2) * grid.dt)
+    E_tot_ens = (
+        float(np.sum(I_ens)) * grid.dt / float(np.sum(np.abs(A0) ** 2) * grid.dt)
+    )
+    E_tot_man = (
+        float(np.sum(I_man)) * grid.dt / float(np.sum(np.abs(A0) ** 2) * grid.dt)
+    )
     assert abs(E_tot_ens - 1.0) < 1e-6 and abs(E_tot_man - 1.0) < 1e-6, (
-        E_tot_ens, E_tot_man)
+        E_tot_ens,
+        E_tot_man,
+    )
     assert err_t < THRESH and err_f < THRESH, (err_t, err_f)
     results["energy_ratio_ensemble"] = E_tot_ens
     results["energy_ratio_manakov"] = E_tot_man
@@ -442,7 +454,8 @@ def check3_manakov_m2(results: dict) -> None:
     results["manakov_m2_err_nobiref"] = err_fixed
     results["manakov_m2_status"] = (
         "reproduced: stochastic Eq. 12 ensemble matches the engine's "
-        "generalized Manakov Eq. 29 (SPM 8/9, inter-mode XPM 4/3)")
+        "generalized Manakov Eq. 29 (SPM 8/9, inter-mode XPM 4/3)"
+    )
     results["t_stochastic_m2"] = t_sto
     results["t_manakov_m2"] = t_man
     results["_m2"] = (grid, I_ens, I_man, S_ens, S_man, I_fixed)
@@ -458,10 +471,15 @@ def _plot(results: dict) -> None:
 
     ax = axes[0]
     S_ens, S_man = S1_e[0], S1_m[0]
-    ax.plot(lam[keep], S_ens[keep] / S_ens[keep].max(), "C0-",
-            label=f"stochastic ens. ({N_SEEDS} seeds)")
-    ax.plot(lam[keep], S_man[keep] / S_man[keep].max(), "k--",
-            label="Manakov 8/9 (engine)")
+    ax.plot(
+        lam[keep],
+        S_ens[keep] / S_ens[keep].max(),
+        "C0-",
+        label=f"stochastic ens. ({N_SEEDS} seeds)",
+    )
+    ax.plot(
+        lam[keep], S_man[keep] / S_man[keep].max(), "k--", label="Manakov 8/9 (engine)"
+    )
     ax.set_xlabel("wavelength (nm)")
     ax.set_ylabel("spectral intensity (norm.)")
     ax.set_title(f"(a) M=1 SPM 8/9  (L2 {results['spm89_err_freq']:.1%})")
@@ -471,22 +489,27 @@ def _plot(results: dict) -> None:
     lam2 = 2 * np.pi * C_MS / (OMEGA0 + w2) * 1e9
     ax = axes[1]
     for m, (Se, Sm) in enumerate(((S2_e[0], S2_m[0]), (S2_e[1], S2_m[1]))):
-        ax.plot(lam2[keep], Se[keep] / Se[keep].max(), f"C{m}-",
-                label=f"stochastic ens. mode {m}")
-        ax.plot(lam2[keep], Sm[keep] / Sm[keep].max(), f"C{m}--",
-                label=f"Manakov 8/9+4/3 mode {m}")
+        ax.plot(
+            lam2[keep],
+            Se[keep] / Se[keep].max(),
+            f"C{m}-",
+            label=f"stochastic ens. mode {m}",
+        )
+        ax.plot(
+            lam2[keep],
+            Sm[keep] / Sm[keep].max(),
+            f"C{m}--",
+            label=f"Manakov 8/9+4/3 mode {m}",
+        )
     ax.set_xlabel("wavelength (nm)")
     ax.set_title(f"(b) M=2 degenerate  (L2 {results['manakov_m2_err_freq']:.1%})")
     ax.legend(fontsize=7)
 
     ax = axes[2]
     t_ps = grid2.t * 1e12
-    ax.plot(t_ps, I_fixed[0] / P_PEAK, "C3-",
-            label="no birefringence (Eq. 6 frame)")
-    ax.plot(t_ps, I2_e[0] / P_PEAK, "C0-",
-            label="stochastic ensemble")
-    ax.plot(t_ps, I2_m[0] / P_PEAK, "k--",
-            label="Manakov (engine)")
+    ax.plot(t_ps, I_fixed[0] / P_PEAK, "C3-", label="no birefringence (Eq. 6 frame)")
+    ax.plot(t_ps, I2_e[0] / P_PEAK, "C0-", label="stochastic ensemble")
+    ax.plot(t_ps, I2_m[0] / P_PEAK, "k--", label="Manakov (engine)")
     ax.set_xlim(-200, 200)
     ax.set_xlabel("t (ps)")
     ax.set_ylabel("|A|^2 / P_in")
@@ -509,17 +532,17 @@ def validate() -> dict:
     check1_table2(results)
     check2_spm_8_9(results)
     check3_manakov_m2(results)
-    results["timing_ratio_m2"] = (
-        results["t_stochastic_m2"] / max(results["t_manakov_m2"], 1e-9)
+    results["timing_ratio_m2"] = results["t_stochastic_m2"] / max(
+        results["t_manakov_m2"], 1e-9
     )
     _plot(results)
 
     print("Mumtaz/Essiambre/Agrawal (2013) generalized Manakov: validation passed")
     print(
-        f"  Table II walk-offs (150 m): LP11 {results['walkoff_measured_s'][0]*1e12:.2f} ps"
-        f" (exp {results['walkoff_expected_s'][0]*1e12:.2f}), "
-        f"LP21 {results['walkoff_measured_s'][1]*1e12:.2f} ps"
-        f" (exp {results['walkoff_expected_s'][1]*1e12:.2f})"
+        f"  Table II walk-offs (150 m): LP11 {results['walkoff_measured_s'][0] * 1e12:.2f} ps"
+        f" (exp {results['walkoff_expected_s'][0] * 1e12:.2f}), "
+        f"LP21 {results['walkoff_measured_s'][1] * 1e12:.2f} ps"
+        f" (exp {results['walkoff_expected_s'][1] * 1e12:.2f})"
     )
     print(
         f"  SPM 8/9 (M=1): rel L2 time {results['spm89_err_time']:.1e}, "
@@ -531,7 +554,7 @@ def validate() -> dict:
         f"{results['manakov_m2_err_nobiref']:.1e}"
     )
     print(
-        f"  timing stochastic/Manakov: M=1 {results['t_stochastic_m1']/max(results['t_manakov_m1'],1e-9):.1f}x, "
+        f"  timing stochastic/Manakov: M=1 {results['t_stochastic_m1'] / max(results['t_manakov_m1'], 1e-9):.1f}x, "
         f"M=2 {results['timing_ratio_m2']:.1f}x"
     )
     return results

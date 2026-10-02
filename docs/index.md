@@ -19,8 +19,8 @@ pip install photonics-helper
 from photonics_helper import Wavelength
 
 wl = Wavelength(1550, "nm")
-print(wl.to_freq().as_THz)      # 193.4 THz
-print(wl.to_energy().as_eV)     # 0.8 eV
+print(wl.to_freq().as_THz)  # 193.4 THz
+print(wl.to_energy().as_eV)  # 0.8 eV
 ```
 
 See the [full quick start](quickstart.md) for a GNLSE run and the

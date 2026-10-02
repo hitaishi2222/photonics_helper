@@ -8,6 +8,7 @@ Anchors: peak/background at max compression (xi=0) must be:
   a->0.5 -> 9  (Peregrine).
 Anchor values from the AB literature: |psi(0,0)|^2 = 4a^2 * ( ) ... test forms.
 """
+
 import numpy as np
 
 L = 20 * np.pi
@@ -25,7 +26,11 @@ def make_psi(vec_xi, tau, a, variant):
     c = np.cos(Om * tau)[None, :]
     s = np.sin(Om * tau)[None, :]
     if variant == "printed":
-        num = (1 - 4 * a) * cw + 1j * np.sqrt(2 * a) * np.cos(2 * Om * tau)[None, :] + np.sqrt(2 * a) * c
+        num = (
+            (1 - 4 * a) * cw
+            + 1j * np.sqrt(2 * a) * np.cos(2 * Om * tau)[None, :]
+            + np.sqrt(2 * a) * c
+        )
         den = np.sqrt(2 * a) * c - cw
     elif variant == "sinh_xi":
         num = (1 - 4 * a) * cw + 1j * np.sqrt(2 * a) * sw + np.sqrt(2 * a) * c
@@ -42,7 +47,10 @@ def make_psi(vec_xi, tau, a, variant):
         #   psi = e^{ixi} * [ cosh(gamma X)*cos(p t) + i sinh(gamma X)*sin(gamma? ...
         # use: psi = e^{ixi} sqrt(2a)*cos(Om t) + ... no — use the documented one:
         #   psi = e^{ixi} * [ (Om cosh(bX) + i (1-2a)^{1/2} sinh(bX)) / (sqrt(2a) cos(Om t) - cosh(bX)) ] * 2a?
-        num = np.sqrt(2 * a) * c * cw + 1j * (np.sqrt(1 - 2 * a)) * s_den_helper(vec_xi, a)[0]
+        num = (
+            np.sqrt(2 * a) * c * cw
+            + 1j * (np.sqrt(1 - 2 * a)) * s_den_helper(vec_xi, a)[0]
+        )
         raise NotImplementedError("placeholder")
     return (num / den) * np.exp(1j * X)
 

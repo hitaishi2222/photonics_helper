@@ -125,9 +125,7 @@ class PhononResponse:
             raise ValueError(f"fR must be a fraction in [0, 1], got {self.fR!r}")
 
     @classmethod
-    def from_material(
-        cls, name: str, db: "object | None" = None
-    ) -> "PhononResponse":
+    def from_material(cls, name: str, db: "object | None" = None) -> "PhononResponse":
         """Build a response for a material, database-first.
 
         Resolution order:

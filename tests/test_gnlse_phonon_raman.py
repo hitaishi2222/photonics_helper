@@ -88,7 +88,9 @@ def test_multi_mode_response_is_not_a_single_lorentzian() -> None:
     assert min(shifts) - 10 <= centroid <= max(shifts) + 10
 
     inner = spectrum[1:-1]
-    peaks = (inner > spectrum[:-2]) & (inner > spectrum[2:]) & (inner > 0.2 * inner.max())
+    peaks = (
+        (inner > spectrum[:-2]) & (inner > spectrum[2:]) & (inner > 0.2 * inner.max())
+    )
     assert peaks.sum() >= 2, "multi-mode response should show several lineshapes"
 
 
@@ -141,9 +143,7 @@ def _two_tone_wave(grid: TemporalGrid) -> Wave:
     env = Envelope(
         shape="gaussian", peak_amplitude=np.sqrt(5.0), pulse_width=Time(1.0, "s")
     )
-    wave = Wave(
-        grid=grid, envelope=env, central_wavelength=Wavelength(1.55e-6, "m")
-    )
+    wave = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(1.55e-6, "m"))
     t = grid.t
     omega_r = 2 * np.pi * 13.2e12
     return wave.with_field(np.sqrt(5.0) * (1 + 1e-3 * np.cos(omega_r * t)))

@@ -95,10 +95,14 @@ def _fwhm(t: np.ndarray, y: np.ndarray) -> float:
     return float(fR - fL)
 
 
-def _cos_envelope(field: np.ndarray, grid: TemporalGrid, peak: float, T0: float) -> Envelope:
+def _cos_envelope(
+    field: np.ndarray, grid: TemporalGrid, peak: float, T0: float
+) -> Envelope:
     """Wrap a precomputed complex field as a 'custom' envelope."""
+
     def f(t, _T0, _A0):
         return np.interp(t, grid.t, field)
+
     return Envelope(
         shape="custom",
         peak_amplitude=peak,
@@ -144,7 +148,9 @@ def _propagate_modulated_cw(
     )
     z_end = length if L_fiber is None else min(length, xi_end * L_NL)
     n_steps = max(int(np.ceil(n_z * z_end / (xi_end * L_NL))), n_z)
-    solver.propagate(num_steps=int(np.ceil(n_z * (z_end if L_fiber is None else 1.0))), nsaves=n_z)
+    solver.propagate(
+        num_steps=int(np.ceil(n_z * (z_end if L_fiber is None else 1.0))), nsaves=n_z
+    )
     return solver, T0, L_NL
 
 
@@ -162,7 +168,9 @@ def validate(params: dict | None = None, make_plot: bool = True) -> dict:
     T0 = np.sqrt(abs(b2_si) * L_NL)
     results: dict = {"L_NL_m": L_NL, "T0_s": T0, "z_deck_m": xi_deck * L_NL}
 
-    grid = TemporalGrid(N=params["grid_N"], Tmax=Time(params["grid_Tmax_ps"] * 1e-12, "s"))
+    grid = TemporalGrid(
+        N=params["grid_N"], Tmax=Time(params["grid_Tmax_ps"] * 1e-12, "s")
+    )
     dt_ps = grid.dt * 1e12
     assert dt_ps < 0.2, f"grid too coarse: dt = {dt_ps:.3f} ps"
     results["dt_ps"] = dt_ps
@@ -177,7 +185,9 @@ def validate(params: dict | None = None, make_plot: bool = True) -> dict:
     # ------------------------------------------------------------------
     xi0 = -xi_deck
     psi0 = general_sfb(xi0, grid.t / T0, a_deck) * np.sqrt(P0)
-    env = _cos_envelope(np.asarray(psi0), grid, float(np.sqrt(P0) * (1 + 4 * a_deck)), float(T0))
+    env = _cos_envelope(
+        np.asarray(psi0), grid, float(np.sqrt(P0) * (1 + 4 * a_deck)), float(T0)
+    )
     wave = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(lam0, "m"))
     fiber = FiberProfile.from_gamma(
         gamma=gamma,
@@ -217,13 +227,18 @@ def validate(params: dict | None = None, make_plot: bool = True) -> dict:
     assert growth.sum() >= 10, "growth leg under-resolved"
     growth_k = np.where(growth)[0]
     growth_l2s = [
-        _rel_l2(all_I[k], np.abs(general_sfb(xi_saved[k], grid.t / T0, a_deck)) ** 2 * P0)
+        _rel_l2(
+            all_I[k], np.abs(general_sfb(xi_saved[k], grid.t / T0, a_deck)) ** 2 * P0
+        )
         for k in growth_k
     ]
     np.savez(
         HERE / "diagnostics_growth.npz",
-        z=z_all, xi=xi_saved, peaks=all_I.max(axis=1) / P0,
-        l2s=np.asarray(growth_l2s), k=growth_k,
+        z=z_all,
+        xi=xi_saved,
+        peaks=all_I.max(axis=1) / P0,
+        l2s=np.asarray(growth_l2s),
+        k=growth_k,
     )
     k_worst = int(growth_k[int(np.argmax(growth_l2s))])
     max_l2_growth = max(growth_l2s)
@@ -280,8 +295,7 @@ def validate(params: dict | None = None, make_plot: bool = True) -> dict:
     fwhm_ana = _fwhm(grid.t[lo0:hi0], I_ana0[lo0:hi0])
     results["fwhm_analytic_s"] = fwhm_ana
     assert abs(fwhm_sim - fwhm_ana) / fwhm_ana < params["fwhm_tolerance"], (
-        f"compressed FWHM {fwhm_sim * 1e12:.3f} ps vs analytic "
-        f"{fwhm_ana * 1e12:.3f} ps"
+        f"compressed FWHM {fwhm_sim * 1e12:.3f} ps vs analytic {fwhm_ana * 1e12:.3f} ps"
     )
 
     # ------------------------------------------------------------------
@@ -292,15 +306,22 @@ def validate(params: dict | None = None, make_plot: bool = True) -> dict:
     nu_l = 2.0 * np.sqrt(1 - 2 * a_lim)
     T_mod = 2.0 * np.pi / nu_l * T0
     psi0_l = general_sfb(-6.0, grid.t / T0, a_lim) * np.sqrt(P0)
-    env_l = _cos_envelope(np.asarray(psi0_l), grid, float(np.sqrt(P0) * (1 + 4 * a_lim)), float(T0))
+    env_l = _cos_envelope(
+        np.asarray(psi0_l), grid, float(np.sqrt(P0) * (1 + 4 * a_lim)), float(T0)
+    )
     wave_l = Wave(grid=grid, envelope=env_l, central_wavelength=Wavelength(lam0, "m"))
     fiber_l = FiberProfile.from_gamma(
-        gamma=gamma, n2=2.7e-20, omega0=float(wave_l.central_frequency),
+        gamma=gamma,
+        n2=2.7e-20,
+        omega0=float(wave_l.central_frequency),
         length=Length(12.0 * L_NL, "m"),
     )
     solver_l = GNLSESolver(
-        pulse=wave_l, fiber=fiber_l, betas=np.array([b2_si * 1e24]),
-        include_raman=False, include_self_steepening=False,
+        pulse=wave_l,
+        fiber=fiber_l,
+        betas=np.array([b2_si * 1e24]),
+        include_raman=False,
+        include_self_steepening=False,
         step_size=Length(0.25, "m"),
     )
     solver_l.propagate(num_steps=n_steps * 2, nsaves=n_steps)
@@ -354,10 +375,14 @@ def validate(params: dict | None = None, make_plot: bool = True) -> dict:
 
     print("Kibler 2010 Peregrine reproduction passed:")
     print(f"  growth-leg max rel-L2 = {results['growth_leg_max_rel_l2']:.3g}")
-    print(f"  peak ratio (a=0.42): {results['deck_peak_ratio']:.3f} vs {results['deck_peak_theory']:.3f}")
+    print(
+        f"  peak ratio (a=0.42): {results['deck_peak_ratio']:.3f} vs {results['deck_peak_theory']:.3f}"
+    )
     print(f"  train period rel err = {results['period_rel_err']:.3g}")
-    print(f"  compressed FWHM = {results['fwhm_compressed_s'] * 1e12:.3f} ps "
-          f"(analytic {results['fwhm_analytic_s'] * 1e12:.3f} ps)")
+    print(
+        f"  compressed FWHM = {results['fwhm_compressed_s'] * 1e12:.3f} ps "
+        f"(analytic {results['fwhm_analytic_s'] * 1e12:.3f} ps)"
+    )
     print(f"  Peregrine-limit ratio = {results['peregrine_ratio_sim']:.3f} (theory 9)")
     print(f"  PS-profile L2 = {results['peregrine_profile_l2']:.3g}")
     return results

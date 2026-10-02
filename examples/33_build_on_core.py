@@ -102,7 +102,7 @@ def group_velocity_dispersion(
 
 
 def _gaussian_pulse(grid: grids.TemporalGrid, t0: float) -> NDArray:
-    return np.exp(-grid.t**2 / (2.0 * t0**2)).astype(complex)
+    return np.exp(-(grid.t**2) / (2.0 * t0**2)).astype(complex)
 
 
 def _rms_width(field: NDArray, t: NDArray) -> float:

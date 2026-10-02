@@ -56,12 +56,18 @@ def run(n_real: int, n_steps: int, fast: bool = False):
     spectra = []
     for seed in range(n_real):
         solver = common.make_solver(
-            pulse, fiber, betas, raman=True, shock=True,
+            pulse,
+            fiber,
+            betas,
+            raman=True,
+            shock=True,
             tau_shock=common.SHOCK_FS * 1e-15,
         )
         solver.propagate(
-            num_steps=n_steps, nsaves=4,
-            raman_noise=True, noise_seed=9000 + seed,
+            num_steps=n_steps,
+            nsaves=4,
+            raman_noise=True,
+            noise_seed=9000 + seed,
         )
         spectra.append(np.asarray(pulse.grid.fft(solver.evolution[-1].envelope_field)))
     omega0 = float(pulse.central_frequency)
@@ -89,7 +95,7 @@ def validate(fast: bool = True, make_plot: bool = True) -> dict:
     i_pump = int(np.argmin(np.abs(wl - WL_PUMP_NM)))
     half_w = 3  # 'few nanometres' bin window (bin ~1 nm at this grid)
     pump_band = np.zeros(len(g12), dtype=bool)
-    pump_band[max(0, i_pump - half_w):i_pump + half_w + 1] = True
+    pump_band[max(0, i_pump - half_w) : i_pump + half_w + 1] = True
     far = ~pump_band
     g_pump = float(g12[pump_band].mean())
     g_far = float(g12[far].mean())
@@ -124,8 +130,10 @@ def validate(fast: bool = True, make_plot: bool = True) -> dict:
         axs[0].set_ylim(-80, 0)
         axs[0].set_xlabel("λ (nm)")
         axs[0].set_ylabel("mean spectrum (dB)")
-        axs[0].set_title(f"Fig. 28a-style mean spectrum "
-                         f"({DUR_PS:.0f} ps, 500 W, {WL_PUMP_NM:.0f} nm)")
+        axs[0].set_title(
+            f"Fig. 28a-style mean spectrum "
+            f"({DUR_PS:.0f} ps, 500 W, {WL_PUMP_NM:.0f} nm)"
+        )
         axs[1].plot(wl, g12, color="C3")
         axs[1].set_ylim(0, 1.05)
         axs[1].set_xlabel("λ (nm)")
@@ -140,4 +148,5 @@ def validate(fast: bool = True, make_plot: bool = True) -> dict:
 
 if __name__ == "__main__":
     import sys
+
     print(validate(fast="--fast" in sys.argv))

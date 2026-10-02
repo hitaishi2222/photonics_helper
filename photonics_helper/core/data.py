@@ -33,7 +33,6 @@ if TYPE_CHECKING:
     from ..phonon import PhononMode
     from ..materials import NKMaterial
 
-    
 
 # Default/sentinel licences per data table. The sentinels point at the row's
 # citation column rather than asserting a blanket licence for literature data;
@@ -361,9 +360,7 @@ class MaterialsDatabase:
         conn = self._connect()
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        cursor.execute(
-            "SELECT * FROM provenance WHERE source_key = ?", (source_key,)
-        )
+        cursor.execute("SELECT * FROM provenance WHERE source_key = ?", (source_key,))
         row = cursor.fetchone()
         conn.close()
         return dict(row) if row is not None else None

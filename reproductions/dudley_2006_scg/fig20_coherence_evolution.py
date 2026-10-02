@@ -89,7 +89,11 @@ def run_deck(
     phases = []  # (real, NZ)
     for seed in range(n_real):
         solver = common.make_solver(
-            pulse, fiber, betas, raman=True, shock=True,
+            pulse,
+            fiber,
+            betas,
+            raman=True,
+            shock=True,
             tau_shock=common.SHOCK_FS * 1e-15,
         )
         solver.propagate(
@@ -109,9 +113,7 @@ def run_deck(
     # g12 over realizations, per snapshot
     g12 = np.asarray([coherence_g12(spectra[:, k]) for k in range(NZ)])
     # roll the (N,) λ axes into ascending order
-    order = np.argsort(
-        2.0 * pi * common.C_MS / (om0 + pulse.grid.w)
-    )
+    order = np.argsort(2.0 * pi * common.C_MS / (om0 + pulse.grid.w))
     g12 = g12[:, order]
     one_spec = np.abs(spectra[0])[:, order] ** 2
     mean_spec = np.mean(np.abs(spectra) ** 2, axis=0)[:, order]
@@ -130,8 +132,9 @@ def run_deck(
     }
 
 
-def near_unity_bandwidth(g12: np.ndarray, wl: np.ndarray, z: np.ndarray,
-                          skip_initial: int = 2) -> float:
+def near_unity_bandwidth(
+    g12: np.ndarray, wl: np.ndarray, z: np.ndarray, skip_initial: int = 2
+) -> float:
     """Max over z (excluding the shared deterministic initial snapshots) of
     the contiguous |g12| > 0.9 band through the pump — the coherent-seeding
     stage of the Fig. 20 narrative."""
@@ -203,9 +206,7 @@ def validate(fast: bool = True, make_plot: bool = True) -> dict:
     # Fig. 20 direction check: 100 fs coherent-seeding stage is larger
     bw_a = out["a_100fs"]["near_unity_bw_nm"]
     bw_b = out["b_150fs"]["near_unity_bw_nm"]
-    assert bw_a >= bw_b, (
-        f"100 fs coherent band {bw_a:.1f} nm < 150 fs {bw_b:.1f} nm"
-    )
+    assert bw_a >= bw_b, f"100 fs coherent band {bw_a:.1f} nm < 150 fs {bw_b:.1f} nm"
     out["near_unity_bw_100fs_nm"] = bw_a
     out["near_unity_bw_150fs_nm"] = bw_b
 
@@ -219,8 +220,9 @@ def validate(fast: bool = True, make_plot: bool = True) -> dict:
         for row, (name, d) in enumerate(decks.items()):
             ax_l, ax_r = axes[row]
             S = 10 * np.log10(d["one_spec"] / d["one_spec"].max() + 1e-300)
-            ax_l.pcolormesh(d["wl"], d["z"], S, cmap="inferno", vmin=-60, vmax=0,
-                            shading="auto")
+            ax_l.pcolormesh(
+                d["wl"], d["z"], S, cmap="inferno", vmin=-60, vmax=0, shading="auto"
+            )
             ax_l.set_title(
                 f"Fig. 20{row and 'b' or 'a'} left: spectra 1-shot "
                 f"({name.split('_')[-1]})"
@@ -243,4 +245,5 @@ def validate(fast: bool = True, make_plot: bool = True) -> dict:
 
 if __name__ == "__main__":
     import sys
+
     print(validate(fast="--fast" in sys.argv))

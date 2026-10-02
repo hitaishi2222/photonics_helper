@@ -21,6 +21,7 @@ Run from the repo root:
     python reproductions/planned/wright_2015_self_organized_instability/\
 diagnostics/probe_gain_spectrum.py [--orders 1 2] [--n-grid 16384]
 """
+
 import argparse
 import importlib.util
 import json
@@ -36,18 +37,17 @@ REPO = HERE.parents[3]
 OUT_JSONL = HERE / "gain_spectrum_points.jsonl"
 OUT_SUM = HERE / "gain_spectrum_summary.json"
 
-spec = importlib.util.spec_from_file_location(
-    "rep", str(HERE.parent / "reproduce.py"))
+spec = importlib.util.spec_from_file_location("rep", str(HERE.parent / "reproduce.py"))
 rep = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(rep)
 
 
 def probe_point(n_ord: int, f_thz: float, L: float, n_grid: int) -> dict:
     """One frequency point via rep.probe_gain (two engine runs)."""
-    rep.N_GRID = n_grid                 # probe_gain reads the module global
+    rep.N_GRID = n_grid  # probe_gain reads the module global
     res = rep.probe_gain(n_ord, f_thz=f_thz, L=L)
-    a1, a2 = res["cols_a1"]          # (|b1|/a_sig, |b2|/a_sig), seed a1 only
-    b1b, b2b = res["cols_a2"]        # seed a2 only (conjugate symmetry probe)
+    a1, a2 = res["cols_a1"]  # (|b1|/a_sig, |b2|/a_sig), seed a1 only
+    b1b, b2b = res["cols_a2"]  # seed a2 only (conjugate symmetry probe)
     a_sig = rep.PROBE_RMS * float(np.sqrt(rep.P0_W))
     # recovery exponent from the sibling channel (sinh growth) and own
     # channel (cosh growth); average the two independent estimates.
@@ -56,14 +56,22 @@ def probe_point(n_ord: int, f_thz: float, L: float, n_grid: int) -> dict:
     g_cosh = float(np.arccosh(max(abs(a1), 1.0 + 1e-12)) / L)
     c = (2.0 / 3.0) * (2.0 * np.pi * rep.N2 / rep.LAMBDA0 / rep.A_EFF) * rep.P0_W
     om = 2.0 * np.pi * f_thz * 1e12  # rad/s
-    sym = (rep.beta0(rep.PUMP_THZ + f_thz) + rep.beta0(rep.PUMP_THZ - f_thz)
-           - 2.0 * rep.beta0(rep.PUMP_THZ))
-    dbar = 0.5 * sym - n_ord * rep.KAPPA - c        # 0.5 sym - N k - gP0/3
+    sym = (
+        rep.beta0(rep.PUMP_THZ + f_thz)
+        + rep.beta0(rep.PUMP_THZ - f_thz)
+        - 2.0 * rep.beta0(rep.PUMP_THZ)
+    )
+    dbar = 0.5 * sym - n_ord * rep.KAPPA - c  # 0.5 sym - N k - gP0/3
     g_ana = float(np.sqrt(max(c * c - dbar * dbar, 0.0)))
     return {
-        "n_ord": n_ord, "f_thz": round(f_thz, 5), "L_m": L, "n_grid": n_grid,
-        "dbar_rad_per_m": round(dbar, 4), "g_ana": round(g_ana, 4),
-        "g_meas_sinh": round(g_sinh, 4), "g_meas_sinh_sym": round(g_sinh_b, 4),
+        "n_ord": n_ord,
+        "f_thz": round(f_thz, 5),
+        "L_m": L,
+        "n_grid": n_grid,
+        "dbar_rad_per_m": round(dbar, 4),
+        "g_ana": round(g_ana, 4),
+        "g_meas_sinh": round(g_sinh, 4),
+        "g_meas_sinh_sym": round(g_sinh_b, 4),
         "g_meas_cosh": round(g_cosh, 4),
         "energy_drift_pct": res["energy_drift_pct"],
         "ts": time.time(),
@@ -76,12 +84,23 @@ def sweep(n_ord: int, L: float, n_grid: int, n_band: int, n_out: int) -> int:
     # band half-width (THz): where dbar(f) = c (g -> 0); ddbar/df sampled
     # numerically over +-0.5 THz around the root.
     f_lo, f_hi = f_root - 0.5, f_root + 0.5
-    s_lo = (rep.beta0(rep.PUMP_THZ + f_lo) + rep.beta0(rep.PUMP_THZ - f_lo)
-            - 2 * rep.beta0(rep.PUMP_THZ))
-    s_hi = (rep.beta0(rep.PUMP_THZ + f_hi) + rep.beta0(rep.PUMP_THZ - f_hi)
-            - 2 * rep.beta0(rep.PUMP_THZ))
+    s_lo = (
+        rep.beta0(rep.PUMP_THZ + f_lo)
+        + rep.beta0(rep.PUMP_THZ - f_lo)
+        - 2 * rep.beta0(rep.PUMP_THZ)
+    )
+    s_hi = (
+        rep.beta0(rep.PUMP_THZ + f_hi)
+        + rep.beta0(rep.PUMP_THZ - f_hi)
+        - 2 * rep.beta0(rep.PUMP_THZ)
+    )
     ddbar = abs((s_hi - s_lo) / 2.0)
-    half_w = (2 / 3) * (2 * np.pi * rep.N2 / rep.LAMBDA0 / rep.A_EFF) * rep.P0_W / (abs(ddbar) + 1e-6)
+    half_w = (
+        (2 / 3)
+        * (2 * np.pi * rep.N2 / rep.LAMBDA0 / rep.A_EFF)
+        * rep.P0_W
+        / (abs(ddbar) + 1e-6)
+    )
     freqs = list(np.linspace(f_root - half_w, f_root + half_w, n_band))
     edge_lo, edge_hi = f_root - 3 * half_w, f_root + 3 * half_w
     freqs += list(np.linspace(edge_lo, f_root - half_w, n_out)[1:-1:2])
@@ -98,9 +117,13 @@ def sweep(n_ord: int, L: float, n_grid: int, n_band: int, n_out: int) -> int:
             try:
                 r = probe_point(n_ord, float(f), L, n_grid)
                 r["elapsed_s"] = round(time.time() - t0, 1)
-            except Exception as e:      # don't lose the sweep to one point
-                r = {"type": "error", "n_ord": n_ord,
-                     "f_thz": round(float(f), 5), "error": repr(e)}
+            except Exception as e:  # don't lose the sweep to one point
+                r = {
+                    "type": "error",
+                    "n_ord": n_ord,
+                    "f_thz": round(float(f), 5),
+                    "error": repr(e),
+                }
             r["type"] = "point"
             with open(OUT_JSONL, "a") as fh:
                 fh.write(json.dumps(r, default=float) + "\n")
@@ -120,17 +143,26 @@ def main() -> None:
     ap.add_argument("--n-out", type=int, default=16)
     args = ap.parse_args()
 
-    rec = {"type": "meta", "orders": args.orders, "L_m": args.L,
-           "n_grid": args.n_grid, "n_band": args.n_band,
-           "n_out": args.n_out, "ts": time.time()}
+    rec = {
+        "type": "meta",
+        "orders": args.orders,
+        "L_m": args.L,
+        "n_grid": args.n_grid,
+        "n_band": args.n_band,
+        "n_out": args.n_out,
+        "ts": time.time(),
+    }
     with open(OUT_JSONL, "a") as fh:
         fh.write(json.dumps(rec) + "\n")
     total = 0
     for n in args.orders:
         total += sweep(n, args.L, args.n_grid, args.n_band, args.n_out)
     with open(OUT_SUM, "w") as fh:
-        json.dump({"total_points": total, "orders": args.orders,
-                   "done": time.time()}, fh, indent=2)
+        json.dump(
+            {"total_points": total, "orders": args.orders, "done": time.time()},
+            fh,
+            indent=2,
+        )
     tqdm.write(f"SWEEP DONE: {total} points -> {OUT_JSONL.name}")
 
 

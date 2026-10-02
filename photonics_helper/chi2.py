@@ -133,9 +133,7 @@ def Lambda_qpm(delta_k: float, order: int = 1) -> float:
     return float(2.0 * pi * order / abs(delta_k))
 
 
-def qpm_grating(
-    z: float | NDArray, period: float, duty_cycle: float = 0.5
-) -> NDArray:
+def qpm_grating(z: float | NDArray, period: float, duty_cycle: float = 0.5) -> NDArray:
     """Square-wave poling sign ``g(z) = ±1`` with period ``period``.
 
     Parameters
@@ -291,9 +289,7 @@ class Chi2Result:
 # ============================================================================
 
 
-def _grating_sign(
-    z: float, qpm_period: float | None, duty_cycle: float
-) -> float:
+def _grating_sign(z: float, qpm_period: float | None, duty_cycle: float) -> float:
     if qpm_period is None:
         return 1.0
     return float(qpm_grating(z, qpm_period, duty_cycle))
@@ -378,8 +374,7 @@ def solve_shg(
     if loss_db_per_cm is not None:
         if len(loss_db_per_cm) != 2:
             raise ValueError(
-                "loss_db_per_cm must be a (pump, sh) pair, got "
-                f"{loss_db_per_cm!r}"
+                f"loss_db_per_cm must be a (pump, sh) pair, got {loss_db_per_cm!r}"
             )
         # dB/cm → Napierian per metre: α = ln(10)/10 · dB/cm · 100
         alpha_f = np.log(10.0) / 10.0 * 100.0 * float(loss_db_per_cm[0])
@@ -544,6 +539,7 @@ def solve_dfg(
 # Cascaded χ⁽²⁾–χ⁽³⁾ coupled-wave solver (SHG + Kerr SPM/XPM)
 # ============================================================================
 
+
 def solve_cascaded_shg(
     *,
     length: float,
@@ -613,15 +609,12 @@ def solve_cascaded_shg(
         raise ValueError(f"P0 must be positive, got {P0}")
     gamma_sh_f = float(gamma_sh) if gamma_sh is not None else float(gamma_f)
     gamma_cross_f = (
-        float(gamma_cross)
-        if gamma_cross is not None
-        else (2.0 / 3.0) * float(gamma_f)
+        float(gamma_cross) if gamma_cross is not None else (2.0 / 3.0) * float(gamma_f)
     )
     if loss_db_per_cm is not None:
         if len(loss_db_per_cm) != 2:
             raise ValueError(
-                "loss_db_per_cm must be a (pump, sh) pair, got "
-                f"{loss_db_per_cm!r}"
+                f"loss_db_per_cm must be a (pump, sh) pair, got {loss_db_per_cm!r}"
             )
         alpha_f = np.log(10.0) / 10.0 * 100.0 * float(loss_db_per_cm[0])
         alpha_sh = np.log(10.0) / 10.0 * 100.0 * float(loss_db_per_cm[1])
@@ -663,7 +656,6 @@ def solve_cascaded_shg(
         qpm_period=qpm_period,
         loss_alpha=(alpha_f, alpha_sh),
     )
-
 
 
 def shg_coupling_overlap(
@@ -728,20 +720,16 @@ def shg_coupling_overlap(
     d_arr = np.broadcast_to(np.asarray(d, dtype=float), E_pump.shape)
 
     O_int = (
-        float(np.real(np.sum(np.conj(E_sh) * (d_arr / d_nom) * E_pump**2)))
-        * dx
-        * dz
+        float(np.real(np.sum(np.conj(E_sh) * (d_arr / d_nom) * E_pump**2))) * dx * dz
     )
     I_p = float(np.sum(np.abs(E_pump) ** 2)) * dx * dz
     I_s = float(np.sum(np.abs(E_sh) ** 2)) * dx * dz
     if I_p <= 0 or I_s <= 0 or O_int == 0.0:
         raise ValueError("mode fields must have non-zero overlap integrals")
-    shape = abs(O_int) / (I_p * np.sqrt(I_s))          # unit: 1/m
+    shape = abs(O_int) / (I_p * np.sqrt(I_s))  # unit: 1/m
     omega = 2.0 * pi * C_MS / wavelength.as_m
     return float(
-        (omega * d_nom / C_MS)
-        * np.sqrt(2.0 * Z0 / (n_pump**2 * n_sh))
-        * shape
+        (omega * d_nom / C_MS) * np.sqrt(2.0 * Z0 / (n_pump**2 * n_sh)) * shape
     )
 
 
@@ -831,9 +819,7 @@ def pgln_overlap(
         n_sh = 2.0
     d0_arr = np.broadcast_to(np.asarray(d0, dtype=float), E_pump.shape)
     d1_arr = np.broadcast_to(np.asarray(d1, dtype=float), E_pump.shape)
-    des_arr = np.broadcast_to(
-        np.asarray(delta_eps1_sh, dtype=float), E_pump.shape
-    )
+    des_arr = np.broadcast_to(np.asarray(delta_eps1_sh, dtype=float), E_pump.shape)
 
     I_p = float(np.sum(np.abs(E_pump) ** 2)) * dx * dz
     I_s = float(np.sum(np.abs(E_sh) ** 2)) * dx * dz
@@ -844,22 +830,14 @@ def pgln_overlap(
 
     # Fourier-overlap shape factors (complex sum → magnitude: coupling strength)
 
-    O0 = (
-        np.sum(np.conj(E_sh) * (d0_arr / d0_nom) * E_pump**2) * dx * dz
-    )
-    O1 = (
-        np.sum(np.conj(E_sh) * (d1_arr / d0_nom) * E_pump**2) * dx * dz
-    )
+    O0 = np.sum(np.conj(E_sh) * (d0_arr / d0_nom) * E_pump**2) * dx * dz
+    O1 = np.sum(np.conj(E_sh) * (d1_arr / d0_nom) * E_pump**2) * dx * dz
     # d^(1) carries the same units as d₀ → D1 is dimensionless × (1/m units
     # from the grid); take magnitudes for the coupling-strength convention
     D0 = abs(O0) / (I_p * np.sqrt(I_s))
     D1 = abs(O1) / (I_p * np.sqrt(I_s))
-    g_nl0 = (2.0 * omega * d0_nom / C_MS) * np.sqrt(
-        2.0 * Z0 / (n_pump**2 * n_sh)
-    ) * D0
-    g_nl1 = (2.0 * omega * d0_nom / C_MS) * np.sqrt(
-        2.0 * Z0 / (n_pump**2 * n_sh)
-    ) * D1
+    g_nl0 = (2.0 * omega * d0_nom / C_MS) * np.sqrt(2.0 * Z0 / (n_pump**2 * n_sh)) * D0
+    g_nl1 = (2.0 * omega * d0_nom / C_MS) * np.sqrt(2.0 * Z0 / (n_pump**2 * n_sh)) * D1
 
     g_L_w = (
         omega

@@ -27,7 +27,7 @@ WL_SH = Wavelength(775, "nm")
 D33 = 27e-12  # LiNbO₃ d33 (m/V), x-cut, e-axis (E_z dominant)
 
 # article anchors (Wang et al. §2/§3)
-PAPER_G = 77.4   # 0.774 W^-1/2 cm⁻¹ → 77.4 1/(m·√W)
+PAPER_G = 77.4  # 0.774 W^-1/2 cm⁻¹ → 77.4 1/(m·√W)
 PAPER_GP = 34.5  # 0.345 W^-1/2 cm⁻¹ → 34.5 1/(m·√W)
 QPM_LAMBDA = 2.77e-6
 
@@ -68,13 +68,19 @@ def main() -> dict:
     # anchor is exercised in the shg_solve study (~/Research/sim/shg_solve).
     w_p = 260e-9
     pump = np.exp(-(X**2 / w_p**2 + (Z + 120e-9) ** 2 / w_p**2))
-    sh3 = (
-        np.cos(3.0 * np.pi * X / 0.4e-6) * np.exp(-(X**2) / (210e-9) ** 2)
-    ) * np.exp(-((Z + 110e-9) ** 2) / (200e-9) ** 2)
+    sh3 = (np.cos(3.0 * np.pi * X / 0.4e-6) * np.exp(-(X**2) / (210e-9) ** 2)) * np.exp(
+        -((Z + 110e-9) ** 2) / (200e-9) ** 2
+    )
 
     g = shg_coupling_overlap(
-        pump, sh3, DX, DX,
-        wavelength=WL_PUMP, d=D33, n_pump=ne_p, n_sh=ne_s,
+        pump,
+        sh3,
+        DX,
+        DX,
+        wavelength=WL_PUMP,
+        d=D33,
+        n_pump=ne_p,
+        n_sh=ne_s,
     )
 
     # PGLN (50 % duty grooves, 80 nm depth): d^(1) & Δε₁ first harmonic
@@ -85,7 +91,10 @@ def main() -> dict:
     delta_k = 2 * np.pi / QPM_LAMBDA  # article-anchored residual mismatch
 
     pg = pgln_overlap(
-        pump, sh3, DX, DX,
+        pump,
+        sh3,
+        DX,
+        DX,
         wavelength=WL_PUMP,
         d0=D33,
         d1=d1,

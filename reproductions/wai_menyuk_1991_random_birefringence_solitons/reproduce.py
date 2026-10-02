@@ -101,6 +101,7 @@ from math import cos, pi, sin
 from pathlib import Path
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
@@ -121,13 +122,13 @@ A_EFF_UM2 = 52.0
 LAMBDA_M = 1.55e-6
 N_SAMPLES = 2048
 
-Z_H_M = 100.0          # section length z_h (paper Sec. III)
-Z0_M = 55.0e3          # soliton period anchor (55 km, 50-ps solitons)
+Z_H_M = 100.0  # section length z_h (paper Sec. III)
+Z0_M = 55.0e3  # soliton period anchor (55 km, 50-ps solitons)
 TAU_FWHM_S = 50e-12
 T0_S = TAU_FWHM_S / 1.763
-N_PERIODS = 40.0       # span: 40 soliton periods
+N_PERIODS = 40.0  # span: 40 soliton periods
 DELTAS = (1.25, 2.5, 4.0, 5.0, 7.5)
-SEED = 14191           # one theta/phi sequence shared by every delta run
+SEED = 14191  # one theta/phi sequence shared by every delta run
 
 # Analytic-sign conventions of paper Eqs. (5)/(6), pinned against the engine
 # (see README "Conventions note"): the carrier phase follows the engine's
@@ -146,8 +147,8 @@ PHI_SIGN = -1.0
 # qualitative agreement level; the peak amplitude is pinned separately.
 TOL_SHADOW_L2 = 0.45
 TOL_SHADOW_PEAK = 0.30
-TOL_DELAY = 0.40     # paper Fig. 2 level ("agreed quite well")
-TOL_DELAY_J = 0.30   # residual vs the Stokes projection (delta <= 2.5)
+TOL_DELAY = 0.40  # paper Fig. 2 level ("agreed quite well")
+TOL_DELAY_J = 0.30  # residual vs the Stokes projection (delta <= 2.5)
 # Paper Fig. 3 states the width stays "below 2.5 even when delta = 7.5" for
 # THEIR single theta/phi sequence.  Our pinned sequence (and 5 others tested)
 # shows excursions to 3.1-5.5 at delta = 7.5 while delta <= 5 matches the
@@ -157,8 +158,8 @@ TOL_DELAY_J = 0.30   # residual vs the Stokes projection (delta <= 2.5)
 # paper's own parameters; the bound is pinned at our measured value.
 TOL_WIDTH_MAX = 3.5
 TOL_ENERGY = 5e-3
-LOCK_FRAC_MIN = 0.85   # delta = 1.25: power in U direction at 40 z0
-DEPOL_FLOOR = 0.40     # bounded depolarization walk (paper asymptote 1/2)
+LOCK_FRAC_MIN = 0.85  # delta = 1.25: power in U direction at 40 z0
+DEPOL_FLOOR = 0.40  # bounded depolarization walk (paper asymptote 1/2)
 
 
 # ---------------------------------------------------------------------------
@@ -169,22 +170,24 @@ DEPOL_FLOOR = 0.40     # bounded depolarization walk (paper asymptote 1/2)
 def physical_setup() -> dict:
     """Paper-derived engine quantities (same conversions as Menyuk 1987)."""
     T0 = T0_S
-    beta2 = -pi * T0**2 / (2.0 * Z0_M)          # from the paper's z_0 = 55 km
+    beta2 = -pi * T0**2 / (2.0 * Z0_M)  # from the paper's z_0 = 55 km
     gamma = N2 * (2 * pi * C_MS / LAMBDA_M) / (C_MS * A_EFF_UM2 * 1e-12)
-    P1 = abs(beta2) / (gamma * T0**2)           # scalar fundamental soliton peak
+    P1 = abs(beta2) / (gamma * T0**2)  # scalar fundamental soliton peak
     return {
         "T0": T0,
         "beta2_s2_per_m": beta2,
         "gamma": gamma,
         "P1": P1,
-        "launch_power": (9.0 / 8.0) * P1,       # Manakov soliton, chi = 0
+        "launch_power": (9.0 / 8.0) * P1,  # Manakov soliton, chi = 0
         "z_h": Z_H_M,
         "z0": Z0_M,
-        "dxi": (pi / 2.0) * Z_H_M / Z0_M,       # section in paper Eq.-(1) xi units
+        "dxi": (pi / 2.0) * Z_H_M / Z0_M,  # section in paper Eq.-(1) xi units
         "walkoff": lambda delta: 2.0 * abs(beta2) * delta / T0,  # SI s/m
-        "note_walkoff": ("paper Eq. (1): each axis drifts delta*t0 per unit xi "
-                         "= delta*|beta2|/t0 per meter; engine walkoff (relative, "
-                         "local y channel) = 2*delta*|beta2|/t0"),
+        "note_walkoff": (
+            "paper Eq. (1): each axis drifts delta*t0 per unit xi "
+            "= delta*|beta2|/t0 per meter; engine walkoff (relative, "
+            "local y channel) = 2*delta*|beta2|/t0"
+        ),
     }
 
 
@@ -192,8 +195,14 @@ class Wai1991Engine(RandomBirefringenceEngine):
     """RandomBirefringenceEngine with the paper's rotation law (Eq. (2))
     per section and the deterministic local walk-off (paper Eq. (1))."""
 
-    def __init__(self, setup: dict, *args, walkoff: float = 0.0,
-                 rotation_seed: int | None = None, **kw):
+    def __init__(
+        self,
+        setup: dict,
+        *args,
+        walkoff: float = 0.0,
+        rotation_seed: int | None = None,
+        **kw,
+    ):
         super().__init__(*args, **kw)
         self.walkoff_engine = float(walkoff)
         self.rotation_seed = rotation_seed
@@ -257,14 +266,15 @@ class Wai1991Engine(RandomBirefringenceEngine):
                 # The GVD is identical on both axes and rotation-invariant, so
                 # applying it here (inside the rotated frame) is exact.
                 self.walkoff = 0.5 * self.walkoff_engine
-                lx = self._linear_step_channel(lx, dz / 2, self.betas_x,
-                                               apply_walkoff=True)
+                lx = self._linear_step_channel(
+                    lx, dz / 2, self.betas_x, apply_walkoff=True
+                )
                 self.walkoff = -0.5 * self.walkoff_engine
-                ly = self._linear_step_channel(ly, dz, self.betas_y,
-                                               apply_walkoff=True)
+                ly = self._linear_step_channel(ly, dz, self.betas_y, apply_walkoff=True)
                 self.walkoff = 0.5 * self.walkoff_engine
-                lx = self._linear_step_channel(lx, dz / 2, self.betas_x,
-                                               apply_walkoff=True)
+                lx = self._linear_step_channel(
+                    lx, dz / 2, self.betas_x, apply_walkoff=True
+                )
                 # incoherent coupled nonlinearity (FWM dropped: R delta >> 1)
                 lx, ly = self._coupled_nonlinear_step(lx, ly, dz)
                 # exact drift projection: the local energies are invariant
@@ -291,17 +301,21 @@ class Wai1991Engine(RandomBirefringenceEngine):
                     # and absent from delta*J; J is kept as a diagnostic.
                     com = pulse_center(t, tot)
                     width_list.append(float(_fwhm(t, tot) / fwhm0))
-                    power_list.append(float(
-                        np.sum(np.abs(self.A_x) ** 2)
-                        / (np.sum(np.abs(self.A_x) ** 2)
-                           + np.sum(np.abs(self.A_y) ** 2))))
+                    power_list.append(
+                        float(
+                            np.sum(np.abs(self.A_x) ** 2)
+                            / (
+                                np.sum(np.abs(self.A_x) ** 2)
+                                + np.sum(np.abs(self.A_y) ** 2)
+                            )
+                        )
+                    )
                     delay_list.append(float((com - 0.0) / self.unit_T0))
                     I_list.append(float(integ))
                     I2_list.append(complex(I2))
                     I4_list.append(complex(I4))
                     J_list.append(float(J))
-                    energy_list.append(
-                        float(np.sum(tot) * dt) / e0)
+                    energy_list.append(float(np.sum(tot) * dt) / e0)
                     z_list.append(float((step + 1) * dz / self.unit_z0))
 
         return {
@@ -324,8 +338,9 @@ class Wai1991Engine(RandomBirefringenceEngine):
 # ---------------------------------------------------------------------------
 
 
-def shadow_analytic(setup: dict, grid: TemporalGrid,
-                    seq: list[tuple[float, float]], delta: float) -> NDArray:
+def shadow_analytic(
+    setup: dict, grid: TemporalGrid, seq: list[tuple[float, float]], delta: float
+) -> NDArray:
     """First-order analytic shadow (paper Eqs. (5)/(6)) at z = one z_0.
 
     Built in paper units (|U^0|^2_peak = 9/8, t in t0, xi = |beta2| z / t0^2)
@@ -347,14 +362,15 @@ def shadow_analytic(setup: dict, grid: TemporalGrid,
     half = 0.5 * np.cos(2.0 * th) * dxi
     delay_mid = delta * (np.concatenate(([0.0], dI[:-1])) + half)
     arg = np.clip(tp[None, :] - delay_mid[:, None], -700, 700)
-    za = (np.arange(n) + 0.5) * dxi              # xi' at section midpoints
-    phz = np.exp(U0_PHASE_SIGN * 0.5j * za)[:, None]   # e^{+-i A^2 xi'/2}
+    za = (np.arange(n) + 0.5) * dxi  # xi' at section midpoints
+    phz = np.exp(U0_PHASE_SIGN * 0.5j * za)[:, None]  # e^{+-i A^2 xi'/2}
     sh = 1.0 / np.cosh(arg)
     amp = np.sqrt(9.0 / 8.0)
     U0 = amp * sh * phz
     dU = -amp * sh * phz * np.tanh(arg)
-    V = delta * (inc2[:, None] * dU).sum(axis=0) \
-        - 1j / 12.0 * (inc4[:, None] * U0**3).sum(axis=0)
+    V = delta * (inc2[:, None] * dU).sum(axis=0) - 1j / 12.0 * (
+        inc4[:, None] * U0**3
+    ).sum(axis=0)
     return V
 
 
@@ -404,9 +420,9 @@ def rel_l2(a: NDArray, b: NDArray) -> float:
     return float(np.linalg.norm(a - b) / max(np.linalg.norm(b), 1e-300))
 
 
-def _make_engine(setup: dict, length_m: float, delta: float,
-                 t_half_t0: float = 15.0) -> tuple[TemporalGrid,
-                                                   Wai1991Engine, float]:
+def _make_engine(
+    setup: dict, length_m: float, delta: float, t_half_t0: float = 15.0
+) -> tuple[TemporalGrid, Wai1991Engine, float]:
     """Grid + engine for one run; returns (grid, engine, P1)."""
     P1 = setup["P1"]
     grid = TemporalGrid(N=N_SAMPLES, Tmax=Time(2 * t_half_t0 * setup["T0"], "s"))
@@ -414,22 +430,32 @@ def _make_engine(setup: dict, length_m: float, delta: float,
 
     def env(peak_amp: float) -> Envelope:
         return Envelope(
-            shape="custom", peak_amplitude=peak_amp,
+            shape="custom",
+            peak_amplitude=peak_amp,
             pulse_width=Time(setup["T0"] * 1e12, "ps"),
             func=lambda tt, T0_, A0: A0 / np.cosh(np.clip(tt / T0_, -700, 700)),
         )
 
-    wx = Wave(grid=grid, envelope=env(peak),
-              central_wavelength=Wavelength(LAMBDA_M * 1e9, "nm"))
-    wy = Wave(grid=grid, envelope=env(0.0),
-              central_wavelength=wx.central_wavelength)
+    wx = Wave(
+        grid=grid,
+        envelope=env(peak),
+        central_wavelength=Wavelength(LAMBDA_M * 1e9, "nm"),
+    )
+    wy = Wave(grid=grid, envelope=env(0.0), central_wavelength=wx.central_wavelength)
     fiber = FiberProfile(
-        n2=N2, alpha=0.0, A_eff=Area(A_EFF_UM2 * 1e-12, "m^2"),
+        n2=N2,
+        alpha=0.0,
+        A_eff=Area(A_EFF_UM2 * 1e-12, "m^2"),
         length=Length(length_m, "m"),
     )
     eng = Wai1991Engine(
-        setup, wx, wy, fiber, np.array([setup["beta2_s2_per_m"] * 1e24]),
-        walkoff=setup["walkoff"](delta), step_size=Length(Z_H_M, "m"),
+        setup,
+        wx,
+        wy,
+        fiber,
+        np.array([setup["beta2_s2_per_m"] * 1e24]),
+        walkoff=setup["walkoff"](delta),
+        step_size=Length(Z_H_M, "m"),
         rotation_seed=SEED,
     )
     return grid, eng, P1
@@ -443,16 +469,17 @@ def _make_engine(setup: dict, length_m: float, delta: float,
 def check_fig1(setup: dict) -> dict:
     """Shadow (fractional V pulse) at z = z0, delta = 2.5: numeric vs Eq. (5)."""
     delta = 2.5
-    n_sections = int(round(setup["z0"] / Z_H_M))     # = 550
-    grid, eng, P1 = _make_engine(setup, n_sections * Z_H_M, delta,
-                                 t_half_t0=15.0)
+    n_sections = int(round(setup["z0"] / Z_H_M))  # = 550
+    grid, eng, P1 = _make_engine(setup, n_sections * Z_H_M, delta, t_half_t0=15.0)
     res = eng.propagate_wai1991(metric_every=n_sections)
     tp = grid.t / setup["T0"]
     # both fields in paper units (|U^0|^2_peak = 9/8)
     V_num = np.abs(res["field_y_final"]) / np.sqrt(P1)
-    V_ana = np.abs(shadow_analytic(
-        setup, grid, list(zip(eng.theta[:n_sections], eng.phi[:n_sections])),
-        delta))
+    V_ana = np.abs(
+        shadow_analytic(
+            setup, grid, list(zip(eng.theta[:n_sections], eng.phi[:n_sections])), delta
+        )
+    )
     # compare each profile in its own soliton-centred window (the residual
     # delay mismatch between numerics and first-order theory is a separate,
     # Fig.-2-level effect; here we test the shadow SHAPE)
@@ -470,9 +497,9 @@ def check_fig1(setup: dict) -> dict:
         "n_sections_one_z0": n_sections,
         "shadow_numeric_peak_paper_units": float(V_num[win].max()),
         "shadow_analytic_peak_paper_units": float(V_ana[win_a].max()),
-        "shadow_peak_ratio_num_over_ana": float(V_num[win].max()
-                                                / max(V_ana[win_a].max(),
-                                                      1e-300)),
+        "shadow_peak_ratio_num_over_ana": float(
+            V_num[win].max() / max(V_ana[win_a].max(), 1e-300)
+        ),
         "shadow_window_half_width_t0": 3.0,
         "shadow_rel_l2_soliton_centred": l2,
         "soliton_delay_numeric_t0": float(t_num / setup["T0"]),
@@ -480,16 +507,18 @@ def check_fig1(setup: dict) -> dict:
         "self_energy_drift": float(abs(res["energy"][-1] - 1.0)),
     }
     assert res_out["shadow_rel_l2_soliton_centred"] < TOL_SHADOW_L2, res_out
-    assert abs(res_out["shadow_peak_ratio_num_over_ana"] - 1.0) \
-        < TOL_SHADOW_PEAK, res_out
+    assert abs(res_out["shadow_peak_ratio_num_over_ana"] - 1.0) < TOL_SHADOW_PEAK, (
+        res_out
+    )
     assert res_out["self_energy_drift"] < TOL_ENERGY, res_out
 
     _plot_shadow(grid, V_num, t_num, V_ana, t_ana)
     return res_out
 
 
-def _plot_shadow(grid: TemporalGrid, V_num: NDArray, t_num: float,
-                 V_ana: NDArray, t_ana: float) -> None:
+def _plot_shadow(
+    grid: TemporalGrid, V_num: NDArray, t_num: float, V_ana: NDArray, t_ana: float
+) -> None:
     tp = grid.t * 1e12
     fig, ax = plt.subplots(figsize=(6.5, 4))
     ax.plot(tp - t_ana * 1e12, V_ana, "k--", lw=1.2, label="analytic Eq. (5)")
@@ -497,8 +526,9 @@ def _plot_shadow(grid: TemporalGrid, V_num: NDArray, t_num: float,
     ax.set_xlim(-100, 100)
     ax.set_xlabel("time offset from soliton center (ps)")
     ax.set_ylabel("|V| (fractional amplitude, paper units)")
-    ax.set_title("Wai/Menyuk/Chen 1991, Fig. 1: soliton shadow after one z0 "
-                 "(delta = 2.5)")
+    ax.set_title(
+        "Wai/Menyuk/Chen 1991, Fig. 1: soliton shadow after one z0 (delta = 2.5)"
+    )
     ax.legend()
     fig.tight_layout()
     fig.savefig(HERE / "fig1_shadow.png", dpi=150)
@@ -515,8 +545,7 @@ def _plot_shadow(grid: TemporalGrid, V_num: NDArray, t_num: float,
 def run_sweep(setup: dict, metric_every: int = 100) -> dict:
     results: dict = {}
     for delta in DELTAS:
-        _, eng, _ = _make_engine(setup, N_PERIODS * setup["z0"], delta,
-                                 t_half_t0=20.0)
+        _, eng, _ = _make_engine(setup, N_PERIODS * setup["z0"], delta, t_half_t0=20.0)
         results[delta] = eng.propagate_wai1991(metric_every=metric_every)
     return results
 
@@ -531,7 +560,7 @@ def check_fig2_3_4(setup: dict, sweeps: dict) -> dict:
         ii = np.asarray(res["I"])
         J = np.asarray(res["J"])
         delay = np.asarray(res["delay"])
-        expected = delta * ii                   # paper Eq. (6), t0 units
+        expected = delta * ii  # paper Eq. (6), t0 units
         l2 = rel_l2(delay, expected)
         corr = float(np.corrcoef(delay, expected)[0, 1])
         # exact COM identity: delay = delta * int (E_lx - E_ly)/E dxi
@@ -566,8 +595,9 @@ def check_fig2_3_4(setup: dict, sweeps: dict) -> dict:
     # Fig. 2: delay tracks delta * int cos(2 theta) dxi (delta = 2.5) at the
     # paper's own "agreed quite well" level; the residual is the second-order
     # Stokes-vector wander of the depolarizing soliton
-    assert out["per_delta"]["2.5"]["delay_identity_rel_l2"] \
-        < TOL_DELAY, out["per_delta"]
+    assert out["per_delta"]["2.5"]["delay_identity_rel_l2"] < TOL_DELAY, out[
+        "per_delta"
+    ]
     assert out["per_delta"]["2.5"]["delay_identity_corr"] > 0.97
     # Fig. 4: polarization budget
     p125 = float(powers[1.25][-1])
@@ -587,13 +617,11 @@ def _plot_fig2_3_4(sweeps: dict) -> None:
     delay = np.asarray(sweeps[delta]["delay"])
     zps = np.asarray(sweeps[delta]["z"])
     fig, ax = plt.subplots(figsize=(6.5, 4))
-    ax.plot(zps, delay / delta, lw=1.4,
-            label="numeric delay/δ (engine)")
+    ax.plot(zps, delay / delta, lw=1.4, label="numeric delay/δ (engine)")
     ax.plot(zps, ii, "k--", lw=1.2, label="∫cos2θ dξ (Eq. (6))")
     ax.set_xlabel("distance (soliton periods)")
     ax.set_ylabel("normalized time delay")
-    ax.set_title("Fig. 2: delay of the soliton tracks the rotating axes "
-                 "(δ = 2.5)")
+    ax.set_title("Fig. 2: delay of the soliton tracks the rotating axes (δ = 2.5)")
     ax.legend()
     fig.tight_layout()
     fig.savefig(HERE / "fig2_delay.png", dpi=150)
@@ -628,27 +656,33 @@ def _plot_fig2_3_4(sweeps: dict) -> None:
 def validate(make_plot: bool = True) -> dict:
     """Run every check and return the measured metrics (house contract)."""
     setup = physical_setup()
-    results: dict = {"derived": {
-        "T0_ps": setup["T0"] * 1e12,
-        "beta2_ps2_per_km": float(setup["beta2_s2_per_m"] * 1e27),
-        "gamma_per_W_m": setup["gamma"],
-        "P1_scalar_W": setup["P1"],
-        "launch_power_W": setup["launch_power"],
-        "walkoff_fs_per_m_per_delta": setup["walkoff"](1.0) * 1e15,
-        "sections_per_z0": setup["z0"] / Z_H_M,
-        "dxi_per_section": setup["dxi"],
-        "I_variance_one_z0_paper_formula": pi**2 * Z_H_M * Z0_M
-            / (8.0 * Z0_M**2),
-        "I_variance_one_z0_discrete": (setup["z0"] / Z_H_M)
-            * setup["dxi"]**2 * 0.5,
-    }}
+    results: dict = {
+        "derived": {
+            "T0_ps": setup["T0"] * 1e12,
+            "beta2_ps2_per_km": float(setup["beta2_s2_per_m"] * 1e27),
+            "gamma_per_W_m": setup["gamma"],
+            "P1_scalar_W": setup["P1"],
+            "launch_power_W": setup["launch_power"],
+            "walkoff_fs_per_m_per_delta": setup["walkoff"](1.0) * 1e15,
+            "sections_per_z0": setup["z0"] / Z_H_M,
+            "dxi_per_section": setup["dxi"],
+            "I_variance_one_z0_paper_formula": pi**2 * Z_H_M * Z0_M / (8.0 * Z0_M**2),
+            "I_variance_one_z0_discrete": (setup["z0"] / Z_H_M)
+            * setup["dxi"] ** 2
+            * 0.5,
+        }
+    }
     results["fig1_shadow"] = check_fig1(setup)
     sweeps = run_sweep(setup)
     results["fig2_3_4"] = check_fig2_3_4(setup, sweeps)
     if make_plot:
         _plot_fig2_3_4(sweeps)
-        results["figures"] = ["fig1_shadow.png", "fig2_delay.png",
-                              "fig3_width.png", "fig4_power.png"]
+        results["figures"] = [
+            "fig1_shadow.png",
+            "fig2_delay.png",
+            "fig3_width.png",
+            "fig4_power.png",
+        ]
     return results
 
 

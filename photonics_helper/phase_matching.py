@@ -778,13 +778,7 @@ def mi_gain_spectrum_extended(
             betas_arr_ = np.atleast_1d(np.asarray(betas, dtype=float))
             beta2_est = float(betas_arr_[0])
         elif beta_fn_convention == "detuning":
-            beta2_est = _as_scalar(
-                (
-                    beta_fn(domega)
-                    + beta_fn(-domega)
-                )
-                / domega**2
-            )
+            beta2_est = _as_scalar((beta_fn(domega) + beta_fn(-domega)) / domega**2)
         else:
             warnings.warn(
                 "mi_gain_spectrum_extended with beta_fn_convention='absolute' "
@@ -943,8 +937,7 @@ def dispersive_wave_roots(
         try:
             res = root_scalar(
                 lambda w, bs=beta_sol, b1=beta1_sol, qs=q_sol: (
-                    _as_scalar(beta_fn(w))
-                    - (bs + b1 * (w - omega_sol) + qs)
+                    _as_scalar(beta_fn(w)) - (bs + b1 * (w - omega_sol) + qs)
                 ),
                 bracket=[w_lo, w_hi],
                 method="brentq",
@@ -971,8 +964,7 @@ def dispersive_wave_roots(
                     )
                     res = root_scalar(
                         lambda w, bs=beta_sol, b1=beta1_sol, qs=q_sol: (
-                            _as_scalar(beta_fn(w))
-                            - (bs + b1 * (w - omega_sol) + qs)
+                            _as_scalar(beta_fn(w)) - (bs + b1 * (w - omega_sol) + qs)
                         ),
                         x0=w_start,
                         method="newton",

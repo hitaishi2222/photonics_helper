@@ -31,6 +31,7 @@ ABSOLUTE angular frequency omega in rad/s (engine `SplitStepEngine._linear_step`
 evaluates phi = [beta(omega0 + grid.w) - beta(omega0)] dz with grid.w in
 rad/s offsets, Nyquist ±2.86e16 rad/s on the 450 fs / 4096 grid).
 """
+
 from __future__ import annotations
 
 import json
@@ -49,18 +50,18 @@ PARAMETERS = HERE / "parameters.json"
 C_MS = 299_792_458.0
 
 # --- system / operating points (Fig. 1, paper text) ------------------------
-A_UM = 125.0            # capillary core radius
-L_M = 1.0               # length
-U11 = 2.4048255577      # first zero of J0 (HE11-equiv. radial mode)
+A_UM = 125.0  # capillary core radius
+L_M = 1.0  # length
+U11 = 2.4048255577  # first zero of J0 (HE11-equiv. radial mode)
 LAMBDA0_NM = 800.0
 TAU_FWHM_FS = 7.5
 P_BAR_FIG1 = 2.1
 E_UJ_FIG1 = 225.0
-T_GAS_K = 293.0         # lab fill temperature (not stated in the paper;
-                        # linear density scaling — recorded)
-N2_HE_STP = 3.6e-25     # m^2/W at 1 bar (273 K): He = 0.36e-20 cm^2/W
-                        # (Lenzner 1998 noble-gas table; parameters.json)
-RDW_WINDOW_NM = (185.0, 265.0)   # Fig. 2 fixed window
+T_GAS_K = 293.0  # lab fill temperature (not stated in the paper;
+# linear density scaling — recorded)
+N2_HE_STP = 3.6e-25  # m^2/W at 1 bar (273 K): He = 0.36e-20 cm^2/W
+# (Lenzner 1998 noble-gas table; parameters.json)
+RDW_WINDOW_NM = (185.0, 265.0)  # Fig. 2 fixed window
 
 # Borerzsoenyi 2008 He (refractiveindex.info formula 2, CC0), 273 K / 1 bar
 _B_C1, _B_C2, _B_C3, _B_C4 = 4977.77e-8, 28.54e-6, 1856.94e-8, 7.76e-3
@@ -68,7 +69,8 @@ _B_C1, _B_C2, _B_C3, _B_C4 = 4977.77e-8, 28.54e-6, 1856.94e-8, 7.76e-3
 P_CONST = [0.8, 1.5, 2.1, 3.0, 4.0]
 P_GRAD_FILL = [1.2, 2.2, 3.2, 4.5, 6.0]
 
-GRID = {"N": 4096, "Tmax_fs": 450.0, "step_m": 2.5e-5}   # paper grid / 40 k steps
+GRID = {"N": 4096, "Tmax_fs": 450.0, "step_m": 2.5e-5}  # paper grid / 40 k steps
+
 
 # computed mode-shape factor for the J0 capillary HE11 mode (deterministic
 # from Eq. (2)'s mode profile, not fitted):
@@ -83,6 +85,7 @@ def he11_gamma_factor(a_um: float = A_UM) -> float:
     i2 = float(np.trapezoid(F**2 * r, r))
     i4 = float(np.trapezoid(F**4 * r, r))
     return i4 / (2.0 * i2**2)  # = 2.0976
+
 
 GAMMA_MODE_FACTOR = he11_gamma_factor()
 
@@ -100,28 +103,32 @@ def n_silica(omega) -> np.ndarray:
     lam_um = 2.0 * np.pi * C_MS / np.asarray(omega, float) * 1e6
     B = (0.6961663, 0.4079426, 0.8974794)
     C = (0.0684043**2, 0.1162414**2, 9.896161**2)
-    return np.sqrt(1.0 + sum(b * lam_um**2 / (lam_um**2 - c)
-                             for b, c in zip(B, C)))
+    return np.sqrt(1.0 + sum(b * lam_um**2 / (lam_um**2 - c) for b, c in zip(B, C)))
 
 
 def beta_total(omega, pressure_bar: float, a_um: float = A_UM) -> np.ndarray:
     """Paper Eq. (2): absolute propagation constant, rad/s intake."""
     w = np.asarray(omega, float)
     n = n_gas(w, pressure_bar)
-    return (w / C_MS) * np.sqrt(np.maximum(
-        n**2 - (C_MS * U11 / ((a_um * 1e-6) * w)) ** 2, 1e-30))
+    return (w / C_MS) * np.sqrt(
+        np.maximum(n**2 - (C_MS * U11 / ((a_um * 1e-6) * w)) ** 2, 1e-30)
+    )
 
 
 def alpha_total(omega, pressure_bar: float, a_um: float = A_UM) -> np.ndarray:
     """Paper Eq. (2) attenuation: c^2 u11^2/(a^3 w^2) (nu^2+1)/sqrt(nu^2-1)."""
     w = np.asarray(omega, float)
     nu = n_silica(w) / n_gas(w, pressure_bar)
-    return (C_MS**2 * U11**2 / ((a_um * 1e-6) ** 3 * w**2)) * \
-        (nu**2 + 1.0) / np.sqrt(nu**2 - 1.0)
+    return (
+        (C_MS**2 * U11**2 / ((a_um * 1e-6) ** 3 * w**2))
+        * (nu**2 + 1.0)
+        / np.sqrt(nu**2 - 1.0)
+    )
 
 
-def beta_gradient(omega, p0_bar: float, length_m: float, z_frac: float,
-                  a_um: float = A_UM) -> np.ndarray:
+def beta_gradient(
+    omega, p0_bar: float, length_m: float, z_frac: float, a_um: float = A_UM
+) -> np.ndarray:
     """Paper Eq. (3): p(z) = p0 sqrt(1 - z/L)."""
     p = p0_bar * np.sqrt(max(1.0 - z_frac, 0.0))
     return beta_total(omega, p, a_um)
@@ -149,6 +156,7 @@ def differentiate_beta(omega, pressure_bar: float, a_um: float = A_UM):
     central differences at h = 1e-12 w are exact to ~1e-30.
     """
     import mpmath as mp
+
     mp.mp.dps = 40
     omegas = np.atleast_1d(np.asarray(omega, float))
     a = mp.mpf("%.17g" % (a_um * 1e-6))
@@ -177,6 +185,7 @@ def zdw_nm(pressure_bar: float, a_um: float = A_UM) -> float:
     def f(lam_nm):
         w = 2 * np.pi * C_MS / (lam_nm * 1e-9)
         return float(differentiate_beta(np.array([w]), pressure_bar, a_um)[2][0])
+
     grid = np.linspace(150.0, 900.0, 2000)
     vals = np.array([f(x) for x in grid])
     idx = np.where(np.diff(np.sign(vals)) != 0)[0]
@@ -191,11 +200,17 @@ def zdw_nm(pressure_bar: float, a_um: float = A_UM) -> float:
 # ---------------------------------------------------------------------------
 
 
-def build_engine(pressure_bar: float = P_BAR_FIG1, energy_uJ: float = E_UJ_FIG1,
-                 tau_fwhm_fs: float = TAU_FWHM_FS, length_m: float = L_M,
-                 a_um: float = A_UM, pressure_gradient: bool = False,
-                 n_grid: int = GRID["N"], step_m: float = GRID["step_m"],
-                 include_loss: bool = False):
+def build_engine(
+    pressure_bar: float = P_BAR_FIG1,
+    energy_uJ: float = E_UJ_FIG1,
+    tau_fwhm_fs: float = TAU_FWHM_FS,
+    length_m: float = L_M,
+    a_um: float = A_UM,
+    pressure_gradient: bool = False,
+    n_grid: int = GRID["N"],
+    step_m: float = GRID["step_m"],
+    include_loss: bool = False,
+):
     """Fig. 1 / Fig. 2 deck: TaperedGNLSESolver (z-dependent-capable).
 
     Pulse: transform-limited sech^2, T0 = tau_FWHM/1.763, E = 2 P0 T0 (the
@@ -207,24 +222,34 @@ def build_engine(pressure_bar: float = P_BAR_FIG1, energy_uJ: float = E_UJ_FIG1,
     t0 = tau_fwhm_fs * 1e-15 / 1.763
     p0 = energy_uJ * 1e-6 / (2.0 * t0)
     env = Envelope(shape="sech", peak_amplitude=float(p0), pulse_width=Time(t0, "s"))
-    wave = Wave(grid=grid, envelope=env,
-                central_wavelength=Wavelength(LAMBDA0_NM, "nm")).with_effective_area(
-                    Area(np.pi * (a_um * 1e-6) ** 2, "m^2"))
-    fiber = FiberProfile(n2=0.0, alpha=0.0,
-                         A_eff=Area(np.pi * (a_um * 1e-6) ** 2, "m^2"),
-                         length=Length(length_m, "m"))
+    wave = Wave(
+        grid=grid, envelope=env, central_wavelength=Wavelength(LAMBDA0_NM, "nm")
+    ).with_effective_area(Area(np.pi * (a_um * 1e-6) ** 2, "m^2"))
+    fiber = FiberProfile(
+        n2=0.0,
+        alpha=0.0,
+        A_eff=Area(np.pi * (a_um * 1e-6) ** 2, "m^2"),
+        length=Length(length_m, "m"),
+    )
     if pressure_gradient:
+
         def profile(w, z):
             return beta_gradient(w, pressure_bar, length_m, z / length_m, a_um)
     else:
+
         def profile(w, z):
             return beta_total(w, pressure_bar, a_um)
+
     gam = gamma_capillary(pressure_bar, a_um)
     solver = TaperedGNLSESolver(
-        pulse=wave, fiber=fiber, dispersion_profile=profile,
+        pulse=wave,
+        fiber=fiber,
+        dispersion_profile=profile,
         gamma_fn=lambda z: gam,
-        include_raman=False, include_self_steepening=False,
-        step_size=Length(step_m, "m"), min_shrink_factor=0.3,
+        include_raman=False,
+        include_self_steepening=False,
+        step_size=Length(step_m, "m"),
+        min_shrink_factor=0.3,
     )
     return solver, gam, p0
 
@@ -264,8 +289,12 @@ def analyse_run(solver) -> dict:
     e_rdw = float(spec_i[mask].sum())
     e_out = float(spec_i[w_abs > 0].sum())
     if spec_i[mask].sum() <= 0:
-        return {"rdw_energy": 0.0, "arrival_time_fs": np.nan,
-                "rdw_lambda_nm": np.nan, "lambda_jitter_nm": np.nan}
+        return {
+            "rdw_energy": 0.0,
+            "arrival_time_fs": np.nan,
+            "rdw_lambda_nm": np.nan,
+            "lambda_jitter_nm": np.nan,
+        }
 
     w_rdw = float((spec_i[mask] * w_abs[mask]).sum() / spec_i[mask].sum())
     # filter -> IFFT of the field's spectral slice -> |E(t)|^2 first moment
@@ -276,15 +305,21 @@ def analyse_run(solver) -> dict:
     e_t = grid.ifft(band_field)
     i_t = np.abs(np.asarray(e_t)) ** 2
     if i_t.sum() <= 0:
-        return {"rdw_energy": 0.0, "arrival_time_fs": 0.0,
-                "rdw_lambda_nm": float("nan"), "lambda_jitter_nm": 0.0}
+        return {
+            "rdw_energy": 0.0,
+            "arrival_time_fs": 0.0,
+            "rdw_lambda_nm": float("nan"),
+            "lambda_jitter_nm": 0.0,
+        }
     tau_bins = float(((np.arange(grid.N)) * i_t).sum() / i_t.sum() - grid.N / 2)
     tau = tau_bins * dt_s(grid)
-    return {"rdw_energy": e_rdw / e_out,
-            "rdw_energy_J": float(np.array(solver.energy_vs_z)[-1] * e_rdw / e_out),
-            "arrival_time_fs": float(tau * 1e15),
-            "rdw_lambda_nm": float(2 * np.pi * C_MS / w_rdw * 1e9),
-            "lambda_jitter_nm": 0.0}
+    return {
+        "rdw_energy": e_rdw / e_out,
+        "rdw_energy_J": float(np.array(solver.energy_vs_z)[-1] * e_rdw / e_out),
+        "arrival_time_fs": float(tau * 1e15),
+        "rdw_lambda_nm": float(2 * np.pi * C_MS / w_rdw * 1e9),
+        "lambda_jitter_nm": 0.0,
+    }
 
 
 def dt_s(grid):
@@ -293,6 +328,7 @@ def dt_s(grid):
 
 def _DW(grid):
     return 2.0 * np.pi / (grid.N * grid.dt * 2.0)
+
 
 # placeholder — arrival fully computed in analyse_run (kept simple v1)
 
@@ -305,36 +341,49 @@ def _DW(grid):
 def load_scan(pressure_bar: float = 2.1, gradient: bool = False) -> dict:
     """Load an energy scan JSONL -> dict of arrays (energy, lam, tau, e_rdw)."""
     here = Path(__file__).resolve().parent
-    name = ("rdw_scan_gradient_%.1fbar.jsonl" % pressure_bar if gradient
-            else "rdw_scan_%.1fbar.jsonl" % pressure_bar)
-    rows = [json.loads(line) for line in (here / name).read_text().splitlines()
-            if line.strip() and '"point"' in line]
+    name = (
+        "rdw_scan_gradient_%.1fbar.jsonl" % pressure_bar
+        if gradient
+        else "rdw_scan_%.1fbar.jsonl" % pressure_bar
+    )
+    rows = [
+        json.loads(line)
+        for line in (here / name).read_text().splitlines()
+        if line.strip() and '"point"' in line
+    ]
     if not rows:
         raise FileNotFoundError(name)
     order = np.argsort([r["energy_uJ"] for r in rows])
     rows = [rows[i] for i in order]
-    return {"e": np.array([r["energy_uJ"] for r in rows]),
-            "lam": np.array([r["rdw_lambda_nm"] for r in rows]),
-            "tau": np.array([r["arrival_time_fs"] for r in rows]),
-            "e_rdw": np.array([r["rdw_energy"] for r in rows])}
+    return {
+        "e": np.array([r["energy_uJ"] for r in rows]),
+        "lam": np.array([r["rdw_lambda_nm"] for r in rows]),
+        "tau": np.array([r["arrival_time_fs"] for r in rows]),
+        "e_rdw": np.array([r["rdw_energy"] for r in rows]),
+    }
 
 
-def resample_scan(scan: dict, mean_uJ: float, sigma_rel: float = 0.02,
-                  n_samples: int = 10000, seed: int = 0) -> dict:
+def resample_scan(
+    scan: dict,
+    mean_uJ: float,
+    sigma_rel: float = 0.02,
+    n_samples: int = 10000,
+    seed: int = 0,
+) -> dict:
     """Paper's resampling method (p-08): interpolants over pump energy ->
     n_samples of pump energy with sigma_rel std -> noise statistics of the
     RDW energy / arrival time / central wavelength."""
     rng = np.random.default_rng(seed)
-    samp = np.clip(rng.normal(mean_uJ, sigma_rel * mean_uJ, n_samples),
-                   scan["e"][0], scan["e"][-1])
+    samp = np.clip(
+        rng.normal(mean_uJ, sigma_rel * mean_uJ, n_samples), scan["e"][0], scan["e"][-1]
+    )
     lam = np.interp(samp, scan["e"], scan["lam"])
     tau = np.interp(samp, scan["e"], scan["tau"])
     en = np.interp(samp, scan["e"], scan["e_rdw"])
     return {"lam": lam, "tau": tau, "e_rdw": en}
 
 
-def eq11_tau_fs(w_rdw_1: np.ndarray, pressure_bar: float,
-                mean_uJ: float) -> np.ndarray:
+def eq11_tau_fs(w_rdw_1: np.ndarray, pressure_bar: float, mean_uJ: float) -> np.ndarray:
     """Simple model (paper Eq. 11/12): tau = (L - Lf) [beta1(w_rdw) - beta1(w0)].
 
     w_rdw_1: RDW angular frequencies per resampled energy (rad/s).
@@ -343,8 +392,10 @@ def eq11_tau_fs(w_rdw_1: np.ndarray, pressure_bar: float,
     w0 = 2 * np.pi * C_MS / (LAMBDA0_NM * 1e-9)
     _, b1_0, b2_0 = differentiate_beta(np.array([w0]), pressure_bar)
     t0 = TAU_FWHM_FS * 1e-15 / 1.763
-    lf = np.sqrt(t0**2 / (gamma_capillary(pressure_bar)
-                          * abs(b2_0[0]) * mean_uJ * 1e-6 / (2.0 * t0)))
+    lf = np.sqrt(
+        t0**2
+        / (gamma_capillary(pressure_bar) * abs(b2_0[0]) * mean_uJ * 1e-6 / (2.0 * t0))
+    )
     lprop = L_M - lf
     rdw, b1_rdw, _ = differentiate_beta(w_rdw_1, pressure_bar)
     return float(lprop) * (b1_rdw - b1_0[0]) * 1e15  # s -> fs
@@ -419,8 +470,10 @@ def validate(*, fast: bool = True, make_plot: bool = True) -> dict:
 
 def _make_fig(results, solver):
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+
     f, S = solver.spectra_vs_z
     S = np.asarray(S)
     w0 = solver.omega0
@@ -432,8 +485,10 @@ def _make_fig(results, solver):
     axes[0].set_xlabel("wavelength (nm)")
     axes[0].set_ylabel("spectral energy density (a.u.)")
     axes[0].set_title("Fig. 1 point: output spectrum (225 uJ, 2.1 bar He)")
-    axes[1].plot(solver.z_array,
-                 [float(s._pulse_train_field.real.max()) for s in solver.evolution])
+    axes[1].plot(
+        solver.z_array,
+        [float(s._pulse_train_field.real.max()) for s in solver.evolution],
+    )
     axes[1].set_xlabel("z (m)")
     axes[1].set_ylabel("peak field (norm)")
     axes[1].set_title("evolution")
@@ -470,7 +525,8 @@ def validate_stats() -> dict:
     stats_path = HERE / "stats_fig5.json"
     if not stats_path.exists():
         raise FileNotFoundError(
-            "stats_fig5.json missing — run `python stats_fig56.py` first")
+            "stats_fig5.json missing — run `python stats_fig56.py` first"
+        )
     decks = json.loads(stats_path.read_text())
     results = {}
     for o in decks:
@@ -480,6 +536,7 @@ def validate_stats() -> dict:
         dvg = np.asarray(o["delta_vg_ms"])
         # tau(E) increasing over the scan (Spearman, robust to local wiggles)
         from scipy.stats import spearmanr
+
         rho = float(spearmanr(o["means_uJ"], tau).statistic)
         tag = f"{p}{'_grad' if o['gradient'] else ''}"
         results[tag] = {
@@ -487,13 +544,20 @@ def validate_stats() -> dict:
             "max_sigma_tau_as": round(float(sig.max()), 1),
             "median_sigma_tau_as": round(float(np.median(sig)), 1),
             "dvg_range_ms": [round(float(dvg.min())), round(float(dvg.max()))],
-            "one_pct_ratio_median": round(float(np.median(
-                np.asarray(o["sigma_tau_1pct_as"])
-                / np.interp(np.asarray(o["means_1pct"]),
-                            np.asarray(o["means_uJ"]), sig))), 3),
+            "one_pct_ratio_median": round(
+                float(
+                    np.median(
+                        np.asarray(o["sigma_tau_1pct_as"])
+                        / np.interp(
+                            np.asarray(o["means_1pct"]), np.asarray(o["means_uJ"]), sig
+                        )
+                    )
+                ),
+                3,
+            ),
         }
-        assert rho > 0.5, (tag, rho)          # Fig. 1c mechanism direction
-        assert -2000 < dvg.min() < -400, (tag, dvg.min())   # Fig. 5c channel
+        assert rho > 0.5, (tag, rho)  # Fig. 1c mechanism direction
+        assert -2000 < dvg.min() < -400, (tag, dvg.min())  # Fig. 5c channel
         if not (abs(p - 0.8) < 1e-9 and not o["gradient"]):
             assert sig.max() < 300.0, (tag, float(sig.max()))
         else:
@@ -501,12 +565,14 @@ def validate_stats() -> dict:
         assert 0.4 < results[tag]["one_pct_ratio_median"] < 1.1, (tag,)
     results["all_decks"] = len(decks)
     results["jitter_claim"] = (
-        "< 300 as in 9/10 decks; 0.8-bar exception 371 as recorded above")
+        "< 300 as in 9/10 decks; 0.8-bar exception 371 as recorded above"
+    )
     return results
 
 
 if __name__ == "__main__":  # pragma: no cover
     import sys
+
     r = validate(fast="--slow" not in sys.argv, make_plot="--slow" in sys.argv)
     if "--stats" in sys.argv:
         r["stats"] = validate_stats()

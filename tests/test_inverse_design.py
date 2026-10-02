@@ -18,8 +18,7 @@ from photonics_helper.inverse_design import design_efficiency, fit_two_wave
 
 
 def _synthetic_eta(L=0.5, sigma=0.5, P0=2.0, delta_k=30.0, n_steps=4000):
-    res = solve_shg(length=L, P0=P0, sigma=sigma, n_steps=n_steps,
-                    delta_k=delta_k)
+    res = solve_shg(length=L, P0=P0, sigma=sigma, n_steps=n_steps, delta_k=delta_k)
     curve = np.abs(res.field("sh")) ** 2 / np.maximum(
         np.abs(res.field("fundamental")) ** 2, 1e-30
     )
@@ -58,7 +57,10 @@ class TestDesignEfficiency:
     def test_unreachable_target_fails_loudly(self):
         with pytest.raises(ValueError, match="unreachable"):
             design_efficiency(
-                target=0.95, P0=0.01, sigma=1e-4, n_steps=200,
+                target=0.95,
+                P0=0.01,
+                sigma=1e-4,
+                n_steps=200,
             )
 
     def test_target_range_enforced(self):

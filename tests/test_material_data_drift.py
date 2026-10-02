@@ -93,13 +93,23 @@ def test_phonon_modes_match_canonical_table() -> None:
     assert rows, "phonon_modes is empty — run seed_db.py"
 
     db_set = {
-        (r["material"], round(r["shift_cm"], 6), round(r["linewidth_cm"], 6),
-         r["symmetry"], round(r["relative_strength"], 6))
+        (
+            r["material"],
+            round(r["shift_cm"], 6),
+            round(r["linewidth_cm"], 6),
+            r["symmetry"],
+            round(r["relative_strength"], 6),
+        )
         for r in rows
     }
     py_set = {
-        (material, round(m.shift_cm.as_1_cm, 6), round(m.linewidth_cm.as_1_cm, 6),
-         m.symmetry, round(m.relative_strength, 6))
+        (
+            material,
+            round(m.shift_cm.as_1_cm, 6),
+            round(m.linewidth_cm.as_1_cm, 6),
+            m.symmetry,
+            round(m.relative_strength, 6),
+        )
         for material, modes in PHONON_MATERIALS.items()
         for m in modes
     }
@@ -154,9 +164,7 @@ def test_no_row_is_missing_a_licence() -> None:
 def test_nk_licence_is_cc0() -> None:
     con = _connect()
     try:
-        licences = {
-            r[0] for r in con.execute("SELECT DISTINCT license FROM nk_data")
-        }
+        licences = {r[0] for r in con.execute("SELECT DISTINCT license FROM nk_data")}
     finally:
         con.close()
     assert licences == {"CC0-1.0"}

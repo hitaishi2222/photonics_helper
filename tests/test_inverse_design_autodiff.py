@@ -54,6 +54,4 @@ def test_validation_errors():
     with pytest.raises(ValueError):
         fit_shg_autodiff(z_samples=[0.0, 1.0], ratios=[1.0, 2.0])
     with pytest.raises(ValueError):
-        fit_shg_autodiff(
-            z_samples=[0.0, 1.0, 2.0], ratios=[0.0, 0.0, 0.0], sigma0=-1.0
-        )
+        fit_shg_autodiff(z_samples=[0.0, 1.0, 2.0], ratios=[0.0, 0.0, 0.0], sigma0=-1.0)

@@ -23,6 +23,7 @@ dispersion profile family the engine used (constant or gradient decks).
 
 Sign convention: τ > 0 means the RDW arrives LATER than the pump.
 """
+
 from __future__ import annotations
 
 import importlib.util as ilu

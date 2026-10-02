@@ -117,34 +117,34 @@ PARAMETERS = HERE / "parameters.json"
 # --- fiber (PRL 2016 p.3; review pages 16-18) ------------------------------
 N_CO = 1.470
 N_CL = 1.457
-R_CORE = 26.0e-6               # core radius rho (PRL numerics)
-DELTA = 8.8e-3                 # (n_co^2 - n_cl^2) / (2 n_co^2) (PRL p.3)
-KAPPA2 = 16.55e-27             # kappa'' = beta_2 at 1064 nm (s^2/m)
-N2 = 3.2e-20                   # m^2/W
+R_CORE = 26.0e-6  # core radius rho (PRL numerics)
+DELTA = 8.8e-3  # (n_co^2 - n_cl^2) / (2 n_co^2) (PRL p.3)
+KAPPA2 = 16.55e-27  # kappa'' = beta_2 at 1064 nm (s^2/m)
+N2 = 3.2e-20  # m^2/W
 LAMBDA0 = 1064e-9
 OMEGA0 = 2.0 * np.pi * C_MS / LAMBDA0
 
 # --- Fig. 14 experiment-side parameters (PRL p.3) --------------------------
-LEN_EXP = 6.0                  # m
-P_PKP_EXP = 50.0e3             # W (P_p-p = 50 kW)
-BEAM_FWHM_EXP = 35.0e-6        # input beam FWHM diameter
+LEN_EXP = 6.0  # m
+P_PKP_EXP = 50.0e3  # W (P_p-p = 50 kW)
+BEAM_FWHM_EXP = 35.0e-6  # input beam FWHM diameter
 
 # --- PRL numerics-side parameters (PRL p.3; used for the power check) ------
-LEN_NUM = 0.4                  # m
-P_PKP_NUM = 12.566e3           # I = 10 GW/cm^2 over a 40 um 1/e^2 diameter
-BEAM_DIAM_NUM = 40.0e-6        # 1/e^2 diameter
-PULSE_FWHM_NUM = 9.0e-12       # quasi-CW pulse duration
+LEN_NUM = 0.4  # m
+P_PKP_NUM = 12.566e3  # I = 10 GW/cm^2 over a 40 um 1/e^2 diameter
+BEAM_DIAM_NUM = 40.0e-6  # 1/e^2 diameter
+PULSE_FWHM_NUM = 9.0e-12  # quasi-CW pulse duration
 
 # --- shared numerics -------------------------------------------------------
-WINDOW_S = 27.32e-12           # dt = 1.67 fs, df = 36.6 GHz, Nyquist 300 THz
+WINDOW_S = 27.32e-12  # dt = 1.67 fs, df = 36.6 GHz, Nyquist 300 THz
 N_GRID = 16384
-STEP_EXP = 0.050e-3            # 0.05 mm (5x-coarser than PRL's 0.02 mm; ok per check 2)
-STEP_NUM = 0.020e-3            # 0.02 mm — the PRL's own step
+STEP_EXP = 0.050e-3  # 0.05 mm (5x-coarser than PRL's 0.02 mm; ok per check 2)
+STEP_NUM = 0.020e-3  # 0.02 mm — the PRL's own step
 N_SAVES = 201
-N_MODES = 4                    # LP_0p truncation (pair sums give h = 1..6)
-SEED_REL_EXP = 1e-8            # -160 dB launch noise for the 6 m experiment run
-                               # (stand-in for GP roundoff self-seeding)
-SEED_REL_NUM = 3e-4            # -70 dB for the 0.4 m numerics checks
+N_MODES = 4  # LP_0p truncation (pair sums give h = 1..6)
+SEED_REL_EXP = 1e-8  # -160 dB launch noise for the 6 m experiment run
+# (stand-in for GP roundoff self-seeding)
+SEED_REL_NUM = 3e-4  # -70 dB for the 0.4 m numerics checks
 NOISE_SEED = 20160
 H_MAX_ASSERT = 3
 TOL_REL = 0.04
@@ -156,9 +156,9 @@ _ESTIMATED_STEP_S = 0.075
 def _eta_seconds(eng_kw: dict, n_steps: int) -> float:
     ng = eng_kw.get("n_grid") or N_GRID
     nm = eng_kw.get("n_modes") or N_MODES
-    return (
-        _ESTIMATED_STEP_S * n_steps * (ng / N_GRID) * (nm / N_MODES)
-    )
+    return _ESTIMATED_STEP_S * n_steps * (ng / N_GRID) * (nm / N_MODES)
+
+
 PEAK_DB = -45.0
 
 F_M_PRL = 124.5e12  # the PRL's own printed f1 used for its Fig. 3 ladder
@@ -268,7 +268,7 @@ def build_engine(
     self-imaging phase grating is removed (no-grating control).
     """
     beam_1e2_radius[0] = beam_1e2_diam / 2.0
-    T0 = 2.0e-12                                # flat top ~9 ps full width
+    T0 = 2.0e-12  # flat top ~9 ps full width
     w0 = mode_w0()
     fractions = seed_fractions(w0, n_modes, beam_1e2_diam / 2.0)
     grid = TemporalGrid(N=n_grid, Tmax=Time(WINDOW_S, "s"))
@@ -321,7 +321,7 @@ def ladder_peaks(engine: MultimodeSplitStepEngine) -> tuple:
     spec_tot = np.zeros(fields[0].shape[-1])
     for p in range(len(fields)):
         spec_tot += np.abs(engine.grid.fft(fields[p][-1])) ** 2
-    f_thz = engine.grid.w / (2.0 * np.pi * 1e12)   # rad/s -> THz
+    f_thz = engine.grid.w / (2.0 * np.pi * 1e12)  # rad/s -> THz
     return f_thz, spec_tot
 
 
@@ -344,7 +344,7 @@ def match_ladder(
     pk, _ = find_peaks(spec_db - base, height=prom_h, distance=10)
     pk_f = f[pk]
 
-    ladder = gpi_ladder(h_max=h_max) / 1e12    # THz
+    ladder = gpi_ladder(h_max=h_max) / 1e12  # THz
     measured, rel_err = [], []
     for f_h in ladder:
         cand = pk_f[np.abs(pk_f - f_h) < 2.5]
@@ -382,31 +382,49 @@ def run_case(
     if cache_path.exists():
         blob = np.load(cache_path)
         if blob["key"].item() == key:
-            print(f"{caseno} case '{label}': loaded from cache "
-                  f"[0:00 elapsed]", flush=True)
-            return {"label": label, "f_thz": blob["f"], "spec": blob["spec"],
-                    "stack": blob["stack"], "energy": blob["energy"]}
+            print(
+                f"{caseno} case '{label}': loaded from cache [0:00 elapsed]", flush=True
+            )
+            return {
+                "label": label,
+                "f_thz": blob["f"],
+                "spec": blob["spec"],
+                "stack": blob["stack"],
+                "energy": blob["energy"],
+            }
     n_steps = int(round(length_m / (eng_kw.get("step_m") or STEP_EXP)))
     est = _eta_seconds(eng_kw, n_steps)
-    print(f"{caseno} running case '{label}': L = {length_m} m, "
-          f"P = {peak_power_w/1e3:.1f} kW, {n_steps} steps "
-          f"(ETA ~{est/60:.0f} min) "
-          f"[{time.strftime('%H:%M:%S')} start] ...", flush=True)
+    print(
+        f"{caseno} running case '{label}': L = {length_m} m, "
+        f"P = {peak_power_w / 1e3:.1f} kW, {n_steps} steps "
+        f"(ETA ~{est / 60:.0f} min) "
+        f"[{time.strftime('%H:%M:%S')} start] ...",
+        flush=True,
+    )
     engine = build_engine(length_m, peak_power_w, beam_1e2_diam, **eng_kw)
     engine.propagate(0, nsaves=nsaves, show_progress=True)
     f_thz, spec_tot = ladder_peaks(engine)
     fields = engine.fields_vs_z()
-    stack = np.array([
-        sum(np.abs(engine.grid.fft(fields[p][k])) ** 2 for p in range(len(fields)))
-        for k in range(fields[0].shape[0])
-    ])
+    stack = np.array(
+        [
+            sum(np.abs(engine.grid.fft(fields[p][k])) ** 2 for p in range(len(fields)))
+            for k in range(fields[0].shape[0])
+        ]
+    )
     energy = engine.energy_vs_z
-    np.savez(cache_path, key=key, f=f_thz, spec=spec_tot, stack=stack,
-             energy=energy)
-    print(f"{caseno} case '{label}': DONE in "
-          f"{(time.perf_counter() - t_case)/60:.1f} min", flush=True)
-    return {"label": label, "f_thz": f_thz, "spec": spec_tot,
-            "stack": stack, "energy": energy}
+    np.savez(cache_path, key=key, f=f_thz, spec=spec_tot, stack=stack, energy=energy)
+    print(
+        f"{caseno} case '{label}': DONE in "
+        f"{(time.perf_counter() - t_case) / 60:.1f} min",
+        flush=True,
+    )
+    return {
+        "label": label,
+        "f_thz": f_thz,
+        "spec": spec_tot,
+        "stack": stack,
+        "energy": energy,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -424,53 +442,86 @@ def validate(*, make_plot: bool = True) -> dict:
     f_m = gpi_first_detuning()
     assert abs(xi / 0.615e-3 - 1.0) < 0.01, f"xi = {xi:.6g} (PRL printed 0.615 mm)"
     assert abs(f_m / F_M_PRL - 1.0) < 0.005, (
-        f"f_m analytic {f_m/1e12:.3f} THz vs PRL ladder f1 {F_M_PRL/1e12:.2f} THz"
+        f"f_m analytic {f_m / 1e12:.3f} THz vs PRL ladder f1 {F_M_PRL / 1e12:.2f} THz"
     )
     assert abs(np.pi / xi - np.sqrt(2.0 * DELTA) / R_CORE) < 1e-12
     results["xi_mm"] = xi * 1e3
     results["f_m_THz_analytic"] = f_m / 1e12
-    print(f"[1] analytic: xi = {xi*1e3:.4f} mm (PRL 0.615), "
-          f"f_m = {f_m/1e12:.2f} THz (PRL printed 125.0, ladder 124.5) OK",
-          flush=True)
+    print(
+        f"[1] analytic: xi = {xi * 1e3:.4f} mm (PRL 0.615), "
+        f"f_m = {f_m / 1e12:.2f} THz (PRL printed 125.0, ladder 124.5) OK",
+        flush=True,
+    )
 
     results["seed_fractions_percent"] = {
         # intensity FWHM 35 um Gaussian -> 1/e^2 radius = FWHM/sqrt(2 ln2)
         "LP0p_for_35um_FWHM_beam": (
-            100.0 * seed_fractions(mode_w0(), N_MODES,
-                                   BEAM_FWHM_EXP / np.sqrt(2.0 * np.log(2.0)))
+            100.0
+            * seed_fractions(
+                mode_w0(), N_MODES, BEAM_FWHM_EXP / np.sqrt(2.0 * np.log(2.0))
+            )
         ).tolist(),
         "LP0p_for_40um_1e2_beam": (
             100.0 * seed_fractions(mode_w0(), N_MODES, BEAM_DIAM_NUM / 2.0)
         ).tolist(),
     }
 
-
     # --- 2. Step-size convergence at the PRL numerics point ---------------
-    fine = run_case("numerics fine (dz=0.02mm)", LEN_NUM, P_PKP_NUM,
-                    BEAM_DIAM_NUM, step_m=STEP_NUM, nsaves=3, n_modes=4,
-                    seed_rel=SEED_REL_NUM, caseno="[2a/6]")
-    coarse = run_case("numerics coarse (dz=0.1mm)", LEN_NUM, P_PKP_NUM,
-                      BEAM_DIAM_NUM, step_m=0.1e-3, nsaves=3, n_modes=4,
-                      seed_rel=SEED_REL_NUM, caseno="[2b/6]")
+    fine = run_case(
+        "numerics fine (dz=0.02mm)",
+        LEN_NUM,
+        P_PKP_NUM,
+        BEAM_DIAM_NUM,
+        step_m=STEP_NUM,
+        nsaves=3,
+        n_modes=4,
+        seed_rel=SEED_REL_NUM,
+        caseno="[2a/6]",
+    )
+    coarse = run_case(
+        "numerics coarse (dz=0.1mm)",
+        LEN_NUM,
+        P_PKP_NUM,
+        BEAM_DIAM_NUM,
+        step_m=0.1e-3,
+        nsaves=3,
+        n_modes=4,
+        seed_rel=SEED_REL_NUM,
+        caseno="[2b/6]",
+    )
     _, mf, rf, _, _ = match_ladder(fine["f_thz"], fine["spec"], H_MAX_ASSERT)
     _, mc, rc, _, _ = match_ladder(coarse["f_thz"], coarse["spec"], H_MAX_ASSERT)
     both = np.isfinite(rf) & np.isfinite(rc)
-    max_rel_ladder_shift = float(
-        np.max(np.abs(mc[both] - mf[both]) / mf[both])) if both.any() else 0.0
+    max_rel_ladder_shift = (
+        float(np.max(np.abs(mc[both] - mf[both]) / mf[both])) if both.any() else 0.0
+    )
     results["step_convergence"] = {
-        "fine_dz_mm": 0.02, "coarse_dz_mm": 0.1,
+        "fine_dz_mm": 0.02,
+        "coarse_dz_mm": 0.1,
         "max_rel_ladder_shift": max_rel_ladder_shift,
     }
     assert max_rel_ladder_shift < 0.02, (
-        f"step convergence {max_rel_ladder_shift:.3f} > 2%")
+        f"step convergence {max_rel_ladder_shift:.3f} > 2%"
+    )
     assert np.isfinite(rf).sum() >= 1, "no GPI ladder peaks at the PRL numerics point"
-    print(f"[2] step convergence (dz 0.1 vs 0.02 mm): ladder shift "
-          f"{max_rel_ladder_shift*100:.2f}% OK", flush=True)
+    print(
+        f"[2] step convergence (dz 0.1 vs 0.02 mm): ladder shift "
+        f"{max_rel_ladder_shift * 100:.2f}% OK",
+        flush=True,
+    )
 
     # --- 3. power dependence (PRL Fig. 3 right): x4 peak-intensity run -----
-    quad = run_case("numerics x4 (dz=0.02mm)", LEN_NUM, 4.0 * P_PKP_NUM,
-                    BEAM_DIAM_NUM, step_m=STEP_NUM, nsaves=3, n_modes=4,
-                    seed_rel=SEED_REL_NUM, caseno="[3/6]")
+    quad = run_case(
+        "numerics x4 (dz=0.02mm)",
+        LEN_NUM,
+        4.0 * P_PKP_NUM,
+        BEAM_DIAM_NUM,
+        step_m=STEP_NUM,
+        nsaves=3,
+        n_modes=4,
+        seed_rel=SEED_REL_NUM,
+        caseno="[3/6]",
+    )
     _, mq, rq, _, _ = match_ladder(quad["f_thz"], quad["spec"], H_MAX_ASSERT)
     f1_fine, f1_quad = float(mf[0]), float(mq[0])
     shift = f1_fine - f1_quad
@@ -487,26 +538,38 @@ def validate(*, make_plot: bool = True) -> dict:
         f"f1 shift at x4 power {shift:.2f} THz; expected |small Kerr QPM "
         "shift| <= 0.25 THz (or <= 2 THz down)"
     )
-    print(f"[3] f1 shift at x4 peak intensity: {shift:.2f} THz "
-          f"({f1_fine:.2f} -> {f1_quad:.2f}; PRL ~2 THz downward) OK", flush=True)
+    print(
+        f"[3] f1 shift at x4 peak intensity: {shift:.2f} THz "
+        f"({f1_fine:.2f} -> {f1_quad:.2f}; PRL ~2 THz downward) OK",
+        flush=True,
+    )
 
     # --- 4. experiment-faithful Fig. 14 run -------------------------------
-    main = run_case("experiment-faithful (L=6m)", LEN_EXP, P_PKP_EXP,
-                    BEAM_FWHM_EXP, step_m=STEP_EXP, nsaves=N_SAVES,
-                    seed_rel=SEED_REL_EXP, caseno="[4/6]")
+    main = run_case(
+        "experiment-faithful (L=6m)",
+        LEN_EXP,
+        P_PKP_EXP,
+        BEAM_FWHM_EXP,
+        step_m=STEP_EXP,
+        nsaves=N_SAVES,
+        seed_rel=SEED_REL_EXP,
+        caseno="[4/6]",
+    )
     lm, sm = main["f_thz"], main["spec"]
     ladder, measured, rel_err, spec_db, base = match_ladder(lm, sm, h_max=7)
     for h, rel in enumerate(rel_err[:H_MAX_ASSERT], start=1):
         assert rel < TOL_REL, (
-            f"ladder h={h}: measured {measured[h-1]:.2f} THz vs analytic "
-            f"sqrt(h)*f_m {ladder[h-1]:.2f} THz (rel {rel:.3f})"
+            f"ladder h={h}: measured {measured[h - 1]:.2f} THz vs analytic "
+            f"sqrt(h)*f_m {ladder[h - 1]:.2f} THz (rel {rel:.3f})"
         )
     results["ladder_THz"] = [float(v) for v in ladder]
     results["measured_THz"] = [None if np.isnan(v) else float(v) for v in measured]
     results["rel_err"] = [None if np.isnan(v) else float(v) for v in rel_err]
-    print(f"[4] measured anti-Stokes ladder (THz): "
-          f"{[None if np.isnan(v) else round(float(v), 2) for v in measured]}",
-          flush=True)
+    print(
+        f"[4] measured anti-Stokes ladder (THz): "
+        f"{[None if np.isnan(v) else round(float(v), 2) for v in measured]}",
+        flush=True,
+    )
 
     # --- 5. energy conservation + Stokes mirror ---------------------------
     energy = main["energy"]
@@ -526,8 +589,7 @@ def validate(*, make_plot: bool = True) -> dict:
     f1 = measured[0]
     near = f_stokes[np.abs(f_stokes - f1) < 6.0]
     assert near.size, (
-        "no Stokes mirror peak within +-6 THz of -f1 (degenerate FWM "
-        "symmetry violated)"
+        "no Stokes mirror peak within +-6 THz of -f1 (degenerate FWM symmetry violated)"
     )
     f_st1 = float(near[np.argmin(np.abs(near - f1))])
     # note: the exact mirror equality is lifted by the small walk-off term
@@ -536,13 +598,24 @@ def validate(*, make_plot: bool = True) -> dict:
         f"Stokes mirror at {f_st1:.2f} THz vs anti-Stokes {f1:.2f} THz"
     )
     results["stokes_f1_THz"] = f_st1
-    print(f"[5b] Stokes mirror of h=1 at {f_st1:.2f} THz "
-          f"(anti-Stokes {f1:.2f} THz) OK", flush=True)
+    print(
+        f"[5b] Stokes mirror of h=1 at {f_st1:.2f} THz (anti-Stokes {f1:.2f} THz) OK",
+        flush=True,
+    )
 
     # --- 6. no-grating control --------------------------------------------
-    ctrl = run_case("no-grating control", LEN_EXP, P_PKP_EXP, BEAM_FWHM_EXP,
-                    use_offsets=False, n_grid=8192, step_m=0.1e-3, nsaves=2,
-                    seed_rel=SEED_REL_EXP, caseno="[6/6]")
+    ctrl = run_case(
+        "no-grating control",
+        LEN_EXP,
+        P_PKP_EXP,
+        BEAM_FWHM_EXP,
+        use_offsets=False,
+        n_grid=8192,
+        step_m=0.1e-3,
+        nsaves=2,
+        seed_rel=SEED_REL_EXP,
+        caseno="[6/6]",
+    )
     fc, sc = ctrl["f_thz"], ctrl["spec"]
     _, _, rc, _, _ = match_ladder(fc, sc, H_MAX_ASSERT, prom_h=8.0)
     n_in_windows = int(np.sum(np.isfinite(rc)))
@@ -551,15 +624,17 @@ def validate(*, make_plot: bool = True) -> dict:
         f"no-grating control shows {n_in_windows} peaks inside GPI windows: "
         "the ladder requires the self-imaging phase offsets"
     )
-    print("[6] control (phase_offsets=None): zero peaks in GPI windows OK",
-          flush=True)
+    print("[6] control (phase_offsets=None): zero peaks in GPI windows OK", flush=True)
 
     results.update({"_plotdata": {"fine": fine, "quad": quad, "main": main}})
 
     if make_plot:
         _plot(fine, quad, main, results)
-    print("Krupa 2019 review / GPI sidebands: validation passed "
-          f"(total {(time.perf_counter() - t0)/60:.1f} min)", flush=True)
+    print(
+        "Krupa 2019 review / GPI sidebands: validation passed "
+        f"(total {(time.perf_counter() - t0) / 60:.1f} min)",
+        flush=True,
+    )
     return results
 
 
@@ -580,21 +655,32 @@ def _plot(fine: dict, quad: dict, main: dict, results: dict) -> None:
         f_h = results["ladder_THz"][h - 1] * 1e12
         for sgn, markerc, mshape in ((+1, "C3", "^"), (-1, "C0", "o")):
             i = int(np.argmin(np.abs(f - sgn * f_h)))
-            ax.plot(sgn * results["ladder_THz"][h - 1], spec_db[i] - base[i],
-                    mshape, color=markerc,
-                    label=("Stokes mirror" if (sgn < 0 and h == 1) else None))
-            ax.axvline(sgn * results["ladder_THz"][h - 1], color=markerc,
-                       ls=":", alpha=0.8)
+            ax.plot(
+                sgn * results["ladder_THz"][h - 1],
+                spec_db[i] - base[i],
+                mshape,
+                color=markerc,
+                label=("Stokes mirror" if (sgn < 0 and h == 1) else None),
+            )
+            ax.axvline(
+                sgn * results["ladder_THz"][h - 1], color=markerc, ls=":", alpha=0.8
+            )
         j = int(np.argmin(np.abs(f - f_h)))
-        ax.annotate(f"+{h}", (results["ladder_THz"][h - 1],
-                              spec_db[j] - base[j] + 0.8),
-                    color="C3", fontsize=9, ha="center")
+        ax.annotate(
+            f"+{h}",
+            (results["ladder_THz"][h - 1], spec_db[j] - base[j] + 0.8),
+            color="C3",
+            fontsize=9,
+            ha="center",
+        )
 
     ax.set_ylim(-2, 15)
     ax.set_xlim(-500, 500)
     ax.set_xlabel("detuning from pump (THz)")
     ax.set_ylabel("spectral prominence above local noise floor (dB)")
-    ax.set_title("(a) L=6m, P=50 kW: GPI ladder lines\n(squares: anti-Stokes, circles: Stokes mirror)")
+    ax.set_title(
+        "(a) L=6m, P=50 kW: GPI ladder lines\n(squares: anti-Stokes, circles: Stokes mirror)"
+    )
     ax.legend(loc="upper left", fontsize=8)
 
     # (b) spectral evolution dB colormap
@@ -604,11 +690,9 @@ def _plot(fine: dict, quad: dict, main: dict, results: dict) -> None:
     stack = main["stack"]
     z = np.linspace(0.0, LEN_EXP, stack.shape[0])
     z_map = 10.0 * np.log10(
-        stack[:, band_all] / stack[:, band_all].max(axis=1, keepdims=True)
-        + 1e-300
+        stack[:, band_all] / stack[:, band_all].max(axis=1, keepdims=True) + 1e-300
     )
-    im = ax.pcolormesh(f_all[band_all], z, z_map, vmin=-60, vmax=5,
-                       shading="auto")
+    im = ax.pcolormesh(f_all[band_all], z, z_map, vmin=-60, vmax=5, shading="auto")
     fig.colorbar(im, ax=ax, label="dB")
     ax.set_xlabel("detuning (THz)")
     ax.set_ylabel("z (m)")
@@ -628,12 +712,22 @@ def _plot(fine: dict, quad: dict, main: dict, results: dict) -> None:
     ax.plot(range(1, len(lad) + 1), lad, "o-", label=r"analytic $\sqrt{h}\,f_m$")
     me = results["measured_THz"]
     ok = [i for i, v in enumerate(me) if v is not None]
-    ax.plot([i + 1 for i in ok], [me[i] for i in ok], "s", color="C1",
-            label="measured peaks (6 m, 50 kW)")
+    ax.plot(
+        [i + 1 for i in ok],
+        [me[i] for i in ok],
+        "s",
+        color="C1",
+        label="measured peaks (6 m, 50 kW)",
+    )
     _, mq, _, _, _ = match_ladder(quad["f_thz"], quad["spec"], H_MAX_ASSERT)
     ok_q = [i for i, v in enumerate(mq) if np.isfinite(v)]
-    ax.plot([i + 1 for i in ok_q], [mq[i] for i in ok_q], "^", color="C2",
-            label="measured (0.4 m numerics, 4I)")
+    ax.plot(
+        [i + 1 for i in ok_q],
+        [mq[i] for i in ok_q],
+        "^",
+        color="C2",
+        label="measured (0.4 m numerics, 4I)",
+    )
     ax.set_xlabel("GPI order h")
     ax.set_ylabel("detuning (THz)")
     ax.set_title("(d) GPI ladder")

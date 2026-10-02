@@ -71,12 +71,18 @@ def run_pump(wl_nm: float, dur_fs: float, n_real: int, n_steps: int):
     spectra = []
     for seed in range(n_real):
         solver = common.make_solver(
-            pulse, fiber, betas, raman=True, shock=True,
+            pulse,
+            fiber,
+            betas,
+            raman=True,
+            shock=True,
             tau_shock=common.SHOCK_FS * 1e-15,
         )
         solver.propagate(
-            num_steps=n_steps, nsaves=2,
-            raman_noise=True, noise_seed=4000 + seed * 17 + int(wl_nm),
+            num_steps=n_steps,
+            nsaves=2,
+            raman_noise=True,
+            noise_seed=4000 + seed * 17 + int(wl_nm),
         )
         spectra.append(np.asarray(pulse.grid.fft(solver.evolution[-1].envelope_field)))
     spectra = np.asarray(spectra, dtype=complex)
@@ -102,8 +108,11 @@ def run_pump(wl_nm: float, dur_fs: float, n_real: int, n_steps: int):
 def validate(fast: bool = True, make_plot: bool = True) -> dict:
     n_real = 4 if fast else N_REAL
     n_steps = 200 if fast else N_STEPS
-    ladder = [760.0, 835.0, 900.0] if fast else \
-        [760.0, 790.0, 820.0, 835.0, 850.0, 880.0, 900.0]
+    ladder = (
+        [760.0, 835.0, 900.0]
+        if fast
+        else [760.0, 790.0, 820.0, 835.0, 850.0, 880.0, 900.0]
+    )
 
     results: dict = {}
     rows = []
@@ -119,17 +128,20 @@ def validate(fast: bool = True, make_plot: bool = True) -> dict:
     # caveat: full GVD curves are not digitised), so the coherence-
     # restoration / normal-side-coherence claims are RECORDED, not asserted.
     g_norm, g_zdw, g_rest = (
-        results["g12_760"], results.get("g12_835"), results.get("g12_900")
+        results["g12_760"],
+        results.get("g12_835"),
+        results.get("g12_900"),
     )
-    assert 0.0 <= min(r["g12_avg"] for r in rows) and \
-        max(r["g12_avg"] for r in rows) <= 1.0
+    assert (
+        0.0 <= min(r["g12_avg"] for r in rows)
+        and max(r["g12_avg"] for r in rows) <= 1.0
+    )
     assert g_zdw is not None and g_zdw < 0.9
     # widest -20 dB bandwidth occurs on the anomalous/near-ZDW side
     widths = {r["pump_nm"]: r["minus20dB_width_nm"] for r in rows}
     w_max_wl = max(widths, key=widths.get)
     assert w_max_wl >= 790.0 - 1e-6, (
-        f"-20 dB width peaks at {w_max_wl} nm (paper: near ZDW on the "
-        f"anomalous side)"
+        f"-20 dB width peaks at {w_max_wl} nm (paper: near ZDW on the anomalous side)"
     )
     results["width_peak_wl"] = w_max_wl
     if g_rest is not None:
@@ -149,13 +161,17 @@ def validate(fast: bool = True, make_plot: bool = True) -> dict:
 
         xs = [r["pump_nm"] for r in rows]
         fig, ax = plt.subplots(figsize=(8, 4.5))
-        ax.plot(xs, [r["g12_avg"] for r in rows], "o-", color="C0",
-                label="avg |g12|")
+        ax.plot(xs, [r["g12_avg"] for r in rows], "o-", color="C0", label="avg |g12|")
         ax.set_xlabel("Pump wavelength (nm)")
         ax.set_ylabel("Average coherence", color="C0")
         ax2 = ax.twinx()
-        ax2.plot(xs, [r["minus20dB_width_nm"] for r in rows], "s--",
-                 color="C3", label="-20 dB width")
+        ax2.plot(
+            xs,
+            [r["minus20dB_width_nm"] for r in rows],
+            "s--",
+            color="C3",
+            label="-20 dB width",
+        )
         ax2.set_ylabel("-20 dB spectral width (nm)", color="C3")
         ax.axvline(ZDW_NM, color="k", ls=":", label=f"ZDW {ZDW_NM:.0f} nm")
         ax.set_title("Dudley Fig. 21a-style: coherence vs pump wavelength")
@@ -170,4 +186,5 @@ def validate(fast: bool = True, make_plot: bool = True) -> dict:
 
 if __name__ == "__main__":
     import sys
+
     print(validate(fast="--fast" in sys.argv))

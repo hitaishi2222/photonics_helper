@@ -1,10 +1,12 @@
 """Extract the engine's per-bin-pair 2x2 linear map empirically and compare
 with closed form from the engine's own operators."""
+
 import importlib.util
 import numpy as np
 
 spec = importlib.util.spec_from_file_location(
-    "rep", "reproductions/planned/wright_2015_self_organized_instability/reproduce.py")
+    "rep", "reproductions/planned/wright_2015_self_organized_instability/reproduce.py"
+)
 rep = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(rep)
 from photonics_helper.base import Area, Length, Time, Wavelength
@@ -26,10 +28,10 @@ kf = int(np.argmin(np.abs(w_thz - F_REP)))
 kn = int(np.argmin(np.abs(grid.w + grid.w[kf])))
 om = grid.w[kf]
 # (scratch var removed)
-xpm_rate = GAMMA * (2 / 3) * P0       # 3.13 rad/m
-coupling_rate = xpm_rate              # c/|ap|^2
-K, dz = 5000, 1e-5                    # 50 m?? no: dz*K = 0.05 m... keep small: K=5000 steps=0.05 m
-K = 5000                              # 0.05 m: coupling response g*z = 3.13*0.05 = 0.157
+xpm_rate = GAMMA * (2 / 3) * P0  # 3.13 rad/m
+coupling_rate = xpm_rate  # c/|ap|^2
+K, dz = 5000, 1e-5  # 50 m?? no: dz*K = 0.05 m... keep small: K=5000 steps=0.05 m
+K = 5000  # 0.05 m: coupling response g*z = 3.13*0.05 = 0.157
 
 off_N = 2
 
@@ -37,8 +39,9 @@ off_N = 2
 def engine(fwm, s1, s2):
     waves = []
     for ch in range(3):
-        env = Envelope(shape="gaussian", peak_amplitude=ap,
-                       pulse_width=Time(WIN * 1e-12 / 20, "s"))
+        env = Envelope(
+            shape="gaussian", peak_amplitude=ap, pulse_width=Time(WIN * 1e-12 / 20, "s")
+        )
         W = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(532.0, "nm"))
         if ch == 0:
             field = np.full(N, ap, dtype=complex)
@@ -47,13 +50,21 @@ def engine(fwm, s1, s2):
         else:
             field = s2 * np.exp(-1j * om * tt)
         waves.append(W.with_field(np.asarray(field, complex)))
-    fiber = FiberProfile(n2=rep.N2, alpha=0.0, A_eff=Area(rep.A_EFF, "m^2"),
-                         length=Length(dz * K, "m"))
+    fiber = FiberProfile(
+        n2=rep.N2, alpha=0.0, A_eff=Area(rep.A_EFF, "m^2"), length=Length(dz * K, "m")
+    )
     return MultimodeSplitStepEngine(
-        waves, fiber, betas=[[b2]] * 3, betas_unit="s^k/m",
+        waves,
+        fiber,
+        betas=[[b2]] * 3,
+        betas_unit="s^k/m",
         phase_offsets=[0.0, -off_N * rep.KAPPA, -off_N * rep.KAPPA],
-        oam_l=[0, 0, 0], coef_model="lp_degenerate", include_fwm=fwm,
-        fwm_pump_depletion=fwm, step_size=Length(dz, "m"))
+        oam_l=[0, 0, 0],
+        coef_model="lp_degenerate",
+        include_fwm=fwm,
+        fwm_pump_depletion=fwm,
+        step_size=Length(dz, "m"),
+    )
 
 
 def b_amp(eng, ch, k):
@@ -63,8 +74,11 @@ def b_amp(eng, ch, k):
 a_sig = 1e-5 * ap
 reads = {}
 for name, (s1v, s2v), fwm in [
-        ("A", (a_sig, 0.0), True), ("B", (0.0, a_sig), True),
-        ("refA", (a_sig, 0.0), False), ("refB", (0.0, a_sig), False)]:
+    ("A", (a_sig, 0.0), True),
+    ("B", (0.0, a_sig), True),
+    ("refA", (a_sig, 0.0), False),
+    ("refB", (0.0, a_sig), False),
+]:
     eng = engine(fwm, s1v, s2v)
     eng.propagate(K, nsaves=2)
     reads[name] = (b_amp(eng, 1, kf), b_amp(eng, 2, kn))
@@ -87,16 +101,34 @@ refB = (reads["refB"][0] / a1_in, reads["refB"][1] / a2_in)
 # M_expected (no FWM): diagonal e^{i u dz K} but per channel: ch1 rotated u1, ch2 by u2:
 # compare measured M off vs predicted separate diagonals:
 print("measured FWM-ON couplings (normalized by input tones):")
-print(" col A (a1 seed):", [f"{x:.6f}" if isinstance(x, float) else x for x in reads["A"]])
-print(" col B (a2 seed):", [complex(round(x.real, 6), round(x.imag, 6)) if isinstance(x, complex) else x for x in reads["B"]])
-print(" FWM-OFF refs:", [complex(round(x.real, 12), round(x.imag, 12)) for x in reads["refA"]],
-      [complex(round(x.real, 12), round(x.imag, 12)) for x in reads["refB"]])
-grow = np.array([[reads["A"][0] / a1_in, reads["B"][0] / a1_in],
-                 [reads["A"][1] / a2_in, reads["B"][1] / a2_in]])
+print(
+    " col A (a1 seed):", [f"{x:.6f}" if isinstance(x, float) else x for x in reads["A"]]
+)
+print(
+    " col B (a2 seed):",
+    [
+        complex(round(x.real, 6), round(x.imag, 6)) if isinstance(x, complex) else x
+        for x in reads["B"]
+    ],
+)
+print(
+    " FWM-OFF refs:",
+    [complex(round(x.real, 12), round(x.imag, 12)) for x in reads["refA"]],
+    [complex(round(x.real, 12), round(x.imag, 12)) for x in reads["refB"]],
+)
+grow = np.array(
+    [
+        [reads["A"][0] / a1_in, reads["B"][0] / a1_in],
+        [reads["A"][1] / a2_in, reads["B"][1] / a2_in],
+    ]
+)
 ev, evec = np.linalg.eig(grow)
 zs = dz * K
 print(f"growth rates ln|eig|/{zs} m = {np.log(np.abs(ev)) / zs} /m")
-print(f"analytic pair coupling gfP0 = {(2/3) * GAMMA * P0:.4f} /m")
-print("mismatch Xi = (2/3)gP0 - (b2 om^2 + 2off): " +
-      str((2/3) * GAMMA * P0 - (b2 * (om * 1e-12) ** 2 / 2 * 2 + 0.0)) + " rad/m "
-      "(b2 rotation per-metre: beta2*om_ps^2 =" + str(b2 * (om * 1e-12) ** 2) + ")")
+print(f"analytic pair coupling gfP0 = {(2 / 3) * GAMMA * P0:.4f} /m")
+print(
+    "mismatch Xi = (2/3)gP0 - (b2 om^2 + 2off): "
+    + str((2 / 3) * GAMMA * P0 - (b2 * (om * 1e-12) ** 2 / 2 * 2 + 0.0))
+    + " rad/m "
+    "(b2 rotation per-metre: beta2*om_ps^2 =" + str(b2 * (om * 1e-12) ** 2) + ")"
+)

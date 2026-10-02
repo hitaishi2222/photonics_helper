@@ -78,12 +78,12 @@ PARAMETERS = HERE / "parameters.json"
 # data generation (photonics_helper SplitStep engine)
 # ---------------------------------------------------------------------------
 
+
 def _sech(x):
     return 1.0 / np.cosh(x)
 
 
-def _make_pulse(grid: TemporalGrid, params: dict, peak_W: float,
-                T0_ps: float) -> Wave:
+def _make_pulse(grid: TemporalGrid, params: dict, peak_W: float, T0_ps: float) -> Wave:
     """Custom sech envelope with the given field peak (2 W -> N = 2, 1 W -> N = 1)."""
     env = Envelope(
         shape="custom",
@@ -99,8 +99,9 @@ def _make_pulse(grid: TemporalGrid, params: dict, peak_W: float,
     )
 
 
-def _run_engine(params: dict, *, fundamental: bool = False,
-                num_steps: int | None = None) -> tuple[TemporalGrid, np.ndarray, np.ndarray]:
+def _run_engine(
+    params: dict, *, fundamental: bool = False, num_steps: int | None = None
+) -> tuple[TemporalGrid, np.ndarray, np.ndarray]:
     """Propagate with the engine; return (grid, z_array, H[nz, nx] complex).
 
     ``fundamental=True`` runs the N = 1 soliton (peak 1 W) to z = pi/4 for
@@ -140,9 +141,15 @@ def analytic_fundamental(t_s: np.ndarray, z: float, T0_s: float) -> np.ndarray:
     return _sech(t_s / T0_s) * np.exp(1j * z / 2.0)
 
 
-def _rk4ip_reference(grid: TemporalGrid, A0: np.ndarray, z_span: float,
-                     n_steps: int, *, T_s: float = 1e-12,
-                     L_s: float = 1.0) -> np.ndarray:
+def _rk4ip_reference(
+    grid: TemporalGrid,
+    A0: np.ndarray,
+    z_span: float,
+    n_steps: int,
+    *,
+    T_s: float = 1e-12,
+    L_s: float = 1.0,
+) -> np.ndarray:
     """Independent RK4IP split-step integrator (Hult 2007) for
     A_z = i(0.5 A_TT + |A|^2 A) on the engine's grid; cross-check 1b."""
     # linear multiplier of A_z = -i(beta2/2) A_TT + i gamma |A|^2 A:
@@ -160,8 +167,7 @@ def _rk4ip_reference(grid: TemporalGrid, A0: np.ndarray, z_span: float,
 
     dz = z_span / n_steps
     A = A0.copy()
-    for _ in tqdm(range(n_steps), desc="rk4ip-cross-check", leave=False,
-                  unit="step"):
+    for _ in tqdm(range(n_steps), desc="rk4ip-cross-check", leave=False, unit="step"):
         Ah = L(A, dz / 2)
         k1 = N(Ah)
         k2 = N(L(Ah + dz / 2 * k1, dz / 2))
@@ -196,19 +202,27 @@ def validate_data(params: dict) -> dict:
     # 1b: independent RK4IP at 4x steps, same grid
     em = params["engine_mapping"]
     A_ref = _rk4ip_reference(
-        grid, H[0], float(em["z_span_m"]), 4 * g["num_steps"],
-        T_s=em["T_s_ps"] * 1e-12, L_s=em["L_s_m"])
+        grid,
+        H[0],
+        float(em["z_span_m"]),
+        4 * g["num_steps"],
+        T_s=em["T_s_ps"] * 1e-12,
+        L_s=em["L_s_m"],
+    )
     out["cross_check_rel_l2_final"] = rel_l2(H[-1] - A_ref, A_ref)
     z_mid = float(z_arr[len(z_arr) // 2])
     A_ref_mid = _rk4ip_reference(
-        grid, H[0], z_mid, max(1, 2 * g["num_steps"]),
-        T_s=em["T_s_ps"] * 1e-12, L_s=em["L_s_m"])
-    out["cross_check_rel_l2_mid"] = rel_l2(H[len(z_arr) // 2] - A_ref_mid,
-                                           A_ref_mid)
+        grid,
+        H[0],
+        z_mid,
+        max(1, 2 * g["num_steps"]),
+        T_s=em["T_s_ps"] * 1e-12,
+        L_s=em["L_s_m"],
+    )
+    out["cross_check_rel_l2_mid"] = rel_l2(H[len(z_arr) // 2] - A_ref_mid, A_ref_mid)
 
     # 1c: breather recurrence at z = pi/2
-    out["recurrence_rel_l2"] = rel_l2(np.abs(H[-1]) - 2.0 * _sech(x),
-                                      2.0 * _sech(x))
+    out["recurrence_rel_l2"] = rel_l2(np.abs(H[-1]) - 2.0 * _sech(x), 2.0 * _sech(x))
 
     # 1d: energy (photon-number analog) conservation
     energies = np.array([np.sum(np.abs(h) ** 2) for h in H])
@@ -226,13 +240,15 @@ def validate_data(params: dict) -> dict:
 # PINN (torch, float64)
 # ---------------------------------------------------------------------------
 
+
 def _torch():
     try:
         # Pre-import allocator settings for GPU runs (ignored on CPU): keep the
         # caching allocator from hoarding GPU memory with tall autograd graphs.
         os.environ.setdefault(
             "PYTORCH_ALLOC_CONF",
-            "expandable_segments:True,garbage_collection_threshold:0.9")
+            "expandable_segments:True,garbage_collection_threshold:0.9",
+        )
         import torch
     except ImportError as exc:  # pragma: no cover
         raise ImportError(
@@ -261,21 +277,32 @@ def _gpu_guardrails(torch, device: str) -> str:
     cap = float(os.environ.get("PH_GPU_CAP_FRAC", "0.6"))
     try:
         torch.cuda.set_per_process_memory_fraction(cap, 0)
-        capped_msg = (f"allocator capped at {cap:.0%} of "
-                      f"{props.total_memory/2**30:.1f} GiB")
+        capped_msg = (
+            f"allocator capped at {cap:.0%} of {props.total_memory / 2**30:.1f} GiB"
+        )
     except Exception as exc:
         capped_msg = f"allocator cap not supported ({exc})"
-    print(f"  [guardrail] GPU: {props.name}; {capped_msg}; "
-          "empty_cache every 200 iters; OOM -> cpu fallback")
+    print(
+        f"  [guardrail] GPU: {props.name}; {capped_msg}; "
+        "empty_cache every 200 iters; OOM -> cpu fallback"
+    )
     return device
 
 
-def train_pinn(params: dict, H: np.ndarray, z_arr: np.ndarray, *,
-               discover_lambda: bool = False, fast: bool = False,
-               seed: int | None = None, verbose: bool = False,
-               device: str = "cpu", nf_chunk: int = 0,
-               adam_iters: int | None = None,
-               resume: bool = False) -> dict:
+def train_pinn(
+    params: dict,
+    H: np.ndarray,
+    z_arr: np.ndarray,
+    *,
+    discover_lambda: bool = False,
+    fast: bool = False,
+    seed: int | None = None,
+    verbose: bool = False,
+    device: str = "cpu",
+    nf_chunk: int = 0,
+    adam_iters: int | None = None,
+    resume: bool = False,
+) -> dict:
     """Train the continuous-time PINN; returns metrics + the trained model."""
     torch = _torch()
     from scipy.stats import qmc
@@ -293,13 +320,18 @@ def train_pinn(params: dict, H: np.ndarray, z_arr: np.ndarray, *,
     #           does not exist in torch)
     #   auto  — cuda if available, else cpu
     torch = _torch()
-    device = (os.environ.get("PH_PINN_DEVICE", "cpu") if device == "cpu"
-              else device).strip().lower()
+    device = (
+        (os.environ.get("PH_PINN_DEVICE", "cpu") if device == "cpu" else device)
+        .strip()
+        .lower()
+    )
     if device == "auto":
         device = "cuda" if torch.cuda.is_available() else "cpu"
     device = _gpu_guardrails(torch, device)
-    print(f"  [device] training on: {device} "
-          f"(torch {torch.__version__}; override with PH_PINN_DEVICE/--device)")
+    print(
+        f"  [device] training on: {device} "
+        f"(torch {torch.__version__}; override with PH_PINN_DEVICE/--device)"
+    )
     dtype = torch.float64
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -309,7 +341,7 @@ def train_pinn(params: dict, H: np.ndarray, z_arr: np.ndarray, *,
     lbfgs_iters = 0 if fast else p["lbfgs_max_iter"]
     n0, nb, nf = (20, 20, 2000) if fast else (p["N0"], p["Nb"], p["Nf"])
 
-    t_min, t_max = 0.0, float(em["z_span_m"])          # t in meters (z = L_s t)
+    t_min, t_max = 0.0, float(em["z_span_m"])  # t in meters (z = L_s t)
     x_min, x_max = params["pde"]["x_domain"]
     # normalization: inputs mapped to [-1, 1]
     t_c, t_h = 0.5 * (t_max + t_min), 0.5 * (t_max - t_min)
@@ -330,8 +362,9 @@ def train_pinn(params: dict, H: np.ndarray, z_arr: np.ndarray, *,
 
     lam = None
     if discover_lambda:
-        lam = torch.tensor([p["lambda_discovery_init"]], dtype=dtype,
-                           device=device, requires_grad=True)
+        lam = torch.tensor(
+            [p["lambda_discovery_init"]], dtype=dtype, device=device, requires_grad=True
+        )
         params_nn.append(lam)
 
     # ---- training data from the engine fields (H[nz, nx], t = z_arr) ----
@@ -355,8 +388,9 @@ def train_pinn(params: dict, H: np.ndarray, z_arr: np.ndarray, *,
     xf = x_min + (x_max - x_min) * q[:, 1]
 
     def tens(a):
-        return torch.tensor(np.asarray(a, dtype=float), dtype=dtype,
-                            device=device).reshape(-1, 1)
+        return torch.tensor(
+            np.asarray(a, dtype=float), dtype=dtype, device=device
+        ).reshape(-1, 1)
 
     x0_t, h0_t = tens(x0), tens(h0)
     tb_t = tens(tb)
@@ -376,8 +410,9 @@ def train_pinn(params: dict, H: np.ndarray, z_arr: np.ndarray, *,
         for y in (u, v):
             g_t = torch.autograd.grad(y, t, torch.ones_like(y), create_graph=True)[0]
             g_x = torch.autograd.grad(y, x, torch.ones_like(y), create_graph=True)[0]
-            g_xx = torch.autograd.grad(g_x, x, torch.ones_like(g_x),
-                                       create_graph=True)[0]
+            g_xx = torch.autograd.grad(g_x, x, torch.ones_like(g_x), create_graph=True)[
+                0
+            ]
             grads.append((g_t, g_xx))
         (u_t, u_xx), (v_t, v_xx) = grads
         n2 = u * u + v * v
@@ -389,19 +424,16 @@ def train_pinn(params: dict, H: np.ndarray, z_arr: np.ndarray, *,
     def loss_fn(chunk_idx: torch.Tensor | None = None):
         # MSE0: initial line (u = 2 sech, v = 0)
         u0, v0 = h_of(torch.zeros_like(x0_t), x0_t)
-        mse0 = ((u0 - h0_t) ** 2 + v0 ** 2).mean()
+        mse0 = ((u0 - h0_t) ** 2 + v0**2).mean()
         # MSE_b: periodic h and h_x at x = +-5
         t1 = tb_t.clone().requires_grad_(True)
         xp1 = torch.full_like(t1, x_min).requires_grad_(True)
         xm1 = torch.full_like(t1, x_max).requires_grad_(True)
         up, vp = h_of(t1, xp1)
         um, vm = h_of(t1, xm1)
-        dxp = torch.autograd.grad(up.sum() + vp.sum(), xp1,
-                                  create_graph=True)[0]
-        dxm = torch.autograd.grad(um.sum() + vm.sum(), xm1,
-                                  create_graph=True)[0]
-        mse_b = ((up - um) ** 2 + (vp - vm) ** 2
-                 + (dxp - dxm) ** 2).mean()
+        dxp = torch.autograd.grad(up.sum() + vp.sum(), xp1, create_graph=True)[0]
+        dxm = torch.autograd.grad(um.sum() + vm.sum(), xm1, create_graph=True)[0]
+        mse_b = ((up - um) ** 2 + (vp - vm) ** 2 + (dxp - dxm) ** 2).mean()
         # MSE_f (guardrail: optionally train on a rotating evaluation subset of
         # the collocation cloud — cuts autograd-graph memory roughly by Nf/chunk,
         # needed to keep the amdgpu iGPU (shared system RAM) below its cap)
@@ -412,13 +444,16 @@ def train_pinn(params: dict, H: np.ndarray, z_arr: np.ndarray, *,
             # deterministic objective, and noise makes torch's LBFGS bail out
             # after a handful of iterations (observed: exit at 13 closures,
             # rel-L2 0.21). Adam keeps the rotating subset.
-            idx = (chunk_idx if chunk_idx is not None
-                   else torch.randint(0, nf, (nf_chunk,), device=tf_t.device))
+            idx = (
+                chunk_idx
+                if chunk_idx is not None
+                else torch.randint(0, nf, (nf_chunk,), device=tf_t.device)
+            )
             xfc, xfc2 = tf_t[idx], xf_t[idx]
         else:
             xfc, xfc2 = tf_t, xf_t
         fu, fv = residual(xfc, xfc2)
-        mse_f = (fu ** 2 + fv ** 2).mean()
+        mse_f = (fu**2 + fv**2).mean()
         return mse0 + mse_b + mse_f
 
     opt = torch.optim.Adam(params_nn, lr=p["adam_lr"])
@@ -428,35 +463,49 @@ def train_pinn(params: dict, H: np.ndarray, z_arr: np.ndarray, *,
     ckpt_path = HERE / "pinn_checkpoint.pt"
     if resume and ckpt_path.exists():
         ck = torch.load(str(ckpt_path), map_location="cpu", weights_only=False)
-        stage = ck.get("stage", f"adam@{ck.get('adam_iter')}" if "adam_iter" in ck
-                        else "lbfgs-mid")
+        stage = ck.get(
+            "stage", f"adam@{ck.get('adam_iter')}" if "adam_iter" in ck else "lbfgs-mid"
+        )
         sd = ck["net"].state_dict() if hasattr(ck["net"], "state_dict") else ck["net"]
         net.load_state_dict(sd)
         if lam is not None and "lam" in ck:
             lam.data.copy_(ck["lam"].to(device))
         if stage.startswith("adam"):
             if "opt" in ck:
-                opt.load_state_dict({k: (v if not hasattr(v, "to") else
-                                         {kk: (vv.to(device) if hasattr(vv, "to")
-                                               else vv) for kk, vv in v.items()}
-                                         if isinstance(v, dict) else v)
-                                     for k, v in ck["opt"].items()})
+                opt.load_state_dict(
+                    {
+                        k: (
+                            v
+                            if not hasattr(v, "to")
+                            else {
+                                kk: (vv.to(device) if hasattr(vv, "to") else vv)
+                                for kk, vv in v.items()
+                            }
+                            if isinstance(v, dict)
+                            else v
+                        )
+                        for k, v in ck["opt"].items()
+                    }
+                )
             start_iter = int(ck["adam_iter"]) + 1
             hist = list(ck.get("hist", []))
-            print(f"  [resume] Adam continued from iter {start_iter} "
-                  f"(loss {ck.get('loss'):.3e}; optimizer state restored)")
+            print(
+                f"  [resume] Adam continued from iter {start_iter} "
+                f"(loss {ck.get('loss'):.3e}; optimizer state restored)"
+            )
         elif stage.startswith("lbfgs") or stage == "pre-eval-final":
             start_iter = adam_iters
             hist = list(ck.get("hist", []))
-            print(f"  [resume] checkpoint stage '{stage}': weights loaded, "
-                  "Adam skipped, LBFGS refinement starts")
+            print(
+                f"  [resume] checkpoint stage '{stage}': weights loaded, "
+                "Adam skipped, LBFGS refinement starts"
+            )
         else:
             start_iter = 0
             print(f"  [resume] unrecognised stage '{stage}' -> full restart")
     elif resume:
         print(f"  [resume] no checkpoint at {ckpt_path} -> full restart")
-    pbar = tqdm(range(start_iter, adam_iters), desc="Adam", unit="it",
-                initial=0)
+    pbar = tqdm(range(start_iter, adam_iters), desc="Adam", unit="it", initial=0)
     for it in pbar:
         opt.zero_grad()
         loss = loss_fn()
@@ -464,34 +513,48 @@ def train_pinn(params: dict, H: np.ndarray, z_arr: np.ndarray, *,
         opt.step()
         hist.append(float(loss.detach()))
         if (it + 1) % max(1, adam_iters // 200) == 0:
-            pbar.set_postfix({"loss": f"{hist[-1]:.3e}",
-                              "s": int(time.time() - t0)})
+            pbar.set_postfix({"loss": f"{hist[-1]:.3e}", "s": int(time.time() - t0)})
         if device != "cpu" and (it + 1) % 200 == 0:
             torch.cuda.empty_cache()
         if (it + 1) % max(1, adam_iters // 200) == 0:
-            pbar.set_postfix({"loss": f"{hist[-1]:.3e}",
-                              "s": int(time.time() - t0)})
+            pbar.set_postfix({"loss": f"{hist[-1]:.3e}", "s": int(time.time() - t0)})
         if device != "cpu" and (it + 1) % 200 == 0:
             torch.cuda.empty_cache()
         # periodic checkpoint: an interrupt or a failed assert must never
         # destroy hours of trained weights (weights + Adam moments so that
         # --resume can also restore optimizer state)
         if (it + 1) % 2000 == 0:
-            torch.save({"net": net, "opt": opt.state_dict(), "seed": seed,
-                        "adam_iter": it, "adam_iters": adam_iters,
-                        "stage": f"adam@{it}", "loss": hist[-1],
-                        "hist": hist},
-                       str(ckpt_path))
+            torch.save(
+                {
+                    "net": net,
+                    "opt": opt.state_dict(),
+                    "seed": seed,
+                    "adam_iter": it,
+                    "adam_iters": adam_iters,
+                    "stage": f"adam@{it}",
+                    "loss": hist[-1],
+                    "hist": hist,
+                },
+                str(ckpt_path),
+            )
     pbar.close()
     if hist:
         # full Adam path ran (or resumed mid-Adam); overwrite the checkpoint
         # with the end-of-Adam state.  On a pure LBFGS/pre-eval resume the
         # checkpoint is already the trained net — do NOT clobber it.
-        torch.save({"net": net, "opt": opt.state_dict(), "seed": seed,
-                    "adam_iter": adam_iters - 1, "adam_iters": adam_iters,
-                    "stage": f"adam@{adam_iters - 1}", "loss": hist[-1],
-                    "hist": hist},
-                   str(ckpt_path))
+        torch.save(
+            {
+                "net": net,
+                "opt": opt.state_dict(),
+                "seed": seed,
+                "adam_iter": adam_iters - 1,
+                "adam_iters": adam_iters,
+                "stage": f"adam@{adam_iters - 1}",
+                "loss": hist[-1],
+                "hist": hist,
+            },
+            str(ckpt_path),
+        )
         pbar.close()
         print(f"  Adam done in {time.time() - t0:.0f}s, final loss {hist[-1]:.3e}")
     else:
@@ -499,15 +562,22 @@ def train_pinn(params: dict, H: np.ndarray, z_arr: np.ndarray, *,
 
     if lbfgs_iters:
         pbar = tqdm(total=lbfgs_iters, desc="LBFGS", unit="iter")
-        opt2 = torch.optim.LBFGS(params_nn, max_iter=lbfgs_iters,
-                                 history_size=p["lbfgs_history"],
-                                 tolerance_grad=1e-12, tolerance_change=1e-14,
-                                 line_search_fn="strong_wolfe")
+        opt2 = torch.optim.LBFGS(
+            params_nn,
+            max_iter=lbfgs_iters,
+            history_size=p["lbfgs_history"],
+            tolerance_grad=1e-12,
+            tolerance_change=1e-14,
+            line_search_fn="strong_wolfe",
+        )
         count = [0]
         # one fixed collocation subset for the whole LBFGS phase -> the closure
         # is deterministic and the line search can actually descend
-        lbfgs_idx = (torch.randint(0, nf, (nf_chunk,), device=tf_t.device)
-                     if nf_chunk and nf_chunk < nf else None)
+        lbfgs_idx = (
+            torch.randint(0, nf, (nf_chunk,), device=tf_t.device)
+            if nf_chunk and nf_chunk < nf
+            else None
+        )
 
         def closure():
             opt2.zero_grad()
@@ -516,16 +586,20 @@ def train_pinn(params: dict, H: np.ndarray, z_arr: np.ndarray, *,
             hist.append(float(loss.detach()))
             count[0] += 1
             pbar.update(1)
-            pbar.set_postfix({"loss": f"{loss:.3e}",
-                              "s": int(time.time() - t0)})
+            pbar.set_postfix({"loss": f"{loss:.3e}", "s": int(time.time() - t0)})
             # periodic checkpoint during LBFGS too (weights only; the LBFGS
             # history cannot be meaningfully frozen/cloned mid-refinement)
             if count[0] % 2000 == 0:
-                torch.save({"net": net, "seed": seed,
-                            "lbfgs_closures": count[0],
-                            "loss": float(loss.detach()),
-                            "stage": "lbfgs-mid"},
-                           str(HERE / "pinn_checkpoint.pt"))
+                torch.save(
+                    {
+                        "net": net,
+                        "seed": seed,
+                        "lbfgs_closures": count[0],
+                        "loss": float(loss.detach()),
+                        "stage": "lbfgs-mid",
+                    },
+                    str(HERE / "pinn_checkpoint.pt"),
+                )
             return loss
 
         opt2.step(closure)
@@ -548,17 +622,29 @@ def train_pinn(params: dict, H: np.ndarray, z_arr: np.ndarray, *,
     # fast/smoke runs must NEVER clobber the real checkpoint (the 2x32 smoke
     # net once overwrote a finished 5x100 training — guard added 2026-09-22).
     import torch as _t
+
     ckpt = HERE / ("pinn_checkpoint_smoke.pt" if fast else "pinn_checkpoint.pt")
-    state = {"net": net, "discover_lambda": discover_lambda,
-             "seed": seed, "adam_iters": adam_iters,
-             "loss_final": hist[-1],
-             "stage": "pre-eval-final", "hist": hist}
+    state = {
+        "net": net,
+        "discover_lambda": discover_lambda,
+        "seed": seed,
+        "adam_iters": adam_iters,
+        "loss_final": hist[-1],
+        "stage": "pre-eval-final",
+        "hist": hist,
+    }
     if lam is not None:
         state["lam"] = lam.detach().clone()
     _t.save(state, str(ckpt))
     print(f"  [checkpoint] trained net saved to {ckpt}")
-    return {"metrics": metrics, "net": net, "h_of": h_of,
-            "t_all": t_all, "x_all": x_all, "h_all": h_all}
+    return {
+        "metrics": metrics,
+        "net": net,
+        "h_of": h_of,
+        "t_all": t_all,
+        "x_all": x_all,
+        "h_all": h_all,
+    }
 
 
 def evaluate_pinn(trained: dict, H: np.ndarray, z_arr: np.ndarray) -> dict:
@@ -569,8 +655,9 @@ def evaluate_pinn(trained: dict, H: np.ndarray, z_arr: np.ndarray) -> dict:
     h_pred = np.zeros_like(H)
     xt = x_all.reshape(-1, 1).to(device)
     with torch.no_grad():
-        for k in tqdm(range(t_all.shape[0]), desc="PINN-eval", leave=False,
-                      unit="snap"):
+        for k in tqdm(
+            range(t_all.shape[0]), desc="PINN-eval", leave=False, unit="snap"
+        ):
             tk = torch.full_like(xt, float(t_all[k]))
             u, v = h_of(tk, xt)
             h_pred[k] = (u + 1j * v).cpu().numpy().reshape(-1)
@@ -584,7 +671,8 @@ def evaluate_pinn(trained: dict, H: np.ndarray, z_arr: np.ndarray) -> dict:
         cuts[str(tc)] = {
             "snapshot_t": float(z_arr[k]),
             "rel_l2": rel_l2(h_pred[k] - H[k], H[k]),
-            "exact": H[k], "pred": h_pred[k],
+            "exact": H[k],
+            "pred": h_pred[k],
         }
     out["cuts"] = cuts
     return out, h_pred
@@ -594,9 +682,16 @@ def evaluate_pinn(trained: dict, H: np.ndarray, z_arr: np.ndarray) -> dict:
 # figures
 # ---------------------------------------------------------------------------
 
-def _make_plots(H: np.ndarray, z_arr: np.ndarray, h_pred: np.ndarray,
-                x0: np.ndarray, tb: np.ndarray, trained: dict,
-                out_dir: Path) -> list[str]:
+
+def _make_plots(
+    H: np.ndarray,
+    z_arr: np.ndarray,
+    h_pred: np.ndarray,
+    x0: np.ndarray,
+    tb: np.ndarray,
+    trained: dict,
+    out_dir: Path,
+) -> list[str]:
     import matplotlib
 
     matplotlib.use("Agg")
@@ -606,15 +701,20 @@ def _make_plots(H: np.ndarray, z_arr: np.ndarray, h_pred: np.ndarray,
     figs = []
     # Fig. 2 style: top |h| heatmap + data locations; bottom cuts
     fig, axes_all = plt.subplots(
-        2, 3, figsize=(10, 6), gridspec_kw={"height_ratios": [1.4, 1]},
+        2,
+        3,
+        figsize=(10, 6),
+        gridspec_kw={"height_ratios": [1.4, 1]},
     )
     ax1, axes = axes_all[0, 0], axes_all[1]
     ax_re, ax_im = axes_all[0, 1], axes_all[0, 2]
     ext = [z_arr[0], z_arr[-1], x[0], x[-1]]
-    im = ax1.imshow(np.abs(h_pred), extent=ext, origin="lower", aspect="auto",
-                    cmap="viridis")
-    ax1.scatter(np.zeros_like(x0), x0, s=6, c="k", marker="x",
-                label="initial data (N0)")
+    im = ax1.imshow(
+        np.abs(h_pred), extent=ext, origin="lower", aspect="auto", cmap="viridis"
+    )
+    ax1.scatter(
+        np.zeros_like(x0), x0, s=6, c="k", marker="x", label="initial data (N0)"
+    )
     ax1.scatter(tb, np.full_like(tb, 5.0), s=6, c="k", marker="x")
     ax1.scatter(tb, np.full_like(tb, -5.0), s=6, c="k", marker="x")
     for tc in (0.59, 0.79, 0.98):
@@ -626,14 +726,27 @@ def _make_plots(H: np.ndarray, z_arr: np.ndarray, h_pred: np.ndarray,
     ax1.legend(loc="upper right", fontsize=7)
     # paper Fig. 2 layout: full row of predicted component heatmaps
     vmax = float(np.max(np.abs(h_pred.real))) or 1.0
-    im_re = ax_re.imshow(h_pred.real, extent=ext, origin="lower",
-                         aspect="auto", cmap="RdBu_r", vmin=-vmax, vmax=vmax)
+    im_re = ax_re.imshow(
+        h_pred.real,
+        extent=ext,
+        origin="lower",
+        aspect="auto",
+        cmap="RdBu_r",
+        vmin=-vmax,
+        vmax=vmax,
+    )
     ax_re.set_xlabel("t")
     ax_re.set_title("Re h — PINN prediction", fontsize=10)
     fig.colorbar(im_re, ax=ax_re)
-    im_im = ax_im.imshow(h_pred.imag, extent=ext, origin="lower",
-                         aspect="auto", cmap="RdBu_r",
-                         vmin=-vmax, vmax=vmax)
+    im_im = ax_im.imshow(
+        h_pred.imag,
+        extent=ext,
+        origin="lower",
+        aspect="auto",
+        cmap="RdBu_r",
+        vmin=-vmax,
+        vmax=vmax,
+    )
     ax_im.set_xlabel("t")
     ax_im.set_title("Im h — PINN prediction", fontsize=10)
     fig.colorbar(im_im, ax=ax_im)
@@ -655,8 +768,7 @@ def _make_plots(H: np.ndarray, z_arr: np.ndarray, h_pred: np.ndarray,
 
     # exact |h| reference heatmap
     fig, ax = plt.subplots(figsize=(7, 3.4))
-    im = ax.imshow(np.abs(H), extent=ext, origin="lower", aspect="auto",
-                   cmap="viridis")
+    im = ax.imshow(np.abs(H), extent=ext, origin="lower", aspect="auto", cmap="viridis")
     ax.set_xlabel("t")
     ax.set_ylabel("x")
     ax.set_title("|h(t,x)| — exact (SplitStepEngine, N=2 breather)")
@@ -686,11 +798,18 @@ def _make_plots(H: np.ndarray, z_arr: np.ndarray, h_pred: np.ndarray,
 # validate (house contract)
 # ---------------------------------------------------------------------------
 
-def validate(*, make_plot: bool = True, fast: bool = False,
-             discover_lambda: bool = False, verbose: bool = False,
-             device: str = "cpu", nf_chunk: int = 0,
-             adam_iters: int | None = None,
-             resume: bool = False) -> dict:
+
+def validate(
+    *,
+    make_plot: bool = True,
+    fast: bool = False,
+    discover_lambda: bool = False,
+    verbose: bool = False,
+    device: str = "cpu",
+    nf_chunk: int = 0,
+    adam_iters: int | None = None,
+    resume: bool = False,
+) -> dict:
     """Run every check and return the measured metrics (house contract).
 
     ``device`` pins the compute backend: "cpu" (safe default on this box),
@@ -701,53 +820,74 @@ def validate(*, make_plot: bool = True, fast: bool = False,
     """
     torch = _torch()
     params = json.loads(PARAMETERS.read_text())
-    results: dict = {"derived": {
-        "note": "units: t in the PINN is z in meters (L_s = 1 m)",
-        "N2_breather_period_m": math.pi / 2.0,
-    }}
+    results: dict = {
+        "derived": {
+            "note": "units: t in the PINN is z in meters (L_s = 1 m)",
+            "N2_breather_period_m": math.pi / 2.0,
+        }
+    }
     results["data_validation"] = validate_data(params)
 
     grid, z_arr, H = _run_engine(params)
     # crop the engine window (+-10 ps) to the paper's domain x in [-5, 5]
     n_big = H.shape[1]
-    H = H[:, n_big // 4: 3 * n_big // 4]
+    H = H[:, n_big // 4 : 3 * n_big // 4]
     try:
-        trained = train_pinn(params, H, z_arr, discover_lambda=discover_lambda,
-                             fast=fast, verbose=verbose, device=device,
-                             nf_chunk=nf_chunk, adam_iters=adam_iters,
-                             resume=resume)
+        trained = train_pinn(
+            params,
+            H,
+            z_arr,
+            discover_lambda=discover_lambda,
+            fast=fast,
+            verbose=verbose,
+            device=device,
+            nf_chunk=nf_chunk,
+            adam_iters=adam_iters,
+            resume=resume,
+        )
     except torch.cuda.OutOfMemoryError:
         torch.cuda.empty_cache()
         print("  [guardrail] CUDA OOM hit -> empty_cache and FULL cpu fallback")
-        trained = train_pinn(params, H, z_arr, discover_lambda=discover_lambda,
-                             fast=fast, verbose=verbose, device="cpu",
-                             nf_chunk=nf_chunk, adam_iters=adam_iters,
-                             resume=resume)
+        trained = train_pinn(
+            params,
+            H,
+            z_arr,
+            discover_lambda=discover_lambda,
+            fast=fast,
+            verbose=verbose,
+            device="cpu",
+            nf_chunk=nf_chunk,
+            adam_iters=adam_iters,
+            resume=resume,
+        )
     ev, h_pred = evaluate_pinn(trained, H, z_arr)
     trained["eval"] = ev
-    results["pinn"] = {k: v for k, v in trained["metrics"].items()
-                       if k != "loss_history"}
+    results["pinn"] = {
+        k: v for k, v in trained["metrics"].items() if k != "loss_history"
+    }
     results["pinn"]["rel_l2_full"] = ev["rel_l2_full"]
     results["pinn"]["rel_l2_real"] = ev["rel_l2_real"]
     results["pinn"]["rel_l2_imag"] = ev["rel_l2_imag"]
-    results["pinn"]["cuts_rel_l2"] = {k: c["rel_l2"]
-                                      for k, c in ev["cuts"].items()}
+    results["pinn"]["cuts_rel_l2"] = {k: c["rel_l2"] for k, c in ev["cuts"].items()}
     results["pinn"]["paper_rel_l2"] = params["reference"]["paper_rel_l2"]
 
     if not fast:
         tol = params["reference"]["accept_rel_l2"]
-        assert ev["rel_l2_full"] < tol, {k: results["pinn"][k] for k in
-                                         ("rel_l2_full", "paper_rel_l2")}
+        assert ev["rel_l2_full"] < tol, {
+            k: results["pinn"][k] for k in ("rel_l2_full", "paper_rel_l2")
+        }
 
     if make_plot:
         from scipy.stats import qmc
 
         p = params["pinn"]
-        x0 = qmc.LatinHypercube(d=1, seed=p["seed"]).random(
-            20 if fast else p["N0"])[:, 0]
+        x0 = qmc.LatinHypercube(d=1, seed=p["seed"]).random(20 if fast else p["N0"])[
+            :, 0
+        ]
         x0 = -5.0 + 10.0 * x0
         tb = qmc.LatinHypercube(d=1, seed=p["seed"] + 1).random(
-            20 if fast else p["Nb"])[:, 0]
+            20 if fast else p["Nb"]
+        )[:, 0]
         tb = params["engine_mapping"]["z_span_m"] * tb
         results["figures"] = _make_plots(H, z_arr, h_pred, x0, tb, trained, HERE)
     return results
@@ -757,36 +897,62 @@ def main() -> None:
     import argparse
 
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--device", default=os.environ.get("PH_PINN_DEVICE", "cpu"),
-                    choices=["cpu", "cuda", "auto"],
-                    help="training backend: cpu (safe default on this "
-                         "machine; the amdgpu ROCm build crashed the system), "
-                         "cuda (with _gpu_guardrails caps + OOM->cpu "
-                         "fallback) or auto")
-    ap.add_argument("--nf-chunk", type=int, default=0,
-                    help="collocation-cloud subsample per iteration "
-                         "(0 = paper-exact full batch of Nf=20000; e.g. "
-                         "5000 cuts graph memory 4x); strong default with "
-                         "any GPU backend")
-    ap.add_argument("--adam-iters", type=int, default=None,
-                    help="override the Adam iteration count (parameters.json "
-                         "default 15000; e.g. 25000 when chunking MSE_f)")
-    ap.add_argument("--resume", action="store_true",
-                    help="continue training from pinn_checkpoint.pt (restores "
-                         "net weights + Adam optimizer state; an 'adam@N' "
-                         "checkpoint resumes Adam at iter N+1, an "
-                         "lbfgs/pre-eval checkpoint skips Adam and goes "
-                         "straight to LBFGS refinement)")
+    ap.add_argument(
+        "--device",
+        default=os.environ.get("PH_PINN_DEVICE", "cpu"),
+        choices=["cpu", "cuda", "auto"],
+        help="training backend: cpu (safe default on this "
+        "machine; the amdgpu ROCm build crashed the system), "
+        "cuda (with _gpu_guardrails caps + OOM->cpu "
+        "fallback) or auto",
+    )
+    ap.add_argument(
+        "--nf-chunk",
+        type=int,
+        default=0,
+        help="collocation-cloud subsample per iteration "
+        "(0 = paper-exact full batch of Nf=20000; e.g. "
+        "5000 cuts graph memory 4x); strong default with "
+        "any GPU backend",
+    )
+    ap.add_argument(
+        "--adam-iters",
+        type=int,
+        default=None,
+        help="override the Adam iteration count (parameters.json "
+        "default 15000; e.g. 25000 when chunking MSE_f)",
+    )
+    ap.add_argument(
+        "--resume",
+        action="store_true",
+        help="continue training from pinn_checkpoint.pt (restores "
+        "net weights + Adam optimizer state; an 'adam@N' "
+        "checkpoint resumes Adam at iter N+1, an "
+        "lbfgs/pre-eval checkpoint skips Adam and goes "
+        "straight to LBFGS refinement)",
+    )
     ap.add_argument("--fast", action="store_true", help="short smoke run")
-    ap.add_argument("--discover-lambda", action="store_true",
-                    help="stretch goal: learnable lambda in the residual")
+    ap.add_argument(
+        "--discover-lambda",
+        action="store_true",
+        help="stretch goal: learnable lambda in the residual",
+    )
     args = ap.parse_args()
-    print(json.dumps(validate(verbose=True, fast=args.fast,
-                              discover_lambda=args.discover_lambda,
-                              device=args.device, nf_chunk=args.nf_chunk,
-                              adam_iters=args.adam_iters,
-                              resume=args.resume),
-                    indent=2, default=str)[:8000])
+    print(
+        json.dumps(
+            validate(
+                verbose=True,
+                fast=args.fast,
+                discover_lambda=args.discover_lambda,
+                device=args.device,
+                nf_chunk=args.nf_chunk,
+                adam_iters=args.adam_iters,
+                resume=args.resume,
+            ),
+            indent=2,
+            default=str,
+        )[:8000]
+    )
     print("\nALL RAISSI-2019 SCHRODINGER-PINN CHECKS PASSED")
 
 

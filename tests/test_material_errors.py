@@ -98,7 +98,9 @@ def test_corrupt_database_is_wrapped_with_context(tmp_path: Path) -> None:
     assert "regenerate" in message
 
 
-def test_missing_library_style_db_creates_nothing_on_construction(tmp_path: Path) -> None:
+def test_missing_library_style_db_creates_nothing_on_construction(
+    tmp_path: Path,
+) -> None:
     """A broken install must not have side effects before it is even used."""
     db_path = tmp_path / "nested" / "missing.db"
     RamanDatabase(db_path=db_path)

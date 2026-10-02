@@ -51,7 +51,9 @@ def _N(P0: float, dur_fs: float, wl_nm: float) -> float:
 
 def run_point(P0: float, dur_fs: float, wl_nm: float, n_real: int, n_steps: int):
     pulse = common.build_pulse(
-        P0, T0_fs=dur_fs / 1.763, N_points=1024,
+        P0,
+        T0_fs=dur_fs / 1.763,
+        N_points=1024,
         Tmax_ps=float(common.PARAMS["figures"]["fig03_basic_scg"]["Tmax_ps"]),
         wl_nm=wl_nm,
     )
@@ -60,12 +62,18 @@ def run_point(P0: float, dur_fs: float, wl_nm: float, n_real: int, n_steps: int)
     spectra = []
     for seed in range(n_real):
         solver = common.make_solver(
-            pulse, fiber, betas, raman=True, shock=True,
+            pulse,
+            fiber,
+            betas,
+            raman=True,
+            shock=True,
             tau_shock=common.SHOCK_FS * 1e-15,
         )
         solver.propagate(
-            num_steps=n_steps, nsaves=2,
-            raman_noise=True, noise_seed=7000 + seed,
+            num_steps=n_steps,
+            nsaves=2,
+            raman_noise=True,
+            noise_seed=7000 + seed,
         )
         spectra.append(np.asarray(pulse.grid.fft(solver.evolution[-1].envelope_field)))
     g12 = coherence_g12(np.asarray(spectra, dtype=complex))
@@ -77,20 +85,25 @@ def validate(fast: bool = True, make_plot: bool = True) -> dict:
     # 30-200 fs, 3-30 kW). Fast: 6 points; full: 12 points.
     if fast:
         points = [
-            (4_000.0, 50.0, 835.0),   # N ~ 1
+            (4_000.0, 50.0, 835.0),  # N ~ 1
             (4_000.0, 100.0, 835.0),  # N ~ 2
-            (10_000.0, 150.0, 835.0), # N ~ 6 (the fig19/20b deck)
-            (30_000.0, 200.0, 835.0), # N ~ 20
+            (10_000.0, 150.0, 835.0),  # N ~ 6 (the fig19/20b deck)
+            (30_000.0, 200.0, 835.0),  # N ~ 20
             (30_000.0, 200.0, 880.0),
         ]
         n_real, n_steps = 4, 200
     else:
         points = [
-            (4_000.0, 50.0, 800.0), (4_000.0, 50.0, 835.0),
-            (4_000.0, 100.0, 800.0), (10_000.0, 150.0, 800.0),
-            (10_000.0, 150.0, 835.0), (10_000.0, 150.0, 880.0),
-            (30_000.0, 150.0, 835.0), (30_000.0, 200.0, 800.0),
-            (30_000.0, 200.0, 835.0), (30_000.0, 200.0, 880.0),
+            (4_000.0, 50.0, 800.0),
+            (4_000.0, 50.0, 835.0),
+            (4_000.0, 100.0, 800.0),
+            (10_000.0, 150.0, 800.0),
+            (10_000.0, 150.0, 835.0),
+            (10_000.0, 150.0, 880.0),
+            (30_000.0, 150.0, 835.0),
+            (30_000.0, 200.0, 800.0),
+            (30_000.0, 200.0, 835.0),
+            (30_000.0, 200.0, 880.0),
         ]
         n_real, n_steps = 8, 400
 
@@ -98,8 +111,7 @@ def validate(fast: bool = True, make_plot: bool = True) -> dict:
     for P0, dur, wl in points:
         N = _N(P0, dur, wl)
         g = run_point(P0, dur, wl, n_real, n_steps)
-        rows.append({"N": N, "g12_avg": g, "P0_W": P0,
-                     "dur_fs": dur, "wl_nm": wl})
+        rows.append({"N": N, "g12_avg": g, "P0_W": P0, "dur_fs": dur, "wl_nm": wl})
     assert all(0.0 <= r["g12_avg"] <= 1.0 for r in rows)
 
     low = np.mean([r["g12_avg"] for r in rows if r["N"] < 10])
@@ -122,19 +134,30 @@ def validate(fast: bool = True, make_plot: bool = True) -> dict:
         fig, ax = plt.subplots(figsize=(7, 4.5))
         Ns = [r["N"] for r in rows]
         gs = [r["g12_avg"] for r in rows]
-        ax.scatter([r["N"] for r in rows], gs, c=[r["P0_W"] for r in rows],
-                   cmap="viridis", s=60, edgecolor="k")
+        ax.scatter(
+            [r["N"] for r in rows],
+            gs,
+            c=[r["P0_W"] for r in rows],
+            cmap="viridis",
+            s=60,
+            edgecolor="k",
+        )
         ax.set_xlabel("input soliton order N")
         ax.set_ylabel("average |g12|")
         for r, g in zip(rows, gs):
-            ax.annotate(f"{int(r['wl_nm'])}nm/{int(r['dur_fs'])}fs",
-                        (r["N"], g), fontsize=7,
-                        textcoords="offset points", xytext=(4, 3))
+            ax.annotate(
+                f"{int(r['wl_nm'])}nm/{int(r['dur_fs'])}fs",
+                (r["N"], g),
+                fontsize=7,
+                textcoords="offset points",
+                xytext=(4, 3),
+            )
         ax.axvspan(10, 30, color="0.9", zorder=0)
         ax.text(20, 0.05, "paper: transition band", ha="center", fontsize=8)
         ax.set_title("Dudley Fig. 22-style: coherence vs soliton order")
-        fig.colorbar(plt.cm.ScalarMappable(cmap="viridis"), ax=ax,
-                     label="peak power (W)")
+        fig.colorbar(
+            plt.cm.ScalarMappable(cmap="viridis"), ax=ax, label="peak power (W)"
+        )
         fig.tight_layout()
         fig.savefig(HERE / "fig22_coherence_vs_N.png", dpi=150)
         plt.close(fig)
@@ -144,4 +167,5 @@ def validate(fast: bool = True, make_plot: bool = True) -> dict:
 
 if __name__ == "__main__":
     import sys
+
     print(validate(fast="--fast" in sys.argv))

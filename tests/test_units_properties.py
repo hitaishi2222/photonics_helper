@@ -112,7 +112,9 @@ def test_wavenumber_roundtrip(wl_m: float) -> None:
     wn = Wavelength(wl_m, "m").to_wn()
     assert isinstance(wn, Wavenumber)
     assert math.isclose(wn.to_wl().as_m, wl_m, rel_tol=REL)
-    assert math.isclose(wn.to_freq().as_Hz, Wavelength(wl_m, "m").to_freq().as_Hz, rel_tol=REL)
+    assert math.isclose(
+        wn.to_freq().as_Hz, Wavelength(wl_m, "m").to_freq().as_Hz, rel_tol=REL
+    )
 
 
 @given(st.lists(WAVELENGTHS_M, min_size=1, max_size=8))

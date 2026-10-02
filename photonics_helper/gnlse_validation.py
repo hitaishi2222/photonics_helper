@@ -300,8 +300,12 @@ def check_spm(
     P0 = float(peak_power)
     T0 = float(t0)
     L = float(phi_max) / (abs(gamma) * P0)
-    env = Envelope(shape="gaussian", peak_amplitude=np.sqrt(P0), pulse_width=Time(T0, "s"))
-    pulse = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(wavelength_m, "m"))
+    env = Envelope(
+        shape="gaussian", peak_amplitude=np.sqrt(P0), pulse_width=Time(T0, "s")
+    )
+    pulse = Wave(
+        grid=grid, envelope=env, central_wavelength=Wavelength(wavelength_m, "m")
+    )
     fiber = FiberProfile.from_gamma(
         gamma=gamma,
         n2=2.6e-20,
@@ -316,7 +320,9 @@ def check_spm(
         include_self_steepening=False,
         include_tpa=False,
     )
-    solver.propagate(num_steps=GNLSESolver.estimate_num_steps(pulse, fiber, np.array([0.0])))
+    solver.propagate(
+        num_steps=GNLSESolver.estimate_num_steps(pulse, fiber, np.array([0.0]))
+    )
     W_num = np.abs(grid.fft(solver.evolution[-1].envelope_field)) ** 2
     W_num = W_num / W_num.max()
 
@@ -460,9 +466,15 @@ def check_mi(
     # that seeds both sidebands of the ±Ω pair. ε = 1 % keeps the dynamics
     # in the linear-stability regime while staying far above the solver's
     # numerical sideband floor.
-    env = Envelope(shape="custom", peak_amplitude=amp, pulse_width=Time(1.0, "s"),
-                   func=lambda t, T0, A0: np.full_like(t, A0))
-    pulse = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(wavelength_m, "m"))
+    env = Envelope(
+        shape="custom",
+        peak_amplitude=amp,
+        pulse_width=Time(1.0, "s"),
+        func=lambda t, T0, A0: np.full_like(t, A0),
+    )
+    pulse = Wave(
+        grid=grid, envelope=env, central_wavelength=Wavelength(wavelength_m, "m")
+    )
     eps = 1e-2
     perturb = eps * amp * np.cos(probe_eff * grid.t)
     A_in = np.asarray(pulse.envelope_field) + perturb
@@ -497,9 +509,7 @@ def check_mi(
     # the first half of the trace.
     half = len(zs) // 2
     if P_side[-1] <= 0 or P_side[half] <= 0:
-        raise ValidationFailure(
-            "MI", "sideband power vanished (numerical noise floor)"
-        )
+        raise ValidationFailure("MI", "sideband power vanished (numerical noise floor)")
     g_meas = float(np.polyfit(zs[half:], np.log(P_side[half:]), 1)[0])
     rel_err = abs(g_meas - g_ref) / g_ref
     metrics = {
@@ -557,7 +567,9 @@ def check_soliton(
     env = Envelope.from_fwhm(
         "sech", peak_amplitude=np.sqrt(P0), fwhm=Time(sech_fwhm_factor, "s")
     )
-    pulse = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(wavelength_m, "m"))
+    pulse = Wave(
+        grid=grid, envelope=env, central_wavelength=Wavelength(wavelength_m, "m")
+    )
     fiber = FiberProfile.from_gamma(
         gamma=gamma,
         n2=2.6e-20,
@@ -649,9 +661,13 @@ def check_gordon_ssfs(
     analytic_dlam = -(wavelength_m**2) / (2 * np.pi * C_MS) * analytic_dnu * 1e9
 
     env = Envelope(
-        shape="sech", peak_amplitude=np.sqrt(peak_power), pulse_width=Time(float(t0), "s")
+        shape="sech",
+        peak_amplitude=np.sqrt(peak_power),
+        pulse_width=Time(float(t0), "s"),
     )
-    pulse = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(wavelength_m, "m"))
+    pulse = Wave(
+        grid=grid, envelope=env, central_wavelength=Wavelength(wavelength_m, "m")
+    )
     fiber = FiberProfile.from_gamma(
         gamma=gamma,
         n2=2.6e-20,

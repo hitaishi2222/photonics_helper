@@ -103,10 +103,14 @@ def main() -> int:
     warnings.filterwarnings("ignore", message=".*normalized envelope units.*")
     warnings.filterwarnings("ignore", message=".*Auto-derived.*")
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--N", type=int, default=2**14, help="grid points (default 2^14)")
+    parser.add_argument(
+        "--N", type=int, default=2**14, help="grid points (default 2^14)"
+    )
     parser.add_argument("--reps", type=int, default=50, help="FFT pairs per timing")
     parser.add_argument("--steps", type=int, default=500, help="GNLSE steps")
-    parser.add_argument("--length-mm", type=float, default=50.0, help="fiber length (mm)")
+    parser.add_argument(
+        "--length-mm", type=float, default=50.0, help="fiber length (mm)"
+    )
     parser.add_argument("--skip-scg", action="store_true", help="FFT layer only")
     args = parser.parse_args()
 
@@ -124,7 +128,9 @@ def main() -> int:
         label = backend_name()
         try:
             fft_times[active] = bench_fft(args.N, args.reps)
-            line = f"  {active:6s} {label:34s} FFT pair: {fft_times[active] * 1e6:9.2f} µs"
+            line = (
+                f"  {active:6s} {label:34s} FFT pair: {fft_times[active] * 1e6:9.2f} µs"
+            )
             if not args.skip_scg:
                 elapsed, field = bench_scg(args.N, args.steps, args.length_mm * 1e-3)
                 scg_times[active] = elapsed

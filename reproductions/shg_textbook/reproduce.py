@@ -73,9 +73,7 @@ def validate(params: dict | None = None, make_plot: bool = True) -> dict:
     assert abs(Lambda_qpm(delta_k) - period) / period < 1e-12
 
     L_qpm = qpm["kappaL"] / kappa
-    off = solve_shg(
-        length=L_qpm, P0=P0, sigma=sigma, n_steps=n_steps, delta_k=delta_k
-    )
+    off = solve_shg(length=L_qpm, P0=P0, sigma=sigma, n_steps=n_steps, delta_k=delta_k)
     on = solve_shg(
         length=L_qpm,
         P0=P0,

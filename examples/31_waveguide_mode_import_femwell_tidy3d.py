@@ -82,7 +82,9 @@ beta2_D = disp.get_beta2(lam.as_nm)
 D_1550 = disp.fn(lam) * 1e6
 print("\nDerived dispersion (femwell import):")
 print(f"  beta2(1550 nm) = {beta2_pc:.4e} s^2/m")
-print(f"  beta2 via D(λ) = {beta2_D:.4e} s^2/m  (rel err {abs(beta2_pc - beta2_D) / abs(beta2_pc):.2e})")
+print(
+    f"  beta2 via D(λ) = {beta2_D:.4e} s^2/m  (rel err {abs(beta2_pc - beta2_D) / abs(beta2_pc):.2e})"
+)
 print(f"  D(1550 nm)     = {D_1550:.2f} ps/(nm·km)")
 
 # ── 4. The import plugs straight into phase_matching ────────────────────
@@ -95,8 +97,12 @@ print(f"\nphase_matching tie-in: Δβ(1550; 1560 nm) = {delta_beta:.3f} 1/m")
 
 # ── 5. Plot ─────────────────────────────────────────────────────────────
 wl_plot = np.linspace(wl_um.min(), wl_um.max(), 200)
-neff_fw_plot = np.array([modes["femwell"]["csv"].neff_at(Wavelength(x, "um")) for x in wl_plot])
-neff_td_plot = np.array([modes["tidy3d"]["csv"].neff_at(Wavelength(x, "um")) for x in wl_plot])
+neff_fw_plot = np.array(
+    [modes["femwell"]["csv"].neff_at(Wavelength(x, "um")) for x in wl_plot]
+)
+neff_td_plot = np.array(
+    [modes["tidy3d"]["csv"].neff_at(Wavelength(x, "um")) for x in wl_plot]
+)
 D_plot = np.array([disp.fn(Wavelength(x, "um")) for x in wl_plot]) * 1e6
 
 fig, axes = plt.subplots(1, 3, figsize=(15, 4.2))
@@ -114,7 +120,9 @@ axes[0].grid(True, alpha=0.3)
 axes[1].plot(wl_um, rel_dev * 100, "C3o-", lw=1.5, ms=4)
 axes[1].axhline(0.0, color="k", lw=0.8, ls=":")
 axes[1].set_xlabel("Wavelength (µm)")
-axes[1].set_ylabel(r"$|n_\mathrm{eff}^{femwell} - n_\mathrm{eff}^{tidy3d}|/n_\mathrm{eff}$ (%)")
+axes[1].set_ylabel(
+    r"$|n_\mathrm{eff}^{femwell} - n_\mathrm{eff}^{tidy3d}|/n_\mathrm{eff}$ (%)"
+)
 axes[1].set_title(f"Solver deviation (max {max_dev:.2%})")
 axes[1].grid(True, alpha=0.3)
 
@@ -132,7 +140,11 @@ fig.suptitle(
     fontsize=11,
 )
 fig.tight_layout()
-out = Path(__file__).resolve().parent / "images" / "31_waveguide_mode_import_femwell_tidy3d.png"
+out = (
+    Path(__file__).resolve().parent
+    / "images"
+    / "31_waveguide_mode_import_femwell_tidy3d.png"
+)
 out.parent.mkdir(exist_ok=True)
 fig.savefig(out, dpi=150)
 print(f"\nwrote {out}")

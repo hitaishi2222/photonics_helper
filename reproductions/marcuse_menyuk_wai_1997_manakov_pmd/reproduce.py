@@ -180,8 +180,12 @@ def check_eq30(phys: PhysicalSetup, make_plot: bool = True) -> dict:
     )
     ref_x = np.abs(env.field(grid.t)) ** 2
     eng = VectorSplitStepEngine(
-        wx, wy, phys.fiber(length_m), [beta2_ps2_m],
-        coupling="incoherent", step_size=Length(step_m, "m"),
+        wx,
+        wy,
+        phys.fiber(length_m),
+        [beta2_ps2_m],
+        coupling="incoherent",
+        step_size=Length(step_m, "m"),
     )
     eng.propagate(n_steps)
     out_x = np.abs(eng.evolution_x[-1].envelope_field) ** 2
@@ -194,8 +198,12 @@ def check_eq30(phys: PhysicalSetup, make_plot: bool = True) -> dict:
     wy = Wave(grid=grid, envelope=env, central_wavelength=wl)
     ref_tot = 2.0 * np.abs(env.field(grid.t)) ** 2
     eng = VectorSplitStepEngine(
-        wx, wy, phys.fiber(length_m), [beta2_ps2_m],
-        coupling="manakov", step_size=Length(step_m, "m"),
+        wx,
+        wy,
+        phys.fiber(length_m),
+        [beta2_ps2_m],
+        coupling="manakov",
+        step_size=Length(step_m, "m"),
     )
     eng.propagate(n_steps)
     out_tot = (
@@ -232,7 +240,9 @@ def _plot_eq30(grid: TemporalGrid, eng, ref_tot: NDArray, out_tot: NDArray) -> N
     fig, ax = plt.subplots(figsize=(6.5, 4))
     ax.plot(t_ps, ref_tot / ref_tot.max(), "k--", lw=1.2, label="initial |U|²+|V|²")
     ax.plot(
-        t_ps, out_tot / out_tot.max(), lw=1.4,
+        t_ps,
+        out_tot / out_tot.max(),
+        lw=1.4,
         label=f"after {SOLITON_Z0_COUNT:.0f} z₀,  {MANAKOV_FACTOR:.3g}γ(|U|²+|V|²)",
     )
     ax.set_xlabel("t (ps)")
@@ -252,8 +262,9 @@ def _plot_eq30(grid: TemporalGrid, eng, ref_tot: NDArray, out_tot: NDArray) -> N
 # ---------------------------------------------------------------------------
 
 
-def check_fig5(phys: PhysicalSetup, seed: int = 20250101,
-               make_plot: bool = True) -> dict:
+def check_fig5(
+    phys: PhysicalSetup, seed: int = 20250101, make_plot: bool = True
+) -> dict:
     wl = Wavelength(phys.wavelength_nm, "nm")
     grid = TemporalGrid(N=2048, Tmax=Time(160e-12, "s"))
     beta2_ps2_m = SOLITON_BETA2_PS2_PER_KM * 1e-3
@@ -272,7 +283,10 @@ def check_fig5(phys: PhysicalSetup, seed: int = 20250101,
     energies: list[float] = []
     for k in range(4):  # four statistically independent fibres (Fig. 5(b) ensemble)
         eng = RandomBirefringenceEngine(
-            wx, wy, phys.fiber(length_m), [beta2_ps2_m],
+            wx,
+            wy,
+            phys.fiber(length_m),
+            [beta2_ps2_m],
             step_size=Length(step_m, "m"),
         )
         eng.seed = int(rng_master.integers(0, 2**31 - 1))
@@ -280,10 +294,7 @@ def check_fig5(phys: PhysicalSetup, seed: int = 20250101,
 
         peaks = np.asarray(
             [
-                np.max(
-                    np.abs(sx.envelope_field) ** 2
-                    + np.abs(sy.envelope_field) ** 2
-                )
+                np.max(np.abs(sx.envelope_field) ** 2 + np.abs(sy.envelope_field) ** 2)
                 for sx, sy in zip(eng.evolution_x, eng.evolution_y)
             ]
         )
@@ -320,10 +331,7 @@ def _plot_fig5(eng, grid: TemporalGrid, ref_tot: NDArray) -> None:
     z0 = z[-1] / SOLITON_Z0_COUNT
     peaks = np.asarray(
         [
-            np.max(
-                np.abs(sx.envelope_field) ** 2
-                + np.abs(sy.envelope_field) ** 2
-            )
+            np.max(np.abs(sx.envelope_field) ** 2 + np.abs(sy.envelope_field) ** 2)
             for sx, sy in zip(eng.evolution_x, eng.evolution_y)
         ]
     )
@@ -342,8 +350,13 @@ def _plot_fig5(eng, grid: TemporalGrid, ref_tot: NDArray) -> None:
     ax.set_title("Fig. 5(b) analogue: soliton peak under random birefringence")
     ax = axes[1]
     ax.plot(t_ps, ref_tot / ref_tot.max(), "k--", lw=1.2, label="Manakov soliton")
-    ax.plot(t_ps, out_tot / out_tot.max(), lw=1, alpha=0.85,
-            label="after 30 z₀, random SU(2) frames")
+    ax.plot(
+        t_ps,
+        out_tot / out_tot.max(),
+        lw=1,
+        alpha=0.85,
+        label="after 30 z₀, random SU(2) frames",
+    )
     ax.set_xlabel("t (ps)")
     ax.set_ylabel("normalized power")
     ax.legend()
@@ -377,8 +390,13 @@ def _nrz_field(grid: TemporalGrid) -> tuple[NDArray, NDArray]:
     return field / np.sqrt(2.0), field / np.sqrt(2.0)
 
 
-def _nrz_run(grid: TemporalGrid, phys: PhysicalSetup, rotations: bool,
-             periods: int = 2, seed: int = 4242) -> NDArray:
+def _nrz_run(
+    grid: TemporalGrid,
+    phys: PhysicalSetup,
+    rotations: bool,
+    periods: int = 2,
+    seed: int = 4242,
+) -> NDArray:
     """Propagate the NRZ word through the paper's map; returns total power."""
     wl = Wavelength(phys.wavelength_nm, "nm")
     fx, fy = _nrz_field(grid)
@@ -404,14 +422,21 @@ def _nrz_run(grid: TemporalGrid, phys: PhysicalSetup, rotations: bool,
         step_m = 100.0 if rotations else 500.0
         if rotations:
             eng = RandomBirefringenceEngine(
-                w_x, w_y, phys.fiber(l_sec), [beta2_ps2_km * 1e-3],
+                w_x,
+                w_y,
+                phys.fiber(l_sec),
+                [beta2_ps2_km * 1e-3],
                 step_size=Length(step_m, "m"),
             )
             eng.seed = int(master.integers(0, 2**31 - 1))
         else:
             eng = VectorSplitStepEngine(
-                w_x, w_y, phys.fiber(l_sec), [beta2_ps2_km * 1e-3],
-                coupling="manakov", step_size=Length(step_m, "m"),
+                w_x,
+                w_y,
+                phys.fiber(l_sec),
+                [beta2_ps2_km * 1e-3],
+                coupling="manakov",
+                step_size=Length(step_m, "m"),
             )
         eng.propagate(int(round(l_sec / step_m)))
         w_x = _cont_wave(eng.A_x.copy())
@@ -464,8 +489,13 @@ def check_nrz(phys: PhysicalSetup, make_plot: bool = True) -> dict:
     }
 
 
-def _plot_nrz(grid: TemporalGrid, p_biref: NDArray, p_avg: NDArray,
-              i_biref: NDArray, i_avg: NDArray) -> None:
+def _plot_nrz(
+    grid: TemporalGrid,
+    p_biref: NDArray,
+    p_avg: NDArray,
+    i_biref: NDArray,
+    i_avg: NDArray,
+) -> None:
     import matplotlib
 
     matplotlib.use("Agg")
@@ -475,14 +505,27 @@ def _plot_nrz(grid: TemporalGrid, p_biref: NDArray, p_avg: NDArray,
     fig, axes = plt.subplots(1, 2, figsize=(11, 4))
     ax = axes[0]
     ax.plot(t_ns, p_biref * 1e3, lw=1, label="random birefringence (SU(2) frames)")
-    ax.plot(t_ns, p_avg * 1e3, lw=1, ls="--", alpha=0.85, label="Poincaré-averaged Manakov")
+    ax.plot(
+        t_ns, p_avg * 1e3, lw=1, ls="--", alpha=0.85, label="Poincaré-averaged Manakov"
+    )
     ax.set_xlabel("t (ns)")
     ax.set_ylabel("optical power (mW)")
-    ax.set_title("Fig. 4 analogue: NRZ output after {0:.0f} km of the dispersion map".format(200.0))
+    ax.set_title(
+        "Fig. 4 analogue: NRZ output after {0:.0f} km of the dispersion map".format(
+            200.0
+        )
+    )
     ax.legend()
     ax = axes[1]
     ax.plot(t_ns, i_biref, lw=1, label="detected + 5 GHz filter (birefringent)")
-    ax.plot(t_ns, i_avg, lw=1, ls="--", alpha=0.85, label="detected + 5 GHz filter (Manakov)")
+    ax.plot(
+        t_ns,
+        i_avg,
+        lw=1,
+        ls="--",
+        alpha=0.85,
+        label="detected + 5 GHz filter (Manakov)",
+    )
     ax.set_xlabel("t (ns)")
     ax.set_ylabel("filtered detected current (W)")
     ax.legend()
@@ -516,7 +559,9 @@ def validate(make_plot: bool = True) -> dict:
     assert fig5["shape_l2_worst"] < tol["random_shape_l2"], fig5
     assert fig5["energy_drift_max"] < tol["energy_drift"], fig5
 
-    assert nrz["current_l2_rel_biref_vs_manakov"] < tol["random_vs_manakov_current_l2"], nrz
+    assert (
+        nrz["current_l2_rel_biref_vs_manakov"] < tol["random_vs_manakov_current_l2"]
+    ), nrz
     assert nrz["pulse_peak_shift_ps_max"] < tol["pulse_peak_time_shift_ps"], nrz
 
     return {"eq30": eq30, "fig5": fig5, "nrz": nrz}

@@ -16,6 +16,7 @@ decisive analytic anchors that need no PDE integration:
 The dark ODE overlay (S63/S73/S81/S97 machinery) stays recorded-outstanding
 until the eta2/C-coupling transcription signs are double-checked.
 """
+
 from __future__ import annotations
 
 import importlib.util as ilu
@@ -40,10 +41,11 @@ _rep = _load("huang_rep", HERE.parent / "reproduce.py")
 def dark_ansatz(P0, rho, eta, Bd, Omega, C, tau):
     """Supplement Eq. (S47) (= main Eq. 29) with zero core phase phi."""
     x = (tau - eta) / rho
-    return (np.sqrt(P0)
-            * (Bd * np.tanh(x) + 1j * np.sqrt(max(1.0 - Bd * Bd, 0.0)))
-            * np.exp(1j * (-Omega * (tau - eta) - C * (tau - eta) ** 2
-                           / (2.0 * rho * rho))))
+    return (
+        np.sqrt(P0)
+        * (Bd * np.tanh(x) + 1j * np.sqrt(max(1.0 - Bd * Bd, 0.0)))
+        * np.exp(1j * (-Omega * (tau - eta) - C * (tau - eta) ** 2 / (2.0 * rho * rho)))
+    )
 
 
 def check_ansatz():
@@ -64,17 +66,24 @@ def check_ansatz():
         m_err = abs(m["M"] - (M_core + Om * E_tgt))
         assert m_err < 1e-9, f"S105 M identity failed: {m_err}"
         assert abs(m["E"] - E_tgt) / E_tgt < 1e-8, "S48 E identity failed"
-        assert abs(m["Omega_tilde"] - (-m["M"] / m["E"])) < 1e-12, \
+        assert abs(m["Omega_tilde"] - (-m["M"] / m["E"])) < 1e-12, (
             "S102 Omega-tilde identity failed"
-        out.append({
-            "Bd": Bd, "rho": rho, "Omega": Om, "C": C, "P0": P0,
-            "E_err": abs(m["E"] - E_tgt) / E_tgt,
-            "M_err": abs(m["M"] - (M_core + Om * E_tgt)) / abs(E_tgt),
-            "Omega_tilde_err": abs(m["Omega_tilde"] - (-m["M"] / m["E"])),
-            "rho_err": abs(m["rho"] - rho) / rho,
-            "Bd_err": abs(m["Bd"] - Bd),
-            "omega_tilde_plus_Mcore_over_E": m["Omega_tilde"] + M_core / E_tgt,
-        })
+        )
+        out.append(
+            {
+                "Bd": Bd,
+                "rho": rho,
+                "Omega": Om,
+                "C": C,
+                "P0": P0,
+                "E_err": abs(m["E"] - E_tgt) / E_tgt,
+                "M_err": abs(m["M"] - (M_core + Om * E_tgt)) / abs(E_tgt),
+                "Omega_tilde_err": abs(m["Omega_tilde"] - (-m["M"] / m["E"])),
+                "rho_err": abs(m["rho"] - rho) / rho,
+                "Bd_err": abs(m["Bd"] - Bd),
+                "omega_tilde_plus_Mcore_over_E": m["Omega_tilde"] + M_core / E_tgt,
+            }
+        )
     return out
 
 
@@ -82,26 +91,47 @@ def check_energy_decay_sign():
     """(d): pc model, dark deck; E decays monotonically, Bd^4 scaling."""
     cases = []
     for Bd in (0.9, 0.8):
-        c = {"name": f"decay_{Bd}", "sD": 1, "delta": 0.001, "sgy": 1,
-             "sigma": 0.0, "tauR": 1.0, "P0": 1.0, "E0": 1.0, "rho0": 1.0,
-             "Bd": Bd, "C0": 0.0, "Omega0": 0.0, "xi_final": 2.0}
+        c = {
+            "name": f"decay_{Bd}",
+            "sD": 1,
+            "delta": 0.001,
+            "sgy": 1,
+            "sigma": 0.0,
+            "tauR": 1.0,
+            "P0": 1.0,
+            "E0": 1.0,
+            "rho0": 1.0,
+            "Bd": Bd,
+            "C0": 0.0,
+            "Omega0": 0.0,
+            "xi_final": 2.0,
+        }
         tau, w, states = _rep.run_case(c, "pc", dark=True)
         Es = [_rep.dark_moments(u, tau, w, c["P0"])["E"] for _, u in states]
         xis = [x for x, _ in states]
         xis = [x for x, _ in states]
-        cases.append({"Bd": Bd,
-                      "dE_dxi_mean": float((Es[-1] - Es[0]) / (xis[-1] - xis[0])),
-                      "E0": Es[0], "E_final": Es[-1],
-                      "E_monotone_decreasing": all(
-                          Es[i + 1] <= Es[i] + 1e-12 for i in range(len(Es) - 1))})
+        cases.append(
+            {
+                "Bd": Bd,
+                "dE_dxi_mean": float((Es[-1] - Es[0]) / (xis[-1] - xis[0])),
+                "E0": Es[0],
+                "E_final": Es[-1],
+                "E_monotone_decreasing": all(
+                    Es[i + 1] <= Es[i] + 1e-12 for i in range(len(Es) - 1)
+                ),
+            }
+        )
     a, b = cases[0], cases[1]
     ratio = a["dE_dxi_mean"] / b["dE_dxi_mean"]
     tgt = (0.9 / 0.8) ** 4
-    return {"decks": cases, "decay_ratio": float(ratio),
-            "Bd4_target": float(tgt),
-            "note": "ratio uses measured rho and E; S55 scaling is "
-                    "P0^2 Bd^4 / rho^3, decks differ only in Bd so the "
-                    "(Bd ratio)^4 * (rho_b/rho_a) correction applies"}
+    return {
+        "decks": cases,
+        "decay_ratio": float(ratio),
+        "Bd4_target": float(tgt),
+        "note": "ratio uses measured rho and E; S55 scaling is "
+        "P0^2 Bd^4 / rho^3, decks differ only in Bd so the "
+        "(Bd ratio)^4 * (rho_b/rho_a) correction applies",
+    }
 
 
 if __name__ == "__main__":

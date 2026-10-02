@@ -261,7 +261,6 @@ class TestWalkoff:
 # ---------------------------------------------------------------------------
 
 
-
 class TestCoherentFWM:
     """The coherent-coupling step vs an independent dense-RK4 integration."""
 
@@ -348,8 +347,10 @@ class TestEnergyConservation:
         if coupling == "coherent":
             # a finite mismatch avoids the Δβ=0 resonance warning
             gamma_probe = VectorSplitStepEngine(
-                _sech_wave(grid, peak), _zero_wave(grid, _sech_wave(grid, peak)),
-                fiber, np.array([0.0]),
+                _sech_wave(grid, peak),
+                _zero_wave(grid, _sech_wave(grid, peak)),
+                fiber,
+                np.array([0.0]),
             )
             kwargs["delta_beta"] = 2.0 * gamma_probe._gamma_v() * peak
         with warnings.catch_warnings():

@@ -118,11 +118,7 @@ def test_validation_requires_four_points():
 def test_validation_requires_monotonic_wavelengths(tmp_path):
     csv = tmp_path / "nonmono.csv"
     csv.write_text(
-        "wavelength_um, neff\n"
-        "1.50, 2.42\n"
-        "1.55, 2.41\n"
-        "1.52, 2.415\n"
-        "1.60, 2.40\n"
+        "wavelength_um, neff\n1.50, 2.42\n1.55, 2.41\n1.52, 2.415\n1.60, 2.40\n"
     )
     with pytest.raises(ValueError):
         WaveguideMode.from_csv(csv)
@@ -131,31 +127,21 @@ def test_validation_requires_monotonic_wavelengths(tmp_path):
 def test_validation_length_mismatch(tmp_path):
     csv = tmp_path / "mismatch.csv"
     csv.write_text(
-        "wavelength_um, neff\n"
-        "1.50, 2.42\n"
-        "1.55, 2.41\n"
-        "1.60, 2.40\n"
-        "1.65, 2.39\n"
+        "wavelength_um, neff\n1.50, 2.42\n1.55, 2.41\n1.60, 2.40\n1.65, 2.39\n"
     )
     mode = WaveguideMode.from_csv(csv)
     assert len(mode.neff) == 4
     with pytest.raises(ValueError):
         WaveguideMode(
             neff=np.array([1.0, 1.1, 1.2, 1.3]),
-            wavelengths=WavelengthArray(
-                np.array([1.50, 1.55, 1.60, 1.65, 1.70]), "um"
-            ),
+            wavelengths=WavelengthArray(np.array([1.50, 1.55, 1.60, 1.65, 1.70]), "um"),
         )
 
 
 def test_validation_rejects_non_finite(tmp_path):
     csv = tmp_path / "nan.csv"
     csv.write_text(
-        "wavelength_um, neff\n"
-        "1.50, 2.42\n"
-        "1.55, nan\n"
-        "1.60, 2.40\n"
-        "1.65, 2.39\n"
+        "wavelength_um, neff\n1.50, 2.42\n1.55, nan\n1.60, 2.40\n1.65, 2.39\n"
     )
     with pytest.raises(ValueError):
         WaveguideMode.from_csv(csv)

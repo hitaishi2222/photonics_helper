@@ -39,15 +39,13 @@ def _waves(seed_fraction: float = 1e-4, with_idler: bool = False):
         if ch == 0:
             field = np.full(N_GRID, a_pump, dtype=complex)
         elif ch == 1:
-            field = seed_fraction * a_pump * np.exp(
-                1j * 2.0 * np.pi * 0.15e12 * grid.t
-            )
+            field = seed_fraction * a_pump * np.exp(1j * 2.0 * np.pi * 0.15e12 * grid.t)
         else:
             if with_idler:
                 field = (
-                    seed_fraction * a_pump * np.conj(
-                        np.exp(1j * 2.0 * np.pi * 0.15e12 * grid.t)
-                    )
+                    seed_fraction
+                    * a_pump
+                    * np.conj(np.exp(1j * 2.0 * np.pi * 0.15e12 * grid.t))
                 ).astype(complex)
             else:
                 field = np.zeros(N_GRID, dtype=complex)
@@ -81,9 +79,7 @@ def test_fwm_stable_without_idler_partner():
     # The old bug produced |idler|/seed ~ 1e244; this asserts orders of
     # magnitude below that while tolerating the exact sinh level.
     rate_pct = np.max(np.abs(a_idler)) / seed
-    assert rate_pct < 3e2, (
-        f"idler/seed = {rate_pct:.1e} exceeds the sinh(γP₀·L) level"
-    )
+    assert rate_pct < 3e2, f"idler/seed = {rate_pct:.1e} exceeds the sinh(γP₀·L) level"
     assert np.max(np.abs(a_signal)) < 3e2 * seed
 
 
@@ -98,8 +94,11 @@ def test_fwm_substep_count_is_stability_driven():
     pump = np.full(N_GRID, 40.0 * np.sqrt(P0_W), dtype=complex)
     sideband = np.zeros(N_GRID, dtype=complex)
     eng = _engine(
-        [_mk_wave(grid, pump), _mk_wave(grid, np.full(N_GRID, 1.0, complex)),
-         _mk_wave(grid, sideband)]
+        [
+            _mk_wave(grid, pump),
+            _mk_wave(grid, np.full(N_GRID, 1.0, complex)),
+            _mk_wave(grid, sideband),
+        ]
     )
     n = eng._fwm_substep_count(
         [pump, np.full(N_GRID, 1e-3, complex), np.zeros(N_GRID, complex)],
@@ -131,15 +130,16 @@ def test_fwm_huge_rate_raises_loudly():
     grid = TemporalGrid(N=256, Tmax=Time(2e-12, "s"))
     tiny = np.zeros(256, dtype=complex)
     eng = _engine(
-        [_mk_wave(grid, np.full(256, 1e6, dtype=complex)),
-         _mk_wave(grid, np.full(256, 1e-6, dtype=complex)),
-         _mk_wave(grid, tiny)],
+        [
+            _mk_wave(grid, np.full(256, 1e6, dtype=complex)),
+            _mk_wave(grid, np.full(256, 1e-6, dtype=complex)),
+            _mk_wave(grid, tiny),
+        ],
         length_m=100.0,
         step_m=50e-3,
     )
     with pytest.raises(ValueError, match="RK4 stability|ISSUES.md #11|/m"):
         eng._fwm_substep_count(
-            [np.full(256, 1e6, dtype=complex),
-             np.full(256, 1e-6, dtype=complex), tiny],
+            [np.full(256, 1e6, dtype=complex), np.full(256, 1e-6, dtype=complex), tiny],
             dz=50e-3,
         )

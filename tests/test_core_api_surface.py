@@ -180,7 +180,9 @@ def test_guard_detects_removed_parameter() -> None:
     live = _mutated()
     module = _first_module()
     symbol = _first_class_symbol(module)
-    live[module]["symbols"][symbol]["params"] = live[module]["symbols"][symbol]["params"][:-1]
+    live[module]["symbols"][symbol]["params"] = live[module]["symbols"][symbol][
+        "params"
+    ][:-1]
     live[module]["symbols"][symbol]["members"] = {}  # avoid member noise
     errors = collect_errors(expected, live)
     assert any("parameters changed" in e for e in errors)
@@ -202,7 +204,9 @@ def test_guard_detects_new_required_parameter() -> None:
     live = _mutated()
     module = _first_module()
     symbol = _first_class_symbol(module)
-    live[module]["symbols"][symbol]["params"].append(["extra", "POSITIONAL_OR_KEYWORD", False])
+    live[module]["symbols"][symbol]["params"].append(
+        ["extra", "POSITIONAL_OR_KEYWORD", False]
+    )
     live[module]["symbols"][symbol]["members"] = {}
     errors = collect_errors(expected, live)
     assert any("new required parameter" in e for e in errors)

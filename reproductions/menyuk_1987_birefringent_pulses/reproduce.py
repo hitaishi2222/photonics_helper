@@ -45,14 +45,14 @@ HERE = Path(__file__).resolve().parent
 PARAMETERS = HERE / "parameters.json"
 
 C_MS = 2.99792458e8
-N2 = 2.6e-20        # m^2/W fiber Kerr coefficient
-A_EFF_UM2 = 52.0    # um^2 (same profile as the Manakov reproduction)
+N2 = 2.6e-20  # m^2/W fiber Kerr coefficient
+A_EFF_UM2 = 52.0  # um^2 (same profile as the Manakov reproduction)
 LAMBDA_NM = 1550.0
 N_SAMPLES = 2048
 
-Z0_5PS_M = 710.0      # paper anchor, tau = 5 ps
-Z0_250FS_M = 1.8      # paper anchor, tau = 250 fs
-R_5PS = 1.4e6         # printed R values (digitization caveat in README)
+Z0_5PS_M = 710.0  # paper anchor, tau = 5 ps
+Z0_250FS_M = 1.8  # paper anchor, tau = 250 fs
+R_5PS = 1.4e6  # printed R values (digitization caveat in README)
 R_250FS = 700.0
 
 STEP_5PS_M = 2.0
@@ -86,10 +86,10 @@ def gamma_per_W_m() -> float:
 
 def physical_case(tau_FWHM_s: float, z0_m: float) -> dict:
     """Paper-derived engine quantities for one case (tau, z0)."""
-    T0 = tau_FWHM_s / 1.763                # sech width t0 = 0.568 tau
-    beta2 = -pi * T0 ** 2 / (2.0 * z0_m)    # s^2/m (anomalous -> solitons)
+    T0 = tau_FWHM_s / 1.763  # sech width t0 = 0.568 tau
+    beta2 = -pi * T0**2 / (2.0 * z0_m)  # s^2/m (anomalous -> solitons)
     g = gamma_per_W_m()
-    P1 = abs(beta2) / (g * T0 ** 2)        # scalar N=1 soliton peak (W)
+    P1 = abs(beta2) / (g * T0**2)  # scalar N=1 soliton peak (W)
 
     def walkoff(delta: float) -> float:
         # Delta_beta1 = 2|beta2| delta/T0, SI s/m (engine: beta1_y - beta1_x)
@@ -106,7 +106,7 @@ def physical_case(tau_FWHM_s: float, z0_m: float) -> dict:
         "beta2_s2_per_m": beta2,
         "gamma": g,
         "P1": P1,
-        "P_axis": 0.6 * P1,   # Eq. (10): 3/5 of P1 on each axis
+        "P_axis": 0.6 * P1,  # Eq. (10): 3/5 of P1 on each axis
         "walkoff": walkoff,
         "delta_beta_fwm": delta_beta_fwm,
     }
@@ -146,6 +146,7 @@ def make_engine(
         def field(t: NDArray, T0_: float, A0: float) -> NDArray:
             x = np.clip(t / T0_, -700.0, 700.0)
             return A0 / np.cosh(x) * np.exp(1j * chirp * t / T0_)
+
         return Envelope(
             shape="custom",
             peak_amplitude=peak,
@@ -153,10 +154,16 @@ def make_engine(
             func=field,
         )
 
-    wx = Wave(grid=grid, envelope=make_env(chirp_x, peak_x),
-              central_wavelength=Wavelength(LAMBDA_NM, "nm"))
-    wy = Wave(grid=grid, envelope=make_env(chirp_y, peak_y),
-              central_wavelength=wx.central_wavelength)
+    wx = Wave(
+        grid=grid,
+        envelope=make_env(chirp_x, peak_x),
+        central_wavelength=Wavelength(LAMBDA_NM, "nm"),
+    )
+    wy = Wave(
+        grid=grid,
+        envelope=make_env(chirp_y, peak_y),
+        central_wavelength=wx.central_wavelength,
+    )
     fiber = FiberProfile(
         n2=n2,
         alpha=0.0,
@@ -164,8 +171,10 @@ def make_engine(
         length=Length(length_m, "m"),
     )
     engine = VectorSplitStepEngine(
-        wx, wy, fiber,
-        [case["beta2_s2_per_m"] * 1e24],   # s^2/m -> ps^2/m (engine unit)
+        wx,
+        wy,
+        fiber,
+        [case["beta2_s2_per_m"] * 1e24],  # s^2/m -> ps^2/m (engine unit)
         coupling=coupling,
         walkoff=walkoff,
         delta_beta=delta_beta,
@@ -188,7 +197,10 @@ def pulse_center(t: NDArray, power: NDArray) -> float:
 
 
 def shape_L2(
-    t: NDArray, power: NDArray, ref_center_t: float, T0: float,
+    t: NDArray,
+    power: NDArray,
+    ref_center_t: float,
+    T0: float,
     shift_halfwidth: int = 4,
 ) -> float:
     """Relative L2 of a peak-normalized |A|^2 profile against sech^2
@@ -262,12 +274,18 @@ def filament_run(
 def check_eq9() -> dict:
     case = physical_case(5e-12, Z0_5PS_M)
     L = N_Z0_FILAMENT * case["z0"]
-    xi_rate = pi / (2.0 * case["z0"])              # d(xi)/dz = pi/(2 z0)
+    xi_rate = pi / (2.0 * case["z0"])  # d(xi)/dz = pi/(2 z0)
 
     # (a) delta = 0 stationary filament, peak P1, v = 0
     grid, eng, px, py = filament_run(
-        case, chirps=(0.0, 0.0), walkoff=0.0, coupling="incoherent",
-        length_m=L, step_m=STEP_5PS_M, peak_x=case["P1"] ** 0.5, peak_y=0.0,
+        case,
+        chirps=(0.0, 0.0),
+        walkoff=0.0,
+        coupling="incoherent",
+        length_m=L,
+        step_m=STEP_5PS_M,
+        peak_x=case["P1"] ** 0.5,
+        peak_y=0.0,
     )
     m0 = {
         "shape_L2": shape_L2(grid.t, px, 0.0, case["T0"]),
@@ -282,21 +300,29 @@ def check_eq9() -> dict:
     # Theory: translation delta*|beta2|*z/T0, phase rate 1/2(1+delta^2)*xi.
     delta = 0.5
     c_th = delta * abs(case["beta2_s2_per_m"]) * L / case["T0"]
-    ph_rate = 0.5 * (1.0 + delta ** 2) * xi_rate * L
+    ph_rate = 0.5 * (1.0 + delta**2) * xi_rate * L
     grid, eng, px, py = filament_run(
-        case, chirps=(delta, 0.0), walkoff=0.0, coupling="incoherent",
-        length_m=L, step_m=STEP_5PS_M,
-        peak_x=case["P1"] ** 0.5, peak_y=0.0,
+        case,
+        chirps=(delta, 0.0),
+        walkoff=0.0,
+        coupling="incoherent",
+        length_m=L,
+        step_m=STEP_5PS_M,
+        peak_x=case["P1"] ** 0.5,
+        peak_y=0.0,
     )
     m1 = {
         "shape_L2": shape_L2(grid.t, px, c_th, case["T0"]),
         "peak_rel": float(px.max() / case["P1"] - 1.0),
         "center_err_ps": abs(pulse_center(grid.t, px) - c_th) * 1e12,
         "phase_rate_residual_rad": float(
-            abs(wrap_phase(ph_rate
-                           - np.angle(eng.evolution_x[-1].envelope_field[
-                               int(np.argmax(px))])
-                           + np.angle((case["P1"]) ** 0.5)))
+            abs(
+                wrap_phase(
+                    ph_rate
+                    - np.angle(eng.evolution_x[-1].envelope_field[int(np.argmax(px))])
+                    + np.angle((case["P1"]) ** 0.5)
+                )
+            )
         ),
     }
     assert m1["shape_L2"] < TOL_SHAPE_L2, m1
@@ -324,13 +350,16 @@ def check_eq9() -> dict:
 def check_eq10_5ps() -> dict:
     case = physical_case(5e-12, Z0_5PS_M)
     L = N_Z0_FILAMENT * case["z0"]
-    delta = 1.0                                     # middle of 0.3 - 3.0
+    delta = 1.0  # middle of 0.3 - 3.0
     xi_rate = pi / (2.0 * case["z0"])
 
     grid, eng, px, py = filament_run(
-        case, chirps=(delta, -delta),               # u: +delta, v: -delta
-        walkoff=case["walkoff"](delta),             # + Delta_beta1 on y
-        coupling="incoherent", length_m=L, step_m=STEP_5PS_M,
+        case,
+        chirps=(delta, -delta),  # u: +delta, v: -delta
+        walkoff=case["walkoff"](delta),  # + Delta_beta1 on y
+        coupling="incoherent",
+        length_m=L,
+        step_m=STEP_5PS_M,
     )
     t = grid.t
     fx = np.abs(eng.evolution_x[-1].envelope_field) ** 2
@@ -350,8 +379,13 @@ def check_eq10_5ps() -> dict:
         "peak_rel_y": float(fy.max() / case["P_axis"] - 1.0),
         "phase_rel_rad": float(abs(wrap_phase(ph_x - ph_y))),
         "phase_rate_residual_rad": float(
-            abs(wrap_phase(ph_x - np.angle(case["P_axis"] ** 0.5)
-                           - 0.5 * (1.0 + delta ** 2) * xi_rate * L))
+            abs(
+                wrap_phase(
+                    ph_x
+                    - np.angle(case["P_axis"] ** 0.5)
+                    - 0.5 * (1.0 + delta**2) * xi_rate * L
+                )
+            )
         ),
     }
     assert res["coincidence_err_ps"] < TOL_CENTER_PS, res
@@ -375,16 +409,20 @@ def check_eq10_5ps() -> dict:
 
 def check_eq10_250fs_coherent() -> dict:
     case = physical_case(250e-15, Z0_250FS_M)
-    L = N_Z0_FILAMENT * case["z0"]          # 9 m
+    L = N_Z0_FILAMENT * case["z0"]  # 9 m
     delta = 0.1
-    db = case["delta_beta_fwm"](delta, R_250FS)      # ~30.5 rad/m
+    db = case["delta_beta_fwm"](delta, R_250FS)  # ~30.5 rad/m
     assert db > 0.0
 
     grid, eng, px, py = filament_run(
-        case, chirps=(delta, -delta),
+        case,
+        chirps=(delta, -delta),
         walkoff=case["walkoff"](delta),
-        coupling="coherent", length_m=L, step_m=STEP_250FS_M,
-        delta_beta=db, t_half_ps=2.0,
+        coupling="coherent",
+        length_m=L,
+        step_m=STEP_250FS_M,
+        delta_beta=db,
+        t_half_ps=2.0,
     )
     t = grid.t
     fx = np.abs(eng.evolution_x[-1].envelope_field) ** 2
@@ -422,19 +460,30 @@ def check_eq10_250fs_coherent() -> dict:
 
 def check_fwm_small_delta() -> dict:
     case = physical_case(250e-15, Z0_250FS_M)
-    L = N_Z0_FILAMENT * case["z0"]          # 5 z0 = 9 m
+    L = N_Z0_FILAMENT * case["z0"]  # 5 z0 = 9 m
     delta = 1.0e-3
-    db = case["delta_beta_fwm"](delta, R_250FS)      # ~0.305 rad/m
+    db = case["delta_beta_fwm"](delta, R_250FS)  # ~0.305 rad/m
     assert R_250FS * delta < 1.0
     w = case["walkoff"](delta)
 
     _, eng_i, pxi, pyi = filament_run(
-        case, chirps=(delta, -delta), walkoff=w, coupling="incoherent",
-        length_m=L, step_m=STEP_250FS_M, t_half_ps=2.0,
+        case,
+        chirps=(delta, -delta),
+        walkoff=w,
+        coupling="incoherent",
+        length_m=L,
+        step_m=STEP_250FS_M,
+        t_half_ps=2.0,
     )
     _, eng_c, pxc, pyc = filament_run(
-        case, chirps=(delta, -delta), walkoff=w, coupling="coherent",
-        length_m=L, step_m=STEP_250FS_M, t_half_ps=2.0, delta_beta=db,
+        case,
+        chirps=(delta, -delta),
+        walkoff=w,
+        coupling="coherent",
+        length_m=L,
+        step_m=STEP_250FS_M,
+        t_half_ps=2.0,
+        delta_beta=db,
     )
     ax_i = eng_i.evolution_x[-1].envelope_field
     ax_c = eng_c.evolution_x[-1].envelope_field
@@ -451,8 +500,8 @@ def check_fwm_small_delta() -> dict:
         "coincidence_err_coh_ps": sep_c * 1e12,
         "coincidence_err_inc_ps": sep_i * 1e12,
     }
-    assert rel > FWM_ACTIVE_MIN, res          # FWM term measurably active
-    assert sep_c * 1e15 < 1.0, res            # locked to sub-fs
+    assert rel > FWM_ACTIVE_MIN, res  # FWM term measurably active
+    assert sep_c * 1e15 < 1.0, res  # locked to sub-fs
     return res
 
 
@@ -495,12 +544,19 @@ def split_scan(
     for delta in deltas:
         w = case["walkoff"](float(delta))
         _, _, px, py = filament_run(
-            case, chirps=(0.0, 0.0), peak_x=case["P_axis"] ** 0.5,
-            peak_y=case["P_axis"] ** 0.5, walkoff=w, coupling="incoherent",
-            length_m=L, step_m=SCAN_STEP_M, t_half_ps=400.0, n=4096,
+            case,
+            chirps=(0.0, 0.0),
+            peak_x=case["P_axis"] ** 0.5,
+            peak_y=case["P_axis"] ** 0.5,
+            walkoff=w,
+            coupling="incoherent",
+            length_m=L,
+            step_m=SCAN_STEP_M,
+            t_half_ps=400.0,
+            n=4096,
         )
         t = make_grid(t_half_ps=400.0, n=4096).t
-        sep_lin = w * L                       # gamma = 0 analytic reference
+        sep_lin = w * L  # gamma = 0 analytic reference
         seps.append(abs(pulse_center(t, py) - pulse_center(t, px)))
         ovls.append(xy_overlap(px, py))
         seps_lin.append(float(sep_lin))
@@ -511,9 +567,17 @@ def split_scan(
     # gamma = 0 linear reference run at the paper's threshold delta = 0.04
     w04 = case["walkoff"](0.04)
     _, _, px_l, py_l = filament_run(
-        case, chirps=(0.0, 0.0), peak_x=case["P_axis"] ** 0.5,
-        peak_y=case["P_axis"] ** 0.5, walkoff=w04, coupling="incoherent",
-        length_m=L, step_m=SCAN_STEP_M, t_half_ps=400.0, n=4096, n2=1e-30,
+        case,
+        chirps=(0.0, 0.0),
+        peak_x=case["P_axis"] ** 0.5,
+        peak_y=case["P_axis"] ** 0.5,
+        walkoff=w04,
+        coupling="incoherent",
+        length_m=L,
+        step_m=SCAN_STEP_M,
+        t_half_ps=400.0,
+        n=4096,
+        n2=1e-30,
     )
     t = make_grid(t_half_ps=400.0, n=4096).t
     sep_04 = abs(pulse_center(t, py_l) - pulse_center(t, px_l))
@@ -540,9 +604,7 @@ def split_scan(
         "split_window": [d_nl_lo, 1.0],
         "linear_reference_separation_ps": float(sep_04 * 1e12),
         "expected_linear_reference_ps": float(2.0 * tau_fwhm * 1e12),
-        "delta_star_linear_exact": float(
-            2.0 * tau_fwhm / float(seps_l[-1])
-        ),
+        "delta_star_linear_exact": float(2.0 * tau_fwhm / float(seps_l[-1])),
         "deltas": [float(d) for d in deltas],
         "overlaps_nonlinear": [float(o) for o in ovls_a],
         "separations_nonlinear_ps": [float(s) for s in seps_a * 1e12],
@@ -564,8 +626,12 @@ def _plot_filaments(case5: dict, case250: dict, out_paths: dict) -> None:
 
     # Eq. (10), tau = 5 ps, delta = 1.0, incoherent
     grid, eng, px, py = filament_run(
-        case5, chirps=(1.0, -1.0), walkoff=case5["walkoff"](1.0),
-        coupling="incoherent", length_m=L5, step_m=STEP_5PS_M,
+        case5,
+        chirps=(1.0, -1.0),
+        walkoff=case5["walkoff"](1.0),
+        coupling="incoherent",
+        length_m=L5,
+        step_m=STEP_5PS_M,
     )
     c_th = abs(case5["beta2_s2_per_m"]) * L5 / case5["T0"]
     x = (grid.t - c_th) * 1e12
@@ -574,9 +640,14 @@ def _plot_filaments(case5: dict, case250: dict, out_paths: dict) -> None:
     # Eq. (10), tau = 250 fs, delta = 0.1, coherent FWM (R delta = 70)
     db = case250["delta_beta_fwm"](0.1, R_250FS)
     gridf, engf, pxf, pyf = filament_run(
-        case250, chirps=(0.1, -0.1), walkoff=case250["walkoff"](0.1),
-        coupling="coherent", length_m=Lf, step_m=STEP_250FS_M,
-        delta_beta=db, t_half_ps=2.0,
+        case250,
+        chirps=(0.1, -0.1),
+        walkoff=case250["walkoff"](0.1),
+        coupling="coherent",
+        length_m=Lf,
+        step_m=STEP_250FS_M,
+        delta_beta=db,
+        t_half_ps=2.0,
     )
     c_thf = 0.1 * abs(case250["beta2_s2_per_m"]) * Lf / case250["T0"]
     fxf = np.abs(engf.evolution_x[-1].envelope_field) ** 2
@@ -615,6 +686,7 @@ def _plot_filaments(case5: dict, case250: dict, out_paths: dict) -> None:
 
 def _plot_split_map(out: dict) -> None:
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
@@ -624,10 +696,10 @@ def _plot_split_map(out: dict) -> None:
     sep_lin = np.asarray(out["separations_linear_ps"])
     d_star = 0.04
     ax.plot(d, sep_lin, "k--", lw=1.2, label="linear reference (γ = 0)")
-    ax.plot(d, sep, "o-", lw=1.4,
-            label="nonlinear coupled GNLSE (locked pair)")
-    ax.axvline(d_star, color="C3", lw=1.0,
-               label="paper linear-split threshold δ* = 0.04")
+    ax.plot(d, sep, "o-", lw=1.4, label="nonlinear coupled GNLSE (locked pair)")
+    ax.axvline(
+        d_star, color="C3", lw=1.0, label="paper linear-split threshold δ* = 0.04"
+    )
     ax.axhline(10.0, color="gray", lw=0.6, alpha=0.5, label="2 × FWHM")
     ax.set_yscale("log")
     ax.set_xlabel("normalized walk-off δ")
