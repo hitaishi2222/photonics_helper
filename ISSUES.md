@@ -922,10 +922,13 @@ Full numbers: `reproductions/heidt_2009_adaptive_step/diagnostics/arbitration_ta
    closed). P2 (Tomlinson) was optional and was reproduced from the derived
    criterion (`PLAN.md` §1b).
 3. **`REPORT.md` / `REVIEW.md` reproduction tables** — refreshed at the end of each
-   reproduction batch (`PLAN.md` checklist item): 2026-09-30 and again 2026-10-02
-   for the Hult/Heidt close-out, including the inventory caveat for the three
-   unregistered folders (`shg_lnoi_shg`, `poletti_2008_multimode`,
-   `dudley_2014_breathers_review`).
+   reproduction batch (`PLAN.md` checklist item): 2026-09-30, 2026-10-02 for the
+   Hult/Heidt close-out (including the inventory caveat for the three
+   unregistered folders — `shg_lnoi_shg` is now registered with recorded
+   caveats, and `poletti_2008_multimode` / `dudley_2014_breathers_review` are
+   documented as reference-only), and again on 2026-10-02 for the #1/#6/#8
+   close-out. **Done**; the refreshes are recorded as dated sections in both
+   files.
 
 ---
 
