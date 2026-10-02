@@ -944,6 +944,8 @@ class SplitStepEngine:
 
         P_NL = self._nl_intensity(intensity, h_R_fft)
 
+        P_inst: NDArray | None
+        P_del: NDArray | None
         if self.conserving_shock:
             # pcGNLSE (ISSUES.md #1): split the nonlinear amplitude into the
             # instantaneous (SPM, signed γ) and delayed-Raman (|γ|) pieces;
@@ -963,7 +965,8 @@ class SplitStepEngine:
             )
             g_r = abs(gamma)
         else:
-            P_inst = P_del = None  # unused
+            P_inst = None  # unused
+            P_del = None  # unused
             g_r = gamma
 
         if self.include_self_steepening:
@@ -1002,12 +1005,13 @@ class SplitStepEngine:
 
             # Symmetric (Strang) split: half the exact Kerr/Raman phase, the
             # full shock correction, then the trailing half phase.
+            half_phase: NDArray
             if self.conserving_shock:
                 assert P_inst is not None and P_del is not None  # narrowed above
                 half_phase = (0.5j * gamma * P_inst + 0.5j * abs(gamma) * P_del) * dz
             else:
                 half_phase = 0.5j * gamma * P_NL * dz
-            A_state = A * np.exp(half_phase)
+            A_state: NDArray = np.asarray(A * np.exp(half_phase), dtype=complex)
 
             # Substep so the shock-induced change per substep stays small.
             # Only the shock term is resolved; the stiff phase is analytic, so

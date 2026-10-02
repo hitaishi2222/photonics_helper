@@ -24,14 +24,14 @@ print(wl.to_energy().as_eV)  # 0.8 eV
 ```
 
 See the [full quick start](quickstart.md) for a GNLSE run and the
-[API Reference](api.md) for the module map.
+[API Reference](api/index.md) for the module map.
 
 ## Where to go next
 
 - **[Install](install.md)** — extras (`fftw`, `webapp`, …) and FFT backends.
 - **[Foundation core](core.md)** — the stable primitives other projects build on.
 - **[Quick start](quickstart.md)** — first pulses through the solvers.
-- **[API Reference](api.md)** — every public module, one page per module.
+- **[API Reference](api/index.md)** — every public module, one page per module.
 - **[Reproductions](reproductions.md)** — validated literature results.
 - The [README](https://github.com/hitaishi2222/photonics_helper#readme) has the
   full feature tour and runnable `examples/`.
