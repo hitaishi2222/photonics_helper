@@ -6,6 +6,12 @@ Demonstrates how an optical pulse interacts with a Raman-active medium.
 Computes the nonlinear polarization P_NL(t) = n₂ · (R(t) ⊗ I(t)) via
 FFT-based convolution of the pulse intensity with the Raman response.
 
+The Raman response used here is the house two-exponential model; for a material
+with a resolved multi-phonon spectrum the same convolution runs against a
+`PhononResponse` built from an explicit `PhononMode` list instead — see
+[`41_multi_phonon_raman.py`](41_multi_phonon_raman.py) for that comparison and
+for the per-material deviations.
+
 When an intense pulse propagates through a Raman-active material:
 1. The pulse intensity I(t) = |E(t)|² drives the nonlinear polarization
 2. The instantaneous (Kerr) component responds immediately with the pulse

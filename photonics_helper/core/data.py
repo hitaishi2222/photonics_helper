@@ -344,6 +344,22 @@ class MaterialsDatabase:
         conn.close()
         return [row[0] for row in rows]
 
+    def list_nk_materials(self) -> list[str]:
+        """SELECT DISTINCT material FROM nk_data.
+
+        Returns
+        -------
+        list of material names in the nk_data table
+        """
+        conn = self._connect()
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT DISTINCT material FROM nk_data ORDER BY material")
+        rows = cursor.fetchall()
+
+        conn.close()
+        return [row[0] for row in rows]
+
     def get_provenance(self, source_key: str) -> dict | None:
         """Fetch the provenance record for a source key.
 

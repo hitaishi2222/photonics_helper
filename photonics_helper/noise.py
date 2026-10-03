@@ -235,15 +235,22 @@ def raman_noise_field(
     Gaussian with variance ``σ² = (ℏω₀/2)·Im[h̃_R]·(n_th+1)·(2π/Δω)``, shaped by the
     (positive) Raman gain ``Im[h̃_R]`` — bins with ``Im[h̃_R] ≤ 0``
     (anti-Stokes side) carry no spontaneous Stokes seed. ``n_th`` is the
-    thermal phonon occupation ``1/(exp(ℏΩ_R/k_B T) − 1)`` (Boer, *Quantum
+    thermal phonon occupation ``1/(exp(ħΩ_R/k_B T) − 1)`` (Boer, *Quantum
     Optics* / Shen, *The Principles of Nonlinear Optics*, Ch. 7);
-    ``n_th + 1 = 1/(1 − exp(−ℏΩ_R/k_B T))`` is the spontaneous + stimulated
+    ``n_th + 1 = 1/(1 − exp(−ħΩ_R/k_B T))`` is the spontaneous + stimulated
     emission factor of the quantum Langevin treatment (Drummond & Hardman,
-    *Eur. Phys. J. D* **21**, 49 (2003)). At optical frequencies and room
-    temperature ``n_th ≪ 1`` for all Raman shifts of interest, so the
-    semi-classical limit ``n_th + 1 → 1`` is accurate; the factor is kept
-    explicit (parameter ``temperature``) so mid-IR or cryogenic studies can
-    resolve it.  The ``2π/Δω``
+    *Eur. Phys. J. D* **21**, 49 (2003)).
+
+    **Note on ``n_th``:** at silica's 440 cm⁻¹ Raman shift the energy is
+    ``ħΩ_R/k_B = 96 K``, so at 300 K ``n_th = 0.138`` and ``n_th + 1 = 1.138``;
+    at 600 K it is ``0.534`` / ``1.534``. The Bose factor is a 35 % correction
+    at room temperature — not a negligible one. The semi-classical ``n_th → 0``
+    limit needs ``T ≫ 96 K``. The factor is built from ``grid.w`` in **rad/s**,
+    while Raman shifts are quoted in Hz or cm⁻¹ — evaluating it at 13.2 THz
+    instead of ``2π × 13.2 THz`` misprices the floor by 2.8× in the variance
+    ratio. The factor is applied per bin at each bin's ``|Ω|``, so it runs
+    from ~625 in the first bin down to ~1 far out, and the product
+    ``Im[h̃_R]·(n_th+1)`` — not either factor alone — is what a bin receives.  The ``2π/Δω``
     factor is the grid's FFT-pair normalization (``fft(A) = raw_fft(A)·dt``,
     ``ifft(A_w) = raw_ifft(A_w)/dt``): it makes the time-domain noise
     variance ``ℏω₀/(2·dt)·Im[h̃_R]``, i.e. PSD ``ℏω₀/2`` per unit angular

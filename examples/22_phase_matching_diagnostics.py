@@ -8,6 +8,28 @@ Demonstrates:
 - Simulation readiness assessment
 - Spectrum overlay with PM predictions
 
+Everything here is the *single-mode* phase-matching picture: one pump, one
+signal, one idler in one polarization. The MI gain's carrier-offset contract — which ``beta_fn_convention`` value
+means what, and the float64 cancellation the offset-aware forms avoid — is in
+[`examples/40_mi_gain_offset_convention.py`](40_mi_gain_offset_convention.py),
+paired with the classical closed forms in
+[`examples/26_mi_gain_convention.py`](26_mi_gain_convention.py).
+
+For the multimode version — per-mode
+dispersion, `group_delays` walk-off, the `N×N` `xpm_weights` / `N×N×N×N`
+`fwm_weights` overlap tensors, `phase_offsets` quasi-phase matching, and the
+`oam_l` angular-momentum gate that decides which inter-modal FWM triplets are
+allowed — see
+[`examples/38_multimode_fewmode_gnlse.py`](38_multimode_fewmode_gnlse.py),
+which builds that engine one parameter at a time.
+
+This example is diagnostic only: it tells you whether a wavelength is phase
+matched, not what device reaches a target. The design counterpart —
+``design_efficiency`` (forward: efficiency in, device length out) and
+``fit_two_wave`` (inverse: measured η(z) in, κ and Δk out, with the ``bounds``
+arguments carrying the well-posedness) — is in
+[`examples/42_inverse_design_qpm_fwm.py`](42_inverse_design_qpm_fwm.py).
+
 Run with: python examples/22_phase_matching_diagnostics.py
 """
 

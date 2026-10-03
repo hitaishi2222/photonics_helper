@@ -15,6 +15,13 @@ powers or for ultrashort pulses:
    to 1/ω₀, so it matters more at shorter wavelengths.
 
 This example compares propagation with and without these effects.
+
+For the self-steepening term specifically -- what the shock operator is, the
+``conserving_shock=True`` (photon-conserving) variant, and the grid guard that
+tells you when the shock term is under-resolved -- see
+``39_conserving_shock_self_steepening.py``. Note that this example's grids do
+not satisfy ``τ_shock·Ω_max ≤ 0.2``, so the runs below illustrate the
+mechanism rather than a converged shock result.
 """
 
 import matplotlib

@@ -517,3 +517,15 @@ class RamanSpec:
             return cls(name=name, **fallback)
 
         raise ValueError(f"Material '{name}' not found in database or fallback")
+
+    @classmethod
+    def model_fields(cls) -> dict:
+        """Pydantic v2-style field introspection.
+
+        ``RamanSpec`` is a ``pydantic.dataclasses.dataclass``, not a
+        ``BaseModel``, so the v2 ``model_fields`` attribute is absent. This
+        classmethod provides the same interface by returning the dataclass
+        fields dict, so callers can write ``RamanSpec.model_fields()``
+        uniformly across pydantic v1/v2 styles.
+        """
+        return cls.__dataclass_fields__

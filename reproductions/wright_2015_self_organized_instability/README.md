@@ -83,6 +83,15 @@ normal-dispersion regime. Good reproduction targets:
 - Large mode number: paper's own PDE/work uses ~40 OAM modes per radial family —
   use the ℓ-gated triplet formalism (`oam_l=` for the engine) to keep costs sane:
   our engine supports per-mode `betas` differing in `group_delays` and OAM-ℓ.
+  **Caveat (ISSUES.md #15):** `oam_l=` buys *selection*, not speed. This folder
+  passes `oam_l=[0, 0, 0]`, and with all labels equal the rule
+  `ℓ_m = ℓ_n + ℓ_p − ℓ_q` holds for every triplet — the gate is exactly the
+  `oam_l=None` fallback and cuts nothing. It never reduces the engine's work,
+  only the number of permitted exchanges. For a real ~40-mode reduction you
+  have to drop modes (or use the analytic block this folder uses); the runnable
+  A/B is
+  [`examples/38_multimode_fewmode_gnlse.py`](../../examples/38_multimode_fewmode_gnlse.py),
+  rung 5.
 - For the linear MI prediction our existing single-mode `mi_gain_spectrum` may
   need a *multimode* partner: implement `mm_mi_gain_spectrum(...)` inside the
   reproduction script (small dense linear stability study around the seeded

@@ -1000,6 +1000,16 @@ class Wave:
             :meth:`with_effective_area` (using
             ``P = ½·n·c·ε₀·A_eff·|A|²``); otherwise ``max|A|²`` in normalized
             envelope units and a one-time :class:`UserWarning` is emitted.
+
+        **Unit hazard:** the return value changes by many orders of
+        magnitude depending on whether ``A_eff`` is attached. For a field
+        built as ``sqrt(5.0)``, ``peak_power()`` returns ``5.0`` without an
+        effective area and ``5.3e-13`` with one — the same field, 13 orders
+        of magnitude apart. ``add_ase_noise`` defaults ``reference_power``
+        to ``wave.peak_power()``, so passing a wave with an effective area
+        to one without silently changes the ASE level by 13 orders of
+        magnitude. Always check which convention you are in before using
+        the result.
         """
         A = self.envelope_field
         peak_intensity = float(np.max(np.abs(A) ** 2))

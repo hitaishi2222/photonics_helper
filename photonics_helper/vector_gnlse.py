@@ -100,8 +100,10 @@ class VectorSplitStepEngine:
     betas : array_like, optional
         Taylor coefficients ``[β₂, β₃, …]`` used by *both* axes.
     betas_x, betas_y : array_like, optional
-        Per-axis dispersion (overrides *betas*). ``betas_y`` defaults to
-        ``betas_x`` (degenerate axes) when only ``betas_x`` is given.
+        Per-axis dispersion (overrides *betas*). If only ``betas_x`` is
+        given, ``betas_y`` defaults to ``None`` and a ``ValueError`` is
+        raised — both axes must be specified explicitly (or use ``betas``
+        for degenerate axes).
     betas_unit : {"ps^k/m", "s^k/m", "SI"}
         Unit of the dispersion coefficients, as in the scalar engine.
     coupling : {"incoherent", "coherent", "manakov"}
@@ -117,6 +119,14 @@ class VectorSplitStepEngine:
           than the nonlinear length.
         * ``"manakov"`` — polarization-averaged model with the ``8/9``
           factor. Requires identical per-axis dispersion and zero walkoff.
+          **Note:** the ``8/9`` factor invites the reading that
+          ``"manakov"`` at γ *is* ``"incoherent"`` at ``8γ/9``. That is
+          true only when one channel is unpopulated (``P_y ≡ 0``): the
+          manakov phase rate is ``(8/9)·γ·(P_x + P_y)`` while incoherent
+          at ``γ'`` gives ``γ'·(P_x + (2/3)·P_y)`` — these agree for all
+          ``P_x, P_y`` only when ``P_y ≡ 0``. With both channels populated
+          they are different models, not a re-parameterisation of one
+          another.
     delta_beta : float
         Birefringent phase mismatch ``β_x − β_y`` (rad/m). ``"coherent"``
         only.

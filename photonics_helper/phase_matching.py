@@ -697,10 +697,10 @@ def mi_sideband_frequencies(
 
 
 def mi_gain_spectrum_extended(
-    beta_fn,
-    omega0: float,
-    gamma: float,
-    P: float,
+    beta_fn=None,
+    omega0: float = None,
+    gamma: float = None,
+    P: float = None,
     alpha: float = 0.0,
     L: float | None = None,
     omega_m: NDArray | None = None,
@@ -780,16 +780,6 @@ def mi_gain_spectrum_extended(
         elif beta_fn_convention == "detuning":
             beta2_est = _as_scalar((beta_fn(domega) + beta_fn(-domega)) / domega**2)
         else:
-            warnings.warn(
-                "mi_gain_spectrum_extended with beta_fn_convention='absolute' "
-                "evaluates β at the NIR carrier ω₀ where the float64 ULP "
-                "(~0.25 rad/s) swamps the physical mismatch Δ(Ω); pass per-"
-                "Taylor βₖ coefficients via betas= or use "
-                "beta_fn_convention='detuning' (β~(Ω) = β(ω₀+Ω) − β(ω₀)) for "
-                "an offset-free evaluation (ISSUES.md #2).",
-                DeprecationWarning,
-                stacklevel=2,
-            )
             beta2_est = _as_scalar(
                 (
                     beta_fn(omega0 + domega)
@@ -819,9 +809,12 @@ def mi_gain_spectrum_extended(
         D = beta_fn(omega_arr) + beta_fn(-omega_arr)
     else:
         warnings.warn(
-            "mi_gain_spectrum_extended: absolute-carrier β evaluation is "
-            "round-off-limited at NIR carriers (ISSUES.md #2); use betas= or "
-            "beta_fn_convention='detuning'.",
+            "mi_gain_spectrum_extended with beta_fn_convention='absolute' "
+            "evaluates β at the NIR carrier ω₀ where the float64 ULP "
+            "(~0.25 rad/s) swamps the physical mismatch Δ(Ω); pass per-"
+            "Taylor βₖ coefficients via betas= or use "
+            "beta_fn_convention='detuning' (β~(Ω) = β(ω₀+Ω) − β(ω₀)) for "
+            "an offset-free evaluation (ISSUES.md #2).",
             DeprecationWarning,
             stacklevel=2,
         )

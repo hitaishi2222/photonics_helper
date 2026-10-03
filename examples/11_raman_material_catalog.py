@@ -9,6 +9,12 @@ Highlights:
 - Materials ranked by Raman shift, n2, and gain coefficient
 - Category-based overlays from COMMON_COMPARISONS
 - Side-by-side spectra for different material families
+
+Companion: [`43_material_catalog_query.py`](43_material_catalog_query.py) is
+the programmatic counterpart of this gallery — it shows how to *query*
+`material_catalog()` (filters on kind/axis/wavelength band, the meaning of each
+`MaterialDataset` field, provenance coverage per dataset, and a consistency
+smoke test) where this one draws the Raman-relevant subset for a human.
 """
 
 import matplotlib
