@@ -524,7 +524,6 @@ class RefractiveIndex:
             # that themselves contain hyphens (e.g. "si3n4-vogt-1-91" →
             # material "si3n4" + author "vogt-1-91").
             canonical = None
-            author = None
             # Build candidate prefixes from longest to shortest
             parts = material.split("-")
             for i in range(len(parts), 0, -1):
@@ -532,7 +531,6 @@ class RefractiveIndex:
                 resolved = cls._resolve_canonical_name(candidate, db)
                 if resolved is not None:
                     canonical = resolved
-                    author = "-".join(parts[i:]) if i < len(parts) else ""
                     break
             if canonical is None:
                 raise ValueError(
