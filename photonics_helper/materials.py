@@ -262,6 +262,9 @@ class RefractiveIndex:
         return cls(n=np.real(nk), k=np.imag(nk), wl=wl)
 
     def _validate_range(self, wavelength: float):
+        # Accept Wavelength objects by extracting the numeric value in μm
+        if hasattr(wavelength, 'as_um'):
+            wavelength = wavelength.as_um
         if not (self._wl_min <= wavelength <= self._wl_max):
             raise ValueError(
                 f"Index valid only between {self._wl_min} μm and {self._wl_max} μm"
@@ -269,16 +272,22 @@ class RefractiveIndex:
 
     def n_func(self, wavelength: float) -> float:
         """Interpolated real refractive index n at wavelength (μm)."""
+        if hasattr(wavelength, 'as_um'):
+            wavelength = wavelength.as_um
         self._validate_range(wavelength)
         return float(self._n_spline(wavelength).item())
 
     def k_func(self, wavelength: float) -> float:
         """Interpolated extinction coefficient k at wavelength (μm)."""
+        if hasattr(wavelength, 'as_um'):
+            wavelength = wavelength.as_um
         self._validate_range(wavelength)
         return float(self._k_spline(wavelength).item())
 
     def nk_func(self, wavelength: float) -> complex:
         """Interpolated complex refractive index n+ik at wavelength (μm)."""
+        if hasattr(wavelength, 'as_um'):
+            wavelength = wavelength.as_um
         self._validate_range(wavelength)
         return complex(
             self._n_spline(wavelength).item(), self._k_spline(wavelength).item()
@@ -286,6 +295,8 @@ class RefractiveIndex:
 
     def dn_dlambda(self, wavelength: float) -> float:
         """Derivative dn/dλ at a scalar wavelength (μm). Returns value in μm⁻¹."""
+        if hasattr(wavelength, 'as_um'):
+            wavelength = wavelength.as_um
         self._validate_range(wavelength)
         return float(self._dn_spline(wavelength).item())
 
@@ -414,9 +425,14 @@ class RefractiveIndex:
     @classmethod
     def _resolve_canonical_name(cls, prefix: str, db: "RamanDatabase") -> str | None:
         """Resolve a (possibly lower-cased) material prefix to its canonical
-        ``raman_specs`` name, matching case-insensitively. Returns None if no
-        material matches."""
+        name, matching case-insensitively. Checks both ``raman_specs`` and
+        ``nk_data`` tables. Returns None if no material matches."""
+        # Check raman_specs first (canonical source)
         for name in db.list_materials():
+            if name.lower() == prefix.lower():
+                return name
+        # Fall back to nk_data materials
+        for name in db.list_nk_materials():
             if name.lower() == prefix.lower():
                 return name
         return None
@@ -503,11 +519,24 @@ class RefractiveIndex:
             # A plain canonical material name (e.g. "N-BK7", "Silica").
             pass
         elif "-" in material:
-            prefix, _author = material.rsplit("-", 1)
-            canonical = cls._resolve_canonical_name(prefix, db)
+            # Longest-known-material-prefix match: try the full key first,
+            # then progressively shorter prefixes. This handles author fields
+            # that themselves contain hyphens (e.g. "si3n4-vogt-1-91" →
+            # material "si3n4" + author "vogt-1-91").
+            canonical = None
+            author = None
+            # Build candidate prefixes from longest to shortest
+            parts = material.split("-")
+            for i in range(len(parts), 0, -1):
+                candidate = "-".join(parts[:i])
+                resolved = cls._resolve_canonical_name(candidate, db)
+                if resolved is not None:
+                    canonical = resolved
+                    author = "-".join(parts[i:]) if i < len(parts) else ""
+                    break
             if canonical is None:
                 raise ValueError(
-                    f"Unknown material '{prefix}' in '{material}'. "
+                    f"Unknown material in '{material}'. "
                     "Known materials: "
                     f"{', '.join(db.list_materials())}"
                 )

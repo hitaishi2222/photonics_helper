@@ -130,3 +130,15 @@ halves ±walkoff/2 → incoherent Kerr step → rotate back.
 - `reproduce.py` — Checks 1–4 (`validate()` returns all metrics) and figures
   `fig1_shadow.png`, `fig2_delay.png`, `fig3_width.png`, `fig4_power.png`.
 - `OL.16.001231.pdf`, `pages/` — source (local only, do not commit).
+
+## Before this deck: the conceptual example
+
+This reproduction is written to check four numbers against four figures of one
+letter, and it assumes you already know what `coupling="manakov"`, `walkoff`
+and `RandomBirefringenceEngine` mean. The conceptual introduction to those is
+[`examples/37_vector_polarization_gnlse.py`](../../examples/37_vector_polarization_gnlse.py):
+the same input pushed through `coupling="incoherent"`, `"coherent"` and
+`"manakov"` side by side, the `MANAKOV_FACTOR = 8/9` rescaling checked
+directly, `delta_beta` and `walkoff` swept independently, and polarisation
+trajectories on the Poincaré sphere for seeded random realisations. Read that
+first; this deck then only has to worry about the paper.

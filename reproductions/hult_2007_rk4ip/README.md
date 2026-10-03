@@ -75,6 +75,13 @@ which imports this module.
   (τ₁ = 12.2 fs, τ₂ = 32 fs, f_R = 0.18) rather than the paper's
   Hollenbeck–Cantrell modal sum. With the fix above this is demonstrably
   *not* the limiting factor — the shift is already 13× the assertion.
+  **How big is the substitution?** Quantified in
+  [`examples/41_multi_phonon_raman.py`](../../examples/41_multi_phonon_raman.py):
+  a 5-mode silica `PhononResponse` built from the same band differs from the
+  two-exponential `h_R` by **0.74** in max relative deviation (74 % of the
+  two-exponential peak), while a *one*-mode list reproduces it to 2.5e-15. So
+  the modal sum is a materially different response function here — which is
+  why it is worth stating that this deck's claim does not rest on it.
 - **Deck B convergence ladder runs on a 2 cm section**, not the full 10 cm.
   The five-soliton cascade is chaotically sensitive on that scale: per
   doubling at 0.1 m the error goes 1.4e-2, 1.0e-2, 2.3e-3, 1.5e-3, 2.6e-4,

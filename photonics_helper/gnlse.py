@@ -613,6 +613,15 @@ class SplitStepEngine:
         835 nm). Pass an explicit value for the effective-area-corrected
         timescale (Dudley–Genty–Coen RMP 78, 1135 (2006), Sec. V.B:
         ``tau_shock = 0.56e-15`` for the Fig. 3 PCF config). Must be > 0.
+    conserving_shock : bool
+        Enable the photon-conserving (pcGNLSE) shock operator. Default
+        ``False``. The modification substitutes ``|γ|`` for ``γ`` on the
+        delayed (Raman) arm only; the instantaneous SPM/SS arm keeps the
+        signed ``γ``. **Note:** for any fiber with ``γ > 0`` (every ordinary
+        dielectric), ``abs(gamma) == gamma`` and the two paths are identical
+        — the flag is a no-op. It only has an effect when ``γ < 0`` (the
+        sign bench used in ``reproductions/huang_202x_pcgnlse_attractors/``).
+        Requires ``include_raman=True`` and a Raman response.
     step_size : Length | None
         Fixed step size (m). If None, adaptive stepping is used.
     min_shrink_factor : float
@@ -718,6 +727,15 @@ class SplitStepEngine:
         The familiar "≈5–6 % shock drift" is therefore a *grid-validity*
         artifact, not an integrator or conservation-law defect — so the honest
         response is to tell the caller, not to silently absorb the error.
+
+        **Resolution floor:** with the default ``τ_shock = 1/ω₀`` and the
+        Taylor limit ``τ_shock·Ω_max ≤ 0.2``, the grid must satisfy
+        ``dt = π/Ω_max ≥ π/(0.2·ω₀)`` — about 12.9 fs at 1550 nm and 7.1 fs
+        at 850 nm. This means a self-steepening run cannot resolve a
+        femtosecond pulse: a 28.4 fs pulse sampled every 7 fs is four points
+        wide, and a 100 fs pulse ~8. This is the likely root cause of the
+        recorded deviation in ``reproductions/hult_2007_rk4ip/`` (shock
+        disabled for its 850 nm / 28.4 fs deck).
         """
         omega_max = float(self.grid.omega_max)
         omega0 = float(self.omega0)
@@ -899,8 +917,8 @@ class SplitStepEngine:
         if h_R_fft is None:
             return np.zeros_like(intensity, dtype=float)
         fR = _response_fR(self.fiber.raman_response)
-        return fR * np.asarray(
-            self.grid.ifft(h_R_fft * self.grid.fft(intensity)), dtype=float
+        return fR * np.real(
+            self.grid.ifft(h_R_fft * self.grid.fft(intensity))
         )
 
     def _get_h_R_fft(self) -> NDArray:
@@ -995,9 +1013,8 @@ class SplitStepEngine:
                 )
             fR0 = float(_response_fR(self.fiber.raman_response))
             P_inst = (1.0 - fR0) * intensity
-            P_del = fR0 * np.asarray(
-                self.grid.ifft(h_R_fft * self.grid.fft(intensity)),
-                dtype=float,
+            P_del = fR0 * np.real(
+                self.grid.ifft(h_R_fft * self.grid.fft(intensity))
             )
             g_r = abs(gamma)
         else:

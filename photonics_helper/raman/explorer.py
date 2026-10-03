@@ -1304,7 +1304,7 @@ class MaterialComparison:
             )
 
             if spec.raman_shift_Hz > 0:
-                tau1_fs = (1.0 / spec.raman_shift_Hz) * 1e15
+                tau1_fs = (1.0 / (2 * np.pi * spec.raman_shift_Hz)) * 1e15
                 tau1_str = f"{tau1_fs:.1f}"
             else:
                 tau1_str = "N/A"

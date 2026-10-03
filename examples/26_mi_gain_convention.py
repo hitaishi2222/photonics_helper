@@ -19,6 +19,13 @@ Also demonstrates the exact extended (full β(ω)) gain
 ``g(Ω) = √[−Δ(Ω)(Δ(Ω) + 4γP)]`` with the un-doubled even dispersion mismatch
 ``Δ(Ω) = β(ω₀+Ω) + β(ω₀−Ω) − 2β(ω₀)``, which reduces *exactly* to the
 classical result under a Taylor expansion of β(ω).
+
+Companion example: [`40_mi_gain_offset_convention.py`](40_mi_gain_offset_convention.py)
+covers what this one does not — the ``beta_fn_convention`` contract of
+``mi_gain_spectrum_extended`` itself. This file establishes the classical
+closed forms; that one shows the offset-aware path (and the round-off-limited
+absolute one) reproducing them, and shows the cancellation the ``betas=`` /
+``"detuning"`` contracts avoid.
 """
 
 import matplotlib

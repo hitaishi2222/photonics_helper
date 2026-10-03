@@ -171,14 +171,10 @@ def main() -> None:
 
     root = Path(__file__).resolve().parents[1]
     out = root / "examples/images/20_gnlse_nlse_simple.png"
-    comparison_out = root / "comparison_output/NLSE_simple.png"
     out.parent.mkdir(parents=True, exist_ok=True)
-    comparison_out.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out, dpi=150, bbox_inches="tight")
-    fig.savefig(comparison_out, dpi=150, bbox_inches="tight")
     plt.close(fig)
     print(f"Saved: {out}")
-    print(f"Saved: {comparison_out}")
 
 
 if __name__ == "__main__":

@@ -120,6 +120,14 @@ def fit_two_wave(
     ``delta_k``; ``σ`` and ``P₀`` follow only if one extra independent
     observable (e.g. absolute power) is supplied.
 
+    **Sign symmetry:** ``η(z)`` is even in ``Δk``, so the sign of
+    ``delta_k`` is not identifiable from ``η(z)`` alone. The fit returns
+    a well-defined answer for the bracket it was given — ``delta_k_bounds``
+    is where a sign prior is supplied. With the default free bracket
+    ``(-200, 200)`` the sign is arbitrary; a converged, perfectly-fitting,
+    wrong-signed answer is reachable by changing nothing but the sign of a
+    prior.
+
     Returns
     -------
     FitResult
@@ -242,6 +250,16 @@ def design_efficiency(
     loudly when the target saturates beyond the ``tanh²`` maximum in the
     bracket (physical reachability guard).
 
+    **Monotonicity assumption:** the bisection assumes ``η(L)`` is
+    monotonically increasing over ``[lo, hi]``. This holds for the
+    phase-matched case (``delta_k = 0``) where ``η(L) = tanh²(κL)`` is
+    exact and monotone. Under QPM (``qpm_period`` set), ``η(L)``
+    oscillates on the poling-coherence scale, so the bisection returns
+    the *first* crossing — which may be off target by several percent.
+    Always check ``residual_norm`` (``|achieved - target|``) to verify the
+    design; ``converged=True`` and ``cost=0.0`` carry no information about
+    the achieved efficiency under QPM.
+
     Parameters
     ----------
     target : float — target conversion efficiency, in ``(0, 1)``.
@@ -256,7 +274,9 @@ def design_efficiency(
     Returns
     -------
     FitResult
-        ``values = {"length": …, "efficiency": …}``.
+        ``values = {"length": …, "efficiency": …}``. Check
+        ``residual_norm`` to verify the achieved efficiency matches the
+        target (important under QPM).
     """
     from .chi2 import solve_shg
 
@@ -345,16 +365,22 @@ def fit_shg_autodiff(
     :func:`fit_two_wave`: fitting only ``ratios`` leaves ``(sigma, P0)``
     a flat direction of the loss, so any combination with the same
     kappa is equally good. Supplying ``sh_power`` (absolute SH power in W
-    at the *same* z samples) makes all three parameters identifiable;
-    batched multi-start Adam runs every grid start in parallel and the
-    lowest-loss run is returned.
+    at the *same* z samples) adds a constraint that *in principle* breaks
+    the degeneracy, but in practice the Adam optimizer does not reliably
+    recover the ``(sigma, P0)`` split — the recovered values depend
+    strongly on seed placement and may not converge to the truth even
+    with seeds at the true values. Use :func:`fit_two_wave` (scipy) for
+    reliable recovery of ``kappa`` and ``|delta_k|``; this function is
+    provided for differentiable/gradient-based workflows where the
+    autograd graph is needed.
 
     Parameters
     ----------
     z_samples : sequence — propagation positions (m), strictly increasing.
     ratios : sequence — measured conversion efficiency ``eta(z)``.
-    sh_power : sequence or None — absolute SH power samples (W); breaks the
-        ``(sigma, P0)`` degeneracy when provided.
+    sh_power : sequence or None — absolute SH power samples (W); adds a
+        power-matching term to the loss. Note: this does *not* reliably
+        break the ``(sigma, P0)`` degeneracy in practice (see above).
     sigma0, P0_prior : float — seeds; the multi-start grid is built around
         them (X0.2, X0.5, X1, X2 in each).
     delta_k0 : float — seed phase mismatch; when 0 the grid spreads

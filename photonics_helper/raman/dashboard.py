@@ -282,7 +282,7 @@ def register_callbacks(dash_app, *, dcc, html, Input, Output, State):
         spec = RamanSpec.from_database(selected_material)
         # Auto-derived tau1/tau2 from the material
         if spec.raman_shift_Hz > 0:
-            auto_tau1_fs = (1.0 / spec.raman_shift_Hz) * 1e15
+            auto_tau1_fs = (1.0 / (2 * np.pi * spec.raman_shift_Hz)) * 1e15
         else:
             auto_tau1_fs = 0.0
         if spec.linewidth_Hz > 0:

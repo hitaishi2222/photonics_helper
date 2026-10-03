@@ -25,6 +25,13 @@ configuration* (the "research-first" validation stance of this library):
 The checks raise :class:`ValidationFailure` when the documented tolerance is
 exceeded, so they can be wired directly into application-level test suites.
 
+Worked example: ``examples/35_gnlse_validation_harness.py`` runs all four
+checks, prints each measured metric beside the closed form it is compared
+against, runs :func:`convergence_study` over a ``z``-step ladder (including
+the mapping form of ``observables``), and demonstrates both failure paths — an
+under-resolved ladder with ``converged=False`` rows and a caught
+:class:`ValidationFailure`.
+
 Importing this module pulls the solver stack only — no plotting backends.
 """
 

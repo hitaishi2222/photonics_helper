@@ -20,6 +20,18 @@ For Silica (the most common fiber material):
   - τ1 (1/(2π·ν_R)) ≈ 12.2 fs
   - τ2 (damping time, 1/(π·Δν)) ≈ 236 fs
   - fR (Raman fraction) = 0.18
+
+Companion example: [`41_multi_phonon_raman.py`](41_multi_phonon_raman.py) builds
+the same quantity from an explicit `PhononMode` list (`PhononResponse`) instead
+of the two-exponential house model, decomposes the sum per mode, and prints how
+far apart the two models are for every database material that ships a mode
+list — the number this page does not give.
+
+This response is the *deterministic* half of the Raman physics. Its stochastic
+counterpart — the spontaneous-Raman field built from the same ñ_R times a
+Bose occupation — is `photonics_helper.noise.raman_noise_field`, demonstrated
+in ``36_noise_ase_raman.py``: run that example after this one to see the thermal
+floor that the deterministic curve does not carry.
 """
 
 import matplotlib

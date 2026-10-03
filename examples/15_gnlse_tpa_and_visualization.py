@@ -11,6 +11,11 @@ provided by the GNLSE module:
 
 - **Visualization**: the module provides waterfall plots, spectrum-vs-distance
   plots, and intensity-metrics plots for analyzing propagation results.
+
+Note that a waterfall of a steepening pulse does not tell you *where* it
+broke. For that, see [`examples/34_wave_breaking_theory.py`](34_wave_breaking_theory.py),
+which marks the analytic folding distance against what the onset detectors
+actually report.
 """
 
 import matplotlib

@@ -10,9 +10,11 @@ Demonstrates the full workflow:
   4. Feed β(ω, z) into ``TaperedGNLSESolver`` for supercontinuum generation
 
 Physical model: a silicon nitride (SiN) ridge waveguide whose core width
-narrows linearly from 1.2 µm → 0.5 µm over 20 mm, shifting the
-zero-dispersion wavelength (ZDW) from ~1100 nm (anomalous) to ~1750 nm
-(normal) — the pump at 1550 nm rides through anomalous → normal dispersion.
+narrows linearly from 1.2 µm → 0.5 µm over 20 mm. For this geometry the FEM
+solution gives normal dispersion at 1550 nm whose magnitude grows as the core
+narrows (β₂ ≈ +0.68 → +2.4 ps²/m over the taper), so the pump rides through a
+progressively more dispersive guide; there is no zero-dispersion crossing inside
+the 0.8–2.5 µm window and the ZDW panel reports that honestly.
 """
 
 from __future__ import annotations
@@ -116,11 +118,15 @@ def compute_neff_wavelengths(
 
     neff = np.empty(len(wavelengths_um))
     for i, wl_um in enumerate(wavelengths_um):
-        wl_m = wl_um * 1e-6
+        # The mesh is built in micrometres, so the wavelength must be passed in
+        # micrometres too: femwell assumes mesh and wavelength share units.
+        # Mixing them (mesh µm, wavelength m) leaves the structure effectively
+        # 10^6x larger than the wavelength, no mode is guided, and n_eff comes
+        # back constant in both λ and core width.
         modes = compute_modes(
             basis0,
             epsilon,
-            wavelength=wl_m,
+            wavelength=wl_um,
             num_modes=1,
             order=1,
             metallic_boundaries=False,
@@ -211,7 +217,10 @@ def extract_beta2_zdw(
     omega0 = 2 * PI * C_MS / (central_wl_nm * 1e-9)
     # Narrow range around pump, clipped to dispersion table bounds to avoid NaN
     omega_min, omega_max = min(zdep.omegas), max(zdep.omegas)
-    halfwidth = min(0.1e15, (omega_max - omega_min) / 2)
+    # Wide enough to span several table points around the pump (a 100-point
+    # 0.8-2.5 µm table is ~1.4e13 rad/s per step near 1550 nm) so the quadratic
+    # fit resolves β₂ rather than the table's own discretisation.
+    halfwidth = min(0.4e15, (omega_max - omega_min) / 2)
     omega_low = max(omega_min, omega0 - halfwidth)
     omega_high = min(omega_max, omega0 + halfwidth)
     omega_near = np.linspace(omega_low, omega_high, 200)
@@ -320,9 +329,9 @@ def main():
         central_wl_nm=1550.0,
     )
 
-    print(f"  β₂(0)     = {beta2_profile[0]:+.3f} ps²/m  (z = 0 mm, anomalous)")
+    print(f"  β₂(0)     = {beta2_profile[0]:+.3f} ps²/m  (z = 0 mm, wide end)")
     print(
-        f"  β₂(L)     = {beta2_profile[-1]:+.3f} ps²/m  (z = {z_mm[-1]:.0f} mm, normal)"
+        f"  β₂(L)     = {beta2_profile[-1]:+.3f} ps²/m  (z = {z_mm[-1]:.0f} mm, narrow end)"
     )
     for i, (z, b2, zd) in enumerate(zip(z_mm, beta2_profile, zdw_profile)):
         if not np.isnan(zd):
@@ -477,14 +486,32 @@ def main():
     print("\n" + "=" * 65)
     print(" Summary")
     print("=" * 65)
-    print(f"  β₂(z=0)    = {beta2_profile[0]:+.3f} ps²/m  (anomalous)")
-    print(f"  β₂(z=L)    = {beta2_profile[-1]:+.3f} ps²/m  (normal)")
+    print(f"  β₂(z=0)    = {beta2_profile[0]:+.3f} ps²/m  (wide end)")
+    print(f"  β₂(z=L)    = {beta2_profile[-1]:+.3f} ps²/m  (narrow end)")
     valid_zdw = zdw_profile[~np.isnan(zdw_profile)]
     if len(valid_zdw) >= 2:
         print(
-            f"  ZDW migration: {valid_zdw[0]:.0f} → {valid_zdw[-1]:.0f} nm (1100→1750 nm taper)"
+            f"  ZDW migration: {valid_zdw[0]:.0f} → {valid_zdw[-1]:.0f} nm across the taper"
         )
+    else:
+        print("  ZDW: none in the 0.8–2.5 µm window (dispersion is normal throughout)")
     print(f"  Energy drift: {drift:.4f}%")
+
+    # ── Checks ───────────────────────────────────────────────────────
+    problems = []
+    if not np.all(np.isfinite(beta2_profile)):
+        problems.append("β₂ profile contains non-finite values")
+    if np.all(np.abs(beta2_profile) < 1e-3):
+        problems.append(
+            "β₂ is numerically zero everywhere — the dispersion table carries no "
+            "wavelength dependence (check the femwell mesh/wavelength units)"
+        )
+    if drift > 5.0:
+        problems.append(f"energy drift {drift:.2f}% exceeds 5%")
+    if problems:
+        for p in problems:
+            print(f"  ✗ {p}")
+        raise SystemExit("checks FAILED")
     print("  All checks passed ✓")
 
 

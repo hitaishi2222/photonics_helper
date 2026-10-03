@@ -6,6 +6,15 @@
 > (arXiv:2607.05244v1, 6 Jul 2026). PDF: `huang_pcgnlse.pdf` (LOCAL-ONLY,
 > gitignored — do not commit). Page images in `pages/p-01..21.png`.
 
+## Runnable example
+
+`examples/39_conserving_shock_self_steepening.py` isolates the same
+discrimination at the SI-engine level: on a positive-γ fiber
+`SplitStepEngine(conserving_shock=True)` is a no-op (|γ| = γ, output fields
+agree to ~1e-14), and on the γ-sign bench below it cuts the accumulated
+self-frequency shift by 3.2× without reversing it. The same file drives the
+`_SHOCK_TAYLOR_LIMIT` grid guard that this reproduction's SI bench runs under.
+
 ## Why this paper (what solving it decides)
 
 This is the source paper of the opt-in photon-conserving shock operator we

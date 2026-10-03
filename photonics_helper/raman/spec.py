@@ -210,7 +210,7 @@ class RamanSpec:
         lines = [
             f"Material: {self.name}",
             f"Crystal: {self.crystal or 'N/A'}",
-            f"Bandgap: {self.bandgap_eV or 'N/A'} eV",
+            f"Bandgap: {self.bandgap_eV.as_eV:.4f} eV" if self.bandgap_eV else "Bandgap: N/A",
             f"n₂: {self.n2 or 'N/A'} m²/W",
             f"Raman shift: {self.raman_shift_cm} cm⁻¹ = {self.raman_shift_THz:.2f} THz",
             f"Linewidth: {self.raman_linewidth_cm} cm⁻¹ = {self.linewidth_THz:.2f} THz",
@@ -517,3 +517,15 @@ class RamanSpec:
             return cls(name=name, **fallback)
 
         raise ValueError(f"Material '{name}' not found in database or fallback")
+
+    @classmethod
+    def model_fields(cls) -> dict:
+        """Pydantic v2-style field introspection.
+
+        ``RamanSpec`` is a ``pydantic.dataclasses.dataclass``, not a
+        ``BaseModel``, so the v2 ``model_fields`` attribute is absent. This
+        classmethod provides the same interface by returning the dataclass
+        fields dict, so callers can write ``RamanSpec.model_fields()``
+        uniformly across pydantic v1/v2 styles.
+        """
+        return cls.__dataclass_fields__
