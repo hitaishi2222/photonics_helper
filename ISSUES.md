@@ -1,6 +1,18 @@
 # ISSUES — open problems verified against the current working tree
 
-> Audit date: **2026-09-21** (post-Krupa-GPI session). Method: every claim of
+> **Register state (2026-10-03): no entry is open-but-unexamined.** Every item
+> below is either **closed with a shipped change plus a regression check**
+> (#0, #1, #2, #3, #4, #6, #7, #8, #10, #11, #12, #13, #14, #15) or a
+> **recorded bounded deviation** carried in the relevant folder `README.md`
+> (Huang's dark-ansatz seam artifact and Case III Ω magnitude; Hult's
+> Hollenbeck–Cantrell Raman model; Heidt's chaos-limited ε ladder and
+> shock-free decks; Guasoni's band/edge readout normalisation; Poletti's
+> vectorial mode counts; the `shg_lnoi_shg` citation, which the **author must
+> confirm**). The only outstanding work is author-side process, entry **#5**
+> (Zenodo DOI + JOSS submission). Newest entries are at the bottom (#13–#15).
+>
+> Audit date of the original sweep: **2026-09-21** (post-Krupa-GPI session),
+> with per-entry resolution dates through 2026-10-03. Method: every claim of
 > an issue/problem/bug found in the repo's markdown files was re-checked
 > against the code and tests. Solved claims were updated in place where they
 > are documented (see the per-file status notes; also `REVIEW.md` →
@@ -732,6 +744,62 @@ slow path, 14 multimode-FWM tests).
 
 ---
 
+## 15. `oam_l` FWM gate: VERIFIED EQUAL to the Poletti & Horak Eq. (18)
+##     rule; documentation gap, not a code defect
+
+**Found.** 2026-10-02, while building the
+`poletti_2008_multimode::validate()` deck (Sec. 4.A symmetry analysis of the
+Eq. (7) coupling coefficients).
+
+**An earlier version of this entry claimed the engine's `oam_l` gate was a
+strict *superset* of Eq. (18) and admitted 64 exchanges the overlap integral
+forbids. That was wrong — an index-mapping error on my side, corrected here.**
+
+**What the two rules say.** Poletti & Horak's ``Q^(2)`` term in Eq. (6) is
+``Q^(2)_plmn A_l* A_m A_n`` feeding channel ``p``, with ``l`` the **conjugated**
+field (this is the detail that has to be read off Eq. (6), not off the
+coefficient's definition alone). Transverse-photon-momentum balance is therefore
+``m_m + m_n = m_p + m_l``, which is precisely their printed Eq. (18) type-2 rule
+``−m_p − m_l + m_m + m_n = 0``. The engine's degenerate term is
+``A_n A_p A_q*`` feeding channel ``m`` with ``q`` conjugated, i.e. the index map
+``(p, l, m, n)_paper = (m, q, n, p)_engine``, under which the paper's rule
+becomes ``ℓ_m + ℓ_q = ℓ_n + ℓ_p`` — with ``p = n`` this is exactly
+``_fwm_allowed``'s ``ℓ_m = ℓ_n + ℓ_p − ℓ_q``.
+
+**Verified.** Element-wise over all 10⁴ quadruples of the paper's Fig. 1
+ten-mode set, the two rules are **identical: 0 mismatches** (asserted in
+`poletti_2008_multimode::check_engine`). The engine implementation is
+**correct**; there is no defect to fix here. My earlier "64 quadruples the gate
+admits and Eq. (7) zeroes" came from comparing the gate against a *different*
+pairing (I had assumed ``n`` rather than ``l`` was the conjugated field); those
+entries are in fact excluded by the **polarisation** rule Eq. (19), which the
+gate correctly does not cover and which lives in the weight tensor.
+
+**What remains — a documentation gap, now closed.** Two things the engine's
+`oam_l` docstring did not say, both of which are easy to get wrong from the
+outside:
+
+1. The gate is the **spatial** rule only. Eq. (19) (polarisation) and the exact
+   magnitudes are carried by ``fwm_weights`` / ``xpm_weights``.
+2. **Uniform labels make the gate inert.** ``wright_2015_self_organized_instability``
+   passes ``oam_l=[0, 0, 0]`` (``reproduce.py`` + nine ``diagnostics/*.py``
+   probes); with all labels equal the condition ``0 == 0`` holds for every
+   triplet, so the gate is exactly the isotropic fallback of ``oam_l=None``. The
+   folder README's advice to "use the ℓ-gated triplet formalism (``oam_l=``) to
+   keep costs sane" gets **no** cost control from the gate — it is a selection
+   filter, never a work reduction. This does **not** affect the Wright-2015
+   results (driven by an analytic 2×2 Kerr block and by ``fwm_weights`` class
+   factors; §10 is closed), but the gate is not doing what its presence suggests.
+
+**Action taken 2026-10-02.** The ``oam_l`` docstring of
+``MultimodeSplitStepEngine`` now states the rule, the index map proving it equals
+Eq. (18), and both caveats above. No code change: the semantics of the public
+parameter are correct as they stand, and `_fwm_allowed` is unchanged.
+
+Not a bug against any published result. No reproduction is blocked.
+
+---
+
 ## 7. ROCm iGPU training crash guardrail (system-level) — SUPERSEDED BY CUDA
 
 **CLOSED 2026-09-30 (author decision).** CUDA is now implemented on this box;
@@ -916,19 +984,23 @@ Full numbers: `reproductions/heidt_2009_adaptive_step/diagnostics/arbitration_ta
    *(Tracked as the "Pending — author action" checklist in `ROADMAP.md`;
    reproduced here so no pending item is lost.)*
 2. **Fold the received PDFs into new reproduction folders** — **done**:
-   P1/Peregrine 2026-09-30 (`reproductions/kibler_2010_peregrine/`), P3/Hult and
+   P1/Peregrine 2026-10-02 (`reproductions/kibler_2010_peregrine/`), P3/Hult and
    P4/Heidt 2026-10-01 (`reproductions/hult_2007_rk4ip/`,
    `reproductions/heidt_2009_adaptive_step/`, both green, `ISSUES.md` #13/#14
-   closed). P2 (Tomlinson) was optional and was reproduced from the derived
+   closed), and Poletti & Horak 2008 (`reproductions/poletti_2008_multimode/`,
+   2026-10-02: the Sec. 4.A Eq. (7)/(16)/(18)/(19) symmetry deck, all checks
+   green in ~10 s; `REVIEW.md` had listed that folder as a PDF-only stub).
+   P2 (Tomlinson) was optional and was reproduced from the derived
    criterion (`PLAN.md` §1b).
 3. **`REPORT.md` / `REVIEW.md` reproduction tables** — refreshed at the end of each
    reproduction batch (`PLAN.md` checklist item): 2026-09-30, 2026-10-02 for the
-   Hult/Heidt close-out (including the inventory caveat for the three
-   unregistered folders — `shg_lnoi_shg` is now registered with recorded
-   caveats, and `poletti_2008_multimode` / `dudley_2014_breathers_review` are
-   documented as reference-only), and again on 2026-10-02 for the #1/#6/#8
-   close-out. **Done**; the refreshes are recorded as dated sections in both
-   files.
+   Hult/Heidt close-out (including the inventory caveat for the then
+   unregistered folders), again on 2026-10-02 for the #1/#6/#8 close-out, and
+   again on 2026-10-02 after the Poletti & Horak deck landed (25 validated
+   studies; `poletti_2008_multimode` promoted from PDF-only stub to a
+   registered row, leaving `dudley_2014_breathers_review` reference-only and
+   `shg_lnoi_shg` runnable-but-unregistered). **Done**; the refreshes are
+   recorded as dated sections in both files.
 
 ---
 

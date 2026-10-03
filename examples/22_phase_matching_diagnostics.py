@@ -134,8 +134,10 @@ def main():
 
     # Plot FWM
     fig_fwm = plot_fwm_efficiency(fwm_result)
-    fig_fwm.savefig("22_fwm_efficiency.png", dpi=150, bbox_inches="tight")
-    print("Saved: 22_fwm_efficiency.png")
+    fig_fwm.savefig(
+        "examples/images/22_fwm_efficiency.png", dpi=150, bbox_inches="tight"
+    )
+    print("Saved: examples/images/22_fwm_efficiency.png")
 
     # ========================================================================
     # 3. MI Gain Spectrum
@@ -145,11 +147,12 @@ def main():
 
     omega_m = np.linspace(-5e13, 5e13, 501)
     gain = mi_gain_spectrum(beta2_si, gamma, P_pump, omega_m)
+    omega_THz = omega_m / (2 * PI) / 1e12  # omega_m is in rad/s
 
     # Find peak
     peak_idx = np.argmax(np.abs(gain))
     print(
-        f"Peak MI gain: {np.max(gain):.2f} 1/m at Ω = {omega_m[peak_idx] / 1e12:.2f} THz"
+        f"Peak MI gain: {np.max(gain):.2f} 1/m at Ω = {omega_THz[peak_idx]:.2f} THz"
     )
 
     # Sideband frequencies
@@ -159,15 +162,15 @@ def main():
 
     # Plot MI gain
     fig_mi = plt.figure(figsize=(10, 6))
-    plt.plot(omega_m / 1e12, gain * 1e3, "b-", linewidth=1)
+    plt.plot(omega_THz, gain * 1e3, "b-", linewidth=1)
     plt.xlabel("Modulation Frequency (THz)")
     plt.ylabel(r"g(Ω) (1/mm)")
     plt.title("Modulation Instability Gain Spectrum")
     plt.axvline(x=0, color="k", linestyle=":", alpha=0.3)
     plt.grid(True, alpha=0.3)
     fig_mi.tight_layout()
-    fig_mi.savefig("22_mi_gain.png", dpi=150, bbox_inches="tight")
-    print("Saved: 22_mi_gain.png")
+    fig_mi.savefig("examples/images/22_mi_gain.png", dpi=150, bbox_inches="tight")
+    print("Saved: examples/images/22_mi_gain.png")
 
     # ========================================================================
     # 4. Dispersive Wave Root Finder
@@ -236,8 +239,10 @@ def main():
 
     # Plot readiness
     fig_readiness = plot_readiness_report(report)
-    fig_readiness.savefig("22_readiness_report.png", dpi=150, bbox_inches="tight")
-    print("Saved: 22_readiness_report.png")
+    fig_readiness.savefig(
+        "examples/images/22_readiness_report.png", dpi=150, bbox_inches="tight"
+    )
+    print("Saved: examples/images/22_readiness_report.png")
 
     # ========================================================================
     # 6. Full GNLSE Simulation with PM Diagnostics
@@ -268,8 +273,10 @@ def main():
 
     # Plot spectrum with PM overlay
     fig_spectrum = plot_spectrum_with_pm_overlay(solver, report)
-    fig_spectrum.savefig("22_spectrum_pm_overlay.png", dpi=150, bbox_inches="tight")
-    print("Saved: 22_spectrum_pm_overlay.png")
+    fig_spectrum.savefig(
+        "examples/images/22_spectrum_pm_overlay.png", dpi=150, bbox_inches="tight"
+    )
+    print("Saved: examples/images/22_spectrum_pm_overlay.png")
 
     # ========================================================================
     # 7. Energy Conservation Check
@@ -298,10 +305,10 @@ def main():
     print("All diagnostics complete!")
     print("=" * 60)
     print("\nGenerated files:")
-    print("  22_fwm_efficiency.png        — FWM Δβ and efficiency curves")
-    print("  22_mi_gain.png               — MI gain spectrum")
-    print("  22_readiness_report.png      — Dispersion coverage panel")
-    print("  22_spectrum_pm_overlay.png   — Final spectrum with PM predictions")
+    print("  examples/images/22_fwm_efficiency.png        — FWM Δβ and efficiency curves")
+    print("  examples/images/22_mi_gain.png               — MI gain spectrum")
+    print("  examples/images/22_readiness_report.png      — Dispersion coverage panel")
+    print("  examples/images/22_spectrum_pm_overlay.png   — Final spectrum with PM predictions")
 
 
 if __name__ == "__main__":

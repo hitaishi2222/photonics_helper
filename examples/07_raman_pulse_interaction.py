@@ -48,7 +48,7 @@ def main():
     )
     print(
         f"Pulse: {envelope.shape}, T₀={envelope.pulse_width.as_fs:.1f} fs, "
-        f"FWHM={fwhm_fs:.1f} fs, peak power={wave.peak_power():.3f} W"
+        f"FWHM={fwhm_fs:.1f} fs, peak amplitude²={wave.peak_power():.3f} (normalized units)"
     )
 
     # ── Create Raman responses for different materials ──────────────────────

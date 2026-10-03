@@ -76,6 +76,12 @@ the stable contract.
   - *Physics hardening* ✅ (0.1.9): interaction-picture self-steepening,
     multi-phonon Raman dispatch, time-resolved TPA/free carriers,
     `gnlse_validation` convergence + analytical checks harness.
+    *Later (reproduction-driven):* the self-steepening grid-validity guard
+    (`_SHOCK_TAYLOR_LIMIT` on `τ_shock·Ω_max`, `ISSUES.md` #1), the offset-aware
+    `mi_gain_spectrum_extended` contract (#2), a stability-driven multimode FWM
+    substep count (#11) with classical RK4 stages restored (#12), and the
+    documented `oam_l` gate semantics — verified equal to Poletti & Horak
+    Eq. (18), inert under uniform labels (#15).
   - *Vector / polarization-coupled GNLSE* ✅ (this release):
     `vector_gnlse.VectorSplitStepEngine` (per-axis dispersion, PMD walk-off,
     XPM 2/3 + coherent polarization FWM, Manakov 8/9 mode) and
@@ -162,11 +168,13 @@ stability contract (Phase 3 rules apply).
   DOI. To be done once the project reaches a suitable milestone.
 - [ ] Mint the Zenodo DOI and add it to `CITATION.cff` (`identifiers:`) and the
   README once the archive exists.
-- *2026-10-02 status note:* the reproduction count now stands at **24 validated
-  studies** in the main table of `reproductions/README.md` (plus one partial
-  deck, `shg_lnoi_shg`, registered with recorded caveats), all green in the
-  local test suite — a natural milestone for the Zenodo release if the author
-  wants one now.
+- *2026-10-03 status note:* the reproduction count now stands at **25 validated
+  studies** in the main table of `reproductions/README.md`, plus one
+  deliberately unregistered partial deck (`shg_lnoi_shg`, registered as a ⚠️
+  PARTIAL row with recorded caveats and left out of the test suite), all green
+  in the local test suite — a natural milestone for the Zenodo release if the
+  author wants one now. Since the 2026-10-02 count of 24: the Poletti & Horak
+  2008 Sec. 4.A overlap/symmetry deck became a full folder and row.
 - [x] Material database backend relocated to the foundation layer
   (2026-09-20): `photonics_helper/core/data.py` now owns ``materials.db``
   (path resolution, schema, generic queries) as ``MaterialsDatabase``;

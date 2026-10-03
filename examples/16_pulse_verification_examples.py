@@ -107,9 +107,6 @@ def example_gaussian_chirp_sweep():
         print(
             f"{alpha:6.1f}  {ratio:12.4f}  {expected:12.4f}  {error * 100:7.1f}%  sigma={sigma_c / 1e12:.2f} rad/ps"
         )
-        print(
-            f"{alpha:6.1f}  {ratio:12.4f}  {expected:12.4f}  {error * 100:7.1f}%  σ={sigma_c / 1e12:.2f} rad/ps"
-        )
 
     max_error = max(ratios)
     print(f"\nMax relative error: {max_error * 100:.1f}%")

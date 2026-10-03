@@ -119,8 +119,32 @@ class MultimodeSplitStepEngine:
         beats wash out over the group-delay walk-off in real fiber).
     oam_l : sequence of int, optional
         OAM azimuthal order ℓ of each channel. When supplied (and FWM is
-        on) FWM triples are restricted to ``ℓ_m = ℓ_n + ℓ_p − ℓ_q``;
-        otherwise every triplet is allowed.
+        on) FWM triples are restricted to ``ℓ_m = ℓ_n + ℓ_p − ℓ_q``
+        (transverse-photon-momentum balance for the ``A_n A_p A_q*`` term
+        feeding channel ``m``); otherwise every triplet is allowed.
+
+        This gate **is** the Poletti & Horak Eq. (18) type-2 spatial
+        selection rule, not merely an approximation of it: their ``Q^(2)``
+        term in Eq. (6) is ``Q^(2)_plmn A_l* A_m A_n`` feeding channel ``p``
+        with ``l`` the *conjugated* field, so their balance
+        ``m_m + m_n = m_p + m_l`` is the printed rule
+        ``−m_p − m_l + m_m + m_n = 0``; under the index map
+        ``(p, l, m, n) = (m, q, n, p)`` it becomes ``ℓ_m + ℓ_q = ℓ_n + ℓ_p``,
+        which is this gate (verified element-wise in
+        ``reproductions/poletti_2008_multimode``).
+
+        Two caveats:
+
+        * The gate carries the **spatial** rule only. The polarisation rule
+          Eq. (19) and the exact magnitudes are in the overlap tensor — pass
+          them via ``fwm_weights`` / ``xpm_weights`` when a real fibre's mode
+          functions are known.
+        * Uniform entries make the gate inert: if all labels are equal (e.g.
+          ``[0, 0, 0]``, the common "these channels have no distinguished
+          azimuthal order" case) the condition holds for every triplet and the
+          gate is exactly the isotropic fallback of ``oam_l=None``. It is a
+          selection filter, not a cost control — it never reduces the engine's
+          work, only the number of permitted exchanges.
     xpm_weights : array_like, optional
         Mode-specific SPM/XPM overlap weights (Mumtaz Eq. 8 style), an
         ``N×N`` real array. ``w[i, j]`` multiplies ``|A_j|²`` entering

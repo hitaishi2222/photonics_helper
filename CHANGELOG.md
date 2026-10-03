@@ -9,6 +9,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Poletti & Horak (2008) multimode-GNLSE overlap deck**
+  (`reproductions/poletti_2008_multimode/`): the Sec. 4.A symmetry analysis of
+  the Eq. (7) coupling coefficients on the paper's Fig. 1 fibre (6 µm core,
+  NA 0.17 at 1.5 µm → V = 4.2726, ten guided LP modes = 2 × 10⁴
+  coefficients). The coefficients are evaluated from the transverse fields by
+  quadrature, so **none of the selection rules is hard-coded** — Eq. (18)
+  (1360 survivors per type, exactly the combinatorial prediction, forbidden
+  entries at 7.8e-17), Eq. (19) (1360 → 340, the 1020 discarded quadruples
+  carrying |Q| up to 1.0), all eleven Eq. (16) permutation identities
+  (2.2e-16), the Sec. 3 statement `Q^(1) = Q^(2)` (exact in the real LP basis
+  and *false* in the helical Eq.-17 basis, max diff 0.672), the Sec. 5
+  complexity saving (survivors fit M^3.65, a 31–47× cut of the O(M⁴N) term),
+  and the Eq. (14) polarisation closure on `MultimodeSplitStepEngine`
+  (opposite-σ power exactly 0 with ten channels and five launched empty, vs
+  1.09 for an isotropic control that ignores Eq. (19); energy 4.8e-8). ~10 s.
+  New folder-local `overlap.py` (analytic step-index LP solver, both azimuthal
+  bases, Eq. (7) tensor, rule checkers, engine weight mapping).
+  Recorded deviations: the paper's Fig. 1 counts (17 872 zeros / 936 below 1 %
+  of max) come from exact *vectorial* mode functions and are not reachable from
+  a weakly-guiding scalar model — folder README caveat 1.
+- **`MultimodeSplitStepEngine` `oam_l` documentation** — the docstring now
+  states that the FWM gate `l_m = l_n + l_p − l_q` **is** the Poletti & Horak
+  Eq. (18) type-2 spatial selection rule (proved by the index map through the
+  paper's Eq. (6) term, verified element-wise in
+  `reproductions/poletti_2008_multimode`), that the gate carries the spatial
+  rule only (Eq. (19) and the magnitudes come through `fwm_weights` /
+  `xpm_weights`), and that uniform labels make the gate inert — it is a
+  selection filter, never a work reduction. **No code change**; `_fwm_allowed`
+  was verified correct. `ISSUES.md` #15.
 - **Heidt (2009) adaptive step-size reproduction**
   (`reproductions/heidt_2009_adaptive_step/`): a reproduction-local adaptive
   layer (`heidt_adaptive.py` — `SSFIntegrator`/`RK4IPIntegrator`,

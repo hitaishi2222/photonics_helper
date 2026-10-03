@@ -40,8 +40,8 @@
     }
   },
   "n_eff_1550nm": {
-    "femwell": 2.439656227484011,
+    "femwell": 2.4396562274840115,
     "tidy3d": 2.423449280416652
   },
-  "max_relative_deviation": 0.0075569667889208636
+  "max_relative_deviation": 0.007556966788922176
 }
