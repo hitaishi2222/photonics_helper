@@ -698,9 +698,9 @@ def mi_sideband_frequencies(
 
 def mi_gain_spectrum_extended(
     beta_fn=None,
-    omega0: float = None,
-    gamma: float = None,
-    P: float = None,
+    omega0: float | None = None,
+    gamma: float | None = None,
+    P: float | None = None,
     alpha: float = 0.0,
     L: float | None = None,
     omega_m: NDArray | None = None,
@@ -767,6 +767,13 @@ def mi_gain_spectrum_extended(
     -------
     result : dict with keys 'omega_m', 'gain', 'Omega_peak', 'Omega_cutoff'.
     """
+    if gamma is None or P is None:
+        raise ValueError("gamma and P are required for mi_gain_spectrum_extended")
+    if beta_fn is not None and omega0 is None:
+        if beta_fn_convention != "detuning":
+            raise ValueError(
+                "omega0 is required when beta_fn uses the absolute convention"
+            )
     if L is None:
         L = 1.0 / max(gamma, 1e-30)
 
@@ -780,6 +787,7 @@ def mi_gain_spectrum_extended(
         elif beta_fn_convention == "detuning":
             beta2_est = _as_scalar((beta_fn(domega) + beta_fn(-domega)) / domega**2)
         else:
+            assert omega0 is not None  # validated above for mypy
             beta2_est = _as_scalar(
                 (
                     beta_fn(omega0 + domega)
@@ -827,6 +835,7 @@ def mi_gain_spectrum_extended(
 
     # Extended MI gain: g(Ω) = √[−D(Ω)·(D(Ω) + 4γP)]
     # Gain exists when -4γP < D < 0
+    assert gamma is not None and P is not None  # narrowed above for mypy
     term = -D * (D + 4 * gamma * P)
     gain = np.zeros_like(term)
     mask = term > 0

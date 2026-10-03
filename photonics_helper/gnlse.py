@@ -917,9 +917,10 @@ class SplitStepEngine:
         if h_R_fft is None:
             return np.zeros_like(intensity, dtype=float)
         fR = _response_fR(self.fiber.raman_response)
-        return fR * np.real(
+        result: NDArray = fR * np.real(
             self.grid.ifft(h_R_fft * self.grid.fft(intensity))
         )
+        return result
 
     def _get_h_R_fft(self) -> NDArray:
         """FFT of the Raman response on ``self.grid.t`` (cached).
