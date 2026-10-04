@@ -1,0 +1,99 @@
+{
+  "schema": "photonics-helper/raman-noise-fixture/1",
+  "paper": {
+    "key": "keita2006",
+    "citation": "K. Keita, P. Delaye, R. Frey, G. Roosen, \"Relative intensity noise transfer of large-bandwidth pump lasers in Raman fiber amplifiers,\" J. Opt. Soc. Am. B 23(12), 2479-2485 (2006).",
+    "doi": "10.1364/JOSAB.23.002479",
+    "local_pdf": "literature/R02_relative_intensity_noise.pdf"
+  },
+  "equations": {
+    "eq_4_5": {
+      "description": "RIN transfer for a modulated monochromatic pump, in linear power units. Exact and fully specified; this is the primary gate.",
+      "expression": "rho = G^2 / (Delta_k^2 + alpha_p^2) * {1 - 2 cos(Delta_k L) exp(-alpha_p L) + exp(-2 alpha_p L)}",
+      "geometry": "The sign convention of Delta_k carries co- versus counter-propagating. Upper sign co-propagating, lower sign counter-propagating, per Keita 2006 Eq. 2.",
+      "units": "G and alpha_p in inverse length (1/km as printed). Delta_k also 1/km. L in length.",
+      "source": "Keita 2006 Eq. 4.5",
+      "doi": "10.1364/JOSAB.23.002479",
+      "kind": "equation"
+    },
+    "eq_4_6": {
+      "description": "Low-frequency limit of Eq. 4.5 as Delta_k tends to zero.",
+      "expression": "rho = (G / alpha_p)^2 * (1 - exp(-alpha_p L))^2",
+      "units": "G and alpha_p in inverse length. L in length.",
+      "source": "Keita 2006 Eq. 4.6",
+      "doi": "10.1364/JOSAB.23.002479",
+      "kind": "equation"
+    },
+    "eq_4_7": {
+      "description": "The same low-frequency transfer expressed against net gain rather than gain coefficient.",
+      "expression": "rho_dB = (20 / ln 10) * ln[ (ln 10 / 20) * g_net_dB + alpha_p * L / 2 ]",
+      "db_convention": "The paper defines rho_dB = 10 ln(rho) / ln(10), a power ratio, which differs from the amplitude convention 20 log10 used elsewhere in this library.",
+      "caveat": "g_net here is the paper's NET gain, which includes pump depletion. Their Fig. 1 inset gives both g_net = 40 dB and G = 4.74/km with G*L = 4.74, so 20 log10(G*L) = 13.5 dB is NOT g_net. The mapping between the two is their Eq. 3.7, which is not transcribed here, so this expression is gated only at the single point Keita 2006 Fig. 1 states.",
+      "source": "Keita 2006 Eq. 4.7",
+      "doi": "10.1364/JOSAB.23.002479",
+      "kind": "equation"
+    },
+    "eq_4_9": {
+      "description": "Full co-propagating transfer with the walk-off term.",
+      "expression": "rho_co = G^2 / ((G - alpha_p)^2 + (Delta_k)^2) * {exp(-2 alpha_p L) - 2 cos(Delta_k L) exp(-(G + alpha_p) L) + exp(-2 G L)}",
+      "source": "Keita 2006 Eq. 4.9",
+      "doi": "10.1364/JOSAB.23.002479",
+      "kind": "equation"
+    },
+    "eq_4_10": {
+      "description": "Full counter-propagating transfer with the walk-off term.",
+      "expression": "rho_count = G^2 / ((G + alpha_p)^2 + (Delta_k)^2) * {exp(-2 (G + alpha_p) L) - 2 cos(Delta_k L) exp(-(G + alpha_p) L) + 1}",
+      "source": "Keita 2006 Eq. 4.10",
+      "doi": "10.1364/JOSAB.23.002479",
+      "kind": "equation"
+    },
+    "walk_off": {
+      "description": "Delta_k^(1) = [(1/v_p) -/+ (1/v_s)] * nu_s for first order. Upper sign co-propagating, lower sign counter-propagating.",
+      "units": "1/km when v in km/s and nu_s in kHz. Note the product (1/v) * nu has units of inverse length only because v is a velocity, not a frequency: Delta_k = (1/v_p -/+ 1/v_s) * nu_s.",
+      "source": "Keita 2006 text following Eq. 3.9",
+      "doi": "10.1364/JOSAB.23.002479",
+      "kind": "text"
+    }
+  },
+  "reference_point": {
+    "description": "Keita 2006 Fig. 1 inset. A fully specified configuration, so it is the primary numerical gate for Eq. 4.5, 4.6 and 4.7.",
+    "net_gain_db": {"value": 40.0, "unit": "dB", "source": "Keita 2006 Fig. 1 inset", "doi": "10.1364/JOSAB.23.002479", "kind": "figure"},
+    "gain_coefficient": {"value": 4.74, "unit": "1/km", "source": "Keita 2006 Fig. 1 inset", "doi": "10.1364/JOSAB.23.002479", "kind": "figure"},
+    "length": {"value": 1.0, "unit": "km", "source": "Keita 2006 Fig. 1 inset", "doi": "10.1364/JOSAB.23.002479", "kind": "figure"},
+    "loss": {"value": 0.046, "unit": "1/km", "source": "Keita 2006 Fig. 1 inset", "doi": "10.1364/JOSAB.23.002479", "kind": "figure"},
+    "note": "0.046 1/km corresponds to 0.2 dB/km, confirming the paper works in inverse-length units throughout Eqs. 4.5 to 4.10. G*L = 4.74 gives exp(4.74) = 115, i.e. 41 dB on-off gain, consistent with the stated 40 dB net gain after depletion.",
+    "low_frequency_transfer_db": {"value": 13.0, "unit": "dB", "source": "Keita 2006 Fig. 1 text, \"At low frequency, there is a noise addition of about 13 dB for this amplifier.\"", "doi": "10.1364/JOSAB.23.002479", "kind": "text"},
+    "expected_at_reference_point_db": {"value": 13.31, "unit": "dB", "source": "derived from Eq. 4.6 at the inset parameters; agrees with the paper's stated 13 dB to 0.31 dB", "doi": "10.1364/JOSAB.23.002479", "kind": "equation"}
+  },
+  "targets": {
+    "dispersion_ordering": {
+      "description": "Keita 2006 Fig. 1. RIN transfer against frequency for D = 2, 20 and 200 ps/(nm km), counterpropagating and copropagating, at the reference point above.",
+      "dispersion_ps_per_nm_km": [2.0, 20.0, 200.0],
+      "expected_corner_ordering": "Counterpropagating roll-off appears first (lowest frequency), then copropagating D=2, then D=20, then D=200 last.",
+      "expected_minimum_separation_db": {"value": 20.0, "unit": "dB", "source": "Keita 2006 Fig. 1 and accompanying text", "doi": "10.1364/JOSAB.23.002479", "kind": "figure", "note": "Keita 2006 states the decrease in RIN transfer already occurs for frequencies in the 10 to 100 kHz range for counterpropagating beams, and that dispersion reshapes the response by more than two orders of magnitude per decade of D. The separation between the D=2 and D=200 curves is therefore tens of dB, not a few."},
+      "source": "Keita 2006 Fig. 1 and accompanying text",
+      "doi": "10.1364/JOSAB.23.002479",
+      "kind": "figure"
+    },
+    "gain_dependence_trend": {
+      "description": "Keita 2006 Fig. 2, RIN transfer against net gain for fiber losses of 0.2, 0.6 and 2.0 dB/km.",
+      "expected_behaviour": "All three curves rise monotonically with net gain and reach approximately 13 dB at 40 dB net gain, converging at high gain. At low gain the higher-loss curves sit above the lower-loss ones.",
+      "alpha_db_per_km": [0.2, 0.6, 2.0],
+      "source": "Keita 2006 Fig. 2",
+      "doi": "10.1364/JOSAB.23.002479",
+      "kind": "figure",
+      "note": "Keita 2006 does not state the fiber length used for Fig. 2, so this is a trend target, not a numeric one. Eq. 4.7 is gated at the Fig. 1 reference point instead, which is fully specified."
+    }
+  },
+  "validity": {
+    "approx_requires_distance_km": 1.0e-3,
+    "counterpropagating_distance_km": 1.0e-7,
+    "note": "Keita 2006 Eq. 4.8 requires z much greater than 2 pi / ((1/v_p -/+ 1/v_s) * Delta_nu_p). For counterpropagating beams this is z >> 1e-7 km at a 10 nm pump linewidth; for copropagating it is z >> 3e-3 km even at D = 2 ps/(nm km). The condition is NOT fulfilled for a 1 km fiber pumped by a 0.1 nm bandwidth source. See design.md Open Questions.",
+    "source": "Keita 2006 Section 4A",
+    "doi": "10.1364/JOSAB.23.002479",
+    "kind": "text"
+  },
+  "acceptance": {
+    "justification": "The Fig. 1 inset gives a fully specified configuration and a stated answer of about 13 dB, so the gate there is 13.31 dB within 0.5 dB. Fig. 2 does not state a fiber length, so it is a trend target only."
+  }
+}

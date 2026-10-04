@@ -38,12 +38,12 @@ Optional extras: `fftw`, `plotting`, `webapp`, `extras`, `mode-export`, `pinns`.
 ## Quick Start
 
 ```python
-from photonics_helper import Wavelength, Frequency, AngularFrequency
+from photonics_helper import Wavelength
 
 # Unit conversions
 wl = Wavelength(1550, "nm")
-freq = Frequency.from_wavelength(wl)
-omega = AngularFrequency.from_frequency(freq)
+freq = wl.to_freq()
+omega = freq.to_omega()
 
 print(f"λ = {wl.as_nm} nm")
 print(f"f = {freq.as_THz} THz")
@@ -52,30 +52,94 @@ print(f"ω = {omega.as_rad_s:.4e} rad/s")
 
 ### GNLSE Propagation
 
+Animated version of `examples/13_gnlse_soliton_evolution.py`: an N = 3 soliton
+breathing and fissioning over one dispersion length.
+
 ```python
 from photonics_helper import (
     Area, Length, Time, Wavelength,
-    FiberProfile, GNLSESolver,
-    Envelope, TemporalGrid, Wave,
-    RamanResponse, RamanSpec,
+    FiberProfile, GNLSESolver, Envelope, TemporalGrid, Wave,
 )
 
-# Create a pulse
-grid = TemporalGrid(N=2**13, Tmax=Time(16e-12, "s"))
-env = Envelope(shape="gaussian", peak_amplitude=1.0, pulse_width=Time(100, "fs"))
-pulse = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(1550, "nm"))
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib import cm
+from matplotlib.animation import FuncAnimation, PillowWriter
 
-# Create a fiber
-silica = RamanSpec(name="Silica", raman_shift_cm=440.0, raman_linewidth_cm=45.0, fR=0.18)
-raman = RamanResponse(spec=silica, grid=grid, tau1=12.2e-15, tau2=32e-15)
-fiber = FiberProfile(n2=2.6e-20, alpha=0.0, A_eff=Area(80, "um^2"),
-                     length=Length(1.0, "m"), raman_response=raman)
+# Anomalous-dispersion fiber: β₂ = -2 ps²/km = -2e-3 ps²/m (engine units)
+T0 = Time(200, "fs")
+beta2 = -2.0e-3
+n2, A_eff = 2.6e-20, Area(80, "um^2")
+omega0 = 2 * np.pi * 299792458.0 / Wavelength(1064, "nm").as_m
+gamma = n2 * omega0 / (299792458.0 * A_eff.as_m2)
 
-# Propagate
-solver = GNLSESolver(pulse=pulse, fiber=fiber, betas=[0, 0, -21e-3],
-                     include_raman=True, include_self_steepening=True)
-solver.propagate(num_steps=100)
+# N = 1 soliton power for these parameters; N = 3 needs 9x the power
+P0_N1 = abs(beta2 * 1e-24) / (gamma * T0.as_s**2)
+L_D = Length(T0.as_s**2 / abs(beta2 * 1e-24), "m")
+
+grid = TemporalGrid(N=2**11, Tmax=Time(5 * T0.as_fs * 1e-15, "s"))
+pulse = Wave(
+    grid=grid,
+    envelope=Envelope(shape="sech", peak_amplitude=np.sqrt(9 * P0_N1),
+                      pulse_width=T0),
+    central_wavelength=Wavelength(1064, "nm"),
+).with_effective_area(A_eff)
+
+solver = GNLSESolver(
+    pulse=pulse,
+    fiber=FiberProfile(n2=n2, alpha=0.0, A_eff=A_eff, length=L_D),
+    betas=np.array([beta2]),          # [β₂, β₃, ...] in psᵏ/m
+    include_raman=False,
+    include_self_steepening=False,
+)
+solver.propagate(num_steps=100, show_progress=True)  # tqdm bar over z
+
+# Animate: temporal-envelope waterfall + peak-power trace growing with z
+t_ps = grid.t * 1e12
+z_m = solver.z_array
+peak = np.array([float(np.max(np.abs(w.envelope_field)) ** 2)
+                 for w in solver.evolution])
+colors = cm.viridis(np.linspace(0, 1, len(solver.evolution)))
+
+OFF = 0.22  # vertical spacing between waterfall traces
+fig, (ax_t, ax_p) = plt.subplots(1, 2, figsize=(12, 4.5), constrained_layout=True)
+ax_t.set(xlim=(-0.5, 0.5), ylim=(-0.1, OFF * len(solver.evolution) + 1.15),
+         xlabel="Time (ps)", ylabel="Propagation distance (m)",
+         title="Temporal envelope (waterfall)")
+ax_p.set(xlim=(0, z_m[-1]), ylim=(0, peak.max() * 1.15),
+         xlabel="Propagation distance (m)", ylabel="Peak power (W)",
+         title="Peak power oscillates (N = 3 soliton)")
+for ax in (ax_t, ax_p):
+    ax.grid(alpha=0.3)
+
+z_line, = ax_p.plot([], [], color="crimson", lw=2.2)
+marker, = ax_p.plot([], [], "o", color="crimson", ms=7)
+label = ax_p.text(0.03, 0.92, "", transform=ax_p.transAxes, fontsize=11,
+                  family="monospace", va="top")
+
+def draw(k):
+    for j in range(k + 1):
+        a = np.abs(solver.evolution[j].envelope_field)
+        base = j * OFF
+        # Filled bands, not thin lines: each trace fills its own slot, so the
+        # stack has no white gaps between traces.
+        ax_t.fill_between(t_ps, base, a / a.max() * OFF * 0.98 + base,
+                          color=colors[j], lw=0)
+    ticks = np.arange(0, len(solver.evolution) * OFF, 10 * OFF)
+    ax_t.set_yticks(ticks)
+    ax_t.set_yticklabels([f"{z_m[int(v / OFF)]:.0f}" for v in ticks])
+    z_line.set_data(z_m[:k + 1], peak[:k + 1])
+    marker.set_data([z_m[k]], [peak[k]])
+    label.set_text(f"z = {z_m[k]:5.2f} / {z_m[-1]:.1f} m")
+    return z_line, marker, label
+
+anim = FuncAnimation(fig, draw, frames=len(solver.evolution), interval=100)
+anim.save("soliton_fission.gif", writer=PillowWriter(fps=12), dpi=95)
 ```
+
+Output:
+
+![N = 3 soliton breathing and fission](docs/img/quickstart_gnlse.gif)
 
 ---
 

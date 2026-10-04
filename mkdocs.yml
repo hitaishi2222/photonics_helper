@@ -73,6 +73,8 @@ nav:
   - Vector / polarization-coupled GNLSE: vector-gnlse.md
   - Multimode (few-mode) GNLSE: multimode-gnlse.md
   - Cascaded χ⁽²⁾–χ⁽³⁾ & inverse design: cascaded-chi23.md
+  - Raman cascade (CW) & RIN transfer: raman-cascade.md
+  - Raman noise sources (planned): raman-noise.md
   - API Reference:
       - api/index.md
       - Foundation core (units/grids/materials): api/core.md
@@ -86,6 +88,7 @@ nav:
       - Phase-matching diagnostics (χ³): api/phase-matching.md
       - χ⁽²⁾ nonlinear optics (SHG / SFG / DFG): api/chi2.md
       - Raman scattering: api/raman.md
+      - Raman cascade (CW) & RIN transfer: api/raman-transfer.md
       - Soliton analysis: api/soliton.md
       - Breathers and exact solutions: api/breathers.md
       - Noise sources: api/noise.md
