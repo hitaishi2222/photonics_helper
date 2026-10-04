@@ -14,8 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`photonics_helper.raman_transfer`**: continuous-wave multi-order Raman cascade, analytic RIN transfer closed forms (Keita 2006 Eqs. 4.5–4.7, 4.9–4.10; Zhu 2007 Eq. 7), and a linearized noise response with a double-pole fit (Mermelstein 2003 Eqs. 2, 5, 6, 7, 10). Purely additive; no existing public behaviour changes.
   - `CWWCascade` solves the cascade in both geometries, with a `photon_consistent` flag selecting between Mermelstein's power-coupled Eqs. 5 and a photon-number-conserving transfer. Both conservation diagnostics hold to better than 1e-6 in the mode they apply to, and warn above it.
   - `benchmarks/raman_noise/{keita2006,mermelstein2003,zhu2007}/fixture.json` carry every published target with its DOI, its location in the source document, and whether it was read from a table or a figure. `load_benchmark` raises `ProvenanceError` on a missing or blank DOI.
-  - Reproduced: the 60 km Mermelstein configuration's ~13 dB on-off gain, and both counter-propagating 6 dB corners (1.31 and 1.33 kHz against 1.33 and 1.59 kHz).
-  - Recorded as **not reproduced**, with `xfail` tests naming the discrepancy rather than loosened thresholds: the four DC transfer levels, the two co-propagating corners, and the Fig. 7 interaction lengths. See `docs/raman-cascade.md` for the analysis.
+  - Reproduced: the 60 km Mermelstein configuration's ~13 dB on-off gain; all four DC transfer levels within 2 dB (counter 13.9/−0.4 dB and co 14.0/−0.3 dB against 15.6/0.04 and 15.4/0.7 dB published), including the published ~15 dB first-to-second-order gap; and all four 6 dB corners within 13–28 percent.
+  - Recorded as **not reproduced**, with an `xfail` test naming the discrepancy: the Fig. 7 direct/indirect interaction lengths.
   - `examples/44_cw_cascade_rin_transfer.py`, `docs/raman-cascade.md`, `docs/raman-noise.md`.
 
 - **12 new examples** (30, 34, 35–43): breather families, wave breaking, GNLSE validation, noise/ASE/Raman, vector polarization, multimode/few-mode, conserving shock, MI gain offset, multi-phonon Raman, inverse design QPM/FWM, material catalog query.

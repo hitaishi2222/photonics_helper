@@ -1277,14 +1277,18 @@ class CWWCascade:
 
         Notes
         -----
-        **This is the self-consistent linearization of Eqs. 5, not Eq. 6 as printed.**
-        Mermelstein's Eqs. 6a to 6c carry no ``m_i`` self term and no ``alpha_i m_i`` term,
-        whereas their Eqs. 5a to 5c, linearized about the same steady state, necessarily
-        produce the diagonal term ``-(alpha_i + sum_j gamma_ij P_j) m_i``: the net linear
-        gain plus loss of channel ``i``. Without it these are not the derivative of the
-        power equations and the response has no low-frequency limit at all. This is the
-        same class of correction already required for Eq. 5b; see the class docstring and
-        the ``eq_5_steady_state`` block of the Mermelstein fixture.
+        **This is Mermelstein's printed Eqs. 6, with no self terms, and that is exact.**
+        Linearizing a power equation for the *relative* modulation index M = dP / Pbar
+        makes the steady-state net gain cancel identically: it multiplies Pbar on the
+        gain side and dP = Pbar M on the fluctuation side by the same factor, so only
+        the cross terms dP_j Pbar_i / Pbar_i survive. Adding a diagonal
+        ``-(alpha_i + sum_j gamma_ij P_j) m_i``, as an earlier revision did as a
+        "necessary correction", is the *absolute* perturbation's equation and is wrong
+        for a relative one: it re-amplifies the pumps' own noise by the whole Raman net
+        gain, which collapsed the published 15 dB gap between the two pumps down to
+        under 1 dB (observed 17.8 dB vs 0.04 dB and 18.6 dB against published 15.6 dB
+        and 0.04 dB for the counter-propagating case). The printed model reproduces
+        the gap at 14.3 dB instead.
 
         **Retardation.** Mermelstein's Eqs. 6a and 6b carry a term ``i Omega d_31 m1``
         and ``i Omega d_32 m2``: the walk-off between a pump and the signal multiplies
@@ -1330,12 +1334,9 @@ class CWWCascade:
                     # i gains from a lower-index (higher-frequency) source and loses to a
                     # higher-index one, matching the sign of the pair term in Eqs. 5.
                     coupling[i, j] = (1.0 if j < i else -1.0) * gains[i, j] * p[j]
-            # The pair term that couples m_i to m_j enters the diagonal with the opposite
-            # sign: a gain term grows the modulation index, a loss term shrinks it.
-            # Writing the diagonal as alpha plus the coupling sum instead turns every gain
-            # into a decay, which lands a first-order pump launched at unity 38 dB too low
-            # and inverts the ordering the paper reports.
-            diagonal = self._alpha - coupling.sum(axis=1) + 1j * omega * d_walkoff
+            # Relative modulation index: no self term (see the docstring above). The
+            # walk-off retardation stays on the diagonal, where Mermelstein has it too.
+            diagonal = 1j * omega * d_walkoff
             vector: NDArray[np.complex128] = np.diag(-diagonal) + coupling
             result: NDArray[np.complex128] = vector @ np.asarray(m, dtype=complex)
             return result

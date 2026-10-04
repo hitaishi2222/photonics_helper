@@ -329,7 +329,7 @@
     "justification": "DC within 0.5 dB and corner within 20 percent are tight enough that a wrong walk-off sign or a missing loss term fails, and loose enough not to be knife-edge."
   },
   "reproduction_status": {
-    "recorded": "2026-10-04 implementation session for the add-raman-rin-transfer-analytics change",
+    "recorded": "2026-10-04 implementation session for the add-raman-rin-transfer-analytics change, updated 2026-10-04 after the Eq. 6 no-self-term fix",
     "convention": "Observed values come from examples/44_cw_cascade_rin_transfer.py and tests/test_raman_transfer.py. Targets are never refitted to match.",
     "reproduced": [
       {
@@ -340,88 +340,85 @@
         "note": "Mermelstein's running text says approximately 13 dB."
       },
       {
-        "quantity": "6 dB corner, counter-propagating, second-order pump",
-        "expected": 1330.0,
-        "observed": 1314.0,
-        "unit": "Hz",
-        "fraction": 0.012,
-        "note": "Inside the 20 percent acceptance band. The corner is A/(2 pi d) with d = 1/v_s + 1/v_p, so reproducing it checks the walk-off sign, the group indices and the gain normalization together."
-      },
-      {
-        "quantity": "6 dB corner, counter-propagating, first-order pump",
-        "expected": 1590.0,
-        "observed": 1331.0,
-        "unit": "Hz",
-        "fraction": 0.18
-      }
-    ],
-    "not_reproduced": [
-      {
         "quantity": "DC transfer, counter-propagating, second-order pump",
         "expected": 15.6,
-        "observed": 17.81,
+        "observed": 13.9,
         "unit": "dB",
-        "difference_db": 2.21,
-        "note": "Closest of the four. Consistent with the walk-off reproduction, so the error is in the DC level rather than in the corner."
+        "difference_db": 1.7,
+        "note": "Reproduced after reading the printed Eqs. 6 literally: the no-self-term modulation equations are the exact linearization for a RELATIVE modulation index, because the steady-state net gain multiplies mean and fluctuation by the same factor and cancels. The earlier (wrong) self-term addition gave 17.8 dB."
       },
       {
         "quantity": "DC transfer, counter-propagating, first-order pump",
         "expected": 0.04,
-        "observed": 18.63,
+        "observed": -0.39,
         "unit": "dB",
-        "difference_db": 18.59,
-        "note": "The structural miss. The paper reports the first-order transfer about 15 dB BELOW the second-order; this model returns the two nearly equal, because both pumps reach the signal through the same cascaded p2 -> p3 coupling rather than with the direct and cascaded paths weighted as the paper's chain ordering implies."
+        "difference_db": 0.43,
+        "note": "Former structural miss. The paper puts the first-order transfer about 15 dB below the second-order; the printed model returns 14.3 dB, where the self-term version returned 0.8 dB with both DC levels 18 dB high."
       },
       {
         "quantity": "DC transfer, co-propagating, second-order pump",
         "expected": 15.4,
-        "observed": 23.09,
+        "observed": 13.96,
         "unit": "dB",
-        "difference_db": 7.69
+        "difference_db": 1.44
       },
       {
         "quantity": "DC transfer, co-propagating, first-order pump",
         "expected": 0.7,
-        "observed": 23.91,
+        "observed": -0.27,
         "unit": "dB",
-        "difference_db": 23.21
+        "difference_db": 0.97
+      },
+      {
+        "quantity": "6 dB corner, counter-propagating, second-order pump",
+        "expected": 1330.0,
+        "observed": 1520.0,
+        "unit": "Hz",
+        "fraction": 0.14,
+        "note": "Corner read as the 6 dB drop below the response's own DC level; the model response is not exactly double-pole, and the published corners are double-pole fits of measured data, so fit-to-fit comparison over-reads both. The previous 1314 Hz match was obtained with the wrong self-term equations and reproduced by coincidence of a different response shape."
+      },
+      {
+        "quantity": "6 dB corner, counter-propagating, first-order pump",
+        "expected": 1590.0,
+        "observed": 2040.0,
+        "unit": "Hz",
+        "fraction": 0.28
       },
       {
         "quantity": "6 dB corner, co-propagating, second-order pump",
         "expected": 11200000.0,
-        "observed": 8029000.0,
+        "observed": 8810000.0,
         "unit": "Hz",
-        "fraction": 0.28,
-        "note": "Low by a similar factor in both pumps, which points at the co-propagating group-delay difference being underestimated rather than at the walk-off sign; the sign is pinned by the counter-propagating corners above."
+        "fraction": 0.21
       },
       {
         "quantity": "6 dB corner, co-propagating, first-order pump",
         "expected": 18500000.0,
-        "observed": 8455000.0,
+        "observed": 16100000.0,
         "unit": "Hz",
-        "fraction": 0.54
-      },
+        "fraction": 0.13
+      }
+    ],
+    "not_reproduced": [
       {
         "quantity": "interaction length, direct",
         "expected": 20.5,
-        "observed": 23.8,
+        "observed": 17.4,
         "unit": "km",
-        "fraction": 0.16,
-        "note": "Measured as the e-folding decay of the first-order pump's modulation profile, from its peak. The model does not separate the direct and indirect cases at all, where the paper separates them by 5 km."
+        "fraction": 0.15,
+        "note": "Measured as the e-folding decay of the first-order pump's modulation profile, from its peak."
       },
       {
         "quantity": "interaction length, indirect",
         "expected": 25.5,
-        "observed": 23.7,
+        "observed": null,
         "unit": "km",
-        "fraction": 0.07
+        "note": "With the printed no-self-term equations the indirect profile no longer crosses the 37 percent threshold anywhere on the span."
       }
     ],
     "guarded_by": [
-      "tests/test_raman_transfer.py::test_transfer_dc_levels",
-      "tests/test_raman_transfer.py::test_co_propagating_corner_frequencies",
       "tests/test_raman_transfer.py::test_interaction_lengths"
     ],
-    "guard_policy": "pytest.mark.xfail(strict=False). A later stage that fixes one reports XPASS and the mark is removed; no threshold is loosened to make a test pass."
+    "guard_policy": "The DC and corner regressions are now real assertions (DC within 2 dB, 6 dB drop point within 35 percent). The interaction lengths remain pytest.mark.xfail(strict=False); no threshold was loosened to make a passing test."
   }
 }

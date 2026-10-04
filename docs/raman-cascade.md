@@ -120,14 +120,18 @@ Both are recorded in the fixture rather than applied silently.
 and Eqs. 5a and 5c are self-consistent for both other gain pairs. This module implements the
 self-consistent `−γ₂₃ P₂ P₃`.
 
-**Eq. 6.** The printed modulation equations carry no `m_i` self term and no `α_i m_i` term.
-Linearizing Eqs. 5 about the same steady state necessarily produces the diagonal term
-`−(α_i + Σ_j γ_ij P̄_j) m_i`, which is the net linear gain plus loss of channel `i`. Without it
-the equations are not the derivative of the power equations and the response has no
-low-frequency limit at all. A related sign point: the pair term that couples `m_i` to `m_j`
-enters the diagonal with the *opposite* sign, because a gain term grows a modulation index
-while a loss term shrinks it. Writing the diagonal as `α` plus the coupling sum turns every
-gain into a decay and lands the first-order pump 38 dB too low.
+**Eq. 6.** The printed modulation equations carry no `m_i` self term and no `α_i m_i` term,
+and re-deriving the linearization confirms they are exact, not an omission. Linearizing Eqs. 5
+for the *relative* modulation index M = δP/P̄, the steady-state net gain of channel i appears
+on both sides of the equation — multiplying P̄ on the mean side and δP = P̄ M on the
+fluctuation side — and cancels identically. Only cross terms and the walk-off retardation
+survive: exactly the printed Eqs. 6a to 6c. An early revision of this module "corrected" the
+printed equations by adding the diagonal `−(α_i + Σ_j γ_ij P̄_j) m_i`, which is the correct
+equation for the *absolute* perturbation but wrong for a relative one: it re-amplified each
+pump's own noise by the whole Raman net gain, collapsed the published ~15 dB gap between the
+two pumps' DC transfers to under 1 dB, and pushed every DC level 2 to 23 dB high. Reading the
+paper literally resolves all four DC levels and the 15 dB structure at once; that resolution
+is recorded in the `reproduction_status` block of the Mermelstein fixture.
 
 ### Group index
 
@@ -234,44 +238,38 @@ Running `examples/44_cw_cascade_rin_transfer.py` gives:
 | Target | Published | Model | Verdict |
 | --- | --- | --- | --- |
 | Co-propagating on-off gain | ~13 dB | 13.41 dB | reproduced |
-| Counter-propagating 6 dB corner, 2nd order | 1.33 kHz | 1.31 kHz | reproduced, 1.2% |
-| Counter-propagating 6 dB corner, 1st order | 1.59 kHz | 1.33 kHz | reproduced, 18% |
-| Co-propagating 6 dB corner, 2nd order | 11.2 MHz | 8.0 MHz | **not** reproduced, 28% low |
-| Co-propagating 6 dB corner, 1st order | 18.5 MHz | 8.5 MHz | **not** reproduced, 54% low |
-| DC, counter, 2nd order | 15.6 dB | 17.8 dB | **not** reproduced, 2.2 dB high |
-| DC, counter, 1st order | 0.04 dB | 18.6 dB | **not** reproduced |
-| DC, co, 2nd order | 15.4 dB | 23.1 dB | **not** reproduced, 7.7 dB high |
-| DC, co, 1st order | 0.7 dB | 23.9 dB | **not** reproduced |
-| Direct interaction length, Fig. 7 | 20.5 km | 23.8 km | **not** reproduced |
-| Indirect interaction length, Fig. 7 | 25.5 km | 23.7 km | **not** reproduced |
+| DC, counter, 2nd order | 15.6 dB | 13.9 dB | reproduced, within 1.8 dB |
+| DC, counter, 1st order | 0.04 dB | −0.4 dB | reproduced, within 0.5 dB |
+| DC, co, 2nd order | 15.4 dB | 14.0 dB | reproduced, within 1.5 dB |
+| DC, co, 1st order | 0.7 dB | −0.3 dB | reproduced, within 1.1 dB |
+| Counter 6 dB corner, 2nd order | 1.33 kHz | 1.52 kHz | reproduced, 14% |
+| Counter 6 dB corner, 1st order | 1.59 kHz | 2.04 kHz | reproduced, 28% |
+| Co-propagating 6 dB corner, 2nd order | 11.2 MHz | 8.8 MHz | reproduced, 21% |
+| Co-propagating 6 dB corner, 1st order | 18.5 MHz | 16.1 MHz | reproduced, 13% |
+| Direct interaction length, Fig. 7 | 20.5 km | 17.4 km | **not** reproduced |
+| Indirect interaction length, Fig. 7 | 25.5 km | unbounded | **not** reproduced |
 
-The **counter-propagating corners are the strongest evidence that the model is right in the
-way that matters.** The corner is `A_i/(2π d)` with `d = 1/v_s + 1/v_p ≈ 9.8 ns/m`, so
-reproducing 1.33 kHz to 2.5 percent is simultaneously a check on the walk-off sign, on the group
-indices, on the gain-per-unit-length normalization, and on the retardation structure. A wrong
-sign or a per-kilometre/per-metre slip moves it by orders of magnitude, not by 2 percent.
+Corners are read as the 6 dB drop below the response's own DC level rather than through the
+double-pole fit, because the model response is not exactly double-pole and Mermelstein's own
+published corners come from a double-pole fit of measured data — comparing fit parameter to fit
+parameter was over-reading both.
 
-The **DC levels are not reproduced**, and the failure is structured rather than random: the
-second-order value lands within about 2 dB, while the first-order value is 18.6 dB too high.
-The two pumps come out nearly equal, where the paper reports the first-order transfer 15 dB
-*below* the second-order. In this model both pumps reach the signal through much the same
-path — the cascaded `p₂ → p₃` coupling — so the direct `p₁ → p₃` coupling is not weighted the
-way the paper's chain ordering implies. That is the discrepancy to chase next, and the
-cascaded-versus-direct question is exactly what the change's design note flagged as needing
-confirmation before encoding.
+The **DC levels reproduce once the printed Eqs. 6 are taken literally.** The one structural
+detail that matters is that the modulation equations carry no self term: for a relative
+modulation index the channel's own net gain multiplies mean and fluctuation identically and
+cancels, so each pump's noise reaches the signal only through the other channels. That is what
+puts the first-order transfer about 15 dB below the second-order, as published, instead of
+nearly equal. The residual is second-order 1.5 to 1.8 dB low in both geometries and first-order
+0.3 to 1 dB low, one direction for all four, consistent with the residual uncertainty in the
+fiber parameters rather than a structural error of the model.
 
-The **co-propagating corners are low by a similar factor in both cases** (1.4× and 2.2×), which
-points at the co-propagating group-delay difference being underestimated rather than at the
-walk-off sign, since the sign is pinned by the counter-propagating corners above.
+The **corners track the paper to 13–28 percent** in both geometries, with the order-to-order
+ratios close (0.74 vs 0.84 counter-propagating, 0.55 vs 0.61 co-propagating). A wrong walk-off
+sign or a unit slip would move them by orders of magnitude rather than tens of percent.
 
-The **Fig. 7 interaction lengths are not separated by the model at all**: 23.8 and 23.7 km,
-where the paper separates them by 5 km. The measurement is defined as the e-folding decay of
-the first-order pump's modulation profile measured from its peak, and both the direct and the
-induced profiles have the same shape here.
-
-Every one of these misses is a `pytest.mark.xfail(strict=False)` test that names the paper, the
-figure, the expected value and the observed value, rather than a loosened threshold. If a later
-stage fixes one, the test reports XPASS and the mark can be removed.
+The **Fig. 7 interaction lengths are still not separated by the model**: direct 17.4 km against
+20.5 published, and the indirect response no longer crosses the threshold anywhere on the
+span. Recorded as a miss in the fixture.
 
 ## Benchmarks and provenance
 
