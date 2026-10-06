@@ -74,7 +74,7 @@ nav:
   - Multimode (few-mode) GNLSE: multimode-gnlse.md
   - Cascaded χ⁽²⁾–χ⁽³⁾ & inverse design: cascaded-chi23.md
   - Raman cascade (CW) & RIN transfer: raman-cascade.md
-  - Raman noise sources (planned): raman-noise.md
+  - Raman noise sources: raman-noise.md
   - API Reference:
       - api/index.md
       - Foundation core (units/grids/materials): api/core.md
@@ -89,6 +89,8 @@ nav:
       - χ⁽²⁾ nonlinear optics (SHG / SFG / DFG): api/chi2.md
       - Raman scattering: api/raman.md
       - Raman cascade (CW) & RIN transfer: api/raman-transfer.md
+      - Raman cascade (multi-pump) & reproductions: api/raman-multipump.md
+      - Raman cascade (split-step) & noise: api/raman-cascade-ss.md
       - Soliton analysis: api/soliton.md
       - Breathers and exact solutions: api/breathers.md
       - Noise sources: api/noise.md

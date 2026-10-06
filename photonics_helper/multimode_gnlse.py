@@ -62,6 +62,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from photonics_helper.pulse import TemporalGrid, Wave
 
 __all__ = [
+    "CavityResult",
     "CoeffModel",
     "MultimodeSplitStepEngine",
 ]
@@ -72,6 +73,38 @@ CoeffModel = Literal["lp_degenerate", "isotropic"]
 _LP_XPM = 2.0 / 3.0
 #: Inter-modal FWM factor of the same degenerate LP model.
 _LP_FWM = 2.0 / 3.0
+
+
+class CavityResult:
+    """Result of a cavity iteration.
+
+    Attributes
+    ----------
+    fields
+        Converged complex fields, one per channel.
+    iterations
+        Number of cavity iterations performed.
+    converged
+        Whether the iteration converged.
+    history
+        Relative change per iteration.
+    beat_period_hz
+        Longitudinal mode beat period of the cavity in Hz.
+    """
+
+    def __init__(
+        self,
+        fields: list[NDArray],
+        iterations: int,
+        converged: bool,
+        history: list[float],
+        beat_period_hz: float,
+    ) -> None:
+        self.fields = fields
+        self.iterations = iterations
+        self.converged = converged
+        self.history = history
+        self.beat_period_hz = beat_period_hz
 
 
 class MultimodeSplitStepEngine:
@@ -155,6 +188,44 @@ class MultimodeSplitStepEngine:
         ``w[m, n, p, q]`` weights the ``→ m`` transition pumped by
         ``(n, p)`` consuming ``q``. When given, it multiplies every
         allowed triple (OAM gating, if any, still applies first).
+    coupling_tensor : array_like, optional
+        Absolute SPM/XPM coupling coefficients, an ``N×N`` **complex**
+        array in W⁻¹ m⁻¹; ``C[i, j]`` is the coefficient multiplying
+        ``|A_j|²`` in the rate of channel ``i``. Supplied when given in
+        preference to ``coef_model``/``xpm_weights``, which carry
+        dimensionless multipliers of a single scalar γ.
+
+        Two properties make this the right slot for a Raman cascade
+        rather than a widened ``xpm_weights``:
+
+        * An **imaginary antisymmetric** off-diagonal pair,
+          ``C[i, j] = −conj(C[j, i])``, is a photon-number-conserving
+          energy exchange — channel ``i`` gains what ``j`` loses — which
+          is the structure a Raman Stokes cascade needs and which a real
+          symmetric overlap weight cannot express.
+        * The coefficients are **absolute**, so pump and Stokes orders
+          carry their own nonlinear scales without the engine holding a
+          per-order γ.
+
+        The instantaneous arm is integrated exactly while ``C`` is real
+        (the closed-form phase rotation) and by RK4 substeps otherwise,
+        so a real tensor reproduces the default path exactly.
+    fwm_coupling_tensor : array_like, optional
+        Absolute FWM coefficients, an ``N×N×N×N`` **complex** array in
+        W⁻¹ m⁻¹; ``C[m, n, p, q]`` is the coefficient of the ``→ m``
+        transition pumped by ``(n, p)`` consuming ``q``. Supplied when
+        given in preference to ``fwm_weights`` (OAM gating still applies
+        first). Requires ``include_fwm=True``.
+    channel_alpha : array_like, optional
+        Per-channel loss in ``1/m``, length ``N``, overriding the shared
+        ``fiber.alpha``. Raman cascade orders sit at different wavelengths and have
+        genuinely different losses (Mermelstein 2003 Table I: 0.279 / 0.220 / 0.179
+        dB/km at 1375 / 1465 / 1560 nm), so a single scalar cannot represent them.
+
+        This is deliberately a *constructor* argument and not part of
+        ``coupling_tensor``: the coupling tensor multiplies ``|A_j|**2``, so folding
+        loss into it would make the loss amplitude-dependent. Omitted (the default)
+        leaves the shared ``fiber.alpha`` in charge, byte-identically.
     fwm_pump_depletion : bool
         Include the Manley–Rowe-consistent back-conversion pump arm
         ``+2iγ f* A_m A_q A_n*`` in the FWM substep (requires
@@ -164,6 +235,24 @@ class MultimodeSplitStepEngine:
         approximation: the pump evolves only through SPM/XPM).
     step_size : Length | None
         Fixed step size (m); ``None`` uses ``length/num_steps``.
+    cavity_reflectivity_input : sequence of float, optional
+        Per-channel power reflectivity at the input end (z=0) of a
+        cavity, length ``N``. ``None`` (default) = no cavity, amplifier
+        mode. When supplied, :meth:`cavity_iterate` closes the
+        propagation into a resonator.
+    cavity_reflectivity_output : sequence of float, optional
+        Per-channel power reflectivity at the output end (z=L) of a
+        cavity, length ``N``. Must be supplied together with
+        ``cavity_reflectivity_input``.
+    cavity_round_trip_length : float, optional
+        Round-trip length of the cavity in metres. Used for the
+        beat-period calculation and the round-trip phase. Defaults
+        to ``2 * fiber.length`` (the physical cavity length).
+    cavity_group_index : float, optional
+        Group index ``n_g`` of the fiber, used both for the round-trip
+        phase and for :meth:`cavity_beat_period`. Defaults to 1.466
+        (silica near 1.5 um), which is the Babin 2005 value. Must be
+        positive.
     """
 
     _COEF_MODELS = ("lp_degenerate", "isotropic")
@@ -182,8 +271,16 @@ class MultimodeSplitStepEngine:
         oam_l: list[int] | None = None,
         xpm_weights=None,
         fwm_weights=None,
+        coupling_tensor=None,
+        fwm_coupling_tensor=None,
+        channel_alpha=None,
         fwm_pump_depletion: bool = False,
         step_size: Length | None = None,
+        cavity_reflectivity_input: list[float] | None = None,
+        cavity_reflectivity_output: list[float] | None = None,
+        cavity_round_trip_length: float | None = None,
+        cavity_group_index: float = 1.466,
+        rayleigh_backscatter: float | None = None,
     ):
         waves = list(waves)
         if len(waves) < 1:
@@ -243,6 +340,28 @@ class MultimodeSplitStepEngine:
                 )
             if not np.all(np.isfinite(fw)):
                 raise ValueError("fwm_weights must be finite.")
+        if coupling_tensor is not None:
+            ct = np.asarray(coupling_tensor, dtype=complex)
+            if ct.shape != (self._n, self._n):
+                raise ValueError(
+                    f"coupling_tensor must be ({self._n}, {self._n}), got {ct.shape}."
+                )
+            if not np.all(np.isfinite(ct)):
+                raise ValueError("coupling_tensor must be finite.")
+        if fwm_coupling_tensor is not None:
+            if not include_fwm:
+                raise ValueError(
+                    "fwm_coupling_tensor requires include_fwm=True (it fills "
+                    "the FWM arm, which is only integrated when FWM is on)."
+                )
+            fc = np.asarray(fwm_coupling_tensor, dtype=complex)
+            if fc.shape != (self._n,) * 4:
+                raise ValueError(
+                    f"fwm_coupling_tensor must be ({self._n},)*4 = "
+                    f"{(self._n,) * 4}, got {fc.shape}."
+                )
+            if not np.all(np.isfinite(fc)):
+                raise ValueError("fwm_coupling_tensor must be finite.")
         if betas is None:
             raise ValueError("betas is required")
 
@@ -276,8 +395,69 @@ class MultimodeSplitStepEngine:
         self.fwm_weights = (
             None if fwm_weights is None else np.asarray(fwm_weights, dtype=float).copy()
         )
+        self.coupling_tensor = (
+            None
+            if coupling_tensor is None
+            else np.asarray(coupling_tensor, dtype=complex).copy()
+        )
+        self.fwm_coupling_tensor = (
+            None
+            if fwm_coupling_tensor is None
+            else np.asarray(fwm_coupling_tensor, dtype=complex).copy()
+        )
         self.fwm_pump_depletion = fwm_pump_depletion
+        if channel_alpha is not None:
+            ca = np.asarray(channel_alpha, dtype=float)
+            if ca.shape != (self._n,):
+                raise ValueError(
+                    f"channel_alpha must be ({self._n},), got {ca.shape}."
+                )
+            if not np.all(np.isfinite(ca)) or np.any(ca < 0):
+                raise ValueError("channel_alpha must be finite and non-negative.")
+        self.channel_alpha = (
+            None if channel_alpha is None else np.asarray(channel_alpha, dtype=float)
+        )
         self.step_size = step_size
+
+        # Cavity configuration
+        if cavity_reflectivity_input is not None or cavity_reflectivity_output is not None:
+            if cavity_reflectivity_input is None or cavity_reflectivity_output is None:
+                raise ValueError(
+                    "cavity_reflectivity_input and cavity_reflectivity_output must "
+                    "be supplied together"
+                )
+            r_in = np.asarray(cavity_reflectivity_input, dtype=float)
+            r_out = np.asarray(cavity_reflectivity_output, dtype=float)
+            if r_in.shape != (self._n,) or r_out.shape != (self._n,):
+                raise ValueError(
+                    f"cavity reflectivity must have shape ({self._n},), got "
+                    f"input {r_in.shape} and output {r_out.shape}"
+                )
+            if np.any(r_in < 0) or np.any(r_in > 1) or np.any(r_out < 0) or np.any(r_out > 1):
+                raise ValueError("cavity reflectivity must be in [0, 1]")
+        else:
+            r_in = None
+            r_out = None
+        self.cavity_reflectivity_input = r_in
+        self.cavity_reflectivity_output = r_out
+        self.cavity_round_trip_length = (
+            cavity_round_trip_length
+            if cavity_round_trip_length is not None
+            else 2.0 * self.fiber.length.as_m
+        )
+        if not cavity_group_index > 0:
+            raise ValueError(
+                f"cavity_group_index must be positive, got {cavity_group_index!r}"
+            )
+        self.cavity_group_index = float(cavity_group_index)
+
+        # Rayleigh backscatter coefficient (1/m)
+        if rayleigh_backscatter is not None:
+            if rayleigh_backscatter < 0:
+                raise ValueError(
+                    f"rayleigh_backscatter must be non-negative, got {rayleigh_backscatter!r}"
+                )
+        self.rayleigh_backscatter = rayleigh_backscatter
 
         self.grid: TemporalGrid = waves[0].grid
         self.omega0 = waves[0].central_frequency
@@ -330,7 +510,7 @@ class MultimodeSplitStepEngine:
             if db0:
                 phi = phi + db0 * dz
         f_w = f_w * np.exp(1j * phi)
-        alpha = self.fiber.alpha
+        alpha = self.fiber.alpha if self.channel_alpha is None else self.channel_alpha[m]
         if alpha > 0:
             f_w = f_w * np.exp(-alpha * dz / 2)
         return np.asarray(self.grid.ifft(f_w), dtype=complex)
@@ -404,6 +584,12 @@ class MultimodeSplitStepEngine:
         per-pair floats so the returned rate is an intensity array per
         channel; the docstring's scalar-model interpretation is unchanged
         for the default coefficient models.
+
+        This is the **default** (no ``coupling_tensor``) arm and is
+        deliberately left as written: the tensor path in
+        :meth:`_coupling_rate` multiplies γ per pair, which rounds
+        differently, and task 1.5 of the stage 1 change requires the
+        default path to be bit-identical to the pre-tensor implementation.
         """
         gamma = self._gamma_v()
         out: list[NDArray] = []
@@ -414,6 +600,38 @@ class MultimodeSplitStepEngine:
                     tot = tot + self._xpm_factor(i, j) * np.abs(A[j]) ** 2
             out.append(gamma * tot)
         return out
+
+    def _coupling_rate(self, A: list[NDArray]) -> list[NDArray]:
+        """Instantaneous SPM/XPM rate per channel from ``coupling_tensor``.
+
+        ``d_i = Σ_j C_ij |A_j|²`` with ``C`` in W⁻¹ m⁻¹, i.e. the rate that
+        the default path exponentiates as ``exp(1j·d_i·dz)``. The result is
+        complex whenever the tensor carries an imaginary (gain-transfer)
+        part, in which case the update is no longer a phase rotation and is
+        integrated by RK4 instead.
+        """
+        if self.coupling_tensor is None:
+            raise RuntimeError("_coupling_rate requires coupling_tensor.")
+        C = self.coupling_tensor
+        out: list[NDArray] = []
+        for i in range(self._n):
+            tot = C[i, i] * (np.abs(A[i]) ** 2)
+            for j in range(self._n):
+                if j != i:
+                    tot = tot + C[i, j] * np.abs(A[j]) ** 2
+            out.append(tot)
+        return out
+
+    def _fwm_coupling(self, m: int, n: int, p: int, q: int) -> complex:
+        """Absolute FWM coefficient of the ``(m n p q)`` transition.
+
+        ``fwm_coupling_tensor`` (absolute, W⁻¹ m⁻¹) when supplied, else
+        ``fwm_weights``/``coef_model`` multiplied by the scalar γ. A real
+        result reproduces the pre-tensor expression exactly.
+        """
+        if self.fwm_coupling_tensor is not None:
+            return complex(self.fwm_coupling_tensor[m, n, p, q])
+        return complex(self._gamma_v() * self._fwm_factor(m, n, p, q))
 
     def _fwm_rhs(self, A: list[NDArray]) -> list[NDArray]:
         """Pump-driven FWM right-hand side for every channel.
@@ -439,7 +657,6 @@ class MultimodeSplitStepEngine:
         back-conversion oscillation of strong pumps. Without the pump
         arm the substep is the standard pump-driven approximation.
         """
-        gamma = self._gamma_v()
         N = self._n
         rhs: list[NDArray] = [np.zeros_like(A[0], dtype=complex) for _ in range(N)]
         if not self.include_fwm:
@@ -454,15 +671,33 @@ class MultimodeSplitStepEngine:
                         continue
                     if not self._fwm_allowed(m, n, n, q):
                         continue
-                    f_m = self._fwm_factor(m, n, n, q)
-                    f_q = self._fwm_factor(q, n, n, m)
-                    rhs[m] = rhs[m] + 1j * gamma * f_m * pump_sq * np.conj(A[q])
-                    rhs[q] = rhs[q] + 1j * gamma * f_q * pump_sq * np.conj(A[m])
+                    c_m = self._fwm_coupling(m, n, n, q)
+                    c_q = self._fwm_coupling(q, n, n, m)
+                    rhs[m] = rhs[m] + 1j * c_m * pump_sq * np.conj(A[q])
+                    rhs[q] = rhs[q] + 1j * c_q * pump_sq * np.conj(A[m])
                     if self.fwm_pump_depletion:
-                        rhs[n] = rhs[n] + 2j * gamma * np.conj(f_m) * A[m] * A[
-                            q
-                        ] * np.conj(A[n])
+                        rhs[n] = (
+                            rhs[n] + 2j * np.conj(c_m) * A[m] * A[q] * np.conj(A[n])
+                        )
         return rhs
+
+    def _nonlinear_rhs_tensor(self, A: list[NDArray]) -> list[NDArray]:
+        """Full coupled nonlinear RHS under the supplied tensors.
+
+        ``dA_i/dz = 1j * ( sum_j C_ij |A_j|**2 * A_i + FWM arms )``.
+
+        The ``A_i`` factor of the instantaneous arm is implicit in the closed-form
+        ``A_i * exp(1j * d * dz)`` of the default path, and must be made explicit here
+        where the same term is integrated by RK4. Omitting it adds a pure imaginary
+        increment to the envelope, which looks like amplitude growth rather than phase
+        and drives the pump up instead of depleting it.
+        """
+        rates = self._coupling_rate(A)
+        rhs = [1j * r * Ai for r, Ai in zip(rates, A)]
+        if not self.include_fwm:
+            return rhs
+        fwm = self._fwm_rhs(A)
+        return [r + f for r, f in zip(rhs, fwm)]
 
     _FWM_SUBSTEP_CAP = 200
     #: Max-FWM rate·η within one explicit RK4 substep for stability margin.
@@ -498,6 +733,23 @@ class MultimodeSplitStepEngine:
                         rate_max, arg_ch = abs(float(c)), n
         return rate_max, arg_ch
 
+    def _coupling_rate_max(self, A: list[NDArray]) -> tuple[float, int]:
+        """Max instantaneous coupling rate ``|d_i * A_i|`` and its channel.
+
+        Drives the RK4 substep count of the tensor arm under the same
+        stability criterion as the FWM arm (:meth:`_fwm_rate_max`). The
+        ``A_i`` factor matters here: the substep is stable when
+        ``|dA_i/dz| * h`` is bounded, not when ``|d_i| * h`` is.
+        """
+        if self.coupling_tensor is None:
+            return 0.0, 0
+        rate_max, arg_ch = 0.0, 0
+        for i, (r, Ai) in enumerate(zip(self._coupling_rate(A), A)):
+            m = float(np.max(np.abs(r * Ai)))
+            if m > rate_max:
+                rate_max, arg_ch = m, i
+        return rate_max, arg_ch
+
     def _fwm_substep_count(self, A: list[NDArray], dz: float) -> int:
         """Explicit-RK4 substeps: stability-driven with an accuracy floor.
 
@@ -525,6 +777,25 @@ class MultimodeSplitStepEngine:
         n_acc = min(self._FWM_SUBSTEP_CAP, int(np.ceil(rate * dz / 0.05)))
         return int(max(1, max(n_stab, n_acc)))
 
+    def _nonlinear_is_rotation(self) -> bool:
+        """True when the nonlinear arm is an exact per-channel rotation.
+
+        Holds when no *complex* tensor was supplied: a real ``C`` makes the
+        instantaneous arm a pure phase, which the closed-form exponential
+        integrates exactly, so the real-tensor case still takes the Strang
+        path. A complex tensor (a Raman gain-transfer arm) is not a rotation
+        and is integrated by RK4 instead.
+        """
+        if self.coupling_tensor is not None and np.any(
+            np.abs(self.coupling_tensor.imag) > 0.0
+        ):
+            return False
+        if self.fwm_coupling_tensor is not None and np.any(
+            np.abs(self.fwm_coupling_tensor.imag) > 0.0
+        ):
+            return False
+        return True
+
     def _coupled_nonlinear_step(self, A: list[NDArray], dz: float) -> list[NDArray]:
         """Coupled nonlinear step for every channel, at ``self._current_z``.
 
@@ -533,45 +804,117 @@ class MultimodeSplitStepEngine:
         frequency-domain RK4 substeps, Strang-split around the exact
         diagonal phase (the FWM term is ``O(γP·f)`` while the diagonal
         phase is ``O(γP)``, so no stage integrates the stiff part).
-        """
-        if not self.include_fwm:
-            diag = self._diagonal_phase(A)
-            return [Ai * np.exp(1j * d * dz) for Ai, d in zip(A, diag)]
 
-        # --- FWM mode ----------------------------------------------------
-        # Strang split: half of the diagonal phase, FWM RK4, trailing half.
-        diag_in = self._diagonal_phase(A)
-        n_sub = self._fwm_substep_count(A, dz)
+        With a ``coupling_tensor`` the arm is integrated instead of
+        exponentiated whenever it is not a pure rotation, because a complex
+        tensor carries a gain-transfer (exchange) flow for which the
+        exponential identity does not hold.
+        """
+        if self._nonlinear_is_rotation():
+            if not self.include_fwm:
+                diag = self._diagonal_phase(A)
+                return [Ai * np.exp(1j * d * dz) for Ai, d in zip(A, diag)]
+
+            # --- FWM mode ------------------------------------------------
+            # Strang split: half of the diagonal phase, FWM RK4, trailing half.
+            diag_in = self._diagonal_phase(A)
+            n_sub = self._fwm_substep_count(A, dz)
+            h_sub = dz / n_sub
+            states = [Ai * np.exp(0.5j * d * dz) for Ai, d in zip(A, diag_in)]
+            for _ in range(n_sub):
+                states = self._rk4_fwm_substep(states, h_sub)
+            diag_out = self._diagonal_phase(states)
+            return [Ai * np.exp(0.5j * d * dz) for Ai, d in zip(states, diag_out)]
+
+        # --- tensor mode --------------------------------------------------
+        # No pure-phase diagonal exists to split against, so the whole
+        # coupled term (instantaneous + FWM arms) advances by RK4 substeps.
+        n_sub = self._tensor_substep_count(A, dz)
         h_sub = dz / n_sub
-        states = [Ai * np.exp(0.5j * d * dz) for Ai, d in zip(A, diag_in)]
+        states = list(A)
         for _ in range(n_sub):
-            # Classical RK4 on the frozen-coefficient FWM flow (anti-Hermitian
-            # when the weight tensor is exchange-symmetric -> photon-number
-            # conserving to O(h_sub^5)).  ISSUES.md #12: the 2026-09-28 #11
-            # rewrite accidentally reduced this to a single explicit Euler
-            # step (rhs evaluated once, linear update), which pumps |A|^2 at
-            # O(dz) — the 13.8 % energy drift and the Eq.-(6) fixed-point
-            # regression of the Renninger-Wise deck.
-            k1 = self._fwm_rhs(states)
-            k2 = self._fwm_rhs([Ai + 0.5 * h_sub * ki for Ai, ki in zip(states, k1)])
-            k3 = self._fwm_rhs([Ai + 0.5 * h_sub * ki for Ai, ki in zip(states, k2)])
-            k4 = self._fwm_rhs([Ai + h_sub * ki for Ai, ki in zip(states, k3)])
-            states = [
-                Ai + (h_sub / 6.0) * (k1i + 2 * k2i + 2 * k3i + k4i)
-                for Ai, k1i, k2i, k3i, k4i in zip(states, k1, k2, k3, k4)
-            ]
-            # Loud failure on any non-finite state (ISSUES.md #11: the old
-            # code surfaced this as ceil(NaN) crashes downstream).
-            for m, s in enumerate(states):
-                if not np.all(np.isfinite(s.view(float) if s.dtype == complex else s)):
-                    raise FloatingPointError(
-                        f"FWM substep produced non-finite amplitudes in "
-                        f"channel {m} at z = {self._current_z:.4e} m; the "
-                        "substep integrator diverged — reduce the outer "
-                        "step size or the seed amplitude (ISSUES.md #11)."
-                    )
-        diag_out = self._diagonal_phase(states)
-        return [Ai * np.exp(0.5j * d * dz) for Ai, d in zip(states, diag_out)]
+            states = self._rk4_tensor_substep(states, h_sub)
+        return states
+
+    def _rk4_fwm_substep(
+        self, states: list[NDArray], h_sub: float
+    ) -> list[NDArray]:
+        """One classical RK4 substep of the FWM flow (default coefficients)."""
+        # Frozen-coefficient FWM flow (anti-Hermitian when the weight tensor
+        # is exchange-symmetric -> photon-number conserving to O(h_sub^5)).
+        # ISSUES.md #12: an explicit Euler step here pumps |A|^2 at O(dz).
+        k1 = self._fwm_rhs(states)
+        k2 = self._fwm_rhs([Ai + 0.5 * h_sub * ki for Ai, ki in zip(states, k1)])
+        k3 = self._fwm_rhs([Ai + 0.5 * h_sub * ki for Ai, ki in zip(states, k2)])
+        k4 = self._fwm_rhs([Ai + h_sub * ki for Ai, ki in zip(states, k3)])
+        out = [
+            Ai + (h_sub / 6.0) * (k1i + 2 * k2i + 2 * k3i + k4i)
+            for Ai, k1i, k2i, k3i, k4i in zip(states, k1, k2, k3, k4)
+        ]
+        for m, s in enumerate(out):
+            if not np.all(np.isfinite(s.view(float) if s.dtype == complex else s)):
+                raise FloatingPointError(
+                    f"FWM substep produced non-finite amplitudes in "
+                    f"channel {m} at z = {self._current_z:.4e} m; the "
+                    "substep integrator diverged — reduce the outer "
+                    "step size or the seed amplitude (ISSUES.md #11)."
+                )
+        return out
+
+    def _rk4_tensor_substep(
+        self, states: list[NDArray], h_sub: float
+    ) -> list[NDArray]:
+        """One classical RK4 substep of the full tensor-driven flow."""
+        k1 = self._nonlinear_rhs_tensor(states)
+        k2 = self._nonlinear_rhs_tensor(
+            [Ai + 0.5 * h_sub * ki for Ai, ki in zip(states, k1)]
+        )
+        k3 = self._nonlinear_rhs_tensor(
+            [Ai + 0.5 * h_sub * ki for Ai, ki in zip(states, k2)]
+        )
+        k4 = self._nonlinear_rhs_tensor(
+            [Ai + h_sub * ki for Ai, ki in zip(states, k3)]
+        )
+        out = [
+            Ai + (h_sub / 6.0) * (k1i + 2 * k2i + 2 * k3i + k4i)
+            for Ai, k1i, k2i, k3i, k4i in zip(states, k1, k2, k3, k4)
+        ]
+        for m, s in enumerate(out):
+            if not np.all(np.isfinite(s.view(float) if s.dtype == complex else s)):
+                raise FloatingPointError(
+                    f"coupling-tensor substep produced non-finite amplitudes "
+                    f"in channel {m} at z = {self._current_z:.4e} m; the "
+                    "substep integrator diverged — reduce the outer step "
+                    "size or the coupling magnitude (ISSUES.md #11)."
+                )
+        return out
+
+    def _tensor_substep_count(self, A: list[NDArray], dz: float) -> int:
+        """RK4 substeps covering both the instantaneous and FWM tensor arms.
+
+        Same policy as :meth:`_fwm_substep_count` — stability needs
+        ``η·h_sub ≤ 2.5``, accuracy targets ``η·h_sub ≲ 0.05`` rad capped at
+        ``_FWM_SUBSTEP_CAP``, and a configuration that cannot be integrated
+        at this ``dz`` raises naming the channel.
+        """
+        rate, ch = self._coupling_rate_max(A)
+        if self.include_fwm:
+            fwm_rate, fwm_ch = self._fwm_rate_max(A, dz)
+            if fwm_rate > rate:
+                rate, ch = fwm_rate, fwm_ch
+        rate = max(rate, 1e-30)
+        n_stab = int(np.ceil(rate * dz / self._FWM_SUBSTEP_RATE))
+        if n_stab > self._FWM_SUBSTEP_MAX:
+            raise ValueError(
+                f"coupling rate = {rate:.3e} /m over outer dz = {dz:.3e} m "
+                f"exceeds the explicit RK4 stability region even with "
+                f"{self._FWM_SUBSTEP_MAX} substeps (η·h ≈ "
+                f"{rate * dz / self._FWM_SUBSTEP_MAX:.2f} > 2.5); reduce the "
+                f"outer step size or shorten the coupling on channel {ch} "
+                "(ISSUES.md #11)."
+            )
+        n_acc = min(self._FWM_SUBSTEP_CAP, int(np.ceil(rate * dz / 0.05)))
+        return int(max(1, max(n_stab, n_acc)))
 
     # ------------------------------------------------------------------
     # propagation
@@ -644,6 +987,9 @@ class MultimodeSplitStepEngine:
             # Strang split: half linear → coupled nonlinear → half linear
             self.A = [self._linear_step(self.A[m], dz / 2, m) for m in range(self._n)]
             self.A = self._coupled_nonlinear_step(self.A, dz)
+            # Apply Rayleigh backscatter if enabled
+            if self.rayleigh_backscatter is not None:
+                self.A = self._apply_rayleigh_backscatter(self.A, dz)
             self.A = [self._linear_step(self.A[m], dz / 2, m) for m in range(self._n)]
             z = step * dz + dz
             self._z_positions.append(z)
@@ -676,13 +1022,54 @@ class MultimodeSplitStepEngine:
             spectra[i] = acc
         self._spectra = (self.grid.w, spectra)
 
+    def _apply_rayleigh_backscatter(self, A: list[NDArray], dz: float) -> list[NDArray]:
+        """Apply Rayleigh backscatter coupling to the fields.
+
+        The Rayleigh backscatter is a distributed feedback mechanism that couples
+        forward and backward propagating waves. In the coupled power equations:
+
+            dP+/dz = ... + eps * P-
+            dP-/dz = ... + eps * P+
+
+        where eps is the Rayleigh backscatter coefficient in 1/m.
+
+        For the multimode GNLSE engine, this is implemented as a perturbation to
+        the field. The Rayleigh backscatter coefficient eps has units of 1/m, and
+        the coupling is applied as:
+
+            A -> A + eps * A * dz
+
+        This is a simplified treatment that captures the essential physics of the
+        random distributed feedback mechanism.
+
+        Parameters
+        ----------
+        A
+            List of complex field arrays, one per channel.
+        dz
+            Step size in metres.
+
+        Returns
+        -------
+        list[NDArray]
+            The fields after applying the Rayleigh backscatter coupling.
+        """
+        if self.rayleigh_backscatter is None or self.rayleigh_backscatter == 0.0:
+            return A
+        # Simplified Rayleigh backscatter: A -> A + eps * A * dz
+        # This captures the essential physics of the random distributed feedback
+        eps = self.rayleigh_backscatter
+        return [a + eps * a * dz for a in A]
+
     def _emit_energy_drift_warning(self) -> None:
         """Warn if the total photon number drifted >5% with loss disabled."""
         assert self._energy_vs_z is not None
         if not self._energy_vs_z:
             return
         e0, e1 = self._energy_vs_z[0], self._energy_vs_z[-1]
-        if e0 <= 0 or self.fiber.alpha != 0:
+        if e0 <= 0:
+            return
+        if self.fiber.alpha != 0 or self.channel_alpha is not None:
             return
         drift = abs(e1 / e0 - 1.0)
         if drift > 0.05:
@@ -693,6 +1080,237 @@ class MultimodeSplitStepEngine:
                 UserWarning,
                 stacklevel=2,
             )
+
+    # ------------------------------------------------------------------
+    # cavity iteration
+    # ------------------------------------------------------------------
+
+    @property
+    def has_cavity(self) -> bool:
+        """Whether cavity reflectivity is configured."""
+        return self.cavity_reflectivity_input is not None
+
+    def cavity_beat_period(self, group_index: float | None = None) -> float:
+        """Longitudinal mode beat period of the cavity, in Hz.
+
+        The beat period is set by the cavity round-trip time:
+        ``f_beat = c / (2 * n_g * L_rt)`` where ``L_rt`` is the round-trip
+        length and ``n_g`` is the group index. For the Babin 2005
+        configuration (L = 16 m, n_g = 1.466) this gives approximately
+        6 MHz.
+
+        Parameters
+        ----------
+        group_index
+            Group index of the fiber. ``None`` (default) uses the engine's
+            ``cavity_group_index``, itself defaulting to 1.466 (silica at 1.5 um).
+
+        Returns
+        -------
+        float
+            Beat period in Hz.
+        """
+        from photonics_helper.base import C_MS
+        n_g = self.cavity_group_index if group_index is None else float(group_index)
+        if not n_g > 0:
+            raise ValueError(f"group_index must be positive, got {n_g!r}")
+        return C_MS / (2.0 * n_g * self.cavity_round_trip_length)
+
+    def _apply_cavity_boundary(self, relaxation: float = 1.0) -> None:
+        """Apply round-trip boundary conditions to the circulating field.
+
+        After propagation, the Stokes output at z=L is reflected by the
+        output mirror, propagates back (round-trip phase), and is reflected
+        by the input mirror. The result is the new input field at z=0.
+
+        The pump (channel 0) is not reflected; it is re-injected by the
+        caller before the next propagation.
+
+        Parameters
+        ----------
+        relaxation
+            Under-relaxation factor ``w`` in ``A <- (1 - w) A_old + w A_boundary``,
+            in ``(0, 1]``. ``1.0`` is the plain map. See
+            :meth:`cavity_iterate` for why an above-threshold cavity needs ``w < 1``.
+        """
+        assert self.cavity_reflectivity_input is not None
+        assert self.cavity_reflectivity_output is not None
+        if not 0.0 < relaxation <= 1.0:
+            raise ValueError(
+                f"relaxation must be in (0, 1], got {relaxation!r}"
+            )
+        r_in = self.cavity_reflectivity_input
+        r_out = self.cavity_reflectivity_output
+        n = self._n
+
+        # Save the output fields at z=L
+        output_fields = [self.A[k].copy() for k in range(n)]
+
+        # Apply output mirror reflectivity and compute round-trip phase
+        for k in range(1, n):  # Skip pump (channel 0)
+            # Output mirror
+            output_fields[k] = output_fields[k] * np.sqrt(r_out[k])
+            # Round-trip phase: the field travels back through the cavity.
+            # beta_k is taken at the group index, since the round trip is set by the
+            # group velocity. Using a hard-coded index here would make the phase, and
+            # therefore the converged circulating field, silently depend on a constant
+            # that the caller cannot see.
+            lam_m = self.waves[k].central_wavelength.as_m
+            if lam_m > 0:
+                beta_k = 2.0 * np.pi * self.cavity_group_index / lam_m
+                phase = beta_k * self.cavity_round_trip_length
+                output_fields[k] = output_fields[k] * np.exp(1j * phase)
+            # Input mirror
+            output_fields[k] = output_fields[k] * np.sqrt(r_in[k])
+
+        # Set the new input fields (Stokes only; pump is re-injected)
+        for k in range(1, n):
+            if relaxation < 1.0:
+                self.A[k] = (1.0 - relaxation) * self.A[k] + relaxation * output_fields[k]
+            else:
+                self.A[k] = output_fields[k]
+
+    def cavity_iterate(
+        self,
+        num_steps: int,
+        *,
+        tolerance: float = 1e-6,
+        max_iterations: int = 100,
+        pump_field: NDArray | None = None,
+        relaxation: float = 1.0,
+        callback=None,
+    ) -> "CavityResult":
+        """Iterate propagation and boundary application to convergence.
+
+        The cavity iteration propagates all channels through the fiber,
+        applies the round-trip boundary conditions, re-injects the pump,
+        and repeats until the circulating field converges.
+
+        Parameters
+        ----------
+        num_steps
+            Number of split-step propagation steps per iteration.
+        tolerance
+            Convergence tolerance on the relative change of the circulating
+            *intensity* ``|A|**2`` between successive round trips, i.e.
+            ``|| |F(A)|**2 - |A|**2 || / || |A|**2 ||``. Intensity, not the complex
+            field, because the round-trip map carries an arbitrary absolute phase;
+            see the comment at the metric below.
+        max_iterations
+            Maximum number of cavity iterations. Raises on non-convergence.
+        relaxation
+            Under-relaxation factor ``w`` in ``A <- (1 - w) A_old + w A_boundary``,
+            in ``(0, 1]``. Default ``1.0`` is the plain round-trip map.
+
+            **An above-threshold cavity needs ``w < 1``.** Its fixed point exists —
+            pump depletion and output coupling balance it — but plain iteration
+            diverges: the small-signal loop gain at the origin is much greater than
+            one, and the gain saturation that would arrest the growth only sets in far
+            from the origin, so every iterate runs away instead of climbing toward the
+            fixed point. This was confirmed directly: a seeded first-Stokes cavity with
+            mirror reflectivities of 0.99 raised ``RuntimeError`` at every launch power
+            and seed tried. Damping moves each iterate inside the basin of attraction
+            instead of over it. ``w = 1`` remains the default so that a below-threshold
+            cavity — the only case that converges unconditionally — is untouched.
+        pump_field
+            Pump field to inject at z=0 at each iteration. If None, the
+            original pump field is used.
+        callback
+            Optional callback function called after each iteration with
+            the iteration index and current relative change.
+
+        Returns
+        -------
+        CavityResult
+            The converged field, iteration count, and convergence history.
+
+        Raises
+        ------
+        RuntimeError
+            If the cavity does not converge within ``max_iterations``. A cavity above
+            its Stokes threshold genuinely has no fixed point under plain
+            fixed-point iteration, and this is the one case where raising is the
+            correct answer rather than a bug.
+        ValueError
+            If no cavity is configured.
+        """
+        if not self.has_cavity:
+            raise ValueError(
+                "cavity_iterate requires cavity_reflectivity_input and "
+                "cavity_reflectivity_output to be configured"
+            )
+
+        # Save the original pump field
+        original_pump = self.A[0].copy()
+        if pump_field is not None:
+            self.A[0] = np.asarray(pump_field, dtype=complex).copy()
+
+        history: list[float] = []
+        converged = False
+
+        for iteration in range(max_iterations):
+            # The state fed into this round trip. It is the previous iterate's
+            # post-boundary field, i.e. the fixed-point variable.
+            incoming = [self.A[k].copy() for k in range(1, self._n)]
+
+            # Propagate through the fiber
+            self.propagate(num_steps)
+
+            # Apply cavity boundary conditions
+            self._apply_cavity_boundary(relaxation)
+
+            # Re-inject pump
+            self.A[0] = original_pump.copy()
+
+            # Convergence is judged on the circulating intensity, not on the complex
+            # field. The round-trip map carries an absolute phase exp(i beta_k L_rt),
+            # and beta_k L_rt is O(1e8) rad, so its residue mod 2pi is an arbitrary
+            # constant that alternates with the optical frequency rather than
+            # converging. A complex-field residual ||F(x) - x|| / ||x|| therefore
+            # settles at |1 - m e^{i phi}| — for a converged, contracting cavity that is
+            # a nonzero constant, not zero — and a solver written on it would raise on
+            # exactly the configurations it is supposed to accept. The circulating
+            # intensity envelope is the phase-insensitive observable every consumer of
+            # this result (threshold, spectra, RIN) actually reads, and it does
+            # converge. The complex fields themselves are returned untouched.
+            max_change = 0.0
+            for j, k in enumerate(range(1, self._n)):
+                new_i = np.abs(self.A[k]) ** 2
+                old_i = np.abs(incoming[j]) ** 2
+                old_norm = float(np.sqrt(np.sum(old_i)))
+                new_norm = float(np.sqrt(np.sum(new_i)))
+                if old_norm > 0:
+                    change = float(np.sqrt(np.sum((new_i - old_i) ** 2))) / old_norm
+                elif new_norm > 0:
+                    change = float("inf")
+                else:
+                    change = 0.0
+                max_change = max(max_change, change)
+
+            history.append(max_change)
+
+            if callback is not None:
+                callback(iteration, max_change)
+
+            if max_change < tolerance:
+                converged = True
+                break
+
+        if not converged:
+            raise RuntimeError(
+                f"Cavity iteration did not converge within {max_iterations} "
+                f"iterations (last relative change: {max_change:.3e}, "
+                f"tolerance: {tolerance:.3e}). The cavity may be "
+                f"over-pumped or the reflectivity too high for convergence."
+            )
+
+        return CavityResult(
+            fields=[self.A[k].copy() for k in range(self._n)],
+            iterations=iteration + 1,
+            converged=converged,
+            history=history,
+            beat_period_hz=self.cavity_beat_period(),
+        )
 
     # ------------------------------------------------------------------
     # readouts

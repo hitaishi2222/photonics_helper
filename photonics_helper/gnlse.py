@@ -2462,7 +2462,7 @@ def _field_feature_labels(
     snapshots = list(fields)
     n_z = len(snapshots)
     n_t = np.asarray(snapshots[0], dtype=complex).shape[0]
-    labels = np.empty((n_z, n_t), dtype=object)
+    labels: NDArray[np.object_] = np.empty((n_z, n_t), dtype=object)
     for iz, snapshot in enumerate(snapshots):
         spectrum = np.fft.fftshift(np.fft.fft(np.asarray(snapshot, dtype=complex)))
         best = np.full(n_t, -np.inf)
@@ -3040,7 +3040,7 @@ def gnlse_spectrogram(
         delay_span_ps = 0.4 * (t.max() - t.min()) * 1e12
     delays = np.linspace(-delay_span_ps, delay_span_ps, n_delays) * 1e-12
 
-    trace = np.empty((n_delays, t.size), dtype=float)
+    trace: NDArray[np.float64] = np.empty((n_delays, t.size), dtype=float)
     for i, tau in enumerate(delays):
         gated = field * np.interp(t - tau, t, gate)
         trace[i] = np.abs(np.fft.fftshift(np.fft.fft(gated))) ** 2
@@ -3057,7 +3057,7 @@ def gnlse_spectrogram(
         raise ValueError(f"wl_bounds must be increasing, got {wl_bounds!r}")
     wl_grid = np.linspace(wl_lo, wl_hi, int(n_wavelength))
 
-    resampled = np.empty((n_delays, int(n_wavelength)), dtype=float)
+    resampled: NDArray[np.float64] = np.empty((n_delays, int(n_wavelength)), dtype=float)
     for i in range(n_delays):
         resampled[i] = np.interp(wl_grid, wl_native, trace[i], left=0.0, right=0.0)
 

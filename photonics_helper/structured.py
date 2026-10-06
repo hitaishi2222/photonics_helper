@@ -369,7 +369,7 @@ class LaguerreGaussianMode:
             half_width = 6.0 * self.waist(z)
         if half_width <= 0.0:
             raise ValueError("half_width must be positive")
-        axis = np.linspace(-half_width, half_width, n)
+        axis = np.asarray(np.linspace(-half_width, half_width, n), dtype=np.float64)
         dx = float(axis[1] - axis[0])
         return StructuredField(self.field(axis, axis, z), dx, dx)
 

@@ -13,35 +13,35 @@
 
 ## Resolved Issues (summary)
 
-| # | Issue | Resolution |
-|---|-------|------------|
-| 0 | GNLSE linear operator: dispersion time-direction inconsistent | **Closed 2026-09-30** — convention swap (conjugated transform pair + plain causal h_R convolution + `exp(+iΣβₖΩᵏz/k!)`); verified against dense-DFT reference, Raman/SSFS law, FFT-kernel tone probe, RDW group-delay walk-off |
-| 1 | Self-steepening: residual photon-number drift | **Closed 2026-10-02** — grid-validity artifact, not a model defect; `_validate_shock_grid` now checks `τ_shock·Ω_max` and warns above `_SHOCK_TAYLOR_LIMIT = 0.2` |
-| 2 | `mi_gain_spectrum_extended`: catastrophic cancellation at absolute ω₀ | **Closed 2026-09-28** — offset-aware contract (`betas=` path, `beta_fn_convention="detuning"`); legacy path kept with DeprecationWarning |
-| 3 | `TaperedGNLSESolver`: inert `betas_unit` parameter | **Closed 2026-09-28** — emits `UserWarning` when `betas_unit != "ps^k/m"` |
-| 4 | `plot_waterfall`: non-standard waterfall rendering | **Closed 2026-09-28** — re-drawn as a true ridge with per-artist `ScaledTranslation` transforms |
-| 5 | Author/process actions (Zenodo DOI + JOSS submission) | **Open** — author-side process, not a code bug |
-| 6 | Raissi-2019 PINN: rel-L2 plateaus at ~3× the paper's 1.97e-3 | **Closed 2026-10-02** — metric-definition mismatch (complex vs magnitude convention); L-BFGS accounting recorded |
-| 7 | ROCm iGPU training crash guardrail | **Superseded by CUDA** |
-| 8 | Guasoni-2015 IM-MI: flat Eq.-12 readout | **Closed 2026-10-02** — readout saturation artifact; band structure recovered with local-gain measurement |
-| 10 | Wright-2015 STMI: engine-side check B asserts a noise | **Closed** — see folder README |
-| 11 | Multimode FWM substep: RK4 blow-up | **Closed** — see folder README |
-| 12 | Multimode FWM substep: hidden Euler integrator | **Closed** — see folder README |
-| 13 | `hult_2007_rk4ip` folder: both decks fail | **Closed 2026-10-01** — see folder README |
-| 14 | `heidt_2009_adaptive_step`: deck A's global error saturates | **Closed** — see folder README |
-| 15 | `oam_l` FWM gate: VERIFIED EQUAL to Poletti & Horak Eq. (18) | **Closed** — no code change needed |
-| 16 | `VectorSplitStepEngine`: `betas_x` without `betas_y` raises | **Fixed 2026-10-03** — docstring corrected to match code (both axes must be specified explicitly) |
-| 17 | Nine of thirty tabulated `source_key`s cannot be loaded | **Fixed 2026-10-03** — longest-known-material-prefix match; all 30 keys now load |
-| 18 | `PhononResponse.from_material` raises for 34 of 44 materials | **Closed as documented behaviour** — 10 of 44 materials have a mode list; silica's list is a band model |
-| 19 | Three papercuts on the refraction/materials API | **Fixed 2026-10-03** — (a) `n_func` accepts `Wavelength`, (b) `RamanSpec.model_fields()` classmethod added, (c) `beta_fn` has default `None` |
-| 20 | `mi_gain_spectrum_extended` emits DeprecationWarning twice | **Fixed 2026-10-03** — warnings consolidated to one |
-| 21 | `VectorSplitStepEngine` "manakov" docstring omits 8/9 equivalence conditions | **Fixed 2026-10-03** — docstring now states equivalence holds only for single channel |
-| 22 | `conserving_shock=True` is a silent no-op for γ > 0 + ComplexWarning flood | **Fixed 2026-10-03** — `.real` added to delayed intensity convolution; docstring documents γ < 0 requirement |
-| 23 | `fit_two_wave`: sign of Δk is not identifiable | **Fixed 2026-10-03** — docstring documents sign symmetry |
-| 24 | `fit_shg_autodiff` does not recover (sigma, P0) | **Fixed 2026-10-03** — docstring corrected; use `fit_two_wave` for reliable recovery |
-| 25 | `design_efficiency` assumes monotone η(L) | **Fixed 2026-10-03** — docstring documents monotonicity assumption and `residual_norm` check |
-| 26 | `_SHOCK_TAYLOR_LIMIT` caps grid step at ~13 fs | **Fixed 2026-10-03** — docstring documents resolution floor |
-| 27 | `noise.py`: Bose-factor docstring overstates n_th + `peak_power()` unit switch | **Fixed 2026-10-03** — docstrings corrected; n_th = 0.138 at 300 K documented; peak_power unit hazard documented |
+| #   | Issue                                                                          | Resolution                                                                                                                                                                                                                     |
+| --- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 0   | GNLSE linear operator: dispersion time-direction inconsistent                  | **Closed 2026-09-30** — convention swap (conjugated transform pair + plain causal h_R convolution + `exp(+iΣβₖΩᵏz/k!)`); verified against dense-DFT reference, Raman/SSFS law, FFT-kernel tone probe, RDW group-delay walk-off |
+| 1   | Self-steepening: residual photon-number drift                                  | **Closed 2026-10-02** — grid-validity artifact, not a model defect; `_validate_shock_grid` now checks `τ_shock·Ω_max` and warns above `_SHOCK_TAYLOR_LIMIT = 0.2`                                                              |
+| 2   | `mi_gain_spectrum_extended`: catastrophic cancellation at absolute ω₀          | **Closed 2026-09-28** — offset-aware contract (`betas=` path, `beta_fn_convention="detuning"`); legacy path kept with DeprecationWarning                                                                                       |
+| 3   | `TaperedGNLSESolver`: inert `betas_unit` parameter                             | **Closed 2026-09-28** — emits `UserWarning` when `betas_unit != "ps^k/m"`                                                                                                                                                      |
+| 4   | `plot_waterfall`: non-standard waterfall rendering                             | **Closed 2026-09-28** — re-drawn as a true ridge with per-artist `ScaledTranslation` transforms                                                                                                                                |
+| 5   | Author/process actions (Zenodo DOI + JOSS submission)                          | **Open** — author-side process, not a code bug                                                                                                                                                                                 |
+| 6   | Raissi-2019 PINN: rel-L2 plateaus at ~3× the paper's 1.97e-3                   | **Closed 2026-10-02** — metric-definition mismatch (complex vs magnitude convention); L-BFGS accounting recorded                                                                                                               |
+| 7   | ROCm iGPU training crash guardrail                                             | **Superseded by CUDA**                                                                                                                                                                                                         |
+| 8   | Guasoni-2015 IM-MI: flat Eq.-12 readout                                        | **Closed 2026-10-02** — readout saturation artifact; band structure recovered with local-gain measurement                                                                                                                      |
+| 10  | Wright-2015 STMI: engine-side check B asserts a noise                          | **Closed** — see folder README                                                                                                                                                                                                 |
+| 11  | Multimode FWM substep: RK4 blow-up                                             | **Closed** — see folder README                                                                                                                                                                                                 |
+| 12  | Multimode FWM substep: hidden Euler integrator                                 | **Closed** — see folder README                                                                                                                                                                                                 |
+| 13  | `hult_2007_rk4ip` folder: both decks fail                                      | **Closed 2026-10-01** — see folder README                                                                                                                                                                                      |
+| 14  | `heidt_2009_adaptive_step`: deck A's global error saturates                    | **Closed** — see folder README                                                                                                                                                                                                 |
+| 15  | `oam_l` FWM gate: VERIFIED EQUAL to Poletti & Horak Eq. (18)                   | **Closed** — no code change needed                                                                                                                                                                                             |
+| 16  | `VectorSplitStepEngine`: `betas_x` without `betas_y` raises                    | **Fixed 2026-10-03** — docstring corrected to match code (both axes must be specified explicitly)                                                                                                                              |
+| 17  | Nine of thirty tabulated `source_key`s cannot be loaded                        | **Fixed 2026-10-03** — longest-known-material-prefix match; all 30 keys now load                                                                                                                                               |
+| 18  | `PhononResponse.from_material` raises for 34 of 44 materials                   | **Closed as documented behaviour** — 10 of 44 materials have a mode list; silica's list is a band model                                                                                                                        |
+| 19  | Three papercuts on the refraction/materials API                                | **Fixed 2026-10-03** — (a) `n_func` accepts `Wavelength`, (b) `RamanSpec.model_fields()` classmethod added, (c) `beta_fn` has default `None`                                                                                   |
+| 20  | `mi_gain_spectrum_extended` emits DeprecationWarning twice                     | **Fixed 2026-10-03** — warnings consolidated to one                                                                                                                                                                            |
+| 21  | `VectorSplitStepEngine` "manakov" docstring omits 8/9 equivalence conditions   | **Fixed 2026-10-03** — docstring now states equivalence holds only for single channel                                                                                                                                          |
+| 22  | `conserving_shock=True` is a silent no-op for γ > 0 + ComplexWarning flood     | **Fixed 2026-10-03** — `.real` added to delayed intensity convolution; docstring documents γ < 0 requirement                                                                                                                   |
+| 23  | `fit_two_wave`: sign of Δk is not identifiable                                 | **Fixed 2026-10-03** — docstring documents sign symmetry                                                                                                                                                                       |
+| 24  | `fit_shg_autodiff` does not recover (sigma, P0)                                | **Fixed 2026-10-03** — docstring corrected; use `fit_two_wave` for reliable recovery                                                                                                                                           |
+| 25  | `design_efficiency` assumes monotone η(L)                                      | **Fixed 2026-10-03** — docstring documents monotonicity assumption and `residual_norm` check                                                                                                                                   |
+| 26  | `_SHOCK_TAYLOR_LIMIT` caps grid step at ~13 fs                                 | **Fixed 2026-10-03** — docstring documents resolution floor                                                                                                                                                                    |
+| 27  | `noise.py`: Bose-factor docstring overstates n_th + `peak_power()` unit switch | **Fixed 2026-10-03** — docstrings corrected; n_th = 0.138 at 300 K documented; peak_power unit hazard documented                                                                                                               |
 
 ---
 
@@ -94,6 +94,7 @@
 ### #19. Three papercuts on the refraction/materials API
 
 **Resolution (2026-10-03).**
+
 - (a) `n_func` (and `k_func`, `nk_func`, `dn_dlambda`) now accept `Wavelength` objects by extracting `.as_um`.
 - (b) `RamanSpec.model_fields()` classmethod added (returns `__dataclass_fields__`).
 - (c) `mi_gain_spectrum_extended`'s `beta_fn` now has default `None`.
@@ -108,7 +109,7 @@
 
 ### #21. `VectorSplitStepEngine` "manakov" docstring omits 8/9 equivalence conditions
 
-**Resolution (2026-10-03).** Docstring now states: the `8/9` factor invites the reading that `"manakov"` at γ *is* `"incoherent"` at `8γ/9`. That is true only when one channel is unpopulated (`P_y ≡ 0`).
+**Resolution (2026-10-03).** Docstring now states: the `8/9` factor invites the reading that `"manakov"` at γ _is_ `"incoherent"` at `8γ/9`. That is true only when one channel is unpopulated (`P_y ≡ 0`).
 
 ---
 
@@ -149,6 +150,7 @@
 ### #27. `noise.py`: Bose-factor docstring + `peak_power()` unit switch
 
 **Resolution (2026-10-03).**
+
 - (a) `raman_noise_field` docstring corrected: n_th = 0.138 at 300 K (not ≪ 1). The Bose factor is a 35% correction at room temperature.
 - (b) `Wave.peak_power` docstring now documents the unit hazard: the return value changes by 13 orders of magnitude depending on whether `A_eff` is attached.
 

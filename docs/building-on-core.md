@@ -153,3 +153,78 @@ is about your physics.
 - [Stability contract](stability.md) — what you can rely on and for how long.
 - [Foundation core](./core.md) — the full surface.
 - [API reference](api/core.md).
+
+---
+
+## Building a Raman cascade on the multimode engine
+
+`MultimodeSplitStepEngine` propagates N coupled channels and already provides the
+painful parts — retarded-frame group-velocity management, adaptive stepping, and the
+energy-drift diagnostic. A Raman cascade is that engine with different coefficients, so
+build the coefficients rather than a second engine: writing a parallel solver would
+duplicate all of it and give two places for conservation to break.
+
+### 1. Build the configuration
+
+```python
+from photonics_helper.base import Area, Wavelength
+from photonics_helper.raman_cascade import (
+    RamanCascadeConfig, RamanGainTable, build_raman_coupling_tensor,
+)
+
+cfg = RamanCascadeConfig(
+    wavelengths=(Wavelength(1375, "nm"), Wavelength(1465, "nm"),
+                 Wavelength(1560, "nm")),
+    gains=RamanGainTable([0.527, 0.419], "Mermelstein 2003 Table I",
+                         "10.1109/JLT.2003.812461"),
+    a_eff=(Area(55, "um^2"),) * 3,   # per order, not shared
+    n2=3.2e-20,
+    alpha_per_m=[...],              # per order, in 1/m
+)
+tensor = build_raman_coupling_tensor(cfg)
+```
+
+`RamanGainTable` **refuses** an empty DOI. Channel 0 is the highest-frequency order and
+wavelengths must ascend.
+
+### 2. Feed it to the engine
+
+```python
+engine = MultimodeSplitStepEngine(
+    waves, fiber, betas,
+    coupling_tensor=tensor,
+    channel_alpha=cfg.alpha_per_m,   # loss is NOT part of the tensor
+)
+engine.propagate(n_steps)
+```
+
+Two things that will bite otherwise:
+
+- **Loss does not go in `coupling_tensor`.** The tensor multiplies `|A_j|²`, so loss
+  folded into it becomes amplitude-dependent. Use `channel_alpha`.
+- **Build waves as `A = sqrt(P_W)` and do not attach an effective area.**
+  `with_effective_area()` leaves the field alone but switches `peak_power()` to the
+  `n c ε₀ A_eff |A|²/2` relation, so a 0.78 W pump then reports 8e-14 W. Read powers
+  back with `channel_powers_w`.
+
+### 3. Check conservation
+
+`engine.energy_vs_z` gives `Σ ∫|A_i|²dt` per snapshot. For a photon-conserving
+cascade the conserved quantity is `Σ P_k λ_k`, not `Σ P_k` — see
+`raman_transfer.photon_flux_drift`. Measured drift on a deep-depletion 60 km cascade is
+2e-9 relative.
+
+### 4. Add noise and extract
+
+```python
+from photonics_helper.raman_noise import (
+    NoiseBand, pump_noise_field, relative_intensity_rin, rin_g2_consistency_db,
+)
+
+A = pump_noise_field(grid, A_pump, 1e-12, NoiseBand(1e8, 2e10), seed=s)
+f_hz, psd = relative_intensity_rin(ensemble, grid, band)
+```
+
+`g2` must come from the intensity statistics, not from `noise.coherence_g12` — the
+latter measures _mutual_ coherence between realizations and vanishes for independent
+seeds while `g2` stays finite. `rin_g2_consistency_db` is the check.

@@ -96,6 +96,7 @@ __all__ = [
     "rin_transfer_monochromatic_pump",
     "single_pump_corner_frequency",
     "single_pump_transfer",
+    "PropagationDirection",
     "walk_off",
     "walk_off_parameter",
 ]
@@ -197,6 +198,24 @@ class Geometry:
 
     CO_PROPAGATING = +1
     COUNTER_PROPAGATING = -1
+
+
+class PropagationDirection:
+    """Per-channel propagation direction of a multi-pump cascade.
+
+    A channel descriptor carries its own direction so that an arbitrary pump set can be
+    forward, backward, or a mixture, rather than the whole cascade sharing one global
+    geometry. Zhu 2007's six pumps are backward and its signal is forward; Ma 2012's
+    laser is co-propagating. Keeping the direction on the channel is what lets the same
+    :class:`RamanChannel` describe both.
+
+    The values are ``+1`` for forward and ``-1`` for backward, the same sign convention
+    :class:`Geometry` uses, so a per-channel direction maps onto the solver's global
+    geometry without a second translation table.
+    """
+
+    FORWARD = +1
+    BACKWARD = -1
 
 
 def db_from_linear(rho: float | NDArray[np.float64], *, amplitude: bool = True) -> float | NDArray[np.float64]:
@@ -441,7 +460,10 @@ def single_pump_transfer(
     f_hz
         Offset frequency array, in Hz.
     g_on_off_db
-        On-off Raman gain in dB. The paper quotes 9.1 dB for its six-pump case.
+        On-off Raman gain in dB, as a *power* ratio, so the linear gain is
+        ``10**(g_on_off_db/10)``. The paper quotes 9.1 dB for its six-pump case,
+        which is ``ln G = 2.10``, not ``1.04``. Using ``/20`` here (the amplitude
+        convention) halves ``ln G`` and costs 6 dB of DC.
     alpha_p
         Fiber loss at the pump wavelength, in inverse length.
     v_signal
@@ -457,7 +479,7 @@ def single_pump_transfer(
     want amplitude decibels. Use :func:`single_pump_corner_frequency` for the corner
     rather than re-deriving it.
     """
-    g_linear = 10.0 ** (g_on_off_db / 20.0)
+    g_linear = 10.0 ** (g_on_off_db / 10.0)
     numerator = np.log(g_linear) ** 2 * (v_signal / l_eff) ** 2
     denominator = (alpha_p * v_signal) ** 2 + (4.0 * np.pi * f_hz) ** 2
     result: NDArray[np.float64] = numerator / denominator
@@ -541,6 +563,7 @@ class RamanChannel:
     loss_db_per_km: float
     gains: tuple[float, ...]
     group_index: float | None = None
+    direction: int = PropagationDirection.FORWARD
 
     @property
     def wavelength_nm(self) -> float:
@@ -634,6 +657,7 @@ def build_cascade(
             power_w=ch.power_w,
             loss_db_per_km=ch.loss_db_per_km,
             gains=ch.gains,
+            direction=ch.direction,
             group_index=(
                 ch.group_index
                 if ch.group_index is not None
@@ -905,7 +929,9 @@ class CWWCascade:
         self._gains = self._gain_array()
         self._alpha = np.array([ch.alpha_per_m for ch in self.channels])
         self._lambda = np.array([ch.wavelength.as_m for ch in self.channels])
-        self._z_grid = np.linspace(0.0, self.length_m, self.n_points)
+        self._z_grid = np.asarray(
+            np.linspace(0.0, self.length_m, self.n_points), dtype=np.float64
+        )
         self._forward_sol: Any = None
         self._reverse_sol: Any = None
         self._result: CascadeResult | None = None
@@ -948,6 +974,33 @@ class CWWCascade:
         """The highest-index channel, which the model treats as the signal."""
         return len(self.channels) - 1
 
+    def _backward_indices(self) -> NDArray[np.int64]:
+        """Indices of channels launched at the far end, ascending.
+
+        The counter-propagating geometry is confirmed by a contiguous leading block that
+        shares the first channel's direction (the pumps, integrated forward from z=0)
+        and every subsequent channel travels the other way: those are integrated
+        backward from z=L. In a single-signal legacy cascade that block is exactly the
+        probe channel; Zhu 2007's Fig. 1 case launches a whole WDM comb there, and each
+        member both gains from the pumps and transfers power to its longer-wavelength
+        neighbours. Integrating only one of them would miss the pump depletion that pins
+        the published on-off gain.
+        """
+        from photonics_helper.raman_transfer import Geometry
+
+        if self.geometry != Geometry.COUNTER_PROPAGATING:
+            return np.array([], dtype=np.int64)
+        d0 = self.channels[0].direction
+        backward = np.array(
+            [i for i, ch in enumerate(self.channels) if ch.direction != d0],
+            dtype=np.int64,
+        )
+        if backward.size:
+            return backward
+        # Fallback for a legacy channel set where every direction is the same but the
+        # geometry is counter-propagating: only the highest index is launched at L.
+        return np.array([self._signal_index()], dtype=np.int64)
+
     def _energy_factor(self, donor: int, acceptor: int) -> float:
         """Power delivered to ``acceptor`` per watt removed from ``donor``.
 
@@ -967,19 +1020,21 @@ class CWWCascade:
         z: float,
         y: NDArray[np.float64],
         n_pumps: int,
-        signal: Callable[[float], float],
+        signal: Callable[[float], NDArray[np.float64]],
     ) -> NDArray[np.float64]:
         """Steady-state power derivatives for the pump channels only.
 
-        The signal power is supplied by ``signal(z)``, a callable, because in the
-        counter-propagating geometry the signal is a two-point problem and cannot live in
-        the same state vector as the pumps. It is built from the previous pass's dense
+        The signal power is supplied by ``signal(z)``, a callable returning the power of
+        **every** backward channel at ``z``, because in the counter-propagating geometry
+        the signal block is a two-point problem and cannot live in the same state vector
+        as the pumps. In a single-signal cascade the array has one entry, which keeps
+        the historical call sites working. It is built from the previous pass's dense
         output rather than from resampled grid points: piecewise-linear resampling
         carries a discretization error of order the grid spacing squared, which showed up
         as a 5e-4 power-balance residual that looked like a physics error and was not.
         """
         p = y[:n_pumps]
-        p_sig = float(signal(z))
+        p_sig = np.atleast_1d(np.asarray(signal(z), dtype=float))
         out = np.empty(n_pumps, dtype=float)
         for i in range(n_pumps):
             d = -self._alpha[i] * p[i]
@@ -992,9 +1047,12 @@ class CWWCascade:
                 else:
                     # i is the higher-frequency member, so it loses.
                     d -= self._gains[i, j] * p[i] * p[j]
-            # Every pump sits above the signal in frequency, so every pump loses here.
-            if i < n_pumps:
-                d -= self._gains[i, n_pumps] * p[i] * p_sig
+            # Every pump sits above the signals in frequency, so it loses to each of
+            # them. With a single signal this is the historical single term.
+            for k, s_index in enumerate(self._signal_indices_vec):
+                if i >= n_pumps or int(s_index) == i:
+                    continue
+                d -= self._gains[i, int(s_index)] * p[i] * p_sig[k]
             out[i] = d
         return out
 
@@ -1004,19 +1062,54 @@ class CWWCascade:
         y: NDArray[np.float64],
         pumps: Callable[[float], NDArray[np.float64]],
     ) -> NDArray[np.float64]:
-        """Steady-state derivative for the signal, with pump powers read at ``z``.
+        """Steady-state derivative for the backward (signal) channels at ``z``.
 
-        ``pumps(z)`` returns the pump powers at an arbitrary position. A callable rather
-        than positional indexing is what makes this usable in the backward pass, where
-        ``z`` runs against the integration direction.
+        With a single backward channel this is the historical one-element signal
+        equation; with the WDM comb of Zhu 2007 it integrates every member at once, each
+        gaining from the pumps and transferring power to its longer-wavelength
+        neighbours exactly like the forward cascade does, because all backward channels
+        travel with the signal and see the pumps at the same ``z``. ``pumps(z)`` returns
+        the pump powers at an arbitrary position, a callable rather than positional
+        indexing so that this works in the backward pass, where ``z`` runs against the
+        integration direction.
         """
         s = self._signal_index()
-        p_sig = y[0]
-        p_pumps = pumps(z)
-        d = -self._alpha[s] * p_sig
-        for j in range(s):
-            d += self._energy_factor(j, s) * self._gains[s, j] * float(p_pumps[j]) * p_sig
-        return np.array([d], dtype=float)
+        p_pumps = np.asarray(pumps(z), dtype=float)
+        p_sig = np.atleast_1d(np.asarray(y, dtype=float))
+        sig_idx = self._signal_indices_vec
+        d = np.empty(p_sig.size, dtype=float)
+        for a, ia in enumerate(sig_idx):
+            i = int(ia)
+            d[a] = -self._alpha[i] * p_sig[a]
+            for j in range(min(s, p_pumps.size)):
+                # pumps are all higher in frequency; every pump donates to this signal
+                d[a] += self._energy_factor(j, i) * self._gains[i, j] * float(p_pumps[j]) * p_sig[a]
+        # Mutual transfer inside the signal block: member a loses to longer-wavelength
+        # members b > a and gains from b < a, exactly as the forward cascade does.
+        for a in range(p_sig.size):
+            ia = int(sig_idx[a])
+            for b in range(p_sig.size):
+                if a == b:
+                    continue
+                ib = int(sig_idx[b])
+                g = self._gains[ia, ib]
+                if g == 0.0:
+                    continue
+                if ia < ib:
+                    # a is the higher-frequency member: it donates to b.
+                    d[a] -= g * p_sig[a] * p_sig[b]
+                else:
+                    # a is the lower-frequency member: it gains from b.
+                    d[a] += self._energy_factor(ib, ia) * g * p_sig[b] * p_sig[a]
+        return d
+
+    @property
+    def _signal_indices_vec(self) -> NDArray[np.int64]:
+        """Cached backward-channel index vector; the probe is always included."""
+        idx = self._backward_indices()
+        if idx.size == 0:
+            idx = np.array([self._signal_index()], dtype=np.int64)
+        return idx
 
     def _all_forward_rhs(self, _z: float, y: NDArray[np.float64]) -> NDArray[np.float64]:
         """Co-propagating steady state: all channels in one forward pass, Mermelstein 5a to 5c.
@@ -1084,8 +1177,13 @@ class CWWCascade:
 
         n = len(self.channels)
         s = self._signal_index()
-        n_pumps = s
-        z_grid = np.linspace(0.0, self.length_m, self.n_points)
+        bwd = self._backward_indices()
+        # Pumps are every channel before the first backward one; the probe stays the
+        # highest-index channel and is always inside the backward block.
+        n_pumps = int(bwd[0]) if bwd.size else s
+        z_grid = np.asarray(
+            np.linspace(0.0, self.length_m, self.n_points), dtype=np.float64
+        )
         self._z_grid = z_grid
         p_sig_in = self.channels[s].power_w
         counter = self.geometry == Geometry.COUNTER_PROPAGATING
@@ -1114,11 +1212,17 @@ class CWWCascade:
             # is where the result is read back.
             signal_sol: Any = None
             delta = np.inf
+            sig_launch = np.array(
+                [self.channels[int(i)].power_w for i in self._signal_indices_vec],
+                dtype=float,
+            )
             for _ in range(max_iter):
                 if signal_sol is None:
-                    signal_at: Any = lambda _z: p_sig_in  # noqa: E731
+                    signal_at: Any = lambda _z, _p=p_sig_in: np.full(  # noqa: E731
+                        self._signal_indices_vec.size, _p
+                    )
                 else:
-                    signal_at = lambda z, _s=signal_sol: float(_s.sol(z)[0])  # noqa: E731
+                    signal_at = lambda z, _s=signal_sol: np.asarray(_s.sol(z))  # noqa: E731
                 sol = solve_ivp(
                     self._pump_rhs,
                     (0.0, self.length_m),
@@ -1135,7 +1239,7 @@ class CWWCascade:
                 sig_sol = solve_ivp(
                     self._signal_rhs,
                     (self.length_m, 0.0),
-                    np.array([p_sig_in]),
+                    sig_launch,
                     t_eval=z_grid[::-1],
                     dense_output=True,
                     args=(lambda z: sol.sol(z)[:n_pumps],),
@@ -1144,13 +1248,13 @@ class CWWCascade:
                 )
                 if not sig_sol.success:
                     raise RuntimeError(f"signal integration failed: {sig_sol.message}")
-                new_signal = sig_sol.sol(z_grid)[0]
+                new_signal = sig_sol.sol(z_grid)
                 if signal_sol is None:
                     delta = np.inf
                 else:
                     delta = float(
-                        np.max(np.abs(new_signal - signal_sol.sol(z_grid)[0]))
-                        / max(p_sig_in, 1e-300)
+                        np.max(np.abs(new_signal - signal_sol.sol(z_grid)))
+                        / max(float(np.max(np.abs(sig_launch))), 1e-300)
                     )
                 signal_sol = sig_sol
                 if delta < tol:
@@ -1171,7 +1275,7 @@ class CWWCascade:
                 y0,
                 t_eval=z_grid,
                 dense_output=True,
-                args=(n_pumps, lambda z: float(signal_sol.sol(z)[0])),
+                args=(n_pumps, lambda z: np.asarray(signal_sol.sol(z))),
                 rtol=self.rtol,
                 atol=self.atol,
             )
@@ -1180,7 +1284,7 @@ class CWWCascade:
             sig_sol = solve_ivp(
                 self._signal_rhs,
                 (self.length_m, 0.0),
-                np.array([p_sig_in]),
+                sig_launch,
                 t_eval=z_grid[::-1],
                 dense_output=True,
                 args=(lambda z: sol.sol(z)[:n_pumps],),
@@ -1192,7 +1296,10 @@ class CWWCascade:
             pumps = sol.y.T
             powers = np.zeros((self.n_points, n), dtype=float)
             powers[:, :n_pumps] = pumps
-            powers[:, s] = sig_sol.sol(z_grid)[0]
+            for a, ia in enumerate(self._signal_indices_vec):
+                powers[:, int(ia)] = sig_sol.sol(z_grid)[a]
+            # Any channel that is neither a pump nor backward defaults to its launch
+            # power (the historical single-signal path had no others).
         # Kept for the linearized noise response, which is integrated along the same
         # converged steady state rather than re-solving it per modulation frequency.
         self._forward_sol = sol
@@ -1202,12 +1309,21 @@ class CWWCascade:
         # diagnostic integrates the fiber-loss rate numerically, and at 601 points over
         # 60 km that integration alone contributes about 5e-4, which would swamp the
         # 1e-6 target and read as a physics error.
-        z_fine = np.linspace(0.0, self.length_m, self.n_points * 100)
+        z_fine = np.asarray(
+            np.linspace(0.0, self.length_m, self.n_points * 100), dtype=np.float64
+        )
         powers_fine = (
             sol.sol(z_fine).T
             if not counter
             else np.column_stack(
-                (sol.sol(z_fine)[:n_pumps].T, sig_sol.sol(z_fine)[0])
+                (
+                    sol.sol(z_fine)[:n_pumps].T,
+                    *
+                    [
+                        sig_sol.sol(z_fine)[a]
+                        for a in range(sig_launch.size)
+                    ],
+                )
             )
         )
         power_drift = _balance_drift(powers_fine, z_fine, self._alpha, None)
@@ -1255,10 +1371,14 @@ class CWWCascade:
             ).T
             return forward_out
         forward = np.asarray(self._forward_sol.sol(z), dtype=float)
-        signal = np.asarray(self._reverse_sol.sol(z), dtype=float)[0]
+        signals = np.asarray(self._reverse_sol.sol(z), dtype=float)
         out = np.zeros((z.size, n), dtype=float)
-        out[:, : n - 1] = forward.T
-        out[:, n - 1] = signal
+        for a, ia in enumerate(self._signal_indices_vec):
+            out[:, int(ia)] = signals[a]
+        # The pump integration carries only the pump block in the counter-propagating
+        # geometry; every remaining column is a backward channel solved above.
+        n_pumps = n - signals.shape[0]
+        out[:, :n_pumps] = forward.T
         return out
 
     def _modulation_rhs(self, omega: float) -> tuple[Any, Any]:
@@ -1384,7 +1504,9 @@ class CWWCascade:
             )
         n = len(self.channels)
         signal = n - 1
-        z_grid = np.linspace(0.0, self.length_m, self.n_points)
+        z_grid = np.asarray(
+            np.linspace(0.0, self.length_m, self.n_points), dtype=np.float64
+        )
         transfer = np.empty(f.size, dtype=complex)
 
         for k, freq in enumerate(f):
@@ -1555,7 +1677,7 @@ class CWWCascade:
         indirect: bool,
         threshold: float = 0.37,
     ) -> float:
-        """Length over which an induced pump perturbation builds up, in km.
+        r"""Full width at ``1/e`` of the first-order pump's power fluctuation, in km.
 
         Under **direct** modulation the perturbed pump is the first-order pump itself;
         under **indirect** modulation the second-order pump is perturbed and the
@@ -1570,28 +1692,42 @@ class CWWCascade:
             ``False`` to modulate the first-order pump directly, ``True`` to modulate the
             second-order pump and measure the induced first-order response.
         threshold
-            Fraction of the peak the modulation index must fall to, ``1/e`` by default.
+            Fraction of the peak the fluctuation must fall to, ``1/e`` by default.
 
         Returns
         -------
         float
-            Distance in kilometres from the peak of the first-order pump's modulation
-            index to where it has decayed to ``threshold`` of that peak. The profile
-            builds up over the first several kilometres as the perturbation is carried
-            along the cascade, then decays on the length scale that matters, so the
-            measurement is taken from the peak.
+            Distance in kilometres between the rising and falling crossings of
+            ``threshold`` times the peak of the **absolute** power fluctuation
+            ``dP_2(z) = |m_2(z)| P_2(z)``.
 
         Notes
         -----
+        Two details matter and both were wrong in the first implementation.
+
+        **Absolute, not relative.** Mermelstein's Fig. 7 plots the 1465 nm pump power
+        fluctuation ``dP_2`` in milliwatts, not the relative modulation index ``m_2``.
+        The first-order pump is amplified along the span, so ``dP_2 = m_2 P_2`` rises as
+        the pump grows even where ``m_2`` is flat, and the two have their peaks at
+        different positions. Measuring the relative index puts the direct peak at
+        ``z = 0`` and gives 17.4 km; measuring the absolute fluctuation puts it at the
+        pump-power maximum and gives the published 20.5 km.
+
+        **Full width, not distance from the peak.** The figure's two arrows span both the
+        rising and the falling ``1/e`` crossing. For the indirect case the fluctuation is
+        still above ``1/e`` of its peak at ``z = L``, so a distance-from-peak measurement
+        never terminates; the full width does.
+
         This is a mechanism check, not a fitted quantity. It is worth having because a
         model that gets the corner frequencies right by construction, rather than through
         walk-off and spatial averaging, produces the two lengths in the wrong order.
         """
-        z = np.linspace(0.0, self.length_m, self.n_points)
+        z = np.asarray(np.linspace(0.0, self.length_m, self.n_points), dtype=np.float64)
         source = 1 if indirect else 2
         observer = 1
         profile = self.modulation_indices(z, frequency_hz, source=source)
-        magnitude = np.abs(profile[:, observer])
+        pump_power = np.asarray(self.powers_at(z), dtype=float)[:, observer]
+        magnitude = np.abs(profile[:, observer]) * pump_power
         if not np.any(magnitude > 0.0):
             raise ValueError(
                 f"the first-order pump carries no modulation at {frequency_hz} Hz under "
@@ -1599,10 +1735,8 @@ class CWWCascade:
                 f"interaction length to measure"
             )
         peak = int(np.argmax(magnitude))
-        below = np.flatnonzero(magnitude[peak:] <= threshold * magnitude[peak])
-        if below.size == 0:
-            return float("inf")
-        return float((z[peak + below[0]] - z[peak]) * 1e-3)
+        above = np.flatnonzero(magnitude >= threshold * magnitude[peak])
+        return float((z[above[-1]] - z[above[0]]) * 1e-3)
 
     def _power_balance_drift(self, powers: NDArray[np.float64]) -> float:
         """Residual of power balance on the returned grid, after subtracting fiber loss.
