@@ -173,9 +173,7 @@ def main():
 
     # Find peak
     peak_idx = np.argmax(np.abs(gain))
-    print(
-        f"Peak MI gain: {np.max(gain):.2f} 1/m at Ω = {omega_THz[peak_idx]:.2f} THz"
-    )
+    print(f"Peak MI gain: {np.max(gain):.2f} 1/m at Ω = {omega_THz[peak_idx]:.2f} THz")
 
     # Sideband frequencies
     sidebands = mi_sideband_frequencies(beta2_si, gamma, P_pump)
@@ -327,10 +325,14 @@ def main():
     print("All diagnostics complete!")
     print("=" * 60)
     print("\nGenerated files:")
-    print("  examples/images/22_fwm_efficiency.png        — FWM Δβ and efficiency curves")
+    print(
+        "  examples/images/22_fwm_efficiency.png        — FWM Δβ and efficiency curves"
+    )
     print("  examples/images/22_mi_gain.png               — MI gain spectrum")
     print("  examples/images/22_readiness_report.png      — Dispersion coverage panel")
-    print("  examples/images/22_spectrum_pm_overlay.png   — Final spectrum with PM predictions")
+    print(
+        "  examples/images/22_spectrum_pm_overlay.png   — Final spectrum with PM predictions"
+    )
 
 
 if __name__ == "__main__":

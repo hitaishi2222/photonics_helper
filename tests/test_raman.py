@@ -693,9 +693,9 @@ class TestThorlabsSubstrateMaterials:
         for name, (wl_um, n_expected, tol) in checks.items():
             spec = RamanSpec.from_database(name)
             n = spec.nk(wl_um).real
-            assert (
-                abs(n - n_expected) < tol
-            ), f"{name}: n={n:.4f}, expected≈{n_expected}"
+            assert abs(n - n_expected) < tol, (
+                f"{name}: n={n:.4f}, expected≈{n_expected}"
+            )
 
     def test_refractive_index_from_material_database(self):
         from photonics_helper.materials import RefractiveIndex
@@ -761,9 +761,9 @@ class TestRamanFrequencyResponse:
         # Allow 10% tolerance due to FFT binning
         expected = spec.raman_shift_THz  # Already in THz
         actual = fr.resonance_frequency_THz
-        assert (
-            abs(actual - expected) / expected < 0.1
-        ), f"Resonance {actual:.2f} THz too far from expected {expected:.2f} THz"
+        assert abs(actual - expected) / expected < 0.1, (
+            f"Resonance {actual:.2f} THz too far from expected {expected:.2f} THz"
+        )
 
     def test_resonance_frequency_positive(self):
         """Test that resonance frequency is positive."""
@@ -784,9 +784,9 @@ class TestRamanFrequencyResponse:
         """Test that Q factor is in reasonable range for Silica."""
         fr = self._make_freq_resp()
         # Silica Q factor should be around 10 (shift/linewidth ≈ 440/45 ≈ 9.8)
-        assert (
-            1 < fr.quality_factor < 100
-        ), f"Q factor {fr.quality_factor:.1f} outside expected range"
+        assert 1 < fr.quality_factor < 100, (
+            f"Q factor {fr.quality_factor:.1f} outside expected range"
+        )
 
     def test_H_at_zero_frequency(self):
         """Test H(0) is real and positive (DC component)."""
@@ -969,9 +969,9 @@ class TestRamanResponse:
 
         # Should have multiple zero crossings (oscillation)
         zero_crossings = np.where(np.diff(np.sign(h)))[0]
-        assert (
-            len(zero_crossings) > 5
-        ), "Expected multiple zero crossings from oscillation"
+        assert len(zero_crossings) > 5, (
+            "Expected multiple zero crossings from oscillation"
+        )
 
         # Envelope should decay (absolute values at later times < earlier times)
         # Check that the envelope of the last peak is smaller than the first peak
@@ -982,9 +982,9 @@ class TestRamanResponse:
             dh = np.diff(positive_h)
             peaks = np.where((dh[:-1] > 0) & (dh[1:] < 0))[0]
             if len(peaks) >= 2:
-                assert (
-                    positive_h[peaks[-1]] < positive_h[peaks[0]]
-                ), "Delayed response should show decaying oscillation"
+                assert positive_h[peaks[-1]] < positive_h[peaks[0]], (
+                    "Delayed response should show decaying oscillation"
+                )
 
     def test_instantaneous_response_is_gaussian(self):
         """Test that instantaneous response is a narrow Gaussian approximation of δ(t)."""
@@ -1109,9 +1109,9 @@ class TestRamanResponse:
         """Test that the default grid is wide enough to capture the response."""
         resp = self._make_response()
         # Grid should cover at least several τ2
-        assert (
-            resp.grid.Tmax.as_s > 10 * resp.tau2
-        ), "Grid Tmax should cover at least 10× τ2 to capture damped oscillation"
+        assert resp.grid.Tmax.as_s > 10 * resp.tau2, (
+            "Grid Tmax should cover at least 10× τ2 to capture damped oscillation"
+        )
 
     def test_different_materials_different_tau(self):
         """Test that different materials produce different τ1, τ2."""
@@ -1206,9 +1206,9 @@ class TestRamanPulseInteraction:
             # P_NL should be much smaller than max in quiet regions
             max_PNL_in_quiet = np.max(np.abs(P_NL[quiet_mask]))
             max_PNL = np.max(np.abs(P_NL))
-            assert (
-                max_PNL_in_quiet < 0.1 * max_PNL
-            ), "P_NL should be small where pulse intensity is negligible"
+            assert max_PNL_in_quiet < 0.1 * max_PNL, (
+                "P_NL should be small where pulse intensity is negligible"
+            )
 
     def test_polarization_lags_pulse(self):
         """Test that the delayed polarization peaks after the pulse."""
@@ -1221,9 +1221,9 @@ class TestRamanPulseInteraction:
 
         # The delayed polarization should peak after the pulse peak
         # (due to the convolution with the delayed Raman response)
-        assert (
-            PNL_peak_t > pulse_peak_t
-        ), f"P_NL peak at {PNL_peak_t * 1e12:.3f} ps should be after pulse peak at {pulse_peak_t * 1e12:.3f} ps"
+        assert PNL_peak_t > pulse_peak_t, (
+            f"P_NL peak at {PNL_peak_t * 1e12:.3f} ps should be after pulse peak at {pulse_peak_t * 1e12:.3f} ps"
+        )
 
     def test_polarization_positive_with_positive_response(self):
         """Test that P_NL is positive when both R(t) and I(t) are positive."""
@@ -1239,9 +1239,9 @@ class TestRamanPulseInteraction:
         if positive_mask.any():
             P_NL = interaction.nonlinear_polarization
             # The convolution should preserve sign in regions where both are positive
-            assert np.any(
-                P_NL[positive_mask] > 0
-            ), "P_NL should be positive where both R(t) and I(t) are positive"
+            assert np.any(P_NL[positive_mask] > 0), (
+                "P_NL should be positive where both R(t) and I(t) are positive"
+            )
 
     def test_polarization_zero_for_zero_fR(self):
         """Test that P_NL has no delayed component when fR=0 (pure Kerr)."""
@@ -1262,9 +1262,9 @@ class TestRamanPulseInteraction:
         P_high = interaction_high.nonlinear_polarization
 
         # Higher n2 should give larger polarization
-        assert np.max(np.abs(P_high)) > np.max(
-            np.abs(P_low)
-        ), "Higher n2 should produce larger P_NL"
+        assert np.max(np.abs(P_high)) > np.max(np.abs(P_low)), (
+            "Higher n2 should produce larger P_NL"
+        )
 
     def test_different_pulse_shapes(self):
         """Test interaction with different pulse shapes."""
@@ -1352,9 +1352,9 @@ class TestRamanPulseInteraction:
 
         # They should be within a few grid points of each other
         # (the pulse broadens the response slightly)
-        assert (
-            abs(PNL_peak_t - R_peak_t) < 10 * interaction.grid.dt
-        ), f"P_NL peak at {PNL_peak_t * 1e12:.3f} ps too far from R peak at {R_peak_t * 1e12:.3f} ps"  # type: ignore[union-attr]
+        assert abs(PNL_peak_t - R_peak_t) < 10 * interaction.grid.dt, (
+            f"P_NL peak at {PNL_peak_t * 1e12:.3f} ps too far from R peak at {R_peak_t * 1e12:.3f} ps"
+        )  # type: ignore[union-attr]
 
     def test_polarization_scales_with_intensity(self):
         """Test that P_NL scales linearly with pulse intensity."""
@@ -1373,9 +1373,9 @@ class TestRamanPulseInteraction:
         ratio_actual = np.max(np.abs(P_strong)) / np.max(np.abs(P_weak))
 
         # Allow 10% tolerance due to convolution effects
-        assert (
-            abs(ratio_actual - ratio_expected) / ratio_expected < 0.1
-        ), f"P_NL scaling ratio {ratio_actual:.1f} too far from expected {ratio_expected}"
+        assert abs(ratio_actual - ratio_expected) / ratio_expected < 0.1, (
+            f"P_NL scaling ratio {ratio_actual:.1f} too far from expected {ratio_expected}"
+        )
 
     def test_grid_default_sizing(self):
         """Test that the grid covers the pulse and response."""
@@ -1514,9 +1514,9 @@ class TestPumpWavelengthExplorer:
         delta_anti_nm = pump.as_nm - anti_stokes.as_nm
 
         # Wavelength shifts should NOT be equal
-        assert (
-            delta_stokes_nm != delta_anti_nm
-        ), "Wavelength shifts should differ (key concept of Layer 5)"
+        assert delta_stokes_nm != delta_anti_nm, (
+            "Wavelength shifts should differ (key concept of Layer 5)"
+        )
 
         # Stokes wavelength shift should be larger in nm for visible/NIR pump
         # (because dλ/dν = -c/ν², and |Δν| is the same)
@@ -1670,9 +1670,9 @@ class TestPumpWavelengthExplorer:
 
         stokes_wls = np.array(stokes_wls)
         # Stokes wavelength should increase as pump wavelength increases
-        assert np.all(
-            np.diff(stokes_wls) > 0
-        ), "Stokes wavelength should increase monotonically with pump wavelength"
+        assert np.all(np.diff(stokes_wls) > 0), (
+            "Stokes wavelength should increase monotonically with pump wavelength"
+        )
 
     def test_frequency_axis_marks_three_lines(self):
         """Test that frequency axis plot marks Anti-Stokes, Pump, and Stokes."""
@@ -2344,12 +2344,12 @@ class TestMaterialComparison:
         right_val = y[np.argmin(np.abs(x - (440 + fwhm)))]
         peak_val = np.max(y)
         # Lorentzian at ±1×FWHM is at 20% of peak; Gaussian would be ~4%
-        assert (
-            left_val / peak_val > 0.1
-        ), f"Left tail {left_val / peak_val:.3f} too low for Lorentzian"
-        assert (
-            right_val / peak_val > 0.1
-        ), f"Right tail {right_val / peak_val:.3f} too low for Lorentzian"
+        assert left_val / peak_val > 0.1, (
+            f"Left tail {left_val / peak_val:.3f} too low for Lorentzian"
+        )
+        assert right_val / peak_val > 0.1, (
+            f"Right tail {right_val / peak_val:.3f} too low for Lorentzian"
+        )
 
         plt.close(fig)  # type: ignore[arg-type]
 

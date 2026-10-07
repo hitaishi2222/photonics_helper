@@ -264,7 +264,7 @@ class RefractiveIndex:
 
     def _validate_range(self, wavelength: float):
         # Accept Wavelength objects by extracting the numeric value in μm
-        if hasattr(wavelength, 'as_um'):
+        if hasattr(wavelength, "as_um"):
             wavelength = wavelength.as_um
         if not (self._wl_min <= wavelength <= self._wl_max):
             raise ValueError(
@@ -273,21 +273,21 @@ class RefractiveIndex:
 
     def n_func(self, wavelength: float) -> float:
         """Interpolated real refractive index n at wavelength (μm)."""
-        if hasattr(wavelength, 'as_um'):
+        if hasattr(wavelength, "as_um"):
             wavelength = wavelength.as_um
         self._validate_range(wavelength)
         return float(self._n_spline(wavelength).item())
 
     def k_func(self, wavelength: float) -> float:
         """Interpolated extinction coefficient k at wavelength (μm)."""
-        if hasattr(wavelength, 'as_um'):
+        if hasattr(wavelength, "as_um"):
             wavelength = wavelength.as_um
         self._validate_range(wavelength)
         return float(self._k_spline(wavelength).item())
 
     def nk_func(self, wavelength: float) -> complex:
         """Interpolated complex refractive index n+ik at wavelength (μm)."""
-        if hasattr(wavelength, 'as_um'):
+        if hasattr(wavelength, "as_um"):
             wavelength = wavelength.as_um
         self._validate_range(wavelength)
         return complex(
@@ -296,7 +296,7 @@ class RefractiveIndex:
 
     def dn_dlambda(self, wavelength: float) -> float:
         """Derivative dn/dλ at a scalar wavelength (μm). Returns value in μm⁻¹."""
-        if hasattr(wavelength, 'as_um'):
+        if hasattr(wavelength, "as_um"):
             wavelength = wavelength.as_um
         self._validate_range(wavelength)
         return float(self._dn_spline(wavelength).item())

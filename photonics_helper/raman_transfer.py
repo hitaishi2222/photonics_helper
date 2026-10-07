@@ -218,7 +218,9 @@ class PropagationDirection:
     BACKWARD = -1
 
 
-def db_from_linear(rho: float | NDArray[np.float64], *, amplitude: bool = True) -> float | NDArray[np.float64]:
+def db_from_linear(
+    rho: float | NDArray[np.float64], *, amplitude: bool = True
+) -> float | NDArray[np.float64]:
     """Convert a linear power ratio to decibels.
 
     Parameters
@@ -328,10 +330,14 @@ def rin_transfer_monochromatic_pump(
         this reduces exactly to :func:`rin_transfer_low_frequency`.
     """
     del geometry  # sign of delta_k carries the geometry
-    value = gain_coefficient**2 / (delta_k**2 + alpha_p**2) * (
-        1.0
-        - 2.0 * np.cos(delta_k * length) * np.exp(-alpha_p * length)
-        + np.exp(-2.0 * alpha_p * length)
+    value = (
+        gain_coefficient**2
+        / (delta_k**2 + alpha_p**2)
+        * (
+            1.0
+            - 2.0 * np.cos(delta_k * length) * np.exp(-alpha_p * length)
+            + np.exp(-2.0 * alpha_p * length)
+        )
     )
     return float(value)
 
@@ -420,7 +426,8 @@ def rin_transfer_dispersion(
         denom = (gain_coefficient - alpha_p) ** 2 + delta_k**2
         bracket = (
             np.exp(-2.0 * alpha_p * length)
-            - 2.0 * np.cos(delta_k * length)
+            - 2.0
+            * np.cos(delta_k * length)
             * np.exp(-(gain_coefficient + alpha_p) * length)
             + np.exp(-2.0 * gain_coefficient * length)
         )
@@ -428,7 +435,8 @@ def rin_transfer_dispersion(
         denom = (gain_coefficient + alpha_p) ** 2 + delta_k**2
         bracket = (
             np.exp(-2.0 * (gain_coefficient + alpha_p) * length)
-            - 2.0 * np.cos(delta_k * length)
+            - 2.0
+            * np.cos(delta_k * length)
             * np.exp(-(gain_coefficient + alpha_p) * length)
             + 1.0
         )
@@ -492,7 +500,10 @@ def single_pump_corner_frequency(alpha_p: float, v_signal: float) -> float:
 
 
 def group_index(
-    wavelength_nm: float, group_index_zero: float, slope_ps_per_km_nm2: float, lambda0_nm: float
+    wavelength_nm: float,
+    group_index_zero: float,
+    slope_ps_per_km_nm2: float,
+    lambda0_nm: float,
 ) -> float:
     r"""Group index from the zero-dispersion wavelength and the dispersion slope.
 
@@ -671,7 +682,9 @@ def build_cascade(
 
 
 def walk_off(
-    observer: RamanChannel, source: RamanChannel, geometry: int = Geometry.COUNTER_PROPAGATING
+    observer: RamanChannel,
+    source: RamanChannel,
+    geometry: int = Geometry.COUNTER_PROPAGATING,
 ) -> float:
     r"""Walk-off parameter ``d_ij`` of Mermelstein 2003 Eq. 2, in km^-1.
 
@@ -771,7 +784,11 @@ def photon_flux_drift(
     :attr:`CascadeResult.power_balance_drift` as the solver check for that model.
     """
     return _balance_drift(
-        powers_w, z_m, np.asarray(alpha_per_m, dtype=float), np.asarray(lambda_m, dtype=float), False
+        powers_w,
+        z_m,
+        np.asarray(alpha_per_m, dtype=float),
+        np.asarray(lambda_m, dtype=float),
+        False,
     )
 
 
@@ -1083,7 +1100,12 @@ class CWWCascade:
             d[a] = -self._alpha[i] * p_sig[a]
             for j in range(min(s, p_pumps.size)):
                 # pumps are all higher in frequency; every pump donates to this signal
-                d[a] += self._energy_factor(j, i) * self._gains[i, j] * float(p_pumps[j]) * p_sig[a]
+                d[a] += (
+                    self._energy_factor(j, i)
+                    * self._gains[i, j]
+                    * float(p_pumps[j])
+                    * p_sig[a]
+                )
         # Mutual transfer inside the signal block: member a loses to longer-wavelength
         # members b > a and gains from b < a, exactly as the forward cascade does.
         for a in range(p_sig.size):
@@ -1111,7 +1133,9 @@ class CWWCascade:
             idx = np.array([self._signal_index()], dtype=np.int64)
         return idx
 
-    def _all_forward_rhs(self, _z: float, y: NDArray[np.float64]) -> NDArray[np.float64]:
+    def _all_forward_rhs(
+        self, _z: float, y: NDArray[np.float64]
+    ) -> NDArray[np.float64]:
         """Co-propagating steady state: all channels in one forward pass, Mermelstein 5a to 5c.
 
         Raman gain transfers power from the higher-frequency member of a pair to the
@@ -1292,7 +1316,9 @@ class CWWCascade:
                 atol=self.atol,
             )
             if not sig_sol.success:
-                raise RuntimeError(f"final signal integration failed: {sig_sol.message}")
+                raise RuntimeError(
+                    f"final signal integration failed: {sig_sol.message}"
+                )
             pumps = sol.y.T
             powers = np.zeros((self.n_points, n), dtype=float)
             powers[:, :n_pumps] = pumps
@@ -1318,11 +1344,7 @@ class CWWCascade:
             else np.column_stack(
                 (
                     sol.sol(z_fine)[:n_pumps].T,
-                    *
-                    [
-                        sig_sol.sol(z_fine)[a]
-                        for a in range(sig_launch.size)
-                    ],
+                    *[sig_sol.sol(z_fine)[a] for a in range(sig_launch.size)],
                 )
             )
         )
@@ -1536,7 +1558,9 @@ class CWWCascade:
                 m_signal: Any = None
                 for _ in range(self.noise_max_iter):
                     previous: Any = m_signal
-                    seed: Any = (lambda _z: 0.0 + 0.0j) if previous is None else previous
+                    seed: Any = (
+                        (lambda _z: 0.0 + 0.0j) if previous is None else previous
+                    )
                     fwd = solve_ivp(
                         _forward_noise_rhs(rhs, signal, seed),
                         (0.0, self.length_m),
@@ -1547,7 +1571,9 @@ class CWWCascade:
                         atol=1e-13,
                     )
                     if not fwd.success:
-                        raise RuntimeError(f"noise pump integration failed: {fwd.message}")
+                        raise RuntimeError(
+                            f"noise pump integration failed: {fwd.message}"
+                        )
                     back = solve_ivp(
                         _reverse_noise_rhs(rhs, signal, n, fwd.sol),
                         (self.length_m, 0.0),
@@ -1558,9 +1584,14 @@ class CWWCascade:
                         atol=1e-13,
                     )
                     if not back.success:
-                        raise RuntimeError(f"noise signal integration failed: {back.message}")
+                        raise RuntimeError(
+                            f"noise signal integration failed: {back.message}"
+                        )
                     m_signal = lambda z, _b=back.sol: complex(_b(z)[0])  # noqa: E731
-                    if previous is not None and _noise_delta(previous, m_signal, z_grid) < 1e-10:
+                    if (
+                        previous is not None
+                        and _noise_delta(previous, m_signal, z_grid) < 1e-10
+                    ):
                         break
                 else:
                     raise RuntimeError(
@@ -1815,9 +1846,6 @@ class NoiseResponse:
         return double_pole_fit(self.frequencies_hz, self.db)
 
 
-
-
-
 def _forward_noise_rhs(rhs: Any, signal: int, m_signal_at: Any) -> Any:
     """Pump-side modulation ODE, taking the signal perturbation from ``m_signal_at``."""
 
@@ -1849,14 +1877,15 @@ def _reverse_noise_rhs(rhs: Any, signal: int, n: int, pumps_at: Any) -> Any:
 
 
 def _noise_delta(
-    old: Callable[[float], complex], new: Callable[[float], complex], z: NDArray[np.float64]
+    old: Callable[[float], complex],
+    new: Callable[[float], complex],
+    z: NDArray[np.float64],
 ) -> float:
     """Max relative change between two signal-perturbation curves sampled on ``z``."""
     a = np.array([complex(old(zi)) for zi in z])
     b = np.array([complex(new(zi)) for zi in z])
     scale = max(float(np.max(np.abs(a))), 1e-300)
     return float(np.max(np.abs(b - a)) / scale)
-
 
 
 def double_pole_fit(
@@ -1890,7 +1919,9 @@ def double_pole_fit(
     f = np.asarray(f_hz, dtype=float)
     amp = 10.0 ** (np.asarray(transfer_db, dtype=float) / 20.0)
 
-    def model(freq: NDArray[np.float64], dc: float, corner: float) -> NDArray[np.float64]:
+    def model(
+        freq: NDArray[np.float64], dc: float, corner: float
+    ) -> NDArray[np.float64]:
         return dc / np.sqrt(1.0 + (freq / corner) ** 2)
 
     guess = [float(amp[0]), float(f[np.argmin(np.abs(amp - amp[0] / np.sqrt(2.0)))])]

@@ -79,7 +79,12 @@ def log_band(band: tuple[float, float], n: int = 120) -> np.ndarray:
 def mermelstein_cascade(geometry: int):
     """Build and solve the Mermelstein 2003 Table I cascade from the fixture."""
     from photonics_helper.base import Length, Wavelength
-    from photonics_helper.raman_transfer import CWWCascade, RamanChannel, build_cascade, load_benchmark
+    from photonics_helper.raman_transfer import (
+        CWWCascade,
+        RamanChannel,
+        build_cascade,
+        load_benchmark,
+    )
 
     fx = load_benchmark("mermelstein2003", root=_ROOT)
     w = fx.data["wavelengths_nm"]
@@ -142,8 +147,13 @@ def transfer_panel(ax, cascade, fx, geometry_key: str, band, title: str) -> None
             color=f"C{source - 1}",
             label=f"{order.replace('_', ' ')} pump, Fig. target",
         )
-        ax.plot([], [], " ", label=f"  DC {dc:.2f} dB (target {expected_dc:g}), "
-                                f"corner {corner:.3g} Hz (target {expected_corner:.3g})")
+        ax.plot(
+            [],
+            [],
+            " ",
+            label=f"  DC {dc:.2f} dB (target {expected_dc:g}), "
+            f"corner {corner:.3g} Hz (target {expected_corner:.3g})",
+        )
 
     ax.set_title(title)
     ax.set_xlabel("offset frequency (Hz)")
@@ -192,8 +202,10 @@ def main() -> None:
         result = cascade.result
         on_off = result.on_off_gain_db(cascade.loss_per_m)
         print(f"--- {geometry_key.replace('_', '-')} ---")
-        print(f"  on-off gain, signal          : {on_off[-1]:.2f} dB "
-              f"(Mermelstein reports about 13 dB)")
+        print(
+            f"  on-off gain, signal          : {on_off[-1]:.2f} dB "
+            f"(Mermelstein reports about 13 dB)"
+        )
         print(f"  power balance drift          : {result.power_balance_drift:.2e}")
         for order, source in (("second_order", 1), ("first_order", 2)):
             response = cascade.noise_response(log_band(band), source=source)
@@ -214,7 +226,9 @@ def main() -> None:
             )
         print()
 
-    print("Reproduced: all four DC transfer levels (within 2 dB) and all four 6 dB corners")
+    print(
+        "Reproduced: all four DC transfer levels (within 2 dB) and all four 6 dB corners"
+    )
     print("(within 13-28 percent, read as the 6 dB drop point). Not reproduced: the")
     print("Fig. 7 interaction lengths. See docs/raman-cascade.md for the analysis.\n")
 

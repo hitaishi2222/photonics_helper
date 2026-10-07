@@ -1014,9 +1014,7 @@ class SplitStepEngine:
                 )
             fR0 = float(_response_fR(self.fiber.raman_response))
             P_inst = (1.0 - fR0) * intensity
-            P_del = fR0 * np.real(
-                self.grid.ifft(h_R_fft * self.grid.fft(intensity))
-            )
+            P_del = fR0 * np.real(self.grid.ifft(h_R_fft * self.grid.fft(intensity)))
             g_r = abs(gamma)
         else:
             P_inst = None  # unused
@@ -3057,7 +3055,9 @@ def gnlse_spectrogram(
         raise ValueError(f"wl_bounds must be increasing, got {wl_bounds!r}")
     wl_grid = np.linspace(wl_lo, wl_hi, int(n_wavelength))
 
-    resampled: NDArray[np.float64] = np.empty((n_delays, int(n_wavelength)), dtype=float)
+    resampled: NDArray[np.float64] = np.empty(
+        (n_delays, int(n_wavelength)), dtype=float
+    )
     for i in range(n_delays):
         resampled[i] = np.interp(wl_grid, wl_native, trace[i], left=0.0, right=0.0)
 

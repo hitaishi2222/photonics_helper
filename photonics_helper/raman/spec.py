@@ -210,7 +210,9 @@ class RamanSpec:
         lines = [
             f"Material: {self.name}",
             f"Crystal: {self.crystal or 'N/A'}",
-            f"Bandgap: {self.bandgap_eV.as_eV:.4f} eV" if self.bandgap_eV else "Bandgap: N/A",
+            f"Bandgap: {self.bandgap_eV.as_eV:.4f} eV"
+            if self.bandgap_eV
+            else "Bandgap: N/A",
             f"n₂: {self.n2 or 'N/A'} m²/W",
             f"Raman shift: {self.raman_shift_cm} cm⁻¹ = {self.raman_shift_THz:.2f} THz",
             f"Linewidth: {self.raman_linewidth_cm} cm⁻¹ = {self.linewidth_THz:.2f} THz",

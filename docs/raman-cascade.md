@@ -93,7 +93,7 @@ single point where the paper states both quantities.
 
 ```python
 h2 = single_pump_transfer(f_hz, g_on_off_db=9.1, alpha_p=..., v_signal=..., l_eff=...)
-corner = single_pole_corner(alpha_p, v_signal)   # alpha_p * v_signal / (4 pi)
+corner = single_pole_corner(alpha_p, v_signal)  # alpha_p * v_signal / (4 pi)
 ```
 
 Zhu 2007 states "the other measured parameters of the fiber are given in [11] and [12]", so
@@ -110,12 +110,21 @@ The roll-off is 20 dB per decade, within 3 dB, one decade past the corner.
 
 ```python
 from photonics_helper.base import Length, Wavelength
-from photonics_helper.raman_transfer import CWWCascade, Geometry, RamanChannel, build_cascade
+from photonics_helper.raman_transfer import (
+    CWWCascade,
+    Geometry,
+    RamanChannel,
+    build_cascade,
+)
 
-channels = build_cascade([...], group_index_zero=1.466, slope_ps_per_km_nm2=0.088, lambda0_nm=1312)
-cascade = CWWCascade(channels, Length(60.0, "km"), geometry=Geometry.COUNTER_PROPAGATING)
+channels = build_cascade(
+    [...], group_index_zero=1.466, slope_ps_per_km_nm2=0.088, lambda0_nm=1312
+)
+cascade = CWWCascade(
+    channels, Length(60.0, "km"), geometry=Geometry.COUNTER_PROPAGATING
+)
 result = cascade.solve()
-result.on_off_gain_db(cascade.loss_per_m)   # -1: about 13.41 dB
+result.on_off_gain_db(cascade.loss_per_m)  # -1: about 13.41 dB
 ```
 
 **Integration order.** Mermelstein integrates all the power equations together. This module
@@ -184,8 +193,8 @@ by `P·λ`, **not** `Σ P_i/λ_i` — the latter weights by photon *energy* and 
 nothing physical. `photon_flux()` returns the true photon rate.
 
 ```python
-result.power_balance_drift     # < 1e-6 in both geometries for the default model
-result.photon_flux_drift       # < 1e-6 only with photon_consistent=True
+result.power_balance_drift  # < 1e-6 in both geometries for the default model
+result.photon_flux_drift  # < 1e-6 only with photon_consistent=True
 ```
 
 Both diagnostics subtract the analytic fiber loss before reporting, and both are evaluated on a
@@ -240,8 +249,8 @@ perturbed pump to the signal, integrated along the converged steady state.
 
 ```python
 response = cascade.noise_response(np.logspace(1, 4, 60), source=1)
-response.db               # 20 log10 |H|, the amplitude convention Mermelstein reports
-response.double_pole()    # (dc_db, corner_hz) via Eq. 10
+response.db  # 20 log10 |H|, the amplitude convention Mermelstein reports
+response.double_pole()  # (dc_db, corner_hz) via Eq. 10
 ```
 
 `double_pole_fit` is the trial function of Mermelstein Eq. 10. It is fitted on the linear
@@ -302,9 +311,12 @@ DOI, unit, and whether it was read from a table, a figure, or the running text:
 
 ```python
 from photonics_helper.raman_transfer import load_benchmark
+
 fx = load_benchmark("mermelstein2003")
-fx.value("parameters", "second_order_pump_power")     # 0.780
-fx.is_figure_transcribed("targets", "counter_propagating", "dc_db", "second_order")   # True
+fx.value("parameters", "second_order_pump_power")  # 0.780
+fx.is_figure_transcribed(
+    "targets", "counter_propagating", "dc_db", "second_order"
+)  # True
 ```
 
 `load_benchmark` fails loudly with `ProvenanceError` on a missing DOI, a blank DOI, an

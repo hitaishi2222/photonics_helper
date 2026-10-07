@@ -409,9 +409,7 @@ class MultimodeSplitStepEngine:
         if channel_alpha is not None:
             ca = np.asarray(channel_alpha, dtype=float)
             if ca.shape != (self._n,):
-                raise ValueError(
-                    f"channel_alpha must be ({self._n},), got {ca.shape}."
-                )
+                raise ValueError(f"channel_alpha must be ({self._n},), got {ca.shape}.")
             if not np.all(np.isfinite(ca)) or np.any(ca < 0):
                 raise ValueError("channel_alpha must be finite and non-negative.")
         self.channel_alpha = (
@@ -420,7 +418,10 @@ class MultimodeSplitStepEngine:
         self.step_size = step_size
 
         # Cavity configuration
-        if cavity_reflectivity_input is not None or cavity_reflectivity_output is not None:
+        if (
+            cavity_reflectivity_input is not None
+            or cavity_reflectivity_output is not None
+        ):
             if cavity_reflectivity_input is None or cavity_reflectivity_output is None:
                 raise ValueError(
                     "cavity_reflectivity_input and cavity_reflectivity_output must "
@@ -433,7 +434,12 @@ class MultimodeSplitStepEngine:
                     f"cavity reflectivity must have shape ({self._n},), got "
                     f"input {r_in.shape} and output {r_out.shape}"
                 )
-            if np.any(r_in < 0) or np.any(r_in > 1) or np.any(r_out < 0) or np.any(r_out > 1):
+            if (
+                np.any(r_in < 0)
+                or np.any(r_in > 1)
+                or np.any(r_out < 0)
+                or np.any(r_out > 1)
+            ):
                 raise ValueError("cavity reflectivity must be in [0, 1]")
         else:
             r_in = None
@@ -510,7 +516,9 @@ class MultimodeSplitStepEngine:
             if db0:
                 phi = phi + db0 * dz
         f_w = f_w * np.exp(1j * phi)
-        alpha = self.fiber.alpha if self.channel_alpha is None else self.channel_alpha[m]
+        alpha = (
+            self.fiber.alpha if self.channel_alpha is None else self.channel_alpha[m]
+        )
         if alpha > 0:
             f_w = f_w * np.exp(-alpha * dz / 2)
         return np.asarray(self.grid.ifft(f_w), dtype=complex)
@@ -676,8 +684,8 @@ class MultimodeSplitStepEngine:
                     rhs[m] = rhs[m] + 1j * c_m * pump_sq * np.conj(A[q])
                     rhs[q] = rhs[q] + 1j * c_q * pump_sq * np.conj(A[m])
                     if self.fwm_pump_depletion:
-                        rhs[n] = (
-                            rhs[n] + 2j * np.conj(c_m) * A[m] * A[q] * np.conj(A[n])
+                        rhs[n] = rhs[n] + 2j * np.conj(c_m) * A[m] * A[q] * np.conj(
+                            A[n]
                         )
         return rhs
 
@@ -836,9 +844,7 @@ class MultimodeSplitStepEngine:
             states = self._rk4_tensor_substep(states, h_sub)
         return states
 
-    def _rk4_fwm_substep(
-        self, states: list[NDArray], h_sub: float
-    ) -> list[NDArray]:
+    def _rk4_fwm_substep(self, states: list[NDArray], h_sub: float) -> list[NDArray]:
         """One classical RK4 substep of the FWM flow (default coefficients)."""
         # Frozen-coefficient FWM flow (anti-Hermitian when the weight tensor
         # is exchange-symmetric -> photon-number conserving to O(h_sub^5)).
@@ -861,9 +867,7 @@ class MultimodeSplitStepEngine:
                 )
         return out
 
-    def _rk4_tensor_substep(
-        self, states: list[NDArray], h_sub: float
-    ) -> list[NDArray]:
+    def _rk4_tensor_substep(self, states: list[NDArray], h_sub: float) -> list[NDArray]:
         """One classical RK4 substep of the full tensor-driven flow."""
         k1 = self._nonlinear_rhs_tensor(states)
         k2 = self._nonlinear_rhs_tensor(
@@ -872,9 +876,7 @@ class MultimodeSplitStepEngine:
         k3 = self._nonlinear_rhs_tensor(
             [Ai + 0.5 * h_sub * ki for Ai, ki in zip(states, k2)]
         )
-        k4 = self._nonlinear_rhs_tensor(
-            [Ai + h_sub * ki for Ai, ki in zip(states, k3)]
-        )
+        k4 = self._nonlinear_rhs_tensor([Ai + h_sub * ki for Ai, ki in zip(states, k3)])
         out = [
             Ai + (h_sub / 6.0) * (k1i + 2 * k2i + 2 * k3i + k4i)
             for Ai, k1i, k2i, k3i, k4i in zip(states, k1, k2, k3, k4)
@@ -1111,6 +1113,7 @@ class MultimodeSplitStepEngine:
             Beat period in Hz.
         """
         from photonics_helper.base import C_MS
+
         n_g = self.cavity_group_index if group_index is None else float(group_index)
         if not n_g > 0:
             raise ValueError(f"group_index must be positive, got {n_g!r}")
@@ -1136,9 +1139,7 @@ class MultimodeSplitStepEngine:
         assert self.cavity_reflectivity_input is not None
         assert self.cavity_reflectivity_output is not None
         if not 0.0 < relaxation <= 1.0:
-            raise ValueError(
-                f"relaxation must be in (0, 1], got {relaxation!r}"
-            )
+            raise ValueError(f"relaxation must be in (0, 1], got {relaxation!r}")
         r_in = self.cavity_reflectivity_input
         r_out = self.cavity_reflectivity_output
         n = self._n
@@ -1166,7 +1167,9 @@ class MultimodeSplitStepEngine:
         # Set the new input fields (Stokes only; pump is re-injected)
         for k in range(1, n):
             if relaxation < 1.0:
-                self.A[k] = (1.0 - relaxation) * self.A[k] + relaxation * output_fields[k]
+                self.A[k] = (1.0 - relaxation) * self.A[k] + relaxation * output_fields[
+                    k
+                ]
             else:
                 self.A[k] = output_fields[k]
 

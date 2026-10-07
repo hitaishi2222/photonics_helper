@@ -213,15 +213,14 @@ def test_dudley_temporal_reversal_lifts_soliton_right():
     from reproductions.dudley_2006_scg import common, fig03_basic_scg
 
     evo = fig03_basic_scg.run(fast=True)
-    t_internal, i_internal = common.temporal_evolution_data(
-        evo, time_reversal=False)
+    t_internal, i_internal = common.temporal_evolution_data(evo, time_reversal=False)
 
     assert t_internal[np.argmax(i_internal[-1])] > 0.0
     # The legacy flip (back-compat flag) still mirrors about zero.
-    t_literature, i_literature = common.temporal_evolution_data(
-        evo, time_reversal=True)
+    t_literature, i_literature = common.temporal_evolution_data(evo, time_reversal=True)
     assert np.sum(t_internal * i_internal) == pytest.approx(
-        -np.sum(t_literature * i_literature))
+        -np.sum(t_literature * i_literature)
+    )
 
 
 def test_dudley_evolution_plots_return_figures():
@@ -354,8 +353,12 @@ def test_renninger_wise_higher_mode_blue_shift():
     rel = [centres[1] - centres[0], centres[2] - centres[0]]
     assert rel[0] < 0 and rel[1] < 0, rel
     # magnitude within a factor ~2 of the kinematic requirement
-    req = (-( -mode_walkoffs_rw()[1:] / BETA2_RW)
-           * LAMBDA0_RW**2 / (2 * np.pi * C_MS_RW) * 1e9)
+    req = (
+        -(-mode_walkoffs_rw()[1:] / BETA2_RW)
+        * LAMBDA0_RW**2
+        / (2 * np.pi * C_MS_RW)
+        * 1e9
+    )
     assert abs(rel[0]) < 2.5 * abs(req[0]) and abs(rel[0]) > 0.3 * abs(req[0])
     assert abs(rel[1]) < 2.5 * abs(req[1]) and abs(rel[1]) > 0.3 * abs(req[1])
 
@@ -371,7 +374,9 @@ def test_kibler_2010_peregrine():
     anchors + Peregrine-limit profile). ~3 min."""
     r = validate_kibler(make_plot=False)
     assert r["growth_leg_max_rel_l2"] < 0.08
-    assert abs(r["deck_peak_ratio"] - r["deck_peak_theory"]) / r["deck_peak_theory"] < 0.15
+    assert (
+        abs(r["deck_peak_ratio"] - r["deck_peak_theory"]) / r["deck_peak_theory"] < 0.15
+    )
     assert r["peregrine_profile_l2"] < 0.1
 
 
@@ -466,8 +471,7 @@ def test_dudley_common_analysis_channel_mirror_audit():
 
     # (a) spectrogram helper: each gated slice uses the engine kernel
     gate = np.ones_like(field)
-    _, _, S = common.spectrogram(field, t, gate, omega, n_delays=3,
-                                 delay_span_ps=1.0)
+    _, _, S = common.spectrogram(field, t, gate, omega, n_delays=3, delay_span_ps=1.0)
     imax = int(np.argmax(S[0]))
     assert float(omega[imax]) == pytest.approx(float(omega[imax_ref]), abs=1e-6)
 
@@ -475,8 +479,8 @@ def test_dudley_common_analysis_channel_mirror_audit():
     # interpolation path: the sorted-PSD pipeline must keep the tone red
     # (a negative frequency offset maps to a LONGER wavelength).
     evo = common.Evolution(
-        z=np.array([0.0]), fields=field[None, :], t=t, omega=omega,
-        omega0=omega0)
+        z=np.array([0.0]), fields=field[None, :], t=t, omega=omega, omega0=omega0
+    )
     wl, psd = evo.spectrum_on_wavelength()
     assert float(wl[int(np.argmax(psd[0]))]) > 835.0  # red of the carrier
     grid_wl, resampled = common.interpolate_on_wavelength(wl, psd[:1], 700.0, 900.0)
@@ -510,7 +514,8 @@ def test_dw_timing_beta1_arrival_helper():
     import importlib.util as ilu
 
     spec = ilu.spec_from_file_location(
-        "ab", "reproductions/dw_timing_gas_hollowcore/arrival_beta1.py")
+        "ab", "reproductions/dw_timing_gas_hollowcore/arrival_beta1.py"
+    )
     ab = ilu.module_from_spec(spec)
     spec.loader.exec_module(ab)
     rep = ab._load_rep()
@@ -522,15 +527,26 @@ def test_dw_timing_beta1_arrival_helper():
         return rep.differentiate_beta(np.asarray(om), 2.1)[1]
 
     got = ab.absolute_arrival_time_fs(
-        lambda zf: (lambda om: b1(om)), length_m=1.0, z_fission_m=0.4,
-        omega0=w0, omega_rdw=wr)
+        lambda zf: lambda om: b1(om),
+        length_m=1.0,
+        z_fission_m=0.4,
+        omega0=w0,
+        omega_rdw=wr,
+    )
     _, b1r, _ = rep.differentiate_beta(np.array([wr]), 2.1)
     _, b1_0, _ = rep.differentiate_beta(np.array([w0]), 2.1)
     ana = 0.6 * (b1r[0] - b1_0[0]) * 1e15
     assert abs(got - ana) < 1e-9 * max(abs(ana), 1.0), (got, ana)
-    ta = [ab.absolute_arrival_time_fs(
-        lambda zf: (lambda om: b1(om)), length_m=1.0, z_fission_m=z,
-        omega0=w0, omega_rdw=wr) for z in (0.05, 0.6)]
+    ta = [
+        ab.absolute_arrival_time_fs(
+            lambda zf: lambda om: b1(om),
+            length_m=1.0,
+            z_fission_m=z,
+            omega0=w0,
+            omega_rdw=wr,
+        )
+        for z in (0.05, 0.6)
+    ]
     # walk-off leg shrinks -> |tau| shrinks monotonically toward 0
     assert abs(ta[0]) > abs(ta[1]) and np.sign(ta[0]) == np.sign(ta[1])
 

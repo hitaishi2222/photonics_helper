@@ -57,8 +57,15 @@ breathing and fissioning over one dispersion length.
 
 ```python
 from photonics_helper import (
-    Area, Length, Time, Wavelength,
-    FiberProfile, GNLSESolver, Envelope, TemporalGrid, Wave,
+    Area,
+    Length,
+    Time,
+    Wavelength,
+    FiberProfile,
+    GNLSESolver,
+    Envelope,
+    TemporalGrid,
+    Wave,
 )
 
 import numpy as np
@@ -80,15 +87,14 @@ L_D = Length(T0.as_s**2 / abs(beta2 * 1e-24), "m")
 grid = TemporalGrid(N=2**11, Tmax=Time(5 * T0.as_fs * 1e-15, "s"))
 pulse = Wave(
     grid=grid,
-    envelope=Envelope(shape="sech", peak_amplitude=np.sqrt(9 * P0_N1),
-                      pulse_width=T0),
+    envelope=Envelope(shape="sech", peak_amplitude=np.sqrt(9 * P0_N1), pulse_width=T0),
     central_wavelength=Wavelength(1064, "nm"),
 ).with_effective_area(A_eff)
 
 solver = GNLSESolver(
     pulse=pulse,
     fiber=FiberProfile(n2=n2, alpha=0.0, A_eff=A_eff, length=L_D),
-    betas=np.array([beta2]),          # [β₂, β₃, ...] in psᵏ/m
+    betas=np.array([beta2]),  # [β₂, β₃, ...] in psᵏ/m
     include_raman=False,
     include_self_steepening=False,
 )
@@ -97,25 +103,36 @@ solver.propagate(num_steps=100, show_progress=True)  # tqdm bar over z
 # Animate: temporal-envelope waterfall + peak-power trace growing with z
 t_ps = grid.t * 1e12
 z_m = solver.z_array
-peak = np.array([float(np.max(np.abs(w.envelope_field)) ** 2)
-                 for w in solver.evolution])
+peak = np.array(
+    [float(np.max(np.abs(w.envelope_field)) ** 2) for w in solver.evolution]
+)
 colors = cm.viridis(np.linspace(0, 1, len(solver.evolution)))
 
 OFF = 0.22  # vertical spacing between waterfall traces
 fig, (ax_t, ax_p) = plt.subplots(1, 2, figsize=(12, 4.5), constrained_layout=True)
-ax_t.set(xlim=(-0.5, 0.5), ylim=(-0.1, OFF * len(solver.evolution) + 1.15),
-         xlabel="Time (ps)", ylabel="Propagation distance (m)",
-         title="Temporal envelope (waterfall)")
-ax_p.set(xlim=(0, z_m[-1]), ylim=(0, peak.max() * 1.15),
-         xlabel="Propagation distance (m)", ylabel="Peak power (W)",
-         title="Peak power oscillates (N = 3 soliton)")
+ax_t.set(
+    xlim=(-0.5, 0.5),
+    ylim=(-0.1, OFF * len(solver.evolution) + 1.15),
+    xlabel="Time (ps)",
+    ylabel="Propagation distance (m)",
+    title="Temporal envelope (waterfall)",
+)
+ax_p.set(
+    xlim=(0, z_m[-1]),
+    ylim=(0, peak.max() * 1.15),
+    xlabel="Propagation distance (m)",
+    ylabel="Peak power (W)",
+    title="Peak power oscillates (N = 3 soliton)",
+)
 for ax in (ax_t, ax_p):
     ax.grid(alpha=0.3)
 
-z_line, = ax_p.plot([], [], color="crimson", lw=2.2)
-marker, = ax_p.plot([], [], "o", color="crimson", ms=7)
-label = ax_p.text(0.03, 0.92, "", transform=ax_p.transAxes, fontsize=11,
-                  family="monospace", va="top")
+(z_line,) = ax_p.plot([], [], color="crimson", lw=2.2)
+(marker,) = ax_p.plot([], [], "o", color="crimson", ms=7)
+label = ax_p.text(
+    0.03, 0.92, "", transform=ax_p.transAxes, fontsize=11, family="monospace", va="top"
+)
+
 
 def draw(k):
     for j in range(k + 1):
@@ -123,15 +140,17 @@ def draw(k):
         base = j * OFF
         # Filled bands, not thin lines: each trace fills its own slot, so the
         # stack has no white gaps between traces.
-        ax_t.fill_between(t_ps, base, a / a.max() * OFF * 0.98 + base,
-                          color=colors[j], lw=0)
+        ax_t.fill_between(
+            t_ps, base, a / a.max() * OFF * 0.98 + base, color=colors[j], lw=0
+        )
     ticks = np.arange(0, len(solver.evolution) * OFF, 10 * OFF)
     ax_t.set_yticks(ticks)
     ax_t.set_yticklabels([f"{z_m[int(v / OFF)]:.0f}" for v in ticks])
-    z_line.set_data(z_m[:k + 1], peak[:k + 1])
+    z_line.set_data(z_m[: k + 1], peak[: k + 1])
     marker.set_data([z_m[k]], [peak[k]])
     label.set_text(f"z = {z_m[k]:5.2f} / {z_m[-1]:.1f} m")
     return z_line, marker, label
+
 
 anim = FuncAnimation(fig, draw, frames=len(solver.evolution), interval=100)
 anim.save("soliton_fission.gif", writer=PillowWriter(fps=12), dpi=95)
