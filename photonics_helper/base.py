@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from functools import cached_property
-from typing import Literal, Self
+from typing import ClassVar, Literal, Self
 
 import numpy as np
 import scipy.constants as const
@@ -21,13 +21,114 @@ H_PLANCK: float = const.h
 HBAR: float = const.hbar
 
 
+class ArithmeticMixin:
+    """Mixin providing arithmetic operations with int/float for unit classes.
+
+    Supports: obj * num, num * obj, obj + obj, obj + num, obj - obj, obj - num,
+    num - obj, obj / num, obj / obj (→ float), num / obj.
+    """
+
+    _internal_unit: ClassVar[str] = ""
+
+    def __mul__(self, other):
+        if isinstance(other, (int, float)):
+            return self.__class__(self.value * other, self._internal_unit)
+        return NotImplemented
+
+    def __rmul__(self, other):
+        return self.__mul__(other)
+
+    def __add__(self, other):
+        if isinstance(other, self.__class__):
+            return self.__class__(self.value + other.value, self._internal_unit)
+        if isinstance(other, (int, float)):
+            return self.__class__(self.value + other, self._internal_unit)
+        return NotImplemented
+
+    def __radd__(self, other):
+        return self.__add__(other)
+
+    def __sub__(self, other):
+        if isinstance(other, self.__class__):
+            return self.__class__(self.value - other.value, self._internal_unit)
+        if isinstance(other, (int, float)):
+            return self.__class__(self.value - other, self._internal_unit)
+        return NotImplemented
+
+    def __rsub__(self, other):
+        if isinstance(other, (int, float)):
+            return self.__class__(other - self.value, self._internal_unit)
+        return NotImplemented
+
+    def __truediv__(self, other):
+        if isinstance(other, (int, float)):
+            return self.__class__(self.value / other, self._internal_unit)
+        if isinstance(other, self.__class__):
+            return self.value / other.value
+        return NotImplemented
+
+    def __rtruediv__(self, other):
+        if isinstance(other, (int, float)):
+            return self.__class__(other / self.value, self._internal_unit)
+        return NotImplemented
+
+
+class ArrayArithmeticMixin:
+    """Mixin providing arithmetic operations with int/float for unit array classes."""
+
+    _internal_unit: ClassVar[str] = ""
+
+    def __mul__(self, other):
+        if isinstance(other, (int, float)):
+            return self.__class__(self.value * other, self._internal_unit)
+        return NotImplemented
+
+    def __rmul__(self, other):
+        return self.__mul__(other)
+
+    def __add__(self, other):
+        if isinstance(other, self.__class__):
+            return self.__class__(self.value + other.value, self._internal_unit)
+        if isinstance(other, (int, float)):
+            return self.__class__(self.value + other, self._internal_unit)
+        return NotImplemented
+
+    def __radd__(self, other):
+        return self.__add__(other)
+
+    def __sub__(self, other):
+        if isinstance(other, self.__class__):
+            return self.__class__(self.value - other.value, self._internal_unit)
+        if isinstance(other, (int, float)):
+            return self.__class__(self.value - other, self._internal_unit)
+        return NotImplemented
+
+    def __rsub__(self, other):
+        if isinstance(other, (int, float)):
+            return self.__class__(other - self.value, self._internal_unit)
+        return NotImplemented
+
+    def __truediv__(self, other):
+        if isinstance(other, (int, float)):
+            return self.__class__(self.value / other, self._internal_unit)
+        if isinstance(other, self.__class__):
+            return self.value / other.value
+        return NotImplemented
+
+    def __rtruediv__(self, other):
+        if isinstance(other, (int, float)):
+            return self.__class__(other / self.value, self._internal_unit)
+        return NotImplemented
+
+
 @dataclass(config={"arbitrary_types_allowed": True})
-class Wavelength:
+class Wavelength(ArithmeticMixin):
     """Wavelength stored internally in meters.
 
     Accepts nm, um, or m on construction; converts to meters in ``__post_init__``.
     """
 
+    _internal_unit: ClassVar[str] = "m"
     value: float
     unit: Literal["nm", "um", "m"]
 
@@ -96,12 +197,13 @@ class Wavelength:
 
 
 @dataclass(config={"arbitrary_types_allowed": True})
-class Frequency:
+class Frequency(ArithmeticMixin):
     """Optical frequency stored internally in Hz.
 
     Accepts THz, GHz, MHz, or Hz on construction; converts to Hz in ``__post_init__``.
     """
 
+    _internal_unit: ClassVar[str] = "Hz"
     value: float
     unit: Literal["THz", "GHz", "MHz", "Hz"]
 
@@ -179,12 +281,13 @@ class Frequency:
 
 
 @dataclass(config={"arbitrary_types_allowed": True})
-class AngularFrequency:
+class AngularFrequency(ArithmeticMixin):
     """Angular optical frequency stored internally in rad/s.
 
     Accepts rad/s or rad/ps on construction; converts to rad/s in ``__post_init__``.
     """
 
+    _internal_unit: ClassVar[str] = "rad/s"
     value: float
     unit: Literal["rad/s", "rad/ps"]
 
@@ -250,12 +353,13 @@ class AngularFrequency:
 
 
 @dataclass(config={"arbitrary_types_allowed": True})
-class Wavenumber:
+class Wavenumber(ArithmeticMixin):
     """Wavenumber stored internally in 1/m.
 
     Accepts 1/cm or 1/m on construction; converts to 1/m in ``__post_init__``.
     """
 
+    _internal_unit: ClassVar[str] = "1/m"
     value: float
     unit: Literal["1/cm", "1/m"]
 
@@ -322,12 +426,13 @@ class Wavenumber:
 
 
 @dataclass(config={"arbitrary_types_allowed": True})
-class Length:
+class Length(ArithmeticMixin):
     """Length stored internally in meters.
 
     Accepts km, m, cm, mm, um, nm, or pm on construction; converts to meters in ``__post_init__``.
     """
 
+    _internal_unit: ClassVar[str] = "m"
     value: float
     unit: Literal["km", "m", "cm", "mm", "um", "nm", "pm"]
 
@@ -418,12 +523,13 @@ class Length:
 
 
 @dataclass(config={"arbitrary_types_allowed": True})
-class Time:
+class Time(ArithmeticMixin):
     """Time stored internally in seconds.
 
     Accepts s, ms, us, ns, ps, fs, or as on construction; converts to seconds in ``__post_init__``.
     """
 
+    _internal_unit: ClassVar[str] = "s"
     value: float
     unit: Literal["s", "ms", "us", "ns", "ps", "fs", "as"]
 
@@ -522,12 +628,13 @@ class Time:
 
 
 @dataclass(config={"arbitrary_types_allowed": True})
-class Energy:
+class Energy(ArithmeticMixin):
     """Energy stored internally in Joules.
 
     Accepts J, mJ, uJ, nJ, pJ, eV, or meV on construction; converts to Joules in ``__post_init__``.
     """
 
+    _internal_unit: ClassVar[str] = "J"
     value: float
     unit: Literal["J", "mJ", "uJ", "nJ", "pJ", "eV", "meV"]
 
@@ -631,12 +738,13 @@ class Energy:
 
 
 @dataclass(config={"arbitrary_types_allowed": True})
-class Power:
+class Power(ArithmeticMixin):
     """Power stored internally in Watts.
 
     Accepts kW, W, mW, uW, or nW on construction; converts to Watts in ``__post_init__``.
     """
 
+    _internal_unit: ClassVar[str] = "W"
     value: float
     unit: Literal["kW", "W", "mW", "uW", "nW"]
 
@@ -704,12 +812,13 @@ class Power:
 
 
 @dataclass(config={"arbitrary_types_allowed": True})
-class Area:
+class Area(ArithmeticMixin):
     """Area stored internally in square meters (m²).
 
     Accepts m^2, cm^2, mm^2, um^2, or nm^2 on construction; converts to m² in ``__post_init__``.
     """
 
+    _internal_unit: ClassVar[str] = "m^2"
     value: float
     unit: Literal["m^2", "cm^2", "mm^2", "um^2", "nm^2"]
 
@@ -777,6 +886,7 @@ class Area:
 
 @dataclass(config={"arbitrary_types_allowed": True})
 class PeakPower(Power):
+    # Inherits ArithmeticMixin from Power; _internal_unit = "W"
     """Peak power of a pulse, tying normalized envelopes to physical watts.
 
     A thin :class:`Power` subclass. The conversion from a normalized envelope
@@ -827,9 +937,10 @@ class PeakPower(Power):
 
 
 @dataclass(config={"arbitrary_types_allowed": True})
-class WavelengthArray:
+class WavelengthArray(ArrayArithmeticMixin):
     """Array of wavelengths stored internally in meters."""
 
+    _internal_unit: ClassVar[str] = "m"
     value: NDArray
     unit: Literal["nm", "um", "m"]
 
@@ -917,9 +1028,10 @@ class WavelengthArray:
 
 
 @dataclass(config={"arbitrary_types_allowed": True})
-class FrequencyArray:
+class FrequencyArray(ArrayArithmeticMixin):
     """Array of frequencies stored internally in Hz."""
 
+    _internal_unit: ClassVar[str] = "Hz"
     value: NDArray
     unit: Literal["THz", "GHz", "MHz", "Hz"]
 
@@ -995,9 +1107,10 @@ class FrequencyArray:
 
 
 @dataclass(config={"arbitrary_types_allowed": True})
-class AngularFrequencyArray:
+class AngularFrequencyArray(ArrayArithmeticMixin):
     """Array of angular frequencies stored internally in rad/s."""
 
+    _internal_unit: ClassVar[str] = "rad/s"
     value: NDArray
     unit: Literal["rad/s", "rad/ps"]
 
@@ -1075,9 +1188,10 @@ class AngularFrequencyArray:
 
 
 @dataclass(config={"arbitrary_types_allowed": True})
-class WavenumberArray:
+class WavenumberArray(ArrayArithmeticMixin):
     """Array of wavenumbers stored internally in 1/m."""
 
+    _internal_unit: ClassVar[str] = "1/m"
     value: NDArray
     unit: Literal["1/cm", "1/m"]
 

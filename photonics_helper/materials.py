@@ -1,6 +1,7 @@
 """Refractive index data with spline interpolation and Sellmeier models."""
 
 import difflib
+import math
 import sqlite3
 import warnings
 from functools import cached_property
@@ -626,7 +627,7 @@ class RefractiveIndex:
                 stacklevel=2,
             )
         alpha = 4 * PI * self.k / self.wl.as_m  # 1/m (intensity attenuation)
-        return np.asarray(10 * np.log10(np.e) * alpha, dtype=float)  # dB/m
+        return np.asarray(10 * np.log10(math.e) * alpha, dtype=float)  # dB/m
 
 
 # ─── Material catalogue ──────────────────────────────────────────────────────

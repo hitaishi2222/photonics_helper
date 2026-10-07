@@ -1,6 +1,6 @@
 [project]
 name = "photonics-helper"
-version = "0.1.9"
+version = "0.1.10"
 description = "A comprehensive helper library for photonics and optics calculations"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -83,6 +83,7 @@ select = ["E4", "E7", "E9", "F"]
 "tests/test_structured.py" = ["E741"]
 "tests/test_breathers.py" = ["E731"]
 "tests/test_dashboard.py" = ["E402"]
+"scripts/test_reproductions.py" = ["E402", "F401"]
 
 [tool.pyrefly]
 project-includes = [

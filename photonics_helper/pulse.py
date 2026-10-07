@@ -195,8 +195,18 @@ class Envelope:
                 pulse_width=T0,
             )
 
-    def field(self, t: NDArray) -> NDArray:
-        """Returns complex envelope A(t)."""
+    def field(self, t: NDArray | None = None) -> NDArray:
+        """Returns complex envelope A(t).
+
+        Parameters
+        ----------
+        t : NDArray | None
+            Time array in seconds. If None (default), auto-generates a grid
+            covering ~10× T0 which captures >99% of the pulse energy for
+            all built-in shapes.
+        """
+        if t is None:
+            t = self._make_grid().t
         T0 = self.pulse_width.as_s
         A0 = self.peak_amplitude
 
@@ -408,9 +418,9 @@ class Envelope:
         new_env = Envelope(
             shape="custom",
             peak_amplitude=float(np.max(np.abs(disp_field))),
-            pulse_width=Time(measured_width, "s")
-            if measured_width > 0.0
-            else self.pulse_width,
+            pulse_width=(
+                Time(measured_width, "s") if measured_width > 0.0 else self.pulse_width
+            ),
             chirp=0.0,
             func=_disp_field,
             phase_func=None,
