@@ -52,3 +52,12 @@ reproductions/**/*.pdf
 reproductions/planned/**/pages/
 tests/test_reproductions.py
 oe2001_checkpoint_A.pt
+
+# --- Repowise (local code-intelligence index; regenerate with `repowise init`) ---
+.repowise/
+.mcp.json
+.vscode/
+.claude/
+
+# Lean 4 formal development (formal/)
+formal/.lake/

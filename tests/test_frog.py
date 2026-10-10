@@ -356,7 +356,18 @@ class TestFROGTrace:
         assert trace.trace.shape == (N, N)
         assert trace.omega is not None
         assert trace.tau is not None
-        assert trace.dt == dt
+        # Unit-typed axes and steps (backwards compatible: floats were
+        # accepted on construction, stored value is in rad/s and seconds).
+        from photonics_helper import AngularFrequency, AngularFrequencyArray, Time
+
+        assert isinstance(trace.dt, Time)
+        assert trace.dt.as_s == dt
+        assert isinstance(trace.dw, AngularFrequency)
+        assert isinstance(trace.omega, AngularFrequencyArray)
+        np.testing.assert_allclose(
+            trace.omega.as_rad_s,
+            np.fft.fftshift(2 * np.pi * np.fft.fftfreq(N, d=dt)),
+        )
 
     def test_visualize_without_retrieval(self):
         """visualize() works without retrieved field."""

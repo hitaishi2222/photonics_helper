@@ -1,0 +1,15 @@
+name = "photonics-formal"
+version = "0.1.0"
+defaultTargets = ["Photonics"]
+
+[[lean_lib]]
+name = "Photonics"
+
+[[require]]
+name = "mathlib"
+scope = "leanprover-community"
+# Pinned to the Mathlib release whose `lean-toolchain` is exactly
+# leanprover/lean4:v4.34.1 — the toolchain installed here. Do not move to
+# master: it tracks Lean 4.35 release candidates and would force a toolchain
+# bump, breaking the reproducibility claim in PLAN.md §2.
+version = "git#v4.34.1"

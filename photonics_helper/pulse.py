@@ -29,10 +29,66 @@ from pydantic.dataclasses import dataclass
 from scipy.special import airy
 from scipy.special import hermite as hermite_poly
 
-from photonics_helper.base import C_MS, EPS_0, Area, Frequency, Time, Wavelength
+from photonics_helper.base import (
+    C_MS,
+    EPS_0,
+    AngularFrequency,
+    AngularFrequencyArray,
+    Area,
+    Frequency,
+    Time,
+    Wavelength,
+    WavelengthArray,
+)
 from photonics_helper.core.grids import TemporalGrid
 
 logger = logging.getLogger(__name__)
+
+# Headless backends that can never pop a window. Kept as a module constant so
+# behavior is auditable and tests can override the candidate list.
+HEADLESS_BACKENDS: frozenset[str] = frozenset(
+    {"agg", "pdf", "ps", "svg", "pgf", "template"}
+)
+INTERACTIVE_BACKEND_CANDIDATES: tuple[str, ...] = (
+    "qtagg",
+    "TkAgg",
+    "gtk4agg",
+    "gtk3agg",
+    "wxagg",
+    "macosx",
+)
+
+
+def _ensure_showable_backend() -> None:
+    """Make the next ``plt.show()`` actually pop a window.
+
+    Scripts (and notebooks exported for CI) often run under a headless backend
+    such as ``Agg`` — e.g. by calling ``matplotlib.use("Agg")`` or inheriting
+    ``MPLBACKEND=Agg`` — where ``plt.show()`` is silently a no-op and users
+    see nothing without knowing why. When a visualizer of this module is used
+    to *display* (no ``save_path``), this helper transparently switches to the
+    first available interactive backend so the returned figure can be shown.
+    Saving paths are unaffected (headless is an *option* there, not a bug).
+    """
+    import matplotlib.pyplot as plt
+
+    backend = (plt.get_backend() or "").lower()
+    if backend not in HEADLESS_BACKENDS:
+        return  # already interactive (e.g. qtagg, TkAgg, macosx, inline widgets)
+    for candidate in INTERACTIVE_BACKEND_CANDIDATES:
+        try:
+            plt.switch_backend(candidate)
+        except Exception:
+            continue  # toolkit not installed — try the next candidate
+        logger.info("Switched matplotlib backend %r → %r for interactive show", backend, candidate)
+        return
+    logger.warning(
+        "matplotlib is on the headless backend %r and no interactive backend "
+        "(qtagg/TkAgg/…) could be imported; figures will not display on "
+        "screen — save them with save_path= or write to a file instead.",
+        backend,
+    )
+
 
 SHAPE_FACTORS: dict[str, float] = {
     "gaussian": 2 * sqrt(log(2)),
@@ -794,6 +850,7 @@ class Envelope:
         ax_pol.axis("equal")
 
         plt.tight_layout()
+        _ensure_showable_backend()
         return fig
 
     def visualize_3d(
@@ -901,6 +958,154 @@ class Envelope:
         )
 
 
+@dataclass(config={"arbitrary_types_allowed": True})
+class ElectricField:
+    """Physical electric field as a complex analytic signal (V/m).
+
+    :attr:`field` stores the complex analytic samples — the physical field is
+    ``np.real(field)``. For an envelope ``A(t)`` reconstructed around a
+    carrier ``ω₀`` the intensity follows the standard relation
+    ``I = ½·n·c·ε₀·|E|²`` with the background :attr:`refractive_index`.
+
+    The class is deliberately a thin unit-bearing value object over a
+    :class:`TemporalGrid`: no plotting, no solver state, and no FFT-backend
+    choices live here (axes and transforms come from the grid). The carrier
+    convention is single-sourced in :meth:`from_envelope` —
+    ``E(t) = A(t)·e^{−iω₀t}`` with the analysis kernel of
+    :meth:`TemporalGrid.fft` — so the library's carrier/sign conventions only
+    need auditing in one place.
+
+    Parameters
+    ----------
+    field : complex 1-D array (V/m analytic samples)
+    grid : :class:`TemporalGrid` — time axis + FFT convention
+    central_frequency : :class:`~photonics_helper.base.AngularFrequency` —
+        carrier ω₀ used in :meth:`from_envelope` / :meth:`to_envelope`
+    refractive_index : background n for the intensity–power conversions
+    """
+
+    field: NDArray
+    grid: TemporalGrid
+    central_frequency: AngularFrequency
+    refractive_index: float = 1.0
+
+    def __post_init__(self) -> None:
+        data = np.asarray(self.field)
+        if data.ndim != 1:
+            raise ValueError(
+                f"ElectricField.field must be a 1-D array, got shape {data.shape}"
+            )
+        if data.shape[0] != self.grid.t.shape[0]:
+            raise ValueError(
+                "ElectricField.field length "
+                f"({data.shape[0]}) must match grid time samples "
+                f"({self.grid.t.shape[0]})"
+            )
+        self.field = np.asarray(self.field, dtype=complex)
+
+    # -- construction ------------------------------------------------------
+
+    @classmethod
+    def from_envelope(
+        cls,
+        A: NDArray,
+        grid: TemporalGrid,
+        central_wavelength: Wavelength,
+        refractive_index: float = 1.0,
+    ) -> ElectricField:
+        """Reconstruct the field from a complex envelope ``A(t)``.
+
+        The single authoritative carrier reconstruction of the library:
+        ``E(t) = A(t)·e^{−iω₀t}`` where ``ω₀ = 2πc/λ₀``. Note ``A`` carries
+        the physical scale directly (V/m when used with intensity
+        ``½·n·c·ε₀·|A|²``), i.e. it is the *analytic* envelope, not a
+        normalized shape (see :class:`Envelope` for the normalized one).
+
+        Parameters
+        ----------
+        A : complex 1-D envelope samples on ``grid.t``
+        grid : the temporal grid ``A`` is sampled on
+        central_wavelength : carrier wavelength λ₀
+        refractive_index : background n (stored for later conversions)
+        """
+        omega0 = central_wavelength.to_omega().as_rad_s
+        return cls(
+            field=np.asarray(A) * np.exp(-1j * omega0 * grid.t),
+            grid=grid,
+            central_frequency=central_wavelength.to_omega(),
+            refractive_index=refractive_index,
+        )
+
+    def to_envelope(self) -> NDArray:
+        """Analytic-signal extraction back to the envelope ``A(t)``.
+
+        Inverse of :meth:`from_envelope` for fields constructed around a
+        carrier: pulls the slow envelope out of ``E(t)`` by multiplying with
+        the conjugate carrier and low-pass filtering over one carrier period.
+        For HiREP-style windows whose sampling resolves the carrier, the
+        roundtrip preserves amplitude and phase up to floating-point noise.
+        """
+        shifted = self.field * np.exp(
+            +1j * self.central_frequency.as_rad_s * self.grid.t
+        )
+        # Low-pass over one carrier period: moving average in the time domain
+        # with a window of ~one carrier cycle suppresses the 2ω₀ image.
+        omega0 = self.central_frequency.as_rad_s
+        cycle = int(max(1, round(2 * np.pi / (omega0 * self.grid.dt))))
+        kernel = np.ones(cycle) / cycle
+        return np.convolve(shifted, kernel, mode="same")
+
+    # -- physical observables ----------------------------------------------
+
+    @property
+    def real_field(self) -> NDArray:
+        """Physical field samples ``Re[E(t)]`` in V/m."""
+        return np.real(self.field)
+
+    @property
+    def intensity(self) -> NDArray:
+        """Instantaneous intensity ``½·n·c·ε₀·|E|²`` in W/m² (single-sourced scale)."""
+        return self.intensity_scale * np.abs(self.field) ** 2
+
+    @property
+    def intensity_scale(self) -> float:
+        """``½·n·c·ε₀`` — the only place the |E|²→W/m² factor is defined."""
+        return 0.5 * self.refractive_index * C_MS * EPS_0
+
+    def power(self, A_eff: Area) -> NDArray:
+        """Sampled power ``P(t) = I(t)·A_eff`` in watts.
+
+        ``A_eff`` is required (and positional): power is meaningless without
+        a mode area, and needing it explicitly prevents the silently-scaling
+        footgun the legacy ``Wave.metrics`` warned about.
+        """
+        return A_eff.as_m2 * self.intensity
+
+    def peak_power(self, A_eff: Area) -> float:
+        """Peak power in watts (max of :meth:`power`)."""
+        return float(np.max(self.power(A_eff)))
+
+    def pulse_energy(self, A_eff: Area) -> float:
+        """Pulse energy ``∫P(t)dt`` in joules (trapezoidal integration)."""
+        p = self.power(A_eff)
+        return float(np.trapezoid(p, self.grid.t))
+
+    def instantaneous_phase(self) -> NDArray:
+        """Unwrapped phase of the analytic field (rad)."""
+        return np.unwrap(np.angle(self.field))
+
+    # -- spectral domain ---------------------------------------------------
+
+    @cached_property
+    def spectrum(self) -> NDArray:
+        """Spectral field ``Ê(Ω)`` from the grid's FFT convention (Parseval-holding)."""
+        return np.asarray(self.grid.fft(self.field))
+
+    @property
+    def spectral_intensity(self) -> NDArray:
+        return np.abs(self.spectrum) ** 2
+
+
 @dataclass
 class Wave:
     grid: TemporalGrid
@@ -919,10 +1124,18 @@ class Wave:
         return self.central_wavelength.to_omega().as_rad_s
 
     @property
-    def wavelength_nm(self) -> NDArray:
-        """Absolute wavelength grid (nm) for each frequency sample on ``grid.w``."""
-        omega_abs = self.central_frequency + self.grid.w
-        return np.asarray(2 * np.pi * C_MS / omega_abs * 1e9)
+    def wavelength_nm(self) -> WavelengthArray:
+        """Absolute wavelength grid (nm) for each frequency sample on ``grid.w``.
+
+        Built through the base-unit conversions (carrier offset from the
+        central wavelength → :class:`AngularFrequencyArray` → to_wl) instead
+        of hand-rolled ``2π·c/ω`` arithmetic, so the returned object carries
+        its own unit handling (``.as_nm``, ``.as_m``, ``to_freq()``).
+        """
+        omega_abs = AngularFrequencyArray(
+            self.central_frequency + self.grid.w, "rad/s"
+        )
+        return omega_abs.to_wl()
 
     @property
     def electric_field(self):
@@ -1083,6 +1296,38 @@ class Wave:
         # Build the multi-pulse envelope field, centered at t=0
         full_field = np.zeros_like(grid.t, dtype=complex)
         spacing = 1.0 / repetition_rate.as_Hz
+        window = float(grid.time_window) if grid.time_window else 0.0
+        # Sanity checks — a grid that cannot resolve the train makes the
+        # field numerically zero and every derived metric collapse (this
+        # exact aliasing produced silent 0.0 peak_power/energy values).
+        span_needed = max(
+            (n_pulses - 1) * spacing + 4 * envelope.pulse_width.as_s,
+            4 * envelope.pulse_width.as_s,
+        )
+        if window < spacing and n_pulses > 1:
+            raise ValueError(
+                f"TemporalGrid window ({window:.3e} s) is shorter than one "
+                f"pulse spacing ({spacing:.3e} s) — the train cannot exist on "
+                "this grid. Use TemporalGrid.for_pulse_train(repetition_rate, "
+                "n_pulses, pulse_width, N) to build a grid that covers it."
+            )
+        if window < span_needed:
+            warnings.warn(
+                f"TemporalGrid window ({window:.3e} s) does not cover the full "
+                f"requested pulse train (~{span_needed:.3e} s): edge pulses are "
+                "clipped and peak_power()/pulse_energy() numbers are biased.",
+                UserWarning,
+                stacklevel=2,
+            )
+        if grid.dt > envelope.pulse_width.as_s / 10:
+            warnings.warn(
+                f"TemporalGrid dt={grid.dt:.3e} s is coarser than pulse_width/10 "
+                f"({envelope.pulse_width.as_s / 10:.3e} s): the envelope is "
+                "aliased and peak_power()/pulse_energy() may be far off zero "
+                "or biased.",
+                UserWarning,
+                stacklevel=2,
+            )
         for k in range(n_pulses):
             t_centered = grid.t - (k - (n_pulses - 1) / 2) * spacing
             full_field += envelope.field(t_centered)
@@ -1099,6 +1344,15 @@ class Wave:
             func=envelope.func,
             phase_func=envelope.phase_func,
         )
+
+        if not np.any(np.abs(full_field) > 1e-6 * max(1.0, envelope.peak_amplitude)):
+            raise ValueError(
+                "The requested grid does not resolve any pulse of the train "
+                f"(max |A| = {np.max(np.abs(full_field)):.3e}). The envelope is "
+                "aliased away: the grid window is far longer than the train "
+                "with insufficient N. Use TemporalGrid.for_pulse_train(...) "
+                "and make sure dt ≪ pulse_width."
+            )
 
         wave = cls(
             grid=grid,
@@ -1386,6 +1640,9 @@ class Wave:
             fig.savefig(
                 save_path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor()
             )
+        else:
+            # Display intent: make sure plt.show() can actually open a window.
+            _ensure_showable_backend()
 
         return fig
 
@@ -1403,26 +1660,32 @@ class FROGTrace:
         The FROG trace (normalized if normalize=True in from_field).
     unnormalized_trace : 2D array of shape (N_omega, N_tau)
         The raw trace before normalization (used for retrieval).
-    omega : angular frequency axis (rad/s), centered at 0.
-    tau : delay axis (s), centered at 0.
-    dt : time step (s).
-    dw : frequency step (rad/s).
+    omega : :class:`~photonics_helper.base.AngularFrequencyArray`
+        Angular frequency axis (rad/s), centered at 0.
+    tau : NDArray
+        Delay axis in seconds, centered at 0 (kept as a raw array; there is
+        no scalar ``Time``-per-element class in :mod:`base` for arrays).
+    dt : :class:`~photonics_helper.base.Time` — time step.
+    dw : :class:`~photonics_helper.base.AngularFrequency` — angular frequency step.
+    field : 1-D complex NDArray — reconstructed field E(t) (raw array on
+        purpose: :class:`~photonics_helper.structured.StructuredField` is a
+        2-D spatial (x, y) object and does not fit a 1-D time trace).
     field : reconstructed field E(t) (set after retrieval).
     """
 
     trace: NDArray
     unnormalized_trace: NDArray
-    omega: NDArray
+    omega: AngularFrequencyArray
     tau: NDArray
-    dt: float
-    dw: float
+    dt: Time
+    dw: AngularFrequency
     field: NDArray | None = None
 
     @classmethod
     def from_field(
         cls,
         E_field: NDArray,
-        dt: float,
+        dt: Time | float,
         normalize: bool = True,
     ) -> FROGTrace:
         """Generate a FROG trace from a complex electric field E(t).
@@ -1430,7 +1693,8 @@ class FROGTrace:
         Parameters
         ----------
         E_field : complex 1D array, the electric field on a uniform time grid.
-        dt : time step in seconds.
+        dt : :class:`~photonics_helper.base.Time` time step. A plain float is
+            accepted as seconds for backwards compatibility.
         normalize : normalize trace to [0, 1] (default True).
 
         Returns
@@ -1438,15 +1702,18 @@ class FROGTrace:
         FROGTrace
         """
         N = len(E_field)
+        if not isinstance(dt, Time):
+            dt = Time(dt, "s")
+        dt_s = dt.as_s
         # Create delay axis: tau = [-N/2*dt, ..., N/2*dt - dt]
-        tau = np.arange(-N // 2, N // 2) * dt
+        tau = np.arange(-N // 2, N // 2) * dt_s
 
         # Build the gated SHG signal. The (periodic) delay roll realizes
         # G(t, tau) = E(t)·E(t + tau); the delay axis is symmetric, so this is
         # the same trace as the usual E(t)·E(t - tau) definition.
         E_shifted = np.zeros((len(tau), N), dtype=complex)
         for i, t_val in enumerate(tau):
-            shift = int(round(t_val / dt))
+            shift = int(round(t_val / dt_s))
             E_shifted[i] = np.roll(E_field, -shift)
 
         # G(t, tau) = E(t)·E(t + tau)
@@ -1459,7 +1726,7 @@ class FROGTrace:
         trace = np.abs(E_hat) ** 2
 
         # Frequency axis
-        omega = np.fft.fftshift(2 * np.pi * np.fft.fftfreq(N, d=dt))
+        omega = np.fft.fftshift(2 * np.pi * np.fft.fftfreq(N, d=dt_s))
 
         raw_trace = trace.copy()
         if normalize and trace.max() > 0:
@@ -1470,10 +1737,10 @@ class FROGTrace:
         return cls(
             trace=trace,
             unnormalized_trace=raw_trace,
-            omega=omega,
+            omega=AngularFrequencyArray(np.asarray(omega), "rad/s"),
             tau=tau,
             dt=dt,
-            dw=dw,
+            dw=AngularFrequency(dw, "rad/s"),
         )
 
     def visualize(
@@ -1504,7 +1771,8 @@ class FROGTrace:
 
         # Trace heatmap
         ax_trace = axes[0]
-        omega_THz = self.omega / (2 * np.pi * 1e12)
+        # angular frequency (rad/s) → linear frequency (THz)
+        omega_THz = np.asarray(self.omega.as_rad_s) / (2 * np.pi) * 1e-12
         tau_ps = self.tau * 1e12
 
         im = ax_trace.pcolormesh(
@@ -1521,7 +1789,7 @@ class FROGTrace:
 
         if retrieved is not None and retrieved.field is not None:
             E = retrieved.field
-            t = (np.arange(len(E)) - len(E) // 2) * self.dt * 1e12  # ps
+            t = (np.arange(len(E)) - len(E) // 2) * self.dt.as_s * 1e12  # ps
 
             # Intensity
             ax_int = axes[1]
@@ -1590,13 +1858,15 @@ class FROGTrace:
 
         if save_path:
             fig.savefig(save_path, dpi=150, bbox_inches="tight")
+        else:
+            _ensure_showable_backend()
 
         return fig
 
 
 def generate_trace(
     E_field: NDArray,
-    dt: float,
+    dt: Time | float,
     normalize: bool = True,
 ) -> FROGTrace:
     """Generate a SHG-FROG trace from an electric field.
@@ -1604,7 +1874,7 @@ def generate_trace(
     Parameters
     ----------
     E_field : complex 1D array, electric field on uniform time grid.
-    dt : time step in seconds.
+    dt : :class:`~photonics_helper.base.Time` time step (plain float = seconds).
     normalize : normalize trace to [0, 1] (default True).
 
     Returns
@@ -1725,7 +1995,7 @@ def retrieve(
     compare retrieved and reference fields up to those symmetries (comparing
     traces is ambiguity-free).
     """
-    dt = trace.dt
+    dt = trace.dt.as_s
 
     # Use unnormalized trace if available (preserves amplitude info)
     measured_trace = (
