@@ -42,9 +42,15 @@ jobs:
           echo "toolchain: $(cat formal/lean-toolchain)"
           echo "mathlib:   $(grep -A2 'name = "mathlib"' formal/lake-manifest.json | grep rev || echo MISSING)"
 
-      - uses: elan/setup-elan@v2
-        with:
-          toolchain: leanprover/lean4:v4.34.1
+      # elan via the official bootstrap script; `actions/` has no maintained
+      # setup-elan (the `elan/setup-elan` reference in an earlier draft does
+      # not resolve — "repository not found").
+      - name: Install elan (pinned toolchain)
+        run: |
+          curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
+            | sh -s -- -y --default-toolchain leanprover/lean4:v4.34.1
+          echo "HOME=$HOME" >> $GITHUB_ENV
+          echo "$HOME/.elan/bin" >> $GITHUB_PATH
 
       # ~5 GB of prebuilt oleans. Cached on the toolchain + manifest hash so a
       # Mathlib bump invalidates it (it must — the oleans do not transfer).
