@@ -21,9 +21,12 @@ import Photonics.Dispersion.Beta
 import Photonics.Nonlinear.Shock
 import Photonics.Nonlinear.Raman
 import Photonics.Optics.DBR
+import Photonics.Optics.DBREnergy
 import Photonics.Optics.Chi2
 import Photonics.Optics.FWM
 import Photonics.Optics.Structured
 import Photonics.Solvers.RK4
 import Photonics.Solvers.Strang
+import Photonics.Solvers.Composition
+import Photonics.Solvers.Etdrk4
 import Photonics.Solvers.Dispersion

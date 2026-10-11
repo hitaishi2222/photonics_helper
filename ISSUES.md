@@ -61,9 +61,11 @@
 
 **Symptom.** With `include_self_steepening=True` (+ Raman), long SCG-class runs drift the pulse energy / photon number by ≈5–6 %.
 
-**Cause.** Grid-validity artifact, not a model defect. The first-order Blow–Wood shock model `iγ(1 + (i/ω₀)∂_t)(A·P_NL)` has a conservation law that vanishes only for a time-independent drive. The drift appears once `τ·Ω_max ≳ 0.15`, where the Taylor form itself is wrong.
+**Cause — superseded 2026-10-27.** Recorded at the time as a grid-validity artifact: "the first-order shock model has a conservation law that vanishes only for a time-independent drive", blamed on a `τ·Ω_max` Taylor region and guarded by `_SHOCK_TAYLOR_LIMIT = 0.2`. Correct reading: the operator's symbol `1 + Ωτ_shock` **is** `ω/ω₀` exactly (no expansion), and Blow & Wood's Appendix Eq. (A5) shows the GNLS conserves the *frequency-weighted* photon number `∫|Û(ω)|²/(ω₀+ω)dω` — the unweighted energy legitimately changes as Raman and self-steepening move the spectrum. Tracking (A5), the drift is ≤5×10⁻⁵ relative at every grid tested, including the −14 % fission case.
 
-**Resolution (2026-10-02).** `_validate_shock_grid` now checks `τ_shock·Ω_max` and warns above `_SHOCK_TAYLOR_LIMIT = 0.2`, naming the measured drift values and the remedies. Regression: `tests/test_gnlse_shock_energy.py`.
+**Resolution (2026-10-02, guard).** `_validate_shock_grid` checks `τ_shock·Ω_max` and warns above `_SHOCK_TAYLOR_LIMIT = 0.2`, now justified as Blow & Wood's `< ω₀/3` derivation regime rather than a truncation bound. Regression: `tests/test_gnlse_shock_energy.py`.
+
+**Resolution (2026-10-27, invariant).** `gnlse.py` gained `photon_number_vs_z` (the A5 invariant), the drift warning now monitors the conserved quantity, and `tests/test_gnlse_photon_number.py` pins it. See `formal/CHANGELOG.md` (2026-10-27) and `CONFORMANCE.md` D1–D9/F11.
 
 ---
 

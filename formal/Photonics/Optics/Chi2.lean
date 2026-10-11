@@ -22,6 +22,12 @@ Note on style: this Mathlib revision has almost no `tanh` lemmas — only
 `Real.tanh_eq` (the exponential quotient) and the `atanh` identities. So the
 basic bounds are derived from `Real.tanh_eq` rather than quoted, which is why
 they are stated as separate lemmas below.
+
+Also proved here: the SHG **phase mismatch** `Δk = β(2ω) − 2β(ω)` and the exact
+first-order QPM cancellation that turns it into a poling period; and the
+**uniform-field reduction** of the modal-overlap coupling — the sentence in
+`shg_coupling_overlap`'s docstring that a uniform field recovers the Boyd
+plane-wave coupling exactly.
 -/
 
 namespace Photonics
@@ -203,6 +209,143 @@ theorem LambdaQPM_neg (delta_k : ℝ) (order : ℕ) :
     LambdaQPM (-delta_k) order = LambdaQPM delta_k order := by
   unfold LambdaQPM
   rw [abs_neg]
+
+/-! ## The phase mismatch
+
+`delta_k_shg` in `chi2.py`: `Δk = β(2ω) − 2β(ω)`. The value is trivial; what
+matters is the two things attached to it — that phase matching is exactly its
+zero, and that the first-order poling period cancels it exactly.
+-/
+
+/-- The SHG phase mismatch, exactly `delta_k_shg`. -/
+noncomputable def deltaK (beta : ℝ → ℝ) (omega : ℝ) : ℝ :=
+  beta (2 * omega) - 2 * beta omega
+
+theorem deltaK_eq (beta : ℝ → ℝ) (omega : ℝ) :
+    deltaK beta omega = beta (2 * omega) - 2 * beta omega := rfl
+
+/--
+**Phase matching is the zero of the mismatch.** `Δk = 0` exactly when
+`β(2ω) = 2β(ω)`: the fundamental and its second harmonic carry the same
+propagation constant per unit of frequency doubling. This is the manifold the
+solver's `delta_k == 0.0` branches act on, and the condition `Lambda_qpm`'s
+docstring makes a hypothesis.
+-/
+theorem deltaK_zero_iff (beta : ℝ → ℝ) (omega : ℝ) :
+    deltaK beta omega = 0 ↔ beta (2 * omega) = 2 * beta omega := by
+  unfold deltaK
+  constructor <;> intro h <;> linarith
+
+/--
+**First-order QPM cancels the mismatch exactly.** With the order-1 poling
+period `Λ = 2π/|Δk|`, the compensated mismatch is zero:
+
+`Δk − 2π/Λ = 0`  for `Δk > 0`.
+
+So the grating is an exact cancellation, not an approximation: the period
+absorbs the magnitude and the domain choice absorbs the sign, which is why
+`LambdaQPM` is stated through `|Δk|`.
+-/
+theorem deltaK_qpm_cancels (beta : ℝ → ℝ) (omega : ℝ) (h : 0 < deltaK beta omega) :
+    deltaK beta omega - 2 * Real.pi / LambdaQPM (deltaK beta omega) 1 = 0 := by
+  have habs : |deltaK beta omega| = deltaK beta omega := abs_of_pos h
+  unfold LambdaQPM
+  rw [habs, Nat.cast_one, mul_one, div_div_eq_mul_div]
+  field_simp [Real.pi_ne_zero]
+  simp
+
+/-! ## The modal-overlap coupling
+
+`shg_coupling_overlap`'s docstring makes one structural claim: the Wang et al.
+(2017) overlap integral, in its scale-invariant form, reduces *exactly* for a
+uniform field to the Boyd plane-wave coupling of `shg_coupling`. The reduction
+is pure arithmetic, so it can be proved rather than asserted.
+-/
+
+/--
+The modal-overlap coupling in the scale-invariant form of
+`shg_coupling_overlap`'s docstring:
+
+`g = (ω·d₀/c)·√(2Z₀/(n_p²·n_s))·O / (I_p·√I_s)`
+
+with `O` the overlap integral, `I_p`, `I_s` the two intensities.
+-/
+noncomputable def overlapCoupling (omega d0 c Z0 np ns O Ip Is : ℝ) : ℝ :=
+  (omega * d0 / c) * Real.sqrt (2 * Z0 / (np ^ 2 * ns)) * O / (Ip * Real.sqrt Is)
+
+/--
+**A uniform field recovers the plane-wave residue.** Take the pump and
+second-harmonic fields uniform with amplitudes `E` and `Es` over a common area
+`A`: `I_p = E²A`, `I_s = Es²A`, `O = (d/d₀)·E·Es·A`. The overlap formula
+then collapses to
+
+`(ω·d/c)·√(2Z₀/(n_p²·n_s)) / √A`,
+
+with every `E`-, `Es`- and `d₀`-dependence cancelled. That is the docstring's
+"all ratios are scale-invariant" sentence, proved: changing the field scaling
+or the `d`-normalisation moves `O`, `I_p` and `I_s` together and leaves `g`
+fixed.
+-/
+theorem overlapCoupling_uniform (omega d0 c Z0 np ns d E Es A : ℝ)
+    (hd0 : d0 ≠ 0) (hc : c ≠ 0) (hE : E ≠ 0) (hEsp : 0 < Es) (hA : 0 < A) :
+    overlapCoupling omega d0 c Z0 np ns (d / d0 * E ^ 2 * Es * A) (E ^ 2 * A) (Es ^ 2 * A)
+      = (omega * d / c) * Real.sqrt (2 * Z0 / (np ^ 2 * ns)) / Real.sqrt A := by
+  have hsqrt : Real.sqrt (Es ^ 2 * A) = Es * Real.sqrt A := by
+    rw [Real.sqrt_mul (sq_nonneg Es), Real.sqrt_sq (le_of_lt hEsp)]
+  have hinner : d / d0 * E ^ 2 * Es * A / (E ^ 2 * A * (Es * Real.sqrt A))
+      = d / d0 / Real.sqrt A := by
+    rw [div_eq_div_iff (by positivity) (by positivity)]
+    field_simp
+  have hratio : (omega * d0 / c) * Real.sqrt (2 * Z0 / (np ^ 2 * ns))
+      * (d / d0 * E ^ 2 * Es * A) / (E ^ 2 * A * (Es * Real.sqrt A))
+      = (omega * d0 / c) * Real.sqrt (2 * Z0 / (np ^ 2 * ns)) * (d / d0 / Real.sqrt A) := by
+    rw [mul_div_assoc, mul_div_assoc, hinner]
+  unfold overlapCoupling
+  rw [hsqrt, hratio]
+  field_simp [hd0, hc]
+
+/--
+**The plane-wave residue is the Boyd coupling.** With equal indices
+`n_p = n_s = n`, the residue of the theorem above equals
+
+`σ = (ω·d/(n·c))·√(2Z₀/(n·A))`,
+
+which is exactly `shg_coupling` (`prefactor = ω·d_eff/(n·C)`, times
+`√(2·Z0/(n·A_eff))`). The bridge is `√(2Z₀/(n³A)) = √(2Z₀/(nA))/n`.
+-/
+theorem overlapCoupling_planeWave (omega d0 c Z0 np ns d E Es A : ℝ)
+    (hd0 : d0 ≠ 0) (hc : c ≠ 0) (hE : E ≠ 0) (hEsp : 0 < Es) (hA : 0 < A) (hn : 0 < np)
+    (hZ0 : 0 < Z0) (hns : ns = np) :
+    overlapCoupling omega d0 c Z0 np ns (d / d0 * E ^ 2 * Es * A) (E ^ 2 * A) (Es ^ 2 * A)
+      = (omega * d / (np * c)) * Real.sqrt (2 * Z0 / (np * A)) := by
+  have h2np : (0:ℝ) < np := hn
+  have key : Real.sqrt (2 * Z0 / (np ^ 2 * np)) / Real.sqrt A
+      = Real.sqrt (2 * Z0 / (np * A)) / np := by
+    have h1 : (Real.sqrt (2 * Z0 / (np ^ 2 * np)) / Real.sqrt A) ^ 2
+        = 2 * Z0 / (np ^ 2 * np * A) := by
+      rw [div_pow, Real.sq_sqrt (by positivity), Real.sq_sqrt hA.le]
+      field_simp
+    have h2 : (Real.sqrt (2 * Z0 / (np * A)) / np) ^ 2
+        = 2 * Z0 / (np * A * np ^ 2) := by
+      rw [div_pow, Real.sq_sqrt (by positivity)]
+      field_simp
+    have h3 : 2 * Z0 / (np ^ 2 * np * A) = 2 * Z0 / (np * A * np ^ 2) := by ring
+    have hcases : Real.sqrt (2 * Z0 / (np ^ 2 * np)) / Real.sqrt A
+        = Real.sqrt (2 * Z0 / (np * A)) / np ∨
+      Real.sqrt (2 * Z0 / (np ^ 2 * np)) / Real.sqrt A
+        = -(Real.sqrt (2 * Z0 / (np * A)) / np) :=
+      (mul_self_eq_mul_self_iff.mp (by rw [← pow_two, ← pow_two, h1, h2, h3]))
+    rcases hcases with hc' | hc'
+    · exact hc'
+    · exfalso
+      have hX : (0:ℝ) < Real.sqrt (2 * Z0 / (np ^ 2 * np)) / Real.sqrt A := by
+        apply div_pos <;> exact Real.sqrt_pos.2 (by positivity)
+      have hY : (0:ℝ) < Real.sqrt (2 * Z0 / (np * A)) / np := by
+        apply div_pos <;> [exact Real.sqrt_pos.2 (by positivity); linarith]
+      linarith
+  rw [overlapCoupling_uniform omega d0 c Z0 np ns d E Es A hd0 hc hE hEsp hA, hns,
+    mul_div_assoc, key]
+  field_simp [hn.ne', hc]
 
 end Optics
 end Photonics

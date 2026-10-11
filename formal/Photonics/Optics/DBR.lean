@@ -14,6 +14,19 @@ identity is `cos²δ + sin²δ = 1`, and that is a *complex* trigonometric ident
 not a real one. Energy conservation (`R + T = 1`) is a separate and strictly
 stronger statement: it additionally needs the media to be lossless. See
 `CONFORMANCE.md` F13 for the absorbing counterexample.
+
+Also proved here: `stackOrder_ne`, the layer-order sensitivity criterion.
+
+**Not proved here: `R + T = 1`.** The header above used to imply it was
+out of reach only for absorbing media. That is not quite right, and the
+distinction matters: writing the standard reflectance
+`r = (n₀B − C)/(n₀B + C)` and transmittance `T = 4n₀n_s/(n₀B + C)²` with
+`B = M₀₀ + M₀₁n_s`, `C = M₁₀ + M₁₁n_s`, the identity `r² + T = 1` reduces to
+`B·C = n_s`. That does **not** follow from `det M = 1` — it is an additional
+constraint, and even for real (lossless) media `B` and `C` stay complex because
+the off-diagonal entries are `∓i·sin δ` terms. The correct lossless statement
+involves conjugates and a real part, so it is a genuinely separate piece of
+work and is **not** claimed here. See `CHANGELOG.md` (2026-10-24).
 -/
 
 namespace Photonics
@@ -99,3 +112,214 @@ theorem stack_det (l : List (Matrix (Fin 2) (Fin 2) ℂ)) (h : ∀ M ∈ l, M.de
     (stackMatrix l).det = 1 := by
   exact stack_det_aux l 1 (by simp) h
 
+/--
+**Swapping two layers changes the stack whenever those layers do not commute.**
+
+Layer order is a real sensitivity of the formalism, not a presentational
+detail, and this states the criterion rather than leaving it to the caller:
+`stackMatrix [A, B] ≠ stackMatrix [B, A]` exactly when `A * B ≠ B * A`.
+
+The contrapositive is the practically useful half: two layers that *do* commute
+may be swapped freely, which is why quarter-wave stacks can be reordered within
+a repeated period without changing `R(λ)`. For layers of unequal `δ` the
+matrices are typically non-commuting, and the swap does change the spectrum.
+
+This is deliberately conditional. Proving a specific pair of layers fails to
+commute would fix a concrete stack and prove little; the criterion is the part
+that generalises, and it is what a caller actually needs to know.
+-/
+theorem stackOrder_ne (A B : Matrix (Fin 2) (Fin 2) ℂ) (h : A * B ≠ B * A) :
+    stackMatrix [A, B] ≠ stackMatrix [B, A] := by
+  intro he
+  simp only [stackMatrix, List.foldl_cons, List.foldl_nil] at he
+  exact h (by simpa [Matrix.one_mul, Matrix.mul_one] using congrArg id he)
+
+
+/-! ### Stage E5 — the admittance branches
+
+`_admittance` sets the layer sine by Snell's law, `sin θ_l = n₀ sin θ_i / n_l`,
+takes `cos θ_l = √(1 − sin² θ_l)` — the *nonnegative* root — and branches on
+polarisation: `η = n cos θ_l` for TE, `η = n / cos θ_l` for TM. Proved here:
+
+- the Snell invariant `n_l · sin θ_l = n₀ · sin θ_i`, which is why the code
+  may pass the *configured incident* index into every layer: the product
+  `n · sin θ` is what is conserved across the stack;
+- the two branches agree at normal incidence, so the polarisation branch is
+  irrelevant on axis;
+- their product is `n²` (the equivalent-admittance term in Macleod), so the
+  branches differ only through `cos θ_l`, never through the material;
+- both are nonnegative for real `n ≥ 0` taken with the principal root;
+- the `np.clip` guard characterised exactly: it is the identity precisely on
+  `|sin θ_l| ≤ 1` (the admissible, non-TIR set), and when it fires the layer
+  sine is forced strict: `s < −1 ∨ 1 < s`.
+
+-/
+
+/-- The layer sine by Snell's law, exactly as `_admittance` and
+`_layer_matrix` compute it with the configured incident-medium index. -/
+noncomputable def snellSine (nLayer nIncident sinThetaIncident : ℝ) : ℝ :=
+  nIncident * sinThetaIncident / nLayer
+
+/-- **Snell's law in invariant form.** Multiplying the layer sine back by the
+layer index recovers the conserved tangential component `n · sin θ`. -/
+theorem snell_invariant (nL nI s : ℝ) (hn : 0 < nL) :
+    snellSine nL nI s * nL = nI * s := by
+  rw [snellSine]
+  field_simp
+
+/-- **Admissibility is the no-clip condition, stated as a theorem.** The layer
+sine satisfies `|sin θ_l| ≤ 1` exactly when the conserved tangential component
+fits the layer, `|n₀ sin θ_i| ≤ n_l`. On this set the Python's `np.clip`
+guard never changes a value. -/
+theorem snell_admissible (nL nI s : ℝ) (hn : 0 < nL) :
+    |snellSine nL nI s| ≤ 1 ↔ |nI * s| ≤ nL := by
+  have hkey : |snellSine nL nI s| * nL = |nI * s| := by
+    rw [← snell_invariant nL nI s hn, abs_mul, abs_of_pos hn]
+  constructor
+  · intro h
+    have hstep : |snellSine nL nI s| * nL ≤ nL := by
+      nlinarith [h, hn, abs_nonneg (snellSine nL nI s)]
+    rw [hkey] at hstep
+    exact hstep
+  · intro h
+    have h2 : |snellSine nL nI s| * nL ≤ nL := by
+      calc |snellSine nL nI s| * nL = |nI * s| := hkey
+          _ ≤ nL := h
+    exact (mul_le_iff_le_one_left hn).mp h2
+
+/-- The layer cosine as the code computes it: the principal square root of
+`1 − sin² θ`. Nonnegative for every layer sine, real or not clamped. -/
+theorem cosLayer_nonneg (s : ℝ) : 0 ≤ Real.sqrt (1 - s ^ 2) :=
+  Real.sqrt_nonneg _
+
+/-- On the admissible set the cosine is at most one. -/
+theorem cosLayer_le_one (s : ℝ) (h : |s| ≤ 1) : Real.sqrt (1 - s ^ 2) ≤ 1 := by
+  have h2 : Real.sqrt (1 - s ^ 2) ≤ Real.sqrt 1 :=
+    Real.sqrt_le_sqrt (by nlinarith [h, abs_nonneg s])
+  rw [Real.sqrt_one] at h2
+  exact h2
+
+/-- The TE branch of `_admittance`: `η_TE = n · cos θ_l`. -/
+noncomputable def etaTE (n cosT : ℝ) : ℝ := n * cosT
+
+/-- The TM branch of `_admittance`: `η_TM = n / cos θ_l`. -/
+noncomputable def etaTM (n cosT : ℝ) : ℝ := n / cosT
+
+/-- **The branches agree at normal incidence.** `cos θ_l = 1` there, so both
+reduce to `n` and the `if polarisation` branch in `_admittance` is
+irrelevant on axis. -/
+theorem admittance_normal_incidence (n : ℝ) : etaTM n 1 = etaTE n 1 := by
+  simp [etaTE, etaTM]
+
+/-- **The branch product is `n²`.** `η_TE · η_TM = n cos θ · n / cos θ = n²`.
+The two branches differ only through `cos θ_l`; the material index enters the
+product, not the contrast between them. This is Macleod's remark that the
+equivalent admittance orderings share the same product. -/
+theorem admittance_product (n cosT : ℝ) (hc : cosT ≠ 0) :
+    etaTE n cosT * etaTM n cosT = n ^ 2 := by
+  unfold etaTE etaTM
+  field_simp
+
+/-- Both branches are nonnegative for real nonnegative `n` and positive
+cosine. So a negative admittance is unreachable by the TE branch with the
+principal root. -/
+theorem etaTE_nonneg (n cosT : ℝ) (hn : 0 ≤ n) (hcos : 0 ≤ cosT) :
+    0 ≤ etaTE n cosT := by
+  unfold etaTE
+  positivity
+
+/-- The TM branch is nonnegative too. -/
+theorem etaTM_nonneg (n cosT : ℝ) (hn : 0 ≤ n) (hcos : 0 < cosT) :
+    0 ≤ etaTM n cosT := by
+  unfold etaTM
+  positivity
+
+/-! The `np.clip(sin, −1, 1)` guard, characterised. It is the identity
+exactly on `|sin θ_l| ≤ 1` (≡ `snell_admissible`), and when it fires the sine
+is strictly outside, the total-internal-reflection branch that the code
+*marks* rather than repairs. -/
+
+/-- The code's clip, as a definition worth a name so the guard's behaviour can
+be *stated* rather than only described in a comment. -/
+noncomputable def clipToUnit (s : ℝ) : ℝ :=
+  min 1 (max (-1) s)
+
+/-- **The clip is the identity on the admissible set.** -/
+theorem clip_no_op (s : ℝ) (h : |s| ≤ 1) : clipToUnit s = s := by
+  have h1 : (-1 : ℝ) ≤ s ∧ s ≤ 1 := abs_le.mp h
+  simp only [clipToUnit, min_def, max_def]
+  split_ifs <;> linarith
+
+/-- **When the clip fires**, the sine is strictly outside `[-1, 1]`. Below,
+the clip saturates to `−1`; above, to `+1`. Either way `cos θ_l` collapses to
+zero and the TM branch is undefined — the TIR branch that must not be silently
+run through the admittance. -/
+theorem clip_fires_iff (s : ℝ) : 1 < |s| ↔ s < -1 ∨ 1 < s := by
+  constructor
+  · intro h
+    rcases lt_or_ge s 0 with hneg | hnonneg
+    · left
+      rw [abs_of_neg hneg] at h
+      linarith
+    · right
+      rw [abs_of_nonneg hnonneg] at h
+      exact h
+  · intro hh
+    rcases hh with hh | hh
+    · rw [abs_of_neg (show s < 0 by linarith)]
+      linarith
+    · rw [abs_of_pos (show 0 < s by linarith)]
+      exact hh
+
+theorem clip_lower (s : ℝ) (h : s < -1) : clipToUnit s = -1 := by
+  unfold clipToUnit
+  rw [max_eq_left (le_of_lt h), min_comm]
+  exact min_eq_left (show (-1 : ℝ) ≤ 1 by norm_num)
+
+theorem clip_upper (s : ℝ) (h : 1 < s) : clipToUnit s = 1 := by
+  unfold clipToUnit
+  rw [max_eq_right (le_of_lt (show (-1 : ℝ) < s by linarith))]
+  exact min_eq_left (le_of_lt h)
+
+/-! ### Stage E6 — the phase thickness and its obliquity factor
+
+`_layer_matrix` sets the phase thickness to `δ = 2π n d cos θ_l / λ` with
+`cos θ_l` the principal-root layer cosine above. Proved here: `δ ≥ 0` for
+real, nonnegative `n d` and `λ` — it inherits that through the nonnegative
+root — and at normal incidence the obliquity factor is absent, so `δ` is the
+plain optical thickness and is strictly positive whenever `n d > 0`. -/
+
+/-- The phase thickness of a real layer, as `_layer_matrix` computes it. -/
+noncomputable def deltaPhase (n d snellS lambda : ℝ) : ℝ :=
+  2 * Real.pi * n * d * Real.sqrt (1 - snellS ^ 2) / lambda
+
+/-- **`δ` is nonnegative for real media.** `n`, `d`, `λ` enter as a product
+of nonnegative factors; the obliquity factor `√(1 − sin²θ_l)` is nonnegative
+by the principal root. -/
+theorem deltaPhase_nonneg (n d snellS lambda : ℝ)
+    (hn : 0 ≤ n) (hd : 0 ≤ d) (hLmb : 0 ≤ lambda) :
+    0 ≤ deltaPhase n d snellS lambda := by
+  unfold deltaPhase
+  positivity
+
+/-- **At normal incidence the obliquity factor is absent** and `δ` is the
+plain optical thickness `2π n d / λ` scaled by `2π`, strictly positive
+whenever `n d > 0`. -/
+theorem deltaPhase_normal_pos (n d lambda : ℝ)
+    (hn : 0 < n) (hd : 0 < d) (hLmb : 0 < lambda) :
+    0 < deltaPhase n d 0 lambda := by
+  unfold deltaPhase
+  rw [zero_pow (show (2 : ℕ) ≠ 0 by norm_num), sub_zero, Real.sqrt_one]
+  positivity
+
+/-! A normal-incidence half-trivial witness for the order-sensitivity
+criterion (E7): with `δ = 0` a layer matrix is the identity, so identical
+such layers commute — the degenerate contrapositive of `stackOrder_ne`. The
+interesting case, unequal `δ`, is what the criterion itself carries. -/
+
+example : layerMatrix 0 (1 : ℂ) = 1 := by
+  ext i j
+  fin_cases i <;> fin_cases j <;> simp [layerMatrix] <;> rfl
+
+end Optics
+end Photonics

@@ -1,0 +1,78 @@
+name: formal
+
+# The Lean development is the mathematical specification the Python library
+# implements. This job enforces the two claims README.md makes about it:
+#
+#   1. the toolchain and Mathlib revision are pinned and reproducible;
+#   2. no `sorry` is hiding anywhere in formal/.
+#
+# (2) is enforced by grep as well as by `lake build`, because a `sorry` builds
+# green — it only prints a warning. A build alone would not catch it.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "formal/**"
+      - ".github/workflows/formal.yml"
+  pull_request:
+    paths:
+      - "formal/**"
+      - ".github/workflows/formal.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: formal-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lean:
+    name: Lean · formal/
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      # lean-toolchain pins the exact Lean version; lakefile.toml + the
+      # committed lake-manifest.json pin Mathlib. Do not "update" either.
+      - name: Show pinned toolchain
+        run: |
+          echo "toolchain: $(cat formal/lean-toolchain)"
+          echo "mathlib:   $(grep -A2 'name = "mathlib"' formal/lake-manifest.json | grep rev || echo MISSING)"
+
+      - uses: elan/setup-elan@v2
+        with:
+          toolchain: leanprover/lean4:v4.34.1
+
+      # ~5 GB of prebuilt oleans. Cached on the toolchain + manifest hash so a
+      # Mathlib bump invalidates it (it must — the oleans do not transfer).
+      - name: Restore Mathlib olean cache
+        id: mathlib-cache
+        uses: actions/cache@v4
+        with:
+          path: formal/.lake/packages
+          key: mathlib-${{ runner.os }}-${{ hashFiles('formal/lean-toolchain', 'formal/lake-manifest.json') }}
+
+      - name: Fetch Mathlib olean cache
+        if: steps.mathlib-cache.outputs.cache-hit != 'true'
+        working-directory: formal
+        run: lake exe cache get
+
+      - name: Build
+        working-directory: formal
+        # Bounded explicitly: an unbounded lake build spawns one worker per core
+        # and exhausts memory on a 2-core runner.
+        run: LAKE_JOBS=2 LEAN_NUM_THREADS=2 lake build
+
+      - name: No sorry
+        working-directory: formal
+        run: |
+          # `sorry` builds green, so it must be grepped for. Allow the word in
+          # prose (docstrings, README, changelog) — only Lean statements count.
+          if grep -rn --include='*.lean' -E '(^|[^[:alnum:]_])sorry([^[:alnum:]_]|$)' Photonics Photonics.lean; then
+            echo "::error::formal/ contains a sorry"
+            exit 1
+          fi
+          echo "no sorry in formal/"

@@ -95,22 +95,47 @@ theorem ramanDrive_nonneg {n : ℕ} (hn : 0 < n) (hR : Fin n → ℝ) {P : Fin n
     simp [hc']
 
 /--
-**The Raman term cannot amplify past unity.** Stated as a target for the
-remaining Stage D work; the ℝ-valued statement is within reach but the
-`Fin`-indexed bookkeeping needed for a clean proof was not finished in the
-session that added this file.
+**The Raman term cannot amplify past unity.**
 
-The claim: with a non-negative response of total weight at most `1`, the drive
-at any sample is at most the total input. That is what makes the Raman step
-safe to iterate — a mis-set delay table can distort a solution but cannot drive
-it exponentially.
+Each surviving summand `h_R(j−i)·P(i)` is bounded by `(∑ h_R)·P(i)`,
+because `h_R(j−i)` is a *single* term of a non-negative sum and so is at most
+the whole sum. Summing gives `(∑ h_R)·(∑ P)`, and the normalisation
+`∑ h_R ≤ 1` closes it. That is what makes the Raman step safe to iterate — a
+mis-set delay table can distort a solution but cannot drive it exponentially.
+
+The bound is deliberately stated for `delay = 0`, the retarded drive; the
+positive delay only drops more terms, so the bound still holds a fortiori.
 -/
 theorem ramanDrive_le_max {n : ℕ} (hn : 0 < n) (hR : Fin n → ℝ)
     (hnorm : (∑ i : Fin n, hR i) ≤ 1)
     (hRpos : ∀ i, 0 ≤ hR i)
     {P : Fin n → ℝ} (hP : ∀ i, 0 ≤ P i) {j : Fin n} :
     ramanDrive n hn 0 P hR j ≤ ∑ i : Fin n, P i := by
-  sorry
+  have hS : 0 ≤ ∑ i : Fin n, hR i := Finset.sum_nonneg fun i _ => hRpos i
+  have hPsum : 0 ≤ ∑ i : Fin n, P i := Finset.sum_nonneg fun i _ => hP i
+  -- Termwise: a single `h_R` weight is at most the whole (non-negative) sum.
+  have hstep : ∀ i : Fin n,
+      (if i.val + 0 ≤ j.val then
+          hR ⟨j.val - 0 - i.val, by have hjlt := j.isLt; omega⟩ * P i
+        else 0)
+        ≤ (∑ k : Fin n, hR k) * P i := by
+    intro i
+    by_cases hc : i.val + 0 ≤ j.val
+    · simp only [hc, ↓reduceIte]
+      have hle : hR ⟨j.val - 0 - i.val, by have hjlt := j.isLt; omega⟩
+          ≤ ∑ k : Fin n, hR k :=
+        Finset.single_le_sum (fun b _ => hRpos b) (Finset.mem_univ _)
+      exact mul_le_mul_of_nonneg_right hle (hP i)
+    · simp only [hc, ↓reduceIte]
+      nlinarith [mul_nonneg hS (hP i)]
+  unfold ramanDrive
+  calc (∑ i : Fin n, (if i.val + 0 ≤ j.val then
+          hR ⟨j.val - 0 - i.val, by have hjlt := j.isLt; omega⟩ * P i
+        else 0))
+      ≤ ∑ i : Fin n, (∑ k : Fin n, hR k) * P i := Finset.sum_le_sum fun i _ => hstep i
+    _ = (∑ k : Fin n, hR k) * ∑ i : Fin n, P i := (Finset.mul_sum _ _ _).symm
+    _ ≤ 1 * ∑ i : Fin n, P i := mul_le_mul_of_nonneg_right hnorm hPsum
+    _ = ∑ i : Fin n, P i := one_mul _
 
 end Nonlinear
 end Photonics

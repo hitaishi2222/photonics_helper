@@ -23,15 +23,26 @@ statement and a concrete instance would not compose with it.
 - `exponent_closed_formC`, `kernel_term` — the same closed form in complex form,
   and one entry of the analysis-then-synthesis product written as a single
   exponential. Together these reduce the pairing to a geometric series.
+- `kernel_factors`, `dft_pair_entry`, `dft_pair` — the pairing itself, for either
+  admissible spectral-axis orientation.
+- `exp_two_pi_int_mul`, `origin_bin_exp` — the origin-bin identity that makes
+  conjugate symmetry hold at the DC bin.
+- `omega_reflect_s`, `omega_reflect_sum` — the frequency grid is antisymmetric
+  under reflection away from the origin bin.
+- `conj_dft`, `hermitian` — conjugate symmetry and the Hermitian symmetry of a
+  real input's spectrum.
 
-**Still open:** `Conventions.dft_pair`, `conj_dft`, `hermitian`.
+**Revision notes.** This file was written against an earlier Mathlib and three
+things had moved; see `CHANGELOG.md` (2026-10-24) for the full account.
 
-The remaining step is mechanical rather than deep, and is written out as a
-`dft_pair_entry` statement at the bottom of this file so the next sitting has a
-concrete target rather than three opaque names. What is left is: rewrite the
-closed form through `Complex.exp_add` and `Complex.exp_nat_mul` to factor the
-summand as `C * ζ^k`, apply `Finset.sum_mul` to lift `C` out of the sum, and
-finish with `geom_sum_zero`.
+- `dotProduct` lives in the **root** namespace, not `Matrix`. `simp only`
+  silently skips an unknown lemma, so the old `Matrix.dotProduct` left the
+  goal in `⋅`-form and the error surfaced much later, at `Finset.sum_congr`.
+- `Complex.exp_conj` is `exp (conj x) = conj (exp x)` here, so rewriting
+  `conj(exp z)` to the right form needs `←`.
+- A `Fin n` literal (`0`) needs `NeZero n`, and that instance is not available
+  while a *statement* is being elaborated. DC-bin indices are written
+  `⟨0, by omega⟩` against an explicit `hn0 : 0 < n`.
 -/
 
 namespace Photonics
@@ -518,6 +529,240 @@ theorem dft_pair (n : ℕ) (Tmax : ℝ) (s : AxisSign) (hs : validAxis s) (hn : 
   · subst hij
     simp
   · simp [hij]
+
+/-! ## Conjugate symmetry
+
+The machinery needed for `conj_dft`: the frequency grid's behavior under
+reflection, and the origin-bin identity that handles the self-paired DC bin.
+-/
+
+/-- `exp(I·2π·k) = 1` for any integer `k`. -/
+theorem exp_two_pi_int_mul (k : ℤ) :
+    Complex.exp (Complex.I * (2 * Real.pi * (k : ℝ))) = 1 := by
+  rw [Complex.exp_eq_one_iff]
+  refine ⟨k, ?_⟩
+  push_cast
+  ring
+
+/-- **The frequency grid is antisymmetric under reflection**, for either
+orientation and away from the origin bin. Generalizes `omega_reflect` (which
+fixes `s = 1`) to arbitrary `s`. -/
+theorem omega_reflect_s (n : ℕ) (Tmax : ℝ) (s : AxisSign) (hs : validAxis s)
+    (hn : Even n) (hT : Tmax ≠ 0) (i : Fin n) (hi : (i : ℕ) ≠ 0) :
+    gridOmega n s Tmax (mirrorIdx i hi) = -(gridOmega n s Tmax i) := by
+  have hhalf : (2 : ℝ) * ((n / 2 : ℕ) : ℝ) = (n : ℝ) := by
+    have key : 2 * (n / 2) = n := by
+      obtain ⟨m, hm⟩ := hn
+      have hm2 : n / 2 = m := by omega
+      rw [hm2, Nat.two_mul, hm]
+    exact_mod_cast key
+  unfold gridOmega
+  simp only [mirrorIdx, Fin.val_mk]
+  push_cast [Nat.cast_sub (Nat.le_of_lt i.isLt), Nat.cast_ofNat]
+  have hT0 : (Tmax : ℝ) ≠ 0 := hT
+  field_simp
+  linarith [hhalf]
+
+/-- **The origin-bin identity.** For even `n`, the double-frequency at bin 0
+satisfies `exp(I·(ω_0 + ω_0)·t_j) = 1`. This is what makes conjugate symmetry
+hold at the DC bin, where `ω_{-0} = ω_0` and the pairing is trivial.
+
+The arithmetic: `(ω_0 + ω_0)·t_j = 2π·s·(n/2 − j)`, and the whole exponent is
+`2π·k` with `k = ±(n/2 − j) ∈ ℤ`, so it is a vanishing `2π` multiple.
+
+The bin index is written `⟨0, by omega⟩` rather than the literal `0`: a
+`Fin n` literal needs a `NeZero n` instance, which is not available while the
+*statement* is being elaborated. Writing the index out keeps the hypothesis
+`hn0 : 0 < n` doing that job explicitly, which is also what callers have.
+-/
+theorem origin_bin_exp (n : ℕ) (Tmax : ℝ) (s : AxisSign) (hs : validAxis s)
+    (hn : Even n) (hn0 : 0 < n) (hT : Tmax ≠ 0) (j : Fin n) :
+    Complex.exp (Complex.I * ((gridOmega n s Tmax ⟨0, by omega⟩ + gridOmega n s Tmax ⟨0, by omega⟩)
+      * gridTime n Tmax j)) = 1 := by
+  haveI : NeZero n := ⟨Nat.ne_of_gt hn0⟩
+  obtain ⟨m, hm⟩ := hn
+  have hm2 : (2 : ℝ) * (m : ℝ) = (n : ℝ) := by push_cast [hm]; ring
+  have hT0 : (Tmax : ℝ) ≠ 0 := hT
+  -- The DC bin sits at `ω_0 = −s·2π·(n/2)/Tmax`.
+  have hzero : gridOmega n s Tmax ⟨0, by omega⟩ = -(s * (2 * Real.pi) * (m : ℝ)) / Tmax := by
+    unfold gridOmega
+    simp only [Nat.cast_zero, zero_sub]
+    field_simp [hT0]
+    rw [← hm2]
+    ring
+  have htime : gridTime n Tmax j = (Tmax : ℝ) * (-(1:ℝ)/2 + (j : ℝ) / n) := by
+    unfold gridTime gridDt
+    field_simp [hT0]
+  -- The exponent is `I · 2π · s·(m − j)`.
+  have hexp : Complex.I * (((↑(gridOmega n s Tmax ⟨0, by omega⟩)) + ↑(gridOmega n s Tmax ⟨0, by omega⟩))
+      * ↑(gridTime n Tmax j)) = Complex.I * (2 * Real.pi * (s * ((m : ℝ) - (j : ℝ)))) := by
+    rw [hzero, htime]
+    push_cast
+    field_simp [hT0, hn0.ne']
+    push_cast [hm]
+    ring
+  rw [hexp]
+  rcases hs with rfl | rfl
+  · rw [Complex.exp_eq_one_iff]
+    refine ⟨m - (j : ℕ), ?_⟩
+    push_cast
+    ring
+  · rw [Complex.exp_eq_one_iff]
+    refine ⟨-((m : ℤ) - (j : ℕ)), ?_⟩
+    push_cast
+    ring
+
+/-- **The reflected frequency grid sums to zero** for either orientation and
+away from the origin bin: `ω_i + ω_{-i} = 0`. -/
+theorem omega_reflect_sum (n : ℕ) (Tmax : ℝ) (s : AxisSign) (hs : validAxis s)
+    (hn : Even n) (hT : Tmax ≠ 0) (i : Fin n) (hi : (i : ℕ) ≠ 0) :
+    gridOmega n s Tmax i + gridOmega n s Tmax (-i) = 0 := by
+  have hneg : gridOmega n s Tmax (-i) = -gridOmega n s Tmax i := by
+    have : (-i : Fin n) = mirrorIdx i hi := by
+      rw [neg_eq_sub i hi]
+      rfl
+    rw [this]
+    exact omega_reflect_s n Tmax s hs hn hT i hi
+  rw [hneg]
+  ring
+
+/-- **Conjugation identity for the DFT.**
+
+Conjugating the analysis transform equals analysing the conjugate, with the
+sign of the frequency index reversed.
+
+This is the algebraic content of the conjugated-transform-pair fast path
+`conj(DFT(conj(·)))`, and it holds because the kernel is a real-exponential.
+
+The proof: the summands match iff `exp(I·(ω_i + ω_{-i})·t_j) = 1`. For
+`i ≠ 0`, `ω_i + ω_{-i} = 0` by `omega_reflect_sum`. For `i = 0`, the origin-bin
+identity applies. Both cases are exact — no `i ≠ 0` hypothesis is needed.
+-/
+theorem conj_dft (n : ℕ) (Tmax : ℝ) (s : AxisSign) (hs : validAxis s)
+    (hn : Even n) (hT : Tmax ≠ 0) (A : Fin n → ℂ) (i : Fin n) :
+    (dftMatrix n s Tmax *ᵥ (fun j => conj (A j))) i
+      = conj ((dftMatrix n s Tmax *ᵥ A) (-i)) := by
+  -- Expand both sides. In this Mathlib revision `dotProduct` lives in the root
+  -- namespace (there is no `Matrix.dotProduct`), so `Matrix.mulVec` unfolds
+  -- to a root-`dotProduct`, which `simp only [dotProduct]` then unfolds to
+  -- the `Finset.sum` the rest of the proof is written against.
+  simp only [dftMatrix, Matrix.mulVec, dotProduct]
+  -- LHS: ∑_j exp(I·ω_i·t_j) · conj(A_j)
+  -- RHS: conj(∑_j exp(I·ω_{-i}·t_j) · A_j)
+  --
+  -- Step 1: pointwise identity exp(I·ω_i·t_j) = exp(-I·ω_{-i}·t_j)
+  have hpt : ∀ j : Fin n,
+      Complex.exp (Complex.I * ((gridOmega n s Tmax i * gridTime n Tmax j : ℝ) : ℂ))
+        = Complex.exp (-(Complex.I * ((gridOmega n s Tmax (-i) * gridTime n Tmax j : ℝ) : ℂ))) := by
+    intro j
+    have hn0 : 0 < n := Nat.lt_of_le_of_lt (Nat.zero_le _) i.isLt
+    -- exp(I·ω_i·t_j) = exp(-I·ω_{-i})·t_j) iff exp(I·(ω_i + ω_{-i})·t_j) = 1
+    have key : Complex.exp (Complex.I * ((gridOmega n s Tmax i + gridOmega n s Tmax (-i))
+        * gridTime n Tmax j)) = 1 := by
+      by_cases hi0 : (i : ℕ) = 0
+      · -- i = 0: ω_{-0} = ω_0, so ω_i + ω_{-i} = 2ω_0
+        haveI : NeZero n := ⟨by omega⟩
+        have hi0' : i = 0 := Fin.val_eq_zero_iff.mp hi0
+        subst hi0'
+        simpa using origin_bin_exp n Tmax s hs hn hn0 hT j
+      · -- i ≠ 0: ω_{-i} = -ω_i, so ω_i + ω_{-i} = 0
+        have hi' : (i : ℕ) ≠ 0 := by omega
+        have hneg : gridOmega n s Tmax (-i) = -gridOmega n s Tmax i := by
+          have : (-i : Fin n) = mirrorIdx i hi' := by
+            rw [neg_eq_sub i hi']
+            rfl
+          rw [this]
+          exact omega_reflect_s n Tmax s hs hn hT i hi'
+        have hzero : (gridOmega n s Tmax i + gridOmega n s Tmax (-i)) * gridTime n Tmax j = 0 := by
+          rw [hneg]; ring
+        -- `key` carries split casts; `hzero` is stated unsplit. Bridge with
+        -- the cast lemmas, then finish with `mul_zero` + `Complex.exp_zero`.
+        rw [← Complex.ofReal_add, ← Complex.ofReal_mul, hzero]
+        show cexp (I * (0 : ℂ)) = 1
+        rw [mul_zero, Complex.exp_zero]
+    -- Derive exp(I·ω_i·t_j) = exp(-I·ω_{-i}·t_j) from key
+    have hsum : Complex.I * ((gridOmega n s Tmax i + gridOmega n s Tmax (-i))
+        * gridTime n Tmax j)
+        = Complex.I * (gridOmega n s Tmax i * gridTime n Tmax j)
+          + Complex.I * (gridOmega n s Tmax (-i) * gridTime n Tmax j) := by
+      push_cast; ring
+    rw [hsum] at key
+    rw [Complex.exp_add] at key
+    -- key : exp(I·ω_i·t_j) · exp(I·ω_{-i}·t_j) = 1
+    -- Goal: exp(I·ω_i·t_j) = exp(-I·ω_{-i}·t_j)
+    have h1 : ∀ (x : ℝ), Complex.exp (Complex.I * (x : ℂ))
+        * Complex.exp (-(Complex.I * (x : ℂ))) = 1 := by
+      intro x
+      rw [← Complex.exp_add, add_neg_cancel, Complex.exp_zero]
+    calc Complex.exp (Complex.I * ((gridOmega n s Tmax i * gridTime n Tmax j : ℝ) : ℂ))
+        = Complex.exp (Complex.I * ((gridOmega n s Tmax i * gridTime n Tmax j : ℝ) : ℂ)) * 1 := by ring
+      _ = Complex.exp (Complex.I * ((gridOmega n s Tmax i * gridTime n Tmax j : ℝ) : ℂ))
+          * (Complex.exp (Complex.I * ((gridOmega n s Tmax (-i) * gridTime n Tmax j : ℝ) : ℂ))
+            * Complex.exp (-(Complex.I * ((gridOmega n s Tmax (-i) * gridTime n Tmax j : ℝ) : ℂ)))) := by
+        rw [h1]
+      _ = (Complex.exp (Complex.I * ((gridOmega n s Tmax i * gridTime n Tmax j : ℝ) : ℂ))
+            * Complex.exp (Complex.I * ((gridOmega n s Tmax (-i) * gridTime n Tmax j : ℝ) : ℂ)))
+          * Complex.exp (-(Complex.I * ((gridOmega n s Tmax (-i) * gridTime n Tmax j : ℝ) : ℂ))) := by ring
+      _ = 1 * Complex.exp (-(Complex.I * ((gridOmega n s Tmax (-i) * gridTime n Tmax j : ℝ) : ℂ))) := by
+        -- `key` carries split casts (`↑a * ↑b`) while this goal carries unsplit ones
+        -- (`↑(a*b)`); `Complex.ofReal_mul` bridges the two forms.
+        rw [Complex.ofReal_mul, Complex.ofReal_mul, key]
+      _ = Complex.exp (-(Complex.I * ((gridOmega n s Tmax (-i) * gridTime n Tmax j : ℝ) : ℂ))) := by ring
+  -- Step 2: the summand identity, stated in the split-cast form that
+  -- `simp only [dftMatrix, Matrix.mulVec, dotProduct]` produces (the cast
+  -- lemmas push `↑(a·b)` into `↑a * ↑b`), so the two sums match syntactically.
+  have hterm : ∀ j : Fin n,
+      Complex.exp (Complex.I * ((↑(gridOmega n s Tmax i) * ↑(gridTime n Tmax j)) : ℂ)) * conj (A j)
+        = conj (Complex.exp (Complex.I * ((↑(gridOmega n s Tmax (-i)) * ↑(gridTime n Tmax j)) : ℂ)) * A j) := by
+    intro j
+    -- Bridge the split casts back to `hpt`'s unsplit form, where it applies.
+    have hkey : Complex.exp (Complex.I * ((↑(gridOmega n s Tmax i) * ↑(gridTime n Tmax j)) : ℂ))
+        = Complex.exp (-(Complex.I * ((↑(gridOmega n s Tmax (-i)) * ↑(gridTime n Tmax j)) : ℂ))) := by
+      have h1 : Complex.exp (Complex.I * ((↑(gridOmega n s Tmax i) * ↑(gridTime n Tmax j)) : ℂ))
+          = Complex.exp (Complex.I * ((gridOmega n s Tmax i * gridTime n Tmax j : ℝ) : ℂ)) := by
+        rw [← Complex.ofReal_mul]
+      have h2 : Complex.exp (-(Complex.I * ((↑(gridOmega n s Tmax (-i)) * ↑(gridTime n Tmax j)) : ℂ)))
+          = Complex.exp (-(Complex.I * ((gridOmega n s Tmax (-i) * gridTime n Tmax j : ℝ) : ℂ))) := by
+        rw [← Complex.ofReal_mul]
+      rw [h1, h2, hpt j]
+    rw [hkey, map_mul, ← Complex.exp_conj]
+    have hconjI : ∀ (x y : ℝ), conj (Complex.I * ((↑x * ↑y) : ℂ))
+        = -(Complex.I * ((↑x * ↑y) : ℂ)) := by
+      intro x y
+      rw [map_mul, Complex.conj_I, map_mul, Complex.conj_ofReal, Complex.conj_ofReal]
+      ring
+    rw [hconjI]
+  -- Step 3: rewrite the LHS summand
+  rw [Finset.sum_congr rfl (fun j _ => hterm j)]
+  -- Step 4: move conj inside the RHS sum. In this Mathlib revision `conj` is
+  -- `starRingEnd ℂ`, which is `Star.star` definitionally, so `star_sum`'s
+  -- conclusion unifies with the goal; its arguments are explicit: `(s) (f)`.
+  exact (star_sum _ _).symm
+
+/--
+**Hermitian symmetry.** A real time-domain input has a spectrum satisfying
+`A_{-i} = conj(A_i)`.
+
+This is the physical statement that the Raman gain spectrum `H(Ω)` is real
+(PLAN.md §7.1): `H` is the transform of a real response, so its bins pair off
+as conjugates.
+
+The proof is `conj_dft` specialised to real input — it is not an independent
+result. `conj_dft` says `DFT(conj A) i = conj(DFT A (-i))`; with `A` real the
+left side is `DFT A i`, and conjugating both sides gives `DFT A (-i) =
+conj(DFT A i)`.
+-/
+theorem hermitian (n : ℕ) (Tmax : ℝ) (s : AxisSign) (hs : validAxis s)
+    (hn : Even n) (hT : Tmax ≠ 0) (A : Fin n → ℂ)
+    (hreal : ∀ j, A j = ((A j).re : ℂ)) (i : Fin n) :
+    (dftMatrix n s Tmax *ᵥ A) (-i) = conj ((dftMatrix n s Tmax *ᵥ A) i) := by
+  have hc : (fun j => conj (A j)) = A := by
+    funext j
+    rw [hreal j, Complex.conj_ofReal]
+  have h := conj_dft n Tmax s hs hn hT A i
+  rw [hc] at h
+  have h' := congrArg (fun z : ℂ => conj z) h
+  simpa using h'.symm
 
 end Grid
 end Photonics

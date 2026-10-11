@@ -173,51 +173,18 @@ The inverse (synthesis) matrix: entry `i j` is `exp(-i·ω_i·t_j)`.
 noncomputable def idftMatrix (n : ℕ) (s : AxisSign) (Tmax : ℝ) : Matrix (Fin n) (Fin n) ℂ :=
   fun i j => Complex.exp (-(Complex.I * ((gridOmega n s Tmax i) * gridTime n Tmax j)))
 
-/--
-**The pair is matched.** Composing analysis with synthesis returns the
-identity up to the `1/n` normalisation that `TemporalGrid.fft` and
-`TemporalGrid.ifft` supply via `dt`.
+-- The Fourier pairing theorem (`idft · dft = n · 1`) is proved in
+-- `Grid/Spectrum.lean` as `Grid.dft_pair` (CONFORMANCE.md B9), with the
+-- stronger hypotheses `validAxis s` and `Tmax ≠ 0`.
 
-Stating this as a theorem — rather than as a comment in the docstring — is what
-makes the pairing a fact the library can rely on, rather than a convention
-someone has to remember.
+-- Conjugation identity (`conj_dft`): proved in `Grid/Spectrum.lean` as
+-- `Grid.conj_dft` (CONFORMANCE.md B10), with hypotheses `validAxis s`, `Even n`,
+-- and `Tmax ≠ 0`. The proof reduces to the origin-bin identity
+-- `(ω_0 + ω_0)·t_j = 2π·(n/2 − j)` and the reflection identity `ω_i + ω_{-i} = 0`
+-- for `i ≠ 0`.
 
-**Status: open (Stage B).** The general form is a statement about sums of
-roots of unity; see `PLAN.md` §5.2 for the concrete-`n` fallback. This is
-tracked as an open statement, not silently left `sorry`.
--/
-theorem dft_pair (n : ℕ) (s : AxisSign) (Tmax : ℝ) (h : 0 < n) (hT : 0 < Tmax) :
-    (idftMatrix n s Tmax * dftMatrix n s Tmax) = (n : ℂ) • (1 : Matrix (Fin n) (Fin n) ℂ) := by
-  sorry
-
-/--
-Conjugation identity: conjugating the analysis transform equals analysing the
-conjugate, with the sign of the frequency index reversed.
-
-This is the algebraic content of the conjugated-transform-pair fast path
-`conj(DFT(conj(·)))`, and it holds because the kernel is a real-exponential,
-not because of anything specific to the implementation.
-
-**Status: open (Stage B).** See `PLAN.md` §5.2.
--/
-theorem conj_dft (n : ℕ) (s : AxisSign) (Tmax : ℝ) (A : Fin n → ℂ) (hn : Even n)
-    (i : Fin n) :
-    (dftMatrix n s Tmax *ᵥ (fun j => conj (A j))) i
-      = conj ((dftMatrix n s Tmax *ᵥ A) ((-i : Fin n) : Fin n)) := by
-  sorry
-
-/--
-Hermitian symmetry: a real-valued field has a conjugate-symmetric spectrum.
-
-Needed downstream to show that the Raman gain spectrum `H(Ω)` is real.
-
-**Status: open (Stage B).** See `PLAN.md` §5.2.
--/
-theorem hermitian (n : ℕ) (s : AxisSign) (Tmax : ℝ) (A : Fin n → ℂ) (hn : Even n)
-    (hA : ∀ j, conj (A j) = A j) (i : Fin n) :
-    conj ((dftMatrix n s Tmax *ᵥ A) i)
-      = (dftMatrix n s Tmax *ᵥ (fun j => conj (A j))) i := by
-  sorry
+-- Hermitian symmetry: a direct corollary of `Grid.conj_dft` when `A` is real
+-- (CONFORMANCE.md B11).
 
 /-! ## Layer ordering -/
 

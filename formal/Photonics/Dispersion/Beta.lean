@@ -237,5 +237,96 @@ theorem no_fission_at_fundamental (g P T0 β2 : ℝ) (hg : 0 < g) (hP : 0 < P) (
   rw [hN]
   simp [fissionLength]
 
+/-! ## F19 — the Taylor truncation of the phase
+
+`phase_matching.py::_taylor_phase_max_error` compares the *full* dispersion
+phase against Taylor truncation and returns the max error. The theorem
+underneath it is Taylor's theorem with Lagrange remainder, applied to `f = β`
+-between any two grid points: the full phase minus its truncation is exactly
+`f^(n+1)(x')·Δ^(n+1)/(n+1)!` for some intermediate point `x'` between `ω₀` and
+`x`, and whenever a bound `M` is known on that derivative across the interval,
+the quantity is at most `M·Δ^(n+1)/(n+1)!`. -/
+
+/-- The Lagrange form of the phase truncation remainder. `f = β(ω)`, `x₀` the
+carrier, `n` the truncation order — this is the statement whose numerical
+counterpart `_taylor_phase_max_error` evaluates: the coefficients the Python
+carries in its `betas` array are exactly `f^(k)(ω₀)`. -/
+theorem phaseRemainder_lagrange (f : ℝ → ℝ) (n : ℕ) (hf : ContDiff ℝ (n + 1) f)
+    (x₀ x : ℝ) (hx : x₀ ≠ x) :
+    ∃ x', x' ∈ Set.uIoo x₀ x ∧
+      f x - (∑ k ∈ Finset.range (n + 1),
+          (iteratedDeriv k f x₀) * (x - x₀) ^ k / (Nat.factorial k : ℝ))
+        = iteratedDeriv (n + 1) f x' * (x - x₀) ^ (n + 1)
+          / (Nat.factorial (n + 1) : ℝ) := by
+  obtain ⟨x', hmem, h2⟩ :=
+    taylor_mean_remainder_lagrange_iteratedDeriv (f := f) (x := x) (x₀ := x₀)
+      (n := n) hx hf.contDiffOn
+  have h0mem : x₀ ∈ Set.uIcc x₀ x := by
+    by_cases hxx : x₀ ≤ x
+    · exact Set.mem_uIcc.mpr (Or.inl ⟨le_refl _, hxx⟩)
+    · exact Set.mem_uIcc.mpr (Or.inr ⟨le_of_lt (not_le.mp hxx), le_refl _⟩)
+  have huniq : UniqueDiffOn ℝ (Set.uIcc x₀ x) := uniqueDiffOn_uIcc hx
+  have htaylor : taylorWithinEval f n (Set.uIcc x₀ x) x₀ x
+      = ∑ k ∈ Finset.range (n + 1), iteratedDeriv k f x₀ * (x - x₀) ^ k
+        / (Nat.factorial k : ℝ) := by
+    rw [taylor_within_apply]
+    apply Finset.sum_congr rfl
+    intro k hk
+    have hkle : (k : ℕ) ≤ n + 1 := le_of_lt (Finset.mem_range.mp hk)
+    have hstep : iteratedDerivWithin k f (Set.uIcc x₀ x) x₀ = iteratedDeriv k f x₀ := by
+      rw [iteratedDerivWithin_eq_iteratedDeriv huniq
+        (hf.contDiffAt.of_le (by exact_mod_cast hkle)) h0mem]
+    rw [hstep, smul_eq_mul, inv_eq_one_div]
+    ring
+  rw [htaylor] at h2
+  exact ⟨x', hmem, h2⟩
+
+/-- The truncation bound `_taylor_phase_max_error` estimates: given `M` a bound
+on `|f^(n+1)|` across the interval, the phase truncation error of the Taylor
+polynomial is at most `M·|Δ|^(n+1)/(n+1)!`, at every grid point `x`. -/
+theorem phaseRemainder_bound (f : ℝ → ℝ) (n : ℕ) (hf : ContDiff ℝ (n + 1) f)
+    (x₀ x : ℝ) (M : ℝ)
+    (hM : ∀ y : ℝ, y ∈ Set.uIcc x₀ x → |iteratedDeriv (n + 1) f y| ≤ M) :
+    |f x - (∑ k ∈ Finset.range (n + 1),
+        iteratedDeriv k f x₀ * (x - x₀) ^ k / (Nat.factorial k : ℝ))|
+      ≤ M * |x - x₀| ^ (n + 1) / (Nat.factorial (n + 1) : ℝ) := by
+  by_cases hxeq : x₀ = x
+  · subst hxeq
+    have h0 : (x₀:ℝ) - x₀ = 0 := sub_self x₀
+    have hsum0 : (∑ k ∈ Finset.range (n + 1), (iteratedDeriv k f x₀)
+        * (x₀ - x₀) ^ k / (Nat.factorial k : ℝ)) = f x₀ := by
+      rw [Finset.sum_eq_single 0]
+      · rw [pow_zero, iteratedDeriv_zero]
+        norm_num
+      · intro k _ hk
+        rw [show ((x₀:ℝ) - x₀) ^ k = (0:ℝ) ^ k from congrArg (· ^ k) h0,
+          zero_pow hk]
+        norm_num
+      · intro hnotmem
+        exact absurd (Finset.mem_range.2 (Nat.zero_lt_succ n)) hnotmem
+    rw [hsum0]
+    simp [h0]
+  · obtain ⟨x', hmem, h2⟩ := phaseRemainder_lagrange f n hf x₀ x hxeq
+    have hxmem0 : x₀ ∈ Set.uIcc x₀ x := by
+      by_cases hh : x₀ ≤ x
+      · exact Set.mem_uIcc.mpr (Or.inl ⟨le_refl _, hh⟩)
+      · exact Set.mem_uIcc.mpr (Or.inr ⟨le_of_lt (not_le.mp hh), le_refl _⟩)
+    have hmxmem : x' ∈ Set.uIcc x₀ x := Set.uIoo_subset_uIcc_self hmem
+    have hx'M : |iteratedDeriv (n + 1) f x'| ≤ M := hM x' hmxmem
+    have hMnonneg : 0 ≤ M := le_trans (abs_nonneg _) (hM x₀ hxmem0)
+    have hpownonneg : 0 ≤ |x - x₀| ^ (n + 1) := pow_nonneg (abs_nonneg _) _
+    rw [h2, abs_div]
+    have hnum : |iteratedDeriv (n + 1) f x' * (x - x₀) ^ (n + 1)|
+        = |iteratedDeriv (n + 1) f x'| * |x - x₀| ^ (n + 1) := by
+      rw [abs_mul, abs_pow]
+    have hFpos : (0:ℝ) < (Nat.factorial (n + 1) : ℝ) :=
+      Nat.cast_pos.2 (Nat.factorial_pos (n + 1))
+    rw [hnum, abs_of_pos hFpos]
+    have hpowle : |iteratedDeriv (n + 1) f x'| * |x - x₀| ^ (n + 1)
+        ≤ M * |x - x₀| ^ (n + 1) :=
+      mul_le_mul hx'M (le_refl _) hpownonneg hMnonneg
+    exact div_le_div_of_nonneg_right hpowle
+      (Nat.cast_nonneg (Nat.factorial (n + 1)))
+
 end Dispersion
 end Photonics

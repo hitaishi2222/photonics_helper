@@ -107,5 +107,77 @@ theorem strang_exact_on_phase (A : ℂ) (h : kerrPhase 0 0 1 = 0) :
     kerrStep (kerrStep A 0 0 1) 0 0 1 = A := by
   rw [kerrStep_zero_phase A 0 0 1 h, kerrStep_zero_phase A 0 0 1 h]
 
+/-! ## Operator ordering: the commutator the split carries
+
+`PLAN.md` §9.1 asks for the ordering half of the operator story, which is the
+formal counterpart of ISSUES.md #0: `Raman ∘ D ≠ D ∘ Raman`, and the sign of
+the discrepancy. On the scalar Kerr/dispersion phases of this file the
+operators *do* commute (`two_phases_add` is commutative in its conclusions),
+so the whole commutator budget sits in the nonlocal operator.
+
+The two-bin grid is the smallest instance that captures it. A convolution `R`
+(the shape of the delayed Raman response, which mixes frequency bins) and a
+diagonal `d` (the dispersion operator, unequal across bins) fail to commute
+exactly when the convolution is off-diagonal — and the witness is the field
+concentrated in one bin.
+-/
+
+/-- A two-bin convolution operator: `(R·A) i = ∑_j R i j · A j`. This is the
+shape of any delayed-response operator, Raman included: nonlocal in the
+frequency index. -/
+noncomputable def convOp (R : Matrix (Fin 2) (Fin 2) ℂ) (A : Fin 2 → ℂ) : Fin 2 → ℂ :=
+  fun i => R i 0 * A 0 + R i 1 * A 1
+
+/-- A two-bin diagonal operator — the dispersion operator restricted to two
+bins. -/
+noncomputable def diagOp (d : Fin 2 → ℂ) (A : Fin 2 → ℂ) : Fin 2 → ℂ :=
+  fun i => d i * A i
+
+/--
+**Composition of the split-step maps is associative.** The alternated sequence
+`D ∘ K ∘ D ∘ K ∘ …` is therefore unambiguous without parentheses — the
+composition theorem of `PLAN.md` §9.1 in its trivial half.
+-/
+theorem split_comp_assoc (D K : ℂ → ℂ) :
+    (D ∘ K) ∘ D = D ∘ (K ∘ D) := Function.comp_assoc D K D
+
+/--
+**A convolution does not commute with an unequal diagonal.**
+
+If `R 1 0 ≠ 0` — the convolution genuinely feeds bin 0 into bin 1, which is the
+shape of a delayed kernel — and `d 0 ≠ d 1` — the dispersion differs across the
+bins, which is the whole point of a dispersive propagator — then the two
+orders differ. The witness is the field `e₀` concentrated in bin 0:
+
+- `(R ∘ D) e₀` at bin 1 is `R 1 0 · d 0`: the dispersed bin-0 field, then
+  convolved;
+- `(D ∘ R) e₀` at bin 1 is `d 1 · R 1 0`: the convolved field, then dispersed.
+
+They agree only when `R 1 0 · (d 0 − d 1) = 0`, which the hypotheses rule out.
+
+This is the formal statement of why the convention swap of ISSUES.md #0 had to
+change the Raman operator and the propagator *together*: they do not commute,
+so changing one without the other is not a change of gauge. It is also why the
+Raman term — not the dispersion, not the Kerr phase — is the piece of
+`gnlse.py` that can move what `splitSeq_norm` proved is otherwise fixed.
+-/
+theorem conv_diag_ne_commute (R : Matrix (Fin 2) (Fin 2) ℂ) (d : Fin 2 → ℂ)
+    (hR : R 1 0 ≠ 0) (hd : d 0 ≠ d 1) :
+    convOp R ∘ diagOp d ≠ diagOp d ∘ convOp R := by
+  intro h
+  -- The witness: the field concentrated in bin 0, evaluated at bin 1.
+  have hcomposed : R 1 0 * (d 0 * 1) + R 1 1 * (d 1 * 0)
+      = d 1 * (R 1 0 * 1 + R 1 1 * 0) := by
+    have h' := congrFun (congrFun h (fun i => if i = 0 then (1:ℂ) else 0)) 1
+    simp only [Function.comp, convOp, diagOp] at h'
+    exact h'
+  have hlt : R 1 0 * d 0 = d 1 * R 1 0 := by simpa using hcomposed
+  have hz : R 1 0 * (d 0 - d 1) = 0 := by
+    have hcomm : R 1 0 * d 0 = R 1 0 * d 1 := by rw [hlt, mul_comm]
+    rw [mul_sub, hcomm, sub_self]
+  rcases mul_eq_zero.mp hz with h | h
+  · exact hR h
+  · exact hd (sub_eq_zero.mp h)
+
 end Solvers
 end Photonics

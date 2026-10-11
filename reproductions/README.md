@@ -122,10 +122,11 @@ literature check; supersedes the one-line issue and the corresponding
 ### Symmetry of the problem
 
 With `include_self_steepening=True` (+ Raman), long SCG-class runs show a
-monotonic ≈5–6 % drift of the pulse energy / photon number (was ≈12 % before
-the mitigations below). Pure-Raman runs are **exactly** conserving
-(E ratio = 1.00000); pure SPM with shock on a frozen drive is conserving to
-machine precision; only the combination *shock + evolving drive* drifts.
+monotonic ≈5–6 % drift of the pulse *energy* (was ≈12 % before the mitigations
+below). **The photon number does not drift** (see the resolution below): pure-
+Raman runs are exactly conserving of both; pure SPM with shock on a frozen
+drive is conservative to machine precision; only *shock + Raman together* moves
+the spectrum enough for the energy↔photon-number distinction to become visible.
 
 ### What was already fixed (do not re-file)
 
@@ -134,105 +135,101 @@ machine precision; only the combination *shock + evolving drive* drifts.
 | `τ_shock` override (Dudley's effective-area-corrected 0.56 fs vs the 1/ω₀ = 0.443 fs default) | `SplitStepEngine(tau_shock=…)`, `photonics_helper/gnlse.py` | removes the 26 % timescale bias; **this part of the old issue text is closed** |
 | Interaction-picture shock integrator (Strang-split exact Kerr/Raman phase + frequency-domain RK4 of the shock correction, adaptive substepping, no bin clamping) | `SplitStepEngine._nonlinear_step` | drift ≈12 % → ≈5–6 %; integrator error < 1e-4 vs a 4000-substep classical-RK4 reference |
 | `energy_vs_z` monitor + >5 % drift warning | engine + `tests/test_gnlse_shock_energy.py` | makes residual drift visible instead of silent |
+| `photon_number_vs_z` — the Blow & Wood (A5) invariant | engine, recorded when self-steepening is on | the *conserved* quantity for Raman+shock runs; see the resolution below |
 
 Verified by `tests/test_gnlse_unitarity.py` and
 `tests/test_gnlse_shock_energy.py` (13 tests, all green).
 
-### Cause (SUPERSEDED 2026-10-02 — see "Measured cause" below)
+### Resolution (2026-10-27) — the wrong invariant, not a wrong model
 
-*The 2025-09-21 analysis attributed the drift to the shock model itself. The
-2026-10-02 measurement shows the multi-percent figure is produced by an
-under-resolved grid, not by the model's conservation law. Kept for the record.*
+**The drift is the difference between energy and photon number, and the
+conserved one is not the one that was being watched.** Blow & Wood (1989),
+Appendix Eq. (A5) (read from `formal/refs/blow.pdf`, p. 2672): the GNLS with
+self-steepening conserves the *frequency-weighted* photon number
 
-The drift is a **property of the first-order shock model itself, not of the
-integrator**:
+```
+Q = ∫ |Û(ω)|² / (ω₀ + ω) dω
+```
 
-1. **The model's own conservation law.** For
-   `iγ(1 + (i/ω₀)∂_t)(A·P_NL)` (Blow & Wood 1989),
-   `d/dz ∫|A|² dt = −2γτ ∫ P_NL·Im(A* ∂_t A) dt`,
-   which vanishes only for a *time-independent* `P_NL`. Any state where the
-   drive keeps changing (fissioning soliton, SCG) violates it at order
-   `O(τ_shock Ω_max)`. The docstring of `_nonlinear_step` derives this
-   in-line.
-2. **The integrator is exonerated.**
-   `test_gnlse_unitarity.py::test_integrator_fidelity` advances the same
-   state with (a) the RK4IP shock step and (b) 4000 classical-RK4 substeps
-   of the *exact* same flow: fields agree to < 1e-4 and **both drift in
-   photon number identically**. No integrator can conserve what the model
-   does not.
-3. **Literature confirms.** Kim, Park & Shin, *Phys. Rev. E* **58**, 6746
-   (1998) (arXiv:solv-int/9904008), "Conservation Laws in Higher-Order
-   Nonlinear Optical Effects": NLSE conservation laws are "violated in
-   general" once self-steepening is added; only special integrable
-   higher-order combinations (Hirota, Sasa–Satsuma) have closed sets. And
-   the photon-conserving GNLSE line (pcGNLSE; see e.g. Huang et al.,
-   arXiv:2607.05244, and references therein) exists precisely because the
-   standard GNLSE with a shock term is not photon-conserving — restoring
-   conservation requires modifying the *equation*, not the solver.
+— with `τ_shock = 1/ω₀` the `n_eff/N` prefactor may be taken outside the
+integral and "(A5) is then the obvious classical analog of the total photon
+number in the optical wave". Their abstract is explicit that the *unweighted*
+energy is not invariant: "Optical energy is not conserved by the equation, as
+indeed it is not conserved in stimulated Raman scattering because photons are
+preferentially emitted at a lower frequency."
 
-### Measured cause (2026-10-02) — grid validity, not the conservation law
+Measured on the fissioning deck below (same parameters as every previous
+measurement of this issue):
 
-The "+5–6 %" figure above was never pinned by a test (the conserving-shock
-tests use `betas = [0]`, so they never fission). Measured on a genuinely
-fissioning soliton deck (Hult/Dudley Table-I PCF parameters, T0 = 500 fs,
-N_sol ≈ 3, 49–51 peaks at the exit — a long pulse is required so the shock term
-is resolvable at all):
+| `τ_shock·Ω_max` | Δ unweighted energy | Δ Q (photon number, A5) |
+|---|---|---|
+| 0.073 | −0.3 % | ≈ −0.01 % |
+| 0.145 | −3.1 % | ≈ −0.01 % |
+| 0.290 | −5.2 % | ≈ −0.01 % |
+| 0.88 | −14.4 % | ≈ −0.001 % |
 
-| `τ_shock·Ω_max` | photon drift |
-|---|---|
-| 0.073 | **−0.002 … −0.28 %** (resolved) |
-| 0.145 | −3.14 % |
-| 0.290 | **−5.22 %** ← the "≈5–6 %" figure |
-| 0.581 | −2.73 % (non-monotone ⇒ numerical noise) |
+So the "drift scales with grid validity" table measured the *energy* — which
+legitimately changes because `Σ|A|²dω = ⟨ω⟩·Q` and the spectrum moves — while
+attributing it to a first-order truncation of `ω/ω₀` that does not exist: the
+operator's symbol `1 + Ω·τ_shock` **is** `(ω₀ + Ω)/ω₀` bin-by-bin
+(`formal/Photonics/Nonlinear/Shock.lean::code_symbol_is_exact`). Both earlier
+readings were wrong: the 2025-09-21 "the model does not conserve it" reading
+was aimed at the wrong invariant, and the 2026-10-02 "grid artifact" reading
+invented a truncation to explain the same numbers. The integrator was
+never at fault (both were agreed on that).
 
-So the first-order expansion ω/ω₀ ≈ 1 + Ω·τ_shock is simply wrong once
-τ·Ω_max ≳ 0.15, and the drift tracks that breakdown. Two corollaries:
+What is true and kept from the earlier analyses:
 
-- On the 28 fs SCG decks the shock term **cannot be run at all** — the engine's
-  Ω_max < ω₀ guard rejects it, and forcing it through needs τ·Ω_max ≈ 0.6
-  (the deviation the Hult folder already records).
-- `conserving_shock=True` does **not** rescue the under-resolved regime
-  (−6.53 % vs −5.22 % at τ·Ω_max = 0.29); it matches the standard engine where
-  the grid is resolved. It is a real, published model (Hernández, *J. Opt.*
-  2020, [10.1080/17455030.2020.1856970](https://doi.org/10.1080/17455030.2020.1856970),
-  exact pcGNLSE solitons), not a cure for under-resolution.
+- pure-Raman runs are **exactly** energy-conserving (no shock ⇒ energy is the
+  invariant again); pure SPM with shock on a frozen drive is
+  machine-precision conservative; only *shock + Raman together* moves the
+  spectrum enough to show the energy↔photon distinction.
+- `conserving_shock=True` is a **no-op for γ > 0** and is a different model
+  (the |γ| pcGNLSE substitutions), not a repair of a truncation — its
+  validation tests (γ < 0 sign bench) are unaffected.
+- Kim, Park & Shin, *Phys. Rev. E* **58**, 6746 (1998): higher-order terms
+  violate the *energy* conservation laws in general — consistent with (A5)
+  being about photon number, and still the right citation for energy.
+- New: `photon_number_vs_z` records (A5) at every saved step when
+  self-steepening is on, and `tests/test_gnlse_photon_number.py` pins the
+  invariant; the >5 % drift warning now monitors the conserved quantity.
 
-**Shipped:** `_validate_shock_grid` now warns when `τ_shock·Ω_max` exceeds
-`_SHOCK_TAYLOR_LIMIT = 0.2`, naming these numbers and the fix (raise Tmax /
-reduce N / disable shock). Pinned by
-`tests/test_gnlse_shock_energy.py::test_fissioning_shock_drift_scales_with_grid_validity`.
+**Shipped:** `_validate_shock_grid` warns when `τ_shock·Ω_max` exceeds
+`_SHOCK_TAYLOR_LIMIT = 0.2`, now justified as Blow & Wood's `ω₀/3`
+derivation regime for the GNLS (the code's window is `2ω₀/5`; strict
+adherence needs `1/6` — recorded in `CONFORMANCE.md` F11, not changed), and
+raises on the hard positivity violation `Ω_max ≥ ω₀`. Pinned by
+`tests/test_gnlse_shock_energy.py::test_fissioning_shock_photon_number_is_grid_independent`
+and `::test_shock_regime_warns_only_outside_derivation_window`.
 
 ### Solutions (ranked)
 
-1. **Grid hygiene at the call site (no code change; do this today).**
-   Keep `Ω_max·τ_shock ≪ 1` (the construction-time validity guard
-   `_validate_shock_grid` already rejects `Ω_max ≥ ω₀`), resolve the shock
-   front (`dt` small enough that the shock correction per substep stays
-   small — the adaptive `n_sub` logic handles this), and read the
-   `energy_vs_z` monitor. For reproductions that need drift-free books,
-   quote the drift as a stated model tolerance (house style, cf. the
-   Renninger & Wise "energy drift 1.0 %" row).
-2. **Implement a photon-conserving shock term (the real fix, medium
-   effort).** Reformulate the shock+Raman coupling in the pcGNLSE form:
-   frequency-domain pcGNLSE, or the time-domain form derived in
-   arXiv:2607.05244 (two sign/|γ| modifications relative to the standard
-   GNLSE: absolute-value Kerr coefficient in the Raman-shift and
-   shock–Raman dissipation terms). This changes model physics, so it must
-   ship as an opt-in flag (`conserving_shock=True`) with its own
-   validation tests (conservation to integrator error on fissioning
-   states, red-shift direction preserved, blue-skew sign preserved), not
-   as a silent replacement.
-3. **Raise the shock expansion order (smaller gain, same caveat).** Using
-   the exact `(1 + Ω/ω₀)` factor instead of the first-order Taylor factor
-   reduces the band-edge error from `O(τΩ_max)` to `O((τΩ_max)²)` but does
-   not restore an exact conservation law; only worth doing together with
-   (2) if pcGNLSE validation demands it.
-4. **Accepted-as-documented (default).** Until (2) lands: keep the
-   ≈5–6 % figure stated per reproduction, with the `>5 %` warning as the
-   tripwire. The Krupa GPI reproduction is unaffected (shock off, as in
-   the PRL); the Dudley high-order SCG bandwidths remain the main
-   affected case — the `τ_shock` fix there is the dominant correction
-   anyway.
+1. **Read the right monitor (no code change; do this today).** With
+   self-steepening on, judge conservation by `photon_number_vs_z` (Blow &
+   Wood's (A5) invariant); `energy_vs_z` will drift by the spectrum's mean
+   frequency change and that is *correct physics*, not a defect. Keep
+   `Ω_max < ω₀` (hard guard), stay near the `ω₀/3` derivation regime the
+   guard warns about, and quote the *photon-number* drift as the model
+   tolerance in reproduction notes (house style, cf. the Renninger & Wise
+   "energy drift 1.0 %" row — which, note, is an energy row and only makes
+   sense with shock off).
+2. **`conserving_shock=True` remains the γ < 0 model it always was.** The
+   pcGNLSE |γ| substitutions are a different model (Hernández, *J. Opt.* 2020,
+   [10.1080/17455030.2020.1856970](https://doi.org/10.1080/17455030.2020.1856970);
+   arXiv:2607.05244), validation-tested on the sign bench. They are *not* a
+   repair of a truncation (there is none) and are a no-op for γ > 0.
+3. **No expansion of the shock factor is needed.** The code's `1 + Ω·τ_shock`
+   already *is* the exact `ω/ω₀` symbol; there is no `O((τΩ_max)²)` band-edge
+   term to reduce. (The one approximation left is dropping Blow & Wood's
+   material-dispersion term `(∂/∂ω)log(N/n_eff)` from `τ_shock`, which they
+   call "extremely weak" in a low-loss guide — a stated approximation, not a
+   truncation of `ω/ω₀`.)
+4. **Accepted-as-documented (default).** The ≈5–6 % energy figure is retained
+   per reproduction as the *energy* tolerance for shock+Raman runs, with the
+   photon-number monitor as the conservation check. The Krupa GPI
+   reproduction is unaffected (shock off, as in the PRL); the Dudley
+   high-order SCG bandwidths remain the main affected case — the
+   `τ_shock` fix there is the dominant correction anyway.
 
 > This issue is tracked in the repo-root **`ISSUES.md`** (now issue #1 there;
 > the new top entry **#0** is the dispersion time-direction convention issue

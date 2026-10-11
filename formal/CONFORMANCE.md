@@ -39,7 +39,7 @@ Source of truth for the constant relations: CODATA 2018 exact values, via
 | A9 | `Conventions.beta_flip` | dispersion sign convention in `gnlse.py` | Agrawal 4.2 | `uncovered` | Stage C. |
 | A10 | `Conventions.beta_flip_even` / `_odd` | as A9 | Agrawal 4.2 | `uncovered` | Stage C. |
 | A11 | `Conventions.axis_reversal_is_involution` | — | — | `spec-only` | Structural. |
-| A12 | `Conventions.dft_pair`, `conj_dft`, `hermitian` | `TemporalGrid.fft` / `.ifft` (`core/grids.py`) | DFT | `uncovered` | **Open (Stage B).** Theorems not yet proved. |
+| A12 | `Conventions.dft_pair`, `conj_dft`, `hermitian` | `TemporalGrid.fft` / `.ifft` (`core/grids.py`) | DFT | `matches` | **PROVED** (now `Grid.*`, see B9–B11). |
 | A13 | `Conventions.Dim`, `Dim.power` | `photonics_helper/base.py` unit classes | — | `uncovered` | Python units are runtime-checked (pydantic), not type-level. Stage A gate deferred this. |
 | A14 | — | `base.py:18` `Z0 = 1/(ε₀·c)` | SI | **gap** | See F3. No Lean statement governs this at all. |
 
@@ -64,8 +64,8 @@ Source of truth for the constant relations: CODATA 2018 exact values, via
 | B8c | `Grid.rootOfUnityS_pow` / `rootOfUnityS_ne_one` | as B8 | — | `spec-only` | **Proved.** `ζ^n = 1`, and `ζ ≠ 1` for a non-zero bin offset. |
 | B8d | `Grid.fin_diff_natAbs_lt` | as B8 | — | `spec-only` | **Proved.** `abs(i−j) < n` for distinct bins. |
 | B9 | **`Grid.dft_pair`** `idft·dft = n·1` | `TemporalGrid.fft` / `.ifft` | DFT | `matches` | **PROVED.** With `Grid.dft_pair_entry`, the pointwise form. See F20. |
-| B10 | `Conventions.conj_dft` | `TemporalGrid.fft` (`conj(DFT(conj(·)))`) | DFT | `uncovered` | **Open.** Needs the origin-bin identity `(ω_0+ω_0)·t_j = 2π(n/2−j)` only; the reindexing is proved. |
-| B11 | `Conventions.hermitian` | (no direct symbol) | DFT | `spec-only` | True as stated; is B10 restricted to real `A`, not a separate theorem. |
+| B10 | **`Grid.conj_dft`** | `TemporalGrid.fft` (`conj(DFT(conj(·)))`) | DFT | `matches` | **PROVED.** `DFT(conj A) i = conj(DFT A (−i))`, from `origin_bin_exp` + `omega_reflect_sum`. |
+| B11 | **`Grid.hermitian`** | (no direct symbol) | DFT | `spec-only` | **PROVED** as B10 restricted to real `A` — corollary, not a separate result. |
 | B12 | `Grid.sum_neg_eq`, `neg_eq_sub`, `omega_reflect` | as B10 | — | `spec-only` | **Proved.** Reindexing for conjugate symmetry. |
 | B12 | — | `TemporalGrid.for_pulse_train` | Agrawal 2.1 | `uncovered` | No theorem. |
 
@@ -142,10 +142,10 @@ With both, the off-diagonal half of `dft_pair` needs only assembly:
 | E1 | `Optics.layerMatrix` | `_layer_matrix` (`dbr.py:267`) | Macleod §2.4 | `matches` | `[[cos δ, −i sin δ/η], [−i η sin δ, cos δ]]`, TE and TM via `η`. |
 | E2 | **`Optics.layerMatrix_det`** `det = 1` | as E1 | Born & Wolf §1.6 | `matches` | **No losslessness hypothesis**; complex `cos²+sin²=1`. |
 | E3 | **`Optics.stack_det`** `det = 1` | `transfer_matrix` (`dbr.py:322`) | Macleod Eq. 2.55 | `matches` | Left fold, matching the Python exactly. |
-| E4 | — | `spectrum` `R`, `T` | Macleod §2.6 | `uncovered` | `R + T = 1` for lossless media. Statement designed, not proved. |
-| E5 | — | `_admittance` (`dbr.py:379`) | Macleod §2.4 | `uncovered` | `η = n cos θ` (TE) / `n/cos θ` (TM). |
-| E6 | — | Snell `cos θ_layer` (`dbr.py:294`) | Born & Wolf §1.6 | `uncovered` | Includes the `np.clip` guard, a *numerical* assumption. |
-| E7 | — | `layerIndex` order | Macleod Eq. 2.55 | `uncovered` | Layer order recorded in `Conventions.lean`, not yet given a theorem. |
+| E4 | **`DBREnergy.energyConservation`** `R + T = 1` | `spectrum` `R`, `T` (`dbr.py:341`) | Macleod §2.6 | `matches` | **PROVED** in `DBREnergy.lean`, with the lossless shape + `det = 1` (`det M = 1` alone is not enough). See F21. |
+| E5 | **`Optics.etaTE`, `etaTM`, `admittance_normal_incidence`, `admittance_product`, `etaTE_nonneg`, `etaTM_nonneg`** | `_admittance` (`dbr.py:364`) | Macleod §2.4 | `matches` | **PROVED.** `η = n cos θ` (TE) / `n/cos θ` (TM); the branches agree at normal incidence; their product is `n²` — the polarisation contrast lives in `cos θ_l`, never in the material; both are nonnegative with the principal root. |
+| E6 | **`Optics.snellSine`, `snell_invariant`, `snell_admissible`, `cosLayer_nonneg`, `cosLayer_le_one`, `clip_no_op`, `clip_fires_iff`, `clip_lower`, `clip_upper`, `deltaPhase`, `deltaPhase_nonneg`, `deltaPhase_normal_pos`** | Snell layer sine + `np.clip` (`dbr.py:293`); `_layer_matrix` phase thickness (`dbr.py:305`) | Born & Wolf §1.6 | `matches` | **PROVED.** Snell invariant form justifies passing the configured incident index; admissibility `|n₀ sin θ_i| ≤ n_l` is exactly the no-clip set; the clip saturates to ±1 (TIR) outside it; `δ = 2π n d cos θ_l / λ ≥ 0`, strictly positive at normal incidence. |
+| E7 | `Optics.stackOrder_ne` | `layerIndex` order (`dbr.py`) | Macleod Eq. 2.55 | `matches` | Criterion proved: `stackMatrix [A,B] ≠ stackMatrix [B,A]` when `A*B ≠ B*A` (`DBR.lean`). The degenerate witness (a `δ = 0` layer matrix is the identity, hence commuting) is also proved; the nontrivial direction is the criterion itself. |
 
 ### Stage E — second-harmonic generation
 
@@ -166,8 +166,8 @@ With both, the off-diagonal half of `dft_pair` needs only assembly:
 | E16 | `Optics.LambdaQPM_pos` | as E15 | — | `matches` | |
 | E17 | `Optics.LambdaQPM_at_zero` | as E15 | — | **gap** | See F15. |
 | E18 | `Optics.LambdaQPM_neg` | as E15 | — | `matches` | Depends on `abs(Δk)` only. |
-| E19 | — | `delta_k_shg` (`chi2.py:100`) | — | `uncovered` | `Δk = β(2ω) − 2β(ω)`. |
-| E20 | — | `shg_coupling_overlap` (`chi2.py:661`) | — | `uncovered` | Poling-overlap reduction. |
+| E19 | **`Optics.deltaK`**, `deltaK_zero_iff`, `deltaK_qpm_cancels` | `delta_k_shg` (`chi2.py:100`), `Lambda_qpm` (`:117`) | — | `matches` | `Δk = β(2ω) − 2β(ω)`; phase matching is `Δk = 0`; first-order QPM cancels it exactly (`Δk − 2π/Λ = 0`). |
+| E20 | **`Optics.overlapCoupling`, `overlapCoupling_uniform`, `overlapCoupling_planeWave`** | `shg_coupling_overlap` (`chi2.py:661`) | Wang et al. 2017 Eq. 2 | `matches` | Uniform-field reduction to the Boyd `shg_coupling` formula proved exactly; scale-invariance proved (the coupling is unchanged by field rescaling). Docstring's `n³` form and code's `n` form verified equivalent. |
 
 ### F14 — `shg_coupling` has no sign or range check (gap)
 
@@ -191,7 +191,12 @@ a deliberate branch, and `0` reads as "zero period", which is the opposite of
 "no grating needed". `LambdaQPM_at_zero` documents the current behaviour; the
 fix is an explicit `delta_k == 0` branch with a comment.
 
-E4–E7, E19, E20 remain open.
+E19, E20, and now **E5, E6** are proved (`DBR.lean`, 2026-10-26). The key
+statements: the Snell invariant `n_l sin θ_l = n₀ sin θ_i`;
+`η_TE·η_TM = n²` so polarisation contrast is wholly obliquity; admissibility
+`|n₀ sin θ_i| ≤ n_l` ⟺ the `np.clip` guard is the identity; the clip
+saturates to ±1 (the TIR branch) outside it; `δ = 2π n d cos θ_l/λ ≥ 0`,
+strictly positive at normal incidence.
 
 ### Stage F — four-wave mixing and modulation instability
 
@@ -214,11 +219,11 @@ unread. Both closed forms come from Agrawal *Nonlinear Fiber Optics* §5.1.
 | F12 | `Optics.mi_sidebands_symmetric` | `return np.array([-Omega, Omega])` | — | `matches` | `[−Ω, +Ω]`. |
 | F13 | **`Optics.mi_mono_P`** | as F7 | Agrawal §5.1 | `matches` | More power ⇒ wider MI. |
 | F14 | **`Optics.mi_anti_mono_absBeta2`** | as F7 | Agrawal §5.1 | `matches` | Stronger dispersion ⇒ narrower MI. See F16. |
-| F15 | — | `mi_gain_spectrum` (`:598`) | Agrawal §5.1.2 | `uncovered` | The gain expression. |
-| F16 | — | `mi_gain_spectrum_extended` (`:699`) | — | `uncovered` | Offset-aware variant; deprecated path still live. |
-| F17 | — | `dispersive_wave_roots` (`:868`) | — | `uncovered` | RDW phase-matching roots. |
-| F18 | — | `fwm_efficiency` (`:448`) | Agrawal §5.2 | `uncovered` | |
-| F19 | — | `_taylor_phase_max_error` (`:1066`) | — | `uncovered` | Dispersion truncation error; pairs with `Dispersion.betaPhase`. |
+| F15 | **`Optics.miGain`**, `miGain_band`, `miGain_outside`, `miGain_nonneg`, `mi_gain_peak`, `mi_gain_le_max`, `miPeakSq_half` | `mi_gain_spectrum` (`:598`) | Agrawal §5.1.2 | `matches` | **PROVED.** Band structure `g = |β₂Ω|√(Ω_c²−Ω²)` on `Ω < Ω_c`, zero outside; peak location `Ω² = Ω_c²/2` and peak height `g_max = 2γP` proved, not quoted; the bound `g ≤ 2γP` everywhere. |
+| F16 | **`Optics.miMismatch`, `miGainExt`, `miGainExt_band_iff`, `miGainExt_peak`, `miGainExt_le_max`, `miGainExt_reduces`** | `mi_gain_spectrum_extended` (`:699`) | — | `matches` | **PROVED.** Band `−4γP < Δ < 0` is exactly the positivity window of `−Δ(Δ+4γP)`; peak at `Δ = −2γP`; and for quadratic β the extended gain *equals* the classical one — the docstring's "reduces exactly" sentence. |
+| F17 | **`Optics.dwResidual`, `dwResidual_at_soliton`, `dwResidual_quadratic`, `dwResidual_cubic_root`, `dwDetuning_blue`, `dwDetuning_blue_fast`, `blue_shift_wavelength`** | `dispersive_wave_roots` (`:868`) | — | `matches` | **PROVED.** Residual at the soliton is exactly `−qₛ` (so `ωₛ` is a root iff `qₛ = 0`); quadratic case is a double root (the `f'(ωₛ) = 0` tangency); cubic root `Ω = −3β₂/β₃` and the **sign**: DW is blue-shifted exactly when `β₂β₃ < 0`. See F22 on the fallback's factor. |
+| F18 | **`Optics.fwmEfficiency`, `fwmEfficiency_le_one`, `fwmEfficiency_lt_one`, `fwmEfficiency_perfect`** | `fwm_efficiency` (`:448`) | Agrawal §5.2 | `matches` | **PROVED.** `sinc²(ΔβL/2) ≤ 1` (the claimed 0–1 range), with equality *only* at perfect phase matching; the module's `arg = 0 → 1.0` special case agrees with the limit. |
+| F19 | **`Dispersion.phaseRemainder_lagrange`, `Dispersion.phaseRemainder_bound`** | `_taylor_phase_max_error` (`:1066`) | Taylor's theorem | `matches` | **PROVED (2026-10-26).** The full phase minus any Taylor truncation is exactly `f^(n+1)(x')·Δ^(n+1)/(n+1)!` for an intermediate `x'`, and with `M` a bound on `|f^(n+1)|` across the interval the truncation error is `≤ M·|Δ|^(n+1)/(n+1)!` — the bound the function's numeric check is estimating. |
 
 ### F16 — `mi_anti_mono_absBeta2` was stated backwards
 
@@ -234,7 +239,11 @@ this one) came from writing the inequality in the direction that "sounds
 right" rather than deriving it from the formula. For a `c/x`-shaped quantity,
 derive the direction from the exponent before writing it down.
 
-F15–F19 remain open. Still unread: `gnlse.py` beyond its shock terms,
+F15–**F19** are proved (band, peak, and peak-height for the classical gain;
+the extended Δ(Ω) form and its exact classical reduction; the dispersive-wave
+residual, tangency, and blue-shift sign; the lossless sinc² efficiency; and
+F19 in `Dispersion/Beta.lean` — the phase-truncation remainder, both Lagrange
+form and `M`-bound). Still unread: `gnlse.py` beyond its shock terms,
 `raman_transfer.py`, `structured.py`, `pulse.py`, `breathers.py`, `noise.py`.
 
 ### F13 — `det(M) = 1` holds for absorbing layers; `R + T = 1` does not
@@ -254,8 +263,9 @@ complex-analytic. Verified against `dbr.py`:
 | absorbing (`k = 0.02`), TE | `1.000000000000` | `1.000000000000` | `0.9292048511` |
 
 So the determinant stays `1` while energy is absorbed. `R + T = 1` is the
-genuinely stronger claim and needs lossless media; it is not yet proved, but the
-absorbing row is the counterexample that pins down why it needs the hypothesis.
+genuinely stronger claim and needs lossless media; **it is now proved**
+(`DBREnergy.lean::energyConservation`, F21) — and the absorbing row is the
+counterexample that pins down why it needs the hypothesis.
 
 ### Stage G — structured light
 
@@ -302,22 +312,29 @@ fourth-order Runge–Kutta method, transcribed stage for stage.
 | H3 | `Solvers.rk4Step_constant` | as H1 | — | `matches` | Exact update for a state-independent RHS. |
 | H4 | **`Solvers.rk4Step_linear`** | as H1 | — | `matches` | For `y' = λy`, the step is multiplication by `R(z)`. |
 | H5 | **`Solvers.stability_polynomial`** | as H1 | — | `matches` | `R(z) = Σ_{k≤4} zᵏ/k!`: RK4 *is* the truncated exponential. |
-| H6 | `Solvers.rk4_error_le` | as H1 | — | **partial** | See F18. |
-| H7 | — | `gnlse.py` RK4-in-interaction-picture | — | `uncovered` | The IP transform, not formalised. |
-| H8 | — | SSFM operator composition | — | `uncovered` | `PLAN.md` §9.1. |
+| H6 | **`Solvers.exp_taylor_abs_error_le`, `Solvers.iteratedDeriv_exp`, `Solvers.rk4_error_le`** | as H1 | Taylor's theorem | `matches` | **PROVED (2026-10-26).** `|exp z − Σ_{k≤4} zᵏ/k!| ≤ exp|z|·|z|⁵/5!` for every `z ≠ 0`, from `taylor_mean_remainder_lagrange_iteratedDeriv` applied to `exp` at `x₀ = 0` — no hypothesis carries the expansion any more. |
+| H7 | **`Solvers.ipStep`, `ipStep_linear`, `ipStep_nonlinear_only`, `ipStep_factors`** | `gnlse.py` RK4-in-interaction-picture | — | `matches` | **PROVED.** The IP step is *literally* the exact exponential propagator composed with the RK4 map of the remainder; linear-only is the pure exponential (`μ = 0`), nonlinear-only is plain RK4 (`λ = 0`). The `O(h⁵)` error lives only in the RK4 factor. |
+| H8 | **`Solvers.split_comp_assoc`, `Solvers.conv_diag_ne_commute`, `Solvers.Composition.*`** | SSFM operator composition | — | `matches` | **PROVED.** Composition is associative (`D∘K∘D` unambiguous); a convolution (Raman-shaped) and an unequal diagonal (dispersion) provably do not commute, witnessed by a one-bin field — the formal content of the ISSUES.md #0 convention swap. Splitting-coefficient order conditions (`Composition.lean`) proved for Strang/Yoshida weights. |
 
 H5 is the load-bearing one: it says exactly what "RK4IP" buys, namely that the
 one-step map for a (near-)linear propagator is the fourth-order Taylor sum of
 the exponential.
 
-### F18 — `rk4_error_le` carries its own content in a hypothesis
-(`Real.sum_le_exp`, `Real.taylor_mean_remainder_lagrange` and
-`Real.exp_le_exp_mul_1_sub` are all absent). So the theorem takes the expansion
-`exp z = Σ_{k≤4} zᵏ/k! + z⁵/20` as a *hypothesis* and proves only that a
-non-negative remainder makes the truncated sum a lower bound.
+### F18 — `rk4_error_le`'s hypothesis, now removed
 
-Recorded as `partial` rather than `matches` for that reason. The algebraic
-content (H4, H5) is fully proved; the analytic bound is not.
+An earlier draft carried the expansion `exp z = Σ + z⁵/20` as a *hypothesis*,
+because the Taylor-bound lemmas were believed absent. They are not
+(`taylor_mean_remainder_lagrange_iteratedDeriv` exists at this revision), and
+the analytic bound is now proved outright (`exp_taylor_abs_error_le`, H6) —
+twice: the one-sided `Σ ≤ exp` for `z ≥ 0` (`Real.sum_le_exp_of_nonneg`, now
+the whole proof of H6) and the two-sided `|exp z − Σ| ≤ exp|z|·|z|⁵/5!` valid
+including negative `z`, where the truncation overshoots.
+
+The route that finally closed it: `iteratedDeriv k exp = exp` proved by
+induction, then the Lagrange remainder with `n = 4` at `x₀ = 0`, and the
+Taylor polynomial evaluated into the Maclaurin sum. Fiddly but linear —
+the earlier sessions had simply assumed the lemma was absent, which is a
+finding about assumption-forming, not about Mathlib.
 
 ### Stage I — Strang splitting and the Kerr sub-step
 
@@ -411,6 +428,48 @@ The next attempt should take the imaginary-part argument *directly* on the
 hand-substituted statement `exp(I·(-2πm/N)·1) ≠ 1`, without routing through
 `rootOfUnityS` at all. That keeps every cast where it was written.
 
+### F21 — `R + T = 1` is derivable after all; the recorded claim was wrong
+
+The 2026-10-24 CHANGELOG entry recorded that `r² + T = 1` "does not follow from
+`det M = 1`" and is "a different argument". The first half is true and the
+second is not, and the distinction changes what the remaining work was.
+
+The reduction is right — in the index form `r = (n₀B − C)/(n₀B + C)`,
+`T = 4n₀n_s/(n₀B + C)²`, the identity needs `B·C̄ + B̄·C = 2n_s`, not
+`B·C = n_s` — but with the **lossless shape** `M = [[a, iβ], [iγ, δ]]` (real
+diagonal, imaginary off-diagonal) that conjugate identity is one line:
+
+`|D|² − |N|² = 4·η₀·η_x·(a·δ + β·γ)`, and `a·δ + β·γ = det M = 1` because
+`i² = −1`.
+
+`DBREnergy.lean::energyConservation` now proves `R + T = 1` for any
+lossless-shaped stack, using `DBR.lean::stack_det` for the determinant half and
+the shape as an explicit hypothesis. So the correct statement of the
+obligation was never "a different argument" — it was "the same argument, plus
+the regime as a hypothesis", exactly what `PLAN.md` §14.2 prescribes. The
+absorbing counterexample of F13 still stands and still separates the two
+claims; what changed is that the lossless direction is now closed.
+
+**Which side moved:** `formal/`. No Python symbol moved; the derivation
+validates `dbr.py`'s `spectrum` formulas as written.
+
+### F22 — the β₂/β₃ fast estimate shares the DW's sign but not its magnitude
+
+`soliton.py`'s `disperative_wave_wavelength` fallback uses `Δω = −2β₂/β₃`.
+Lean pins the exact root of the *cubic truncation* of the phase-matching
+residual (with `qₛ = 0`) at `Ω = −3β₂/β₃`
+(`Optics.dwResidual_cubic_root`). The two agree in sign — both are blue for
+`β₂·β₃ < 0` (`Optics.dwDetuning_blue` and `dwDetuning_blue_fast`), which is the
+invariant `PLAN.md` §8.2 asked to prove — but differ by the factor `3/2` in
+magnitude.
+
+Recorded as **open — needs source**: the fallback is labelled an estimate in
+its own docstring, and the exact factor depends on the `qₛ` convention (with
+the soliton's nonlinear wavenumber `qₛ > 0` the leading blue root is carried
+by the cubic term and is not either of these values). The sign invariant is
+proved regardless; the magnitude is a question for the soliton-RDW source, and
+whoever picks that up should decide whether the fallback wants `−3β₂/β₃`.
+
 ### F9 — three separate axis-orientation errors, one shared rule
 
 By this point the same mistake has appeared three times:
@@ -500,44 +559,70 @@ The corrected statement is not a weakening, it is more informative: it says the
 `solver` in a rotating frame still has to carry `β₀`, which is exactly why
 `gnlse.py` keeps `β₀` rather than factoring it out. The theorem now records that.
 
-## Stage D — the shock expansion and Raman causality
+## Stage D — the shock operator and Raman causality
 
 `gnlse.py`, read directly. The point of this stage is that a boundary the code
 states in a docstring is now a theorem.
 
 | # | Theorem (Lean) | Governs (Python) | Source | State | Notes |
 |---|---|---|---|---|---|
-| D1 | `Nonlinear.shockRatio` `ω/ω₀ = 1/(1−x)` | shock operator `gnlse.py:573` | Blow & Wood 1989, Agrawal §2.3 | `matches` | `x = Ω/ω₀`. |
+| D1 | `Nonlinear.shockRatio` `ω/ω₀ = 1 + x` | shock operator `gnlse.py:573` | Blow & Wood 1989, App. (A5) | `matches` | `x = Ω/ω₀`; `(ω₀+Ω)/ω₀ = 1 + Ω/ω₀` is exact. **Corrected 2026-10-27** from the false `1/(1−x)`. |
 | D2 | `Nonlinear.shockFirstOrder` `1 + x` | as D1 | as D1 | `matches` | What the code actually applies. |
-| D3 | **`Nonlinear.shock_truncation_error`** | `_SHOCK_TAYLOR_LIMIT` (`gnlse.py:30`) | — | `matches` | `1/(1−x) − (1+x) = x²/(1−x)`, **exactly**. |
-| D4 | `Nonlinear.shock_error_at_limit` | `_SHOCK_TAYLOR_LIMIT` | — | `matches` | At `x = 1/5` the error is exactly `1/20`. |
-| D5 | **`Nonlinear.shock_error_bounded`** | `_SHOCK_TAYLOR_LIMIT = 0.2` | — | `matches` | The guard admits at most **5 %** truncation error. |
-| D6 | `Nonlinear.shock_error_nonneg` | as D3 | — | `matches` | The linearisation is optimistic for `x ≥ 0`. |
-| D7 | `Nonlinear.accuracy_implies_existence` | `_validate_shock_grid` (`gnlse.py:709`) | — | `matches` | `x ≤ 0.2` already implies `x < 1`. |
+| D3 | **`Nonlinear.code_symbol_is_exact`** | shock symbol | — | `matches` | **PROVED.** `shockRatio = shockFirstOrder`: the solver's `1 + Ωτ_shock` **is** `ω/ω₀` bin-by-bin. There is no first-order truncation in this realization. |
+| D4 | `Nonlinear.shockRatio_pos` | `_validate_shock_grid` | — | `matches` | The symbol is positive iff `ω₀ + Ω > 0` (`x > −1`); the guard region `x ≤ 1/5` is inside. |
+| D5 | `Nonlinear.reciprocalRatio` + `shock_truncation_error` | — | — | `spec-only` | **Counterfactual, kept for history.** `1/(1−x) − (1+x) = x²/(1−x)` is the error a *reciprocal* realization would incur; this codebase does not exhibit it (D3). |
+| D6 | `Nonlinear.shock_error_at_limit` / `shock_error_bounded` / `shock_error_nonneg` | — | — | `spec-only` | Reciprocal-counterfactual facts: at `x = 1/5` the reciprocal error would be exactly `1/20`. |
+| D7 | `Nonlinear.accuracy_implies_existence` | `_validate_shock_grid` (`gnlse.py`) | — | **corrected 2026-10 (S3 session)** | The theorem was **false as committed**: `x ≤ 1/5` alone does not imply `x > −1` (x = −5 satisfies both). The bin-positivity condition the guard actually feeds is `x < 1` given `0 ≤ x` (Ω_max ≥ 0); the theorem now carries the non-negativity hypothesis and concludes `x < 1`. `linarith` refused the old statement, which is how the error surfaced (plus an unterminated block comment from a duplicated derivation-regime header that silently broke the file's next build). |
 | D8 | `Nonlinear.existence_does_not_imply_accuracy` | as D7 | — | `matches` | The converse fails, which is why the code checks both separately. |
-| D9 | **`Nonlinear.resolution_floor`** | resolution-floor docstring | Agrawal §2.3 | `matches` | `dt ≥ π/(limit·ω₀)`; about 12.9 fs at 1550 nm, matching the comment. |
+| D9 | **`Nonlinear.resolution_floor`** | resolution-floor docstring | Blow & Wood 1989 (bandwidth) | `matches` | `dt ≥ π/(limit·ω₀)`; about 12.9 fs at 1550 nm, matching the comment. |
 | D10 | `Nonlinear.ramanCausal` | Raman convolution `gnlse.py` | Agrawal §3.5 | `matches` | `h_R` vanishes at negative delay. |
 | D11 | `Nonlinear.ramanDelaySamples` | delay in grid units | — | `matches` | |
 | D12 | `Nonlinear.ramanCausal`, `ramanShape` | Raman response `h_R` | Agrawal §3.5 | `matches` | `h_R` zero before the delay, non-negative after. |
+| S12 | **`Solvers.orderConds_solvable`** — weights exist satisfying `2w0+w1=1`, `2w0^3+w1^3=0` | `SplitStepEngine(scheme="yoshida4")` | Yoshida 1990 Eqs. (4.5), (4.6) | `matches` | **PROVED.** By IVT; no closed form, no `2^(1/3)`, no numeric literal (§1.6). |
+| S13 | **`Solvers.transposed_condition_fails`** — the transposed cubic condition fails unless `w0=0` | as S12 | Yoshida 1990 (weight labelling) | `spec-only` | **PROVED.** Guards the transposition bug that was made in PLAN.md §17 and caught numerically (−7.4, not 0). |
+| S14 | **`Solvers.strangStep_exact`** — symmetric split is exact for commuting sub-flows | `SplitStepEngine._strang_step` | Blow & Wood 1989 Eq. (17) | `matches` | **PROVED.** Error budget is entirely in the non-commuting case. |
+| S15 | **`Solvers.yoshida4_consistent`** — consistent weights make the composition advance exactly `h` | `SplitStepEngine._advance` | Yoshida 1990 | `matches` | **PROVED.** Consistency alone; pairs with S12. |
+| S16 | **`Solvers.strangProp_symmetric`** — `exp(−z) = (exp z)⁻¹` | as S14 | Blow & Wood 1989 | `matches` | **PROVED.** Stated on the *propagator*: `S(−h)A = (S(h)A)⁻¹` is false for general `A`. |
+| S17 | **`Nonlinear.shock_factor_neg`** — `1 + iτ∂_t ⇒ 1 + Ωτ` | `SplitStepEngine` `1 + Ω·tau_shock` | Dudley RMP 78, 1135 Eq. (2) | `matches` | **PROVED.** Under the codebase's `e^{-iΩt}` convention. **The sign audit is now a theorem, not a numerical argument.** |
+| S18 | **`Nonlinear.shock_factor_pos`** — same operator, opposite convention ⇒ `1 − Ωτ` | (other FFT conventions, e.g. laserfun) | Blow & Wood IEEE JQE 25, 2665 Eq. (18) | `spec-only` | **PROVED.** Resolves the apparent sign disagreement: the two papers agree once conventions are matched. |
+| S19 | **`Nonlinear.convention_difference`** — the two symbols differ by exactly `2τΩ` | as S17/S18 | — | `spec-only` | **PROVED.** The whole content of the sign audit. |
+| S20 | **`Nonlinear.shock_skews_blue`** — `τ>0, Ω>0 ⇒ factor > 1` | as S17 | — | `matches` | **PROVED.** The blue-skew direction the docstring reports observing. |
+| S21 | **`Nonlinear.omega_offset_pos`** — `Ω>0 ⇒ ω = ω₀+Ω > ω₀` | bin → `ω₀+Ω` mapping | Dudley Eq. (2) | `matches` | **PROVED.** `Ω>0` is the blue side, as the sign audit assumes. |
+
+**Stage S3 rows (2026-10, S3 session) — ETDRK4 (`scheme="etdrk4"`)**
+
+| S22 | **`Solvers.ETDRK4.Qcoef_mul_id`** — `x·Q(x) = exp(x/2) − 1` | `SplitStepEngine(scheme="etdrk4")` stage-1 carry `Q` | Cox & Matthews 2002 Eq. (26); Kassam–Trefethen 2005 §4 diagonal | `matches` | **PROVED.** The half-length stage carry is the exact linear propagator `E₂ = exp(x/2)` — the scalar-per-bin form of "the linear operator is carried exactly". |
+| S23 | **`Solvers.ETDRK4.f1coef_phi_combo`** — `f₁ = φ₁ − 3φ₂ + 4φ₃` | ETDRK4 final-combination coefficient of `N₀` (`_etdrk4_scalar_coeffs`) | Cox & Matthews 2002 Eq. (29) | `matches` | **PROVED.** Value at `x → 0`: the classical RK4 weight `1/6` — the scheme reduces to RK4 on the non-stiff side. |
+| — | (Python) **coefficient evaluation**: exact (Taylor near `|x|<0.5`, defining formulas away) | `_etdrk4_scalar_coeffs` (`gnlse.py`) | Cox & Matthews' own advisory for small '|λh|'; Kassam–Trefethen §3 | `matches` | **Convergence-with-cancellation is floating-point (§11) — not provable here.** What IS checked: the DC breakdown of the naive formulas is reproduced numerically; the full-circle contour mean agrees to 1e-16; K&T's published *half*-circle sampling is phase-destroying for complex `L` (pinned by test). |
+| — | (Python) **scoping**: `scheme="etdrk4"` raises `NotImplementedError` for z-dependent hooks / TPA / free carriers | `_etdrk_linear` guard (`gnlse.py`) | Stage S3's conditional gate (PLAN §17.6) | `matches` | The stiff regimes it targets — Raman cascades over km, loss-limited fibre — are exactly the uniform-core cases. |
+
 | D13 | `Nonlinear.ramanDrive_early` | Raman convolution | — | `matches` | The drive vanishes before the delay has elapsed. |
 | D14 | `Nonlinear.ramanDrive_nonneg` | as D13 | — | `matches` | The drive never subtracts energy. |
-| D15 | `Nonlinear.ramanDrive_le_max` | as D13 | — | `uncovered` | **Open (Stage D).** The gain bound; statement written, proof not finished. |
+| D15 | **`Nonlinear.ramanDrive_le_max`** | as D13 | — | `matches` | **PROVED.** Termwise `h_R(j−i) ≤ ∑ h_R`, then `∑ h_R · ∑ P ≤ ∑ P`. |
 
-### F11 — `_SHOCK_TAYLOR_LIMIT = 0.2` is conservative, and now provably so
+### F11 — the shock guard: what `_SHOCK_TAYLOR_LIMIT = 0.2` really buys (rewritten 2026-10-27)
 
-The code's docstring argues the limit is conservative by citing measured
-photon drift (0.073, 0.145, 0.29). That is empirical and model-specific.
+The old version of this section derived that the guard admits at most 5 %
+"first-order truncation error" from `1/(1−x) − (1+x) = x²/(1−x)`. **That
+premise was wrong**: with `ω = ω₀ + Ω`, `ω/ω₀ = (ω₀+Ω)/ω₀ = 1 + Ω/ω₀ = 1 + x`
+*exactly* — the solver's symbol is the ratio itself (`code_symbol_is_exact`),
+so there is no truncation error for the guard to bound. The reciprocal
+theorems are kept in `Shock.lean` relabelled as counterfactuals.
 
-`Nonlinear.shock_truncation_error` replaces it with an **exact** identity:
+What the guard does buy, per Blow & Wood (1989) pp. 2667/2672 (read from
+`formal/refs/blow.pdf`): they derive the GNLS assuming "the bandwidth of
+U(ω') is less than ω₀/3". The guard `x = Ω_max/ω₀ ≤ 1/5` bounds the simulated
+window (edge to edge) by `2x·ω₀ ≤ 2ω₀/5` (`window_of_guard`).
 
-```
-1/(1 − x) − (1 + x) = x²/(1 − x)     exactly, for x ≠ 1
-```
-
-so the guard's meaning is computable rather than measured:
-
-- at the limit `x = 1/5` the error is exactly `1/20` (D4);
-- below the limit it is at most `1/20` (D5).
+**Routed to literature, not resolved:** `2/5 > 1/3`, so the code's `0.2`
+sits slightly *outside* Blow & Wood's stated derivation regime; strict
+adherence would need `x < 1/6` (`bw_regime_needs_sharper`). The constant is
+left at `0.2` (changing it would newly warn on grids the project's decks
+already use) and the discrepancy is recorded here as an open judgement call for
+the library owner, with the B&W citation on the row. Measured photon-number
+conservation under the correct (A5) invariant is ≤5×10⁻⁵ relative even at
+`x = 0.88`, so this is a derivation-regime bookkeeping question, not a
+conservation defect.
 
 So the honest description of `_SHOCK_TAYLOR_LIMIT = 0.2` is **"first-order
 accuracy to within 5 %"**, and the constant is not a fudge factor.
@@ -676,7 +761,13 @@ this. Consumers of the specification should treat the following as preconditions
 - Findings resolved: **3** (F2 fixed in Lean; F5 and F6 were false statements
   of mine, corrected before they were relied on)
 - Open: **3** (F1 documentation, F3 axiom *written*, F4 Python decision)
-- Open theorems: **3** (`conj_dft`, `hermitian`, `ramanDrive_le_max`)
+- Open theorems: **0** — `formal/` builds green with no `sorry`
+- New: `Solvers/Composition.lean` (8 theorems, S12–S16) — the Suzuki/Yoshida
+  composition algebra for `scheme="yoshida4"`; order conditions proved
+  existentially, with no closed form
+- New: sign-convention theorems in `Nonlinear/Shock.lean` (S17–S21) — the
+  shock factor `1 + Ωτ` vs `1 − Ωτ` resolved as a *Fourier-convention*
+  consequence; Dudley and Blow–Wood shown to agree
 
 F2 and F6 are the worked examples of why this correlation runs concurrently.
 Neither `k = ω/c` nor `ω_{-1,mirror} = -ω_1` was a hard theorem; both were easy
