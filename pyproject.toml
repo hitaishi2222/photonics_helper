@@ -65,6 +65,11 @@ include = ["photonics_helper*"]
 [tool.setuptools.package-data]
 photonics_helper = ["py.typed", "materials.db"]
 
+# Non-shipped exploratory probes (drift diagnostics, order-study driver):
+# terse throwaway style by design; never part of the lint gate.
+[tool.ruff]
+extend-exclude = ["scratch"]
+
 # Pin the rule set explicitly so lint results stay stable across ruff releases
 # (ruff 0.16 expanded the default select; we keep the classic default set).
 [tool.ruff.lint]

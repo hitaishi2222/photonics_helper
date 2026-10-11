@@ -1065,7 +1065,8 @@ class ElectricField:
     @property
     def intensity(self) -> NDArray:
         """Instantaneous intensity ``½·n·c·ε₀·|E|²`` in W/m² (single-sourced scale)."""
-        return self.intensity_scale * np.abs(self.field) ** 2
+        # asarray: scale·array returns Any under newer mypy stub drifts (2.3).
+        return np.asarray(self.intensity_scale * np.abs(self.field) ** 2)
 
     @property
     def intensity_scale(self) -> float:
@@ -1103,7 +1104,7 @@ class ElectricField:
 
     @property
     def spectral_intensity(self) -> NDArray:
-        return np.abs(self.spectrum) ** 2
+        return np.asarray(np.abs(self.spectrum) ** 2)
 
 
 @dataclass
