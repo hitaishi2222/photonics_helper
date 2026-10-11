@@ -198,6 +198,7 @@ __all__ = [
     "DispersionAdaptor",
     "DispersionModel",
     "DispersiveWaveResult",
+    "ElectricField",
     "Energy",
     "Envelope",
     "FROGTrace",
@@ -507,6 +508,7 @@ _LAZY_MODULES: dict[str, str] = {
     **{
         n: ".pulse"
         for n in (
+            "ElectricField",
             "Envelope",
             "FROGTrace",
             "TemporalGrid",

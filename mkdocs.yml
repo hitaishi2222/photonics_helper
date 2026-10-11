@@ -101,6 +101,7 @@ nav:
       - Phonons: api/phonon.md
       - FFT backends: api/fftw.md
       - Unified dashboard: api/dashboard.md
+  - Formal specification (Lean 4): formal.md
   - Reproductions: reproductions.md
   - Data provenance: data-provenance.md
   - Database schema: data-schema.md

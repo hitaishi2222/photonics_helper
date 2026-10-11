@@ -15,6 +15,7 @@
   "DispersionModel",
   "DispersiveWaveResult",
   "EPS_0",
+  "ElectricField",
   "Energy",
   "Envelope",
   "FROGTrace",

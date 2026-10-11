@@ -152,14 +152,13 @@ def test_energy_monitor_records_and_warns():
     with pytest.warns(UserWarning, match="energy drift 10.00%"):
         eng2._emit_energy_drift_warning()
     # No warning on a clean run. This test's own grid (N = 4096 over 8 ps) is
-    # deliberately coarse and is *under-resolved* for the first-order shock
-    # expansion, so the new `_validate_shock_grid` resolution warning is
-    # filtered out here — the intent of this test is the energy-drift
-    # monitor, which is asserted separately in
-    # `test_shock_resolution_warns_only_when_under_resolved`.
+    # deliberately coarse and is *outside* the GNLS derivation regime, so the
+    # new `_validate_shock_grid` regime warning is filtered out here — the
+    # intent of this test is the drift monitor, which is asserted separately in
+    # `test_shock_regime_warns_only_outside_derivation_window`.
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        warnings.filterwarnings("ignore", message="self-steepening is under-resolved")
+        warnings.filterwarnings("ignore", message="self-steepening is being run outside")
         eng3 = SplitStepEngine(
             pulse=wave,
             fiber=fiber,
@@ -171,18 +170,22 @@ def test_energy_monitor_records_and_warns():
 
 
 # ---------------------------------------------------------------------------
-# ISSUES.md #1 — the drift is a GRID-VALIDITY artifact, not a conservation-law
-# defect. Measured on the fissioning deck below (Hult/Dudley Table-I PCF
-# parameters, 500 fs pulse, N_sol ~ 3):
+# ISSUES.md #1 — the residual drift, re-diagnosed 2026-10-27. The old reading
+# (grid-validity artifact of a nonexistent first-order Taylor truncation of
+# omega/omega_0) was WRONG: the operator's symbol 1 + Omega*tau_shock IS
+# omega/omega_0 = (w0+Omega)/w0 exactly (Nonlinear.code_symbol_is_exact).
+# Blow & Wood's Appendix Eq. (A5) shows the GNLS conserves the
+# *frequency-weighted* photon number  integral |Uhat(w)|^2/(w0+w) dw  --
+# not the unweighted energy. On the fissioning deck below:
 #
-#     tau*Omega_max   photon drift
-#     0.073            -0.144 %
-#     0.145            -3.143 %
-#     0.290            -5.223 %   <- the familiar "5-6 %" figure
+#     tau*Omega_max   d(unweighted energy)   d(photon number, A5)
+#     0.073           -0.3 %                  ~ -0.01 %
+#     0.145           -3.1 %                  ~ -0.01 %
+#     0.290           -5.2 %                  ~ -0.01 %
 #
-# i.e. the drift appears only once the first-order shock expansion
-# omega/omega_0 ~ 1 + Omega*tau_shock is no longer valid. These tests pin both
-# the guard and the scaling so the claim cannot silently rot again.
+# i.e. the *energy* change scales with bandwidth (the spectrum moves; the
+# photon count does not). These tests now pin the corrected claim: the guard
+# warns on the derivation regime, and the photon number is grid-independent.
 # ---------------------------------------------------------------------------
 
 _SHOCK_DECK_B2 = -0.01276e-24  # ps^2/m -> s^2/m (Hult/Dudley Table-I PCF)
@@ -232,42 +235,50 @@ def _raman_response_for(grid: TemporalGrid):
     )
 
 
-def test_shock_resolution_warns_only_when_under_resolved():
-    """tau_shock*Omega_max above the Taylor limit must warn; below, stay quiet."""
+def test_shock_regime_warns_only_outside_derivation_window():
+    """tau_shock*Omega_max outside Blow & Wood's bandwidth regime must warn.
+
+    The guard is no longer about a truncation error (there is none — the symbol
+    is exact); it marks the `omega_0/3` derivation regime of the GNLS.
+    """
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        eng = _fissioning_shock_engine(1024)  # tau*Om ~ 0.073 -> resolved
+        eng = _fissioning_shock_engine(1024)  # tau*Om ~ 0.073 -> inside regime
     assert eng.tau_shock * float(eng.grid.omega_max) < 0.2
 
-    with pytest.warns(UserWarning, match="under-resolved"):
-        _fissioning_shock_engine(4096)  # tau*Om ~ 0.29 -> under-resolved
+    with pytest.warns(UserWarning, match="derivation regime"):
+        _fissioning_shock_engine(4096)  # tau*Om ~ 0.29 -> outside regime
 
 
-def test_fissioning_shock_drift_scales_with_grid_validity():
-    """The +5-6 % drift only appears once the shock expansion is invalid.
+def test_fissioning_shock_photon_number_is_grid_independent():
+    """The corrected claim: the (A5) photon number is conserved at BOTH grids.
 
-    This is the measurement behind ISSUES.md #1's closure: on a resolved grid
-    the engine is photon-conserving to a few tenths of a percent even through
-    genuine soliton fission, so the residual is a grid artifact rather than a
-    property of the first-order Blow-Wood model.
+    This replaces the withdrawn test that asserted the *unweighted energy*
+    drift scales with grid validity while calling it a photon-number drift.
+    Blow & Wood (1989) App. Eq. (A5): the GNLS conserves the frequency-weighted
+    photon number `∫|Û(ω)|²/(ω₀+ω)dω`; the unweighted energy legitimately
+    changes as fission and Raman move the spectrum, and the size of that change
+    grows with the simulated bandwidth — which is what the old "drift scales
+    with tau*Omega_max" measurement was actually seeing.
 
-    The bounds are deliberately loose and only pin the ORDER OF MAGNITUDE:
-    measured resolved/under-resolved drift is -0.28 % / -5.2 % with the FFTW3
-    backend and -0.64 % / -6.1 % with the scipy/numpy fallback, so the threshold
-    has to hold on both CI legs (with- and without-pyfftw). What is being
-    asserted is the separation — roughly an order of magnitude — not a
-    backend-independent number to three digits.
+    Both grids must therefore show a small photon-number drift while their
+    energy drifts differ by roughly an order of magnitude. Bounds are
+    deliberately loose; the deck is required to genuinely fission first.
     """
     from scipy.signal import find_peaks
 
     drifts, peaks = {}, {}
-    for n_pts, resolved in ((1024, True), (4096, False)):
+    for n_pts in (1024, 4096):
         eng = _fissioning_shock_engine(n_pts)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             eng.propagate(num_steps=4000, nsaves=3)
-        z = np.asarray(eng.energy_vs_z, dtype=float)
-        drifts[n_pts] = float(100.0 * (z[-1] / z[0] - 1.0))
+        e = np.asarray(eng.energy_vs_z, dtype=float)
+        p = np.asarray(eng.photon_number_vs_z, dtype=float)
+        drifts[n_pts] = (
+            float(100.0 * (e[-1] / e[0] - 1.0)),
+            float(100.0 * (p[-1] / p[0] - 1.0)),
+        )
         a = np.asarray(eng.evolution[-1].envelope_field, dtype=complex)
         S = np.abs(eng.grid.fft(a)) ** 2
         pks, _ = find_peaks(S, height=S.max() * 0.05, distance=8)
@@ -275,9 +286,9 @@ def test_fissioning_shock_drift_scales_with_grid_validity():
 
     # the deck really does fission, otherwise this proves nothing
     assert peaks[1024] > 3
-    # resolved grid: sub-percent drift
-    assert abs(drifts[1024]) < 1.0, drifts
-    # under-resolved grid: the multi-percent drift of ISSUES.md #1
-    assert abs(drifts[4096]) > 2.0, drifts
-    # ...and the separation between the two is the actual claim
-    assert abs(drifts[4096]) > 5.0 * abs(drifts[1024]), drifts
+    # photon number (A5): conserved on both grids, within a fraction of a percent
+    assert abs(drifts[1024][1]) < 0.5, drifts
+    assert abs(drifts[4096][1]) < 0.5, drifts
+    # unweighted energy: NOT conserved with self-steepening on, and the two
+    # grids differ (the bandwidth-dependent redistribution, not a defect)
+    assert abs(drifts[4096][0]) > 5.0 * abs(drifts[1024][0]), drifts

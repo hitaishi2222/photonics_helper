@@ -52,3 +52,17 @@ reproductions/**/*.pdf
 reproductions/planned/**/pages/
 tests/test_reproductions.py
 oe2001_checkpoint_A.pt
+
+# --- Repowise (local code-intelligence index; regenerate with `repowise init`) ---
+.repowise/
+.mcp.json
+.vscode/
+.claude/
+
+# Lean 4 formal development (formal/)
+formal/.lake/
+
+# Reference PDFs for formal/PLAN.md section 17 (local only, ~31 MB).
+# The citations they support ARE tracked, in formal/PLAN.md section 17.7 and
+# paper/paper.bib; the PDFs themselves are not, so do not commit these.
+formal/refs/*.pdf

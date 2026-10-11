@@ -38,6 +38,7 @@ Importing this module pulls the solver stack only — no plotting backends.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
+import dataclasses
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -48,8 +49,11 @@ __all__ = [
     "ConvergenceReport",
     "ObservableReport",
     "ObservableFn",
+    "OrderEstimate",
+    "OrderReport",
     "ValidationFailure",
     "convergence_study",
+    "order_study",
     "check_spm",
     "check_mi",
     "check_soliton",
@@ -260,6 +264,246 @@ def convergence_study(
     return ConvergenceReport(
         refinements=[dict(r) for r in refinements], observables=reports
     )
+
+
+# ---------------------------------------------------------------------------
+# Observed order of accuracy
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class OrderEstimate:
+    """Observed convergence order from a refinement ladder.
+
+    ``diffs[i]`` is the relative difference between refinement ``i`` and
+    refinement ``i+1``; ``orders[i]`` is the Richardson estimate
+    ``log2(diffs[i] / diffs[i+1])``.
+
+    ``orders`` entries are ``None`` wherever the ratio is undefined or
+    non-positive — that is, wherever the ladder is not yet in the asymptotic
+    regime. A number is never reported where the data cannot support one.
+    """
+
+    name: str
+    step_sizes: list[float]
+    diffs: list[float | None]
+    orders: list[float | None]
+    monotonic: bool
+    note: str
+
+    @property
+    def order_best(self) -> float | None:
+        """Median of the valid Richardson estimates, or ``None``.
+
+        The median is used rather than the mean because one bad pair (a
+        round-off-dominated or step-size-limited rung) should not drag the
+        estimate, and the median is robust to that in a way the mean is not.
+        """
+        valid = [o for o in self.orders if o is not None]
+        if not valid:
+            return None
+        return float(np.median(valid))
+
+    @property
+    def order_spread(self) -> float | None:
+        """Spread of the valid estimates — large means "not yet asymptotic"."""
+        valid = [o for o in self.orders if o is not None]
+        if len(valid) < 2:
+            return None
+        return float(np.max(valid) - np.min(valid))
+
+
+@dataclass
+class OrderReport:
+    """Result of :func:`order_study`."""
+
+    # NOTE: the attribute below is named ``field``, which shadows
+    # ``dataclasses.field`` inside this class body — hence the qualified form.
+    step_sizes: list[float] = dataclasses.field(default_factory=list)
+    field: OrderEstimate | None = None
+    observables: list[OrderEstimate] = dataclasses.field(default_factory=list)
+    descending: bool = True
+
+    @property
+    def order(self) -> float | None:
+        """Observed order from the full field — the primary number."""
+        return self.field.order_best if self.field is not None else None
+
+    def summary(self) -> str:
+        lines = [f"order study over {len(self.step_sizes)} steps "
+                f"({'coarse->fine' if self.descending else 'fine->coarse'}):"]
+        if self.field is not None:
+            f = self.field
+            got = "n/a" if f.order_best is None else f"{f.order_best:.2f}"
+            lines.append(f"  field: observed order {got} — {f.note}")
+        for o in self.observables:
+            got = "n/a" if o.order_best is None else f"{o.order_best:.2f}"
+            lines.append(f"  {o.name}: observed order {got} — {o.note}")
+        return "\n".join(lines)
+
+
+def _relative_diff(a: np.ndarray, b: np.ndarray) -> float:
+    """Relative L2 difference ``|a-b| / |b|``, with a 0/0-safe denominator."""
+    num = float(np.sqrt(np.sum(np.abs(a - b) ** 2)))
+    den = float(np.sqrt(np.sum(np.abs(b) ** 2)))
+    if den == 0.0:
+        return 0.0 if num == 0.0 else float("inf")
+    return num / den
+
+
+def _estimate_order(name: str, values: list[Any], step_sizes: list[float]) -> OrderEstimate:
+    """Richardson observed order from successive relative differences."""
+    diffs: list[float | None] = [None] * (len(values) - 1)
+    for i in range(len(values) - 1):
+        try:
+            diffs[i] = _relative_diff(
+                np.asarray(values[i]), np.asarray(values[i + 1])
+            )
+        except ValueError as exc:  # mismatched shapes -> not comparable
+            raise ValueError(
+                f"{name}: refinement {i} and {i+1} are not comparable "
+                f"({exc}). An order ladder must hold the temporal grid fixed and "
+                f"vary only the propagation step."
+            ) from exc
+
+    orders: list[float | None] = [None] * (len(diffs) - 1)
+    for i in range(len(diffs) - 1):
+        lo, hi = diffs[i], diffs[i + 1]
+        if lo is None or hi is None:
+            continue
+        if lo <= 0.0 or hi <= 0.0 or not np.isfinite(lo) or not np.isfinite(hi):
+            continue
+        if hi == 0.0:
+            continue
+        orders[i] = float(np.log2(lo / hi))
+
+    finite = [d for d in diffs if d is not None and np.isfinite(d)]
+    nonzero = [d for d in finite if d > 0.0]
+    monotonic = all(a > b for a, b in zip(nonzero, nonzero[1:]))
+
+    valid = [o for o in orders if o is not None]
+    if not valid:
+        note = "insufficient usable pairs to estimate an order"
+    elif not monotonic:
+        note = (
+            "differences are not monotonically decreasing — the ladder is not "
+            "in the asymptotic regime, so the order estimate is not meaningful"
+        )
+    elif len(valid) > 1 and (max(valid) - min(valid)) > 0.5:
+        note = (
+            "estimates disagree across pairs (>0.5 apart) — approaching the "
+            "asymptotic regime but not yet inside it"
+        )
+    else:
+        note = "consistent across pairs"
+
+    return OrderEstimate(
+        name=name,
+        step_sizes=list(step_sizes),
+        diffs=diffs,
+        orders=orders,
+        monotonic=monotonic,
+        note=note,
+    )
+
+
+def order_study(
+    build_solver: Callable[..., Any],
+    step_sizes: Sequence[float],
+    *,
+    observables: Sequence[str] | Mapping[str, Callable[[Any], Any]] | None = None,
+    shared: Mapping[str, Any] | None = None,
+    step_kwarg: str = "step_size",
+) -> OrderReport:
+    """Measure the *order of accuracy* of a solver by self-convergence.
+
+    :func:`convergence_study` answers "has it stopped moving?". This answers the
+    different and harder question "**what order is it?**" — which is what
+    distinguishes a second-order split-step scheme from a fourth-order one, and
+    which the repository previously could not answer from its own output.
+
+    Method (Richardson self-convergence). If ``y(h) = y* + C·h^p`` then
+    ``|y(h) - y(h/2)| = |C|·h^p·|1 - 2^-p|`` and therefore
+
+    .. math:: p = \\log_2 \\frac{|y_{h_i} - y_{h_{i+1}}|}{|y_{h_{i+1}} - y_{h_{i+2}}|}
+
+    No analytic solution is required, so this works for any configuration. The
+    ladder must **hold the temporal grid fixed and vary only the propagation
+    step**; varying the grid too confounds the two errors.
+
+    Parameters
+    ----------
+    build_solver : callable
+        ``build_solver(**kwargs) -> result``; receives one ``step_size`` entry
+        from *step_sizes* plus every entry of *shared*, and must return a
+        propagated result.
+    step_sizes : sequence of float
+        Refinement ladder, ordered coarse -> fine. The unit is whatever
+        *step_kwarg* expects (metres for ``step_size``, a step count for
+        ``num_steps``); the order estimate is scale-invariant, so only the
+        *ratio* between rungs matters.
+    observables : sequence[str] | mapping[str, callable], optional
+        As for :func:`convergence_study`.
+    shared : mapping, optional
+        Factory kwargs forwarded to *every* refinement.
+    step_kwarg : str, optional
+        Name of the factory keyword carrying the refinement value. Default
+        ``"step_size"``; pass ``"num_steps"`` for factories that take a step
+        count instead of a length.
+
+    Returns
+    -------
+    OrderReport
+        Primary number is :attr:`OrderReport.order`, from the full field.
+    """
+    steps = [float(s) for s in step_sizes]
+    if len(steps) < 3:
+        raise ValueError(
+            f"order_study needs at least 3 rungs for a Richardson estimate; "
+            f"got {len(steps)}"
+        )
+    # The ladder may run in either direction: `step_size` in metres decreases
+    # as the solution refines, whereas a `num_steps` count *increases*. Only
+    # monotonicity matters, since the order estimate uses ratios.
+    descending = all(a > b for a, b in zip(steps, steps[1:]))
+    ascending = all(a < b for a, b in zip(steps, steps[1:]))
+    if not (descending or ascending):
+        raise ValueError(
+            f"the ladder must be strictly monotone in either direction; got {steps}"
+        )
+
+    if observables is None:
+        selected: dict[str, ObservableFn] = dict(DEFAULT_OBSERVABLES)
+    elif isinstance(observables, Mapping):
+        selected = dict(observables)
+    else:
+        selected = {}
+        for name in observables:
+            if name not in DEFAULT_OBSERVABLES:
+                raise ValueError(
+                    f"unknown observable {name!r}; available: "
+                    f"{sorted(DEFAULT_OBSERVABLES)}"
+                )
+            selected[name] = DEFAULT_OBSERVABLES[name]
+
+    fields: list[np.ndarray] = []
+    obs_values: dict[str, list[Any]] = {n: [] for n in selected}
+    for step in steps:
+        kwargs = dict(shared or {})
+        kwargs[step_kwarg] = step
+        result = build_solver(**kwargs)
+        fields.append(_field_of(result))
+        for name, fn in selected.items():
+            obs_values[name].append(fn(result))
+
+    report = OrderReport(
+        step_sizes=steps,
+        field=_estimate_order("field", fields, steps),
+        descending=descending,
+    )
+    for name, fn in selected.items():
+        report.observables.append(_estimate_order(name, obs_values[name], steps))
+    return report
 
 
 # ---------------------------------------------------------------------------

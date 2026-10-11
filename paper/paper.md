@@ -88,6 +88,18 @@ Specifically it provides:
   workflow has already found and fixed real bugs — an inverted GNLSE dispersion
   sign and an inverted Raman response direction both survived the unit-test suite
   and were exposed only by literature comparisons.
+- **A machine-checked specification** (`formal/`): a companion Lean 4 development
+  that proves the sign conventions, analytic limits, and conservation laws
+  underlying the numerical kernels. Tests can confirm that a computation ran;
+  they cannot confirm that the *convention* it used was the intended one. The
+  formal layer states each convention once as a theorem — that reversing the
+  spectral axis negates exactly the odd-order dispersion terms, that the Fourier
+  analysis and synthesis kernels are a matched pair, that a real input has a
+  conjugate-paired spectrum, that a normalised Raman response cannot amplify
+  past unity — and checks the algebra by construction rather than by example.
+  Where the proof and the code disagree, the disagreement is recorded and
+  resolved against the primary literature rather than in favour of either side;
+  the register is public and the correction history is kept.
 
 The intended users are photonics researchers and educators who need trustworthy
 building blocks: students learning pulse propagation with correct conventions,

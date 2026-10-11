@@ -21,13 +21,119 @@ from photonics_helper.base import C_MS, Area, Length, Time
 BetasUnit = Literal["ps^k/m", "s^k/m", "SI"]
 _BETAS_UNITS: tuple[str, ...] = ("ps^k/m", "s^k/m", "SI")
 
-# Validity limit for the first-order shock expansion ω/ω₀ ≈ 1 + Ω·τ_shock.
-# Beyond it the Taylor form is no longer accurate and the engine's
-# photon-number drift is a grid artifact (measured: ≤0.3 % at 0.073, −3.1 % at
-# 0.145, −5.2 % at 0.29 — see ISSUES.md #1). Exceeding this warns; it does not
-# raise, because the shock term is still well defined up to the harder
-# Ω_max < ω₀ condition checked in `SplitStepEngine._validate_shock_grid`.
+# Bandwidth limit of the GNLS derivation (Blow & Wood 1989: the GNLS assumes
+# the envelope bandwidth is less than ω₀/3). Exceeding it warns; it does not
+# raise, because the shock symbol ω/ω₀ = 1 + Ω·τ_shock stays exact and
+# well-defined up to the harder Ω_max < ω₀ positivity condition checked in
+# `SplitStepEngine._validate_shock_grid`. Renamed in spirit 2026-10-25: this
+# is not a Taylor-truncation limit — (1+Ωτ) IS ω/ω₀ bin-by-bin — it guards the
+# small-bandwidth regime the equation was derived in.
 _SHOCK_TAYLOR_LIMIT = 0.2
+
+# Suzuki triple-jump weights for a 4th-order symmetric composition of Strang
+# steps:  S2(w0*dz) S2(w1*dz) S2(w0*dz).
+#
+# Yoshida (1990), Phys. Lett. A 150(5-7), 262, Eqs. (4.1), (4.5), (4.6):
+#   consistency      2*w0 + w1 = 1
+#   cubic cancellation 2*w0**3 + w1**3 = 0
+# solved by w0 = 1/(2 - 2**(1/3)), w1 = -2**(1/3)/(2 - 2**(1/3)).
+#
+# NOTE ON NAMING: Yoshida writes the same composition with his w1 as the OUTER
+# weight and his w0 as the middle, i.e. the transpose of the weights below.
+# The order conditions above are stated in THIS file's convention (w0 outer).
+# Both residues were checked numerically (2e-16, 9e-16); the transposed
+# condition w0**3 + 2*w1**3 = 0 evaluates to about -7.4 and is NOT satisfied.
+YOSHIDA4_W0 = 1.0 / (2.0 - 2.0 ** (1.0 / 3.0))
+YOSHIDA4_W1 = -(2.0 ** (1.0 / 3.0)) / (2.0 - 2.0 ** (1.0 / 3.0))
+YOSHIDA4_WEIGHTS = (YOSHIDA4_W0, YOSHIDA4_W1, YOSHIDA4_W0)
+
+#: Number of contour points for the Kassam–Trefethen complex means used by
+#: the DC-reconciliation test (their §4 diagonal examples use M = 32).
+ETDRK4_M = 48
+
+#: Below this ``|L·dz|`` the ETDRK4 coefficients switch from the defining
+#: formulas to their Taylor series (Cox & Matthews' own recommendation when
+#: ``|λh|`` is small: "the Taylor series for the coefficients should be used
+#: rather than the explicit formulae themselves"). At ``|x| ≥ 0.5`` the
+#: cancellation in the formulas is ~machine-epsilon level.
+ETDRK4_SMALL = 0.5
+
+
+def _etdrk4_scalar_coeffs(x: NDArray, h: float) -> tuple[NDArray, NDArray, NDArray, NDArray]:
+    """ETDRK4 coefficients ``(Q, f1, f2, f3)`` per bin (Cox & Matthews 2002).
+
+    Evaluated exactly for each ``x = λ·h`` per bin: the defining formulas
+
+    ``Q  = h·(e^{x/2} − 1)/x``
+    ``f1 = h·(−4 − x + e^x(4 − 3x + x²))/x³``
+    ``f2 = h·(2 + x + e^x(x − 2))/x³``
+    ``f3 = h·(−4 − 3x − x² + e^x(4 − x))/x³``
+
+    for ``|x| ≥ 0.5``, and their Taylor series (order ``x⁸``, truncation well
+    below round-off there) for ``|x|`` below that — the DC-bin failure mode
+    both Cox & Matthews and Kassam–Trefethen identify. The Taylor coefficients
+    are:
+
+    ``Q  = 1/2 + x/8 + x²/48 + x³/384 + x⁴/3840 + x⁵/46080 + x⁶/645120 + …``
+    ``f1 = 1/6 + x/6 + 3x²/40 + x³/45 + 5x⁴/1008 + x⁵/1120 + …``
+    ``f2 = 1/6 + x/12 + x²/40 + x³/180 + x⁴/1008 + …``
+    ``f3 = 1/6 − x²/120 − x³/360 − x⁴/1680 − …``
+    """
+    x = np.asarray(x, dtype=complex)
+    small = np.abs(x) < ETDRK4_SMALL
+    xs = x[small]
+
+    Q = np.empty_like(x)
+    f1 = np.empty_like(x)
+    f2 = np.empty_like(x)
+    f3 = np.empty_like(x)
+
+    if xs.size:
+        x1 = xs
+        x2 = x1 * x1
+        x3 = x2 * x1
+        x4 = x3 * x1
+        x5 = x4 * x1
+        x6 = x5 * x1
+        x7 = x6 * x1
+        x8 = x7 * x1
+        Q[small] = (
+            0.5 + x1 / 8.0 + x2 / 48.0 + x3 / 384.0 + x4 / 3840.0
+            + x5 / 46080.0 + x6 / 645120.0 + x7 / 10321920.0 + x8 / 185794560.0
+        )
+        f1[small] = (
+            1.0 / 6.0 + x1 / 6.0 + 3.0 * x2 / 40.0 + x3 / 45.0
+            + 5.0 * x4 / 1008.0 + x5 / 1120.0 + 7.0 * x6 / 51840.0
+            + x7 / 56700.0 + x8 / 492800.0
+        )
+        f2[small] = (
+            1.0 / 6.0 + x1 / 12.0 + x2 / 40.0 + x3 / 180.0 + x4 / 1008.0
+            + x5 / 6720.0 + x6 / 51840.0 + x7 / 453600.0 + x8 / 4435200.0
+        )
+        f3[small] = (
+            1.0 / 6.0 - x2 / 120.0 - x3 / 360.0 - x4 / 1680.0
+            - x5 / 10080.0 - x6 / 72576.0 - x7 / 604800.0 - x8 / 5702400.0
+        )
+
+    big = ~small
+    xb = x[big]
+    if xb.size:
+        exb = np.exp(xb)
+        Q[big] = (np.exp(xb * 0.5) - 1.0) / xb
+        f1[big] = (
+            (-4.0 - xb + exb * (4.0 - 3.0 * xb + xb**2)) / xb**3
+        )
+        f2[big] = (2.0 + xb + exb * (-2.0 + xb)) / xb**3
+        f3[big] = (
+            (-4.0 - 3.0 * xb - xb**2 + exb * (4.0 - xb)) / xb**3
+        )
+
+    return Q * h, f1 * h, f2 * h, f3 * h
+
+#: Valid ``scheme`` values for :class:`SplitStepEngine`.
+Scheme: TypeAlias = Literal["strang", "yoshida4", "etdrk4"]
+
+_SCHEMES = ("strang", "yoshida4", "etdrk4")
 
 
 def _validate_betas_unit(betas_unit: str) -> str:
@@ -641,6 +747,7 @@ class SplitStepEngine:
         conserving_shock: bool = False,
         tau_shock: float | None = None,
         step_size: Length | None = None,
+        scheme: Scheme = "strang",
         dispersion_profile: (
             ZDependentDispersion | Callable[[NDArray, float], NDArray] | None
         ) = None,
@@ -677,6 +784,13 @@ class SplitStepEngine:
         self._min_shrink_factor = min_shrink_factor
         self._h_R_fft_cache: NDArray | None = None
 
+        if scheme not in _SCHEMES:
+            raise ValueError(
+                f"Unknown scheme {scheme!r}; expected one of {', '.join(_SCHEMES)}."
+            )
+        #: Composition scheme; see :meth:`_advance`.
+        self.scheme: Scheme = scheme
+
         # z-dependent hooks (all optional; None → uniform behavior)
         self._dispersion_profile = dispersion_profile
         self._a_eff_fn = a_eff_fn
@@ -693,11 +807,34 @@ class SplitStepEngine:
         self._current_z: float = 0.0
         self._spectra_vs_z: tuple[NDArray, NDArray] | None = None
         self._energy_vs_z: list[float] | None = None
+        #: Blow & Wood (1989) App. Eq. (A5) photon number Σ|Â(ω)|²/(ω₀+ω)dω at
+        #: each saved step; only recorded with self-steepening, where the grid
+        #: validation guarantees ω₀+Ω > 0 (see :meth:`_photon_number`).
+        self._photon_vs_z: list[float] | None = None
         self._U = 0.0  # carrier density for TPA
         self._N: NDArray | None = None  # time-resolved carrier population
 
         if self.include_self_steepening:
             self._validate_shock_grid()
+
+    def _photon_number(self, A: NDArray) -> float:
+        """Blow & Wood (1989) photon number: the Appendix Eq. (A5) invariant
+        of the GNLS, ``Σ_ω |Â(ω)|² / (ω₀ + ω) · dω``.
+
+        This — not the unweighted Parseval norm ``Σ|A|²dt`` — is what the
+        GNLSE with self-steepening conserves. With ``τ_shock = 1/ω₀`` the
+        frequency-dependent prefactor ``n_eff/N`` may be taken outside the
+        integral, and B&W state the conserved quantity (A5) "is then the
+        obvious classical analog of the total photon number in the optical
+        wave". The unweighted energy is *not* an invariant: "Optical energy
+        is not conserved by the equation, as indeed it is not conserved in
+        stimulated Raman scattering".
+
+        Only meaningful when every bin satisfies ``ω₀ + Ω > 0``, which
+        :meth:`_validate_shock_grid` enforces whenever self-steepening is on.
+        """
+        w_abs = self.omega0 + self.grid.w
+        return float(np.sum(np.abs(self.grid.fft(A)) ** 2 / w_abs) * self.grid.dw)
 
     @property
     def tau_shock(self) -> float:
@@ -707,35 +844,39 @@ class SplitStepEngine:
         return 1.0 / float(self.omega0)
 
     def _validate_shock_grid(self) -> None:
-        """Reject grids that push the ``ω/ω₀`` shock expansion out of validity.
+        """Reject grids that push the ``ω/ω₀`` shock factor outside its domain.
 
-        The shock operator ``(1 + (i/ω₀)∂_t)`` is the first-order form of
-        ``ω/ω₀`` (Blow & Wood 1989; Agrawal §2.3), so it is only defined for
-        channels with positive *absolute* frequency, ``ω = ω₀ + Ω > 0``. On a
-        symmetric grid spanning ``±Ω_max`` this requires ``Ω_max < ω₀``. Bins
-        beyond that would alias onto negative optical frequencies where the
-        factor ``1 + Ω·τ_shock`` has no physical meaning; the historical code
-        clamped them to zero, which silently corrupted the shock physics.
-        Failing loudly is the honest alternative (design decision D2).
+        Two independent conditions, both from the primary source (Blow & Wood
+        1989):
 
-        A second, independent validity condition is checked here as a warning:
-        the *Taylor* validity of ``ω/ω₀ ≈ 1 + Ω·τ_shock`` needs
-        ``τ_shock·Ω_max`` small (see ``_SHOCK_TAYLOR_LIMIT``). Measured on a
-        fissioning soliton deck (Hult/Dudley Table-I PCF parameters, 500 fs
-        pulse, N_sol ≈ 3, ISSUES.md #1): the photon-number drift is ≤ 0.3 % at
-        ``τ·Ω_max = 0.073`` but rises to −3.1 % at 0.145 and −5.2 % at 0.29.
-        The familiar "≈5–6 % shock drift" is therefore a *grid-validity*
-        artifact, not an integrator or conservation-law defect — so the honest
-        response is to tell the caller, not to silently absorb the error.
+        1. **Positivity of the optical frequency (hard).** The shock operator
+           ``(1 + (i/ω₀)∂_t)`` has symbol ``ω/ω₀ = (ω₀ + Ω)/ω₀`` — exact, with no
+           Taylor expansion in this realization. It is only meaningful for
+           channels with positive *absolute* frequency, ``ω = ω₀ + Ω > 0``. On
+           a symmetric grid spanning ``±Ω_max`` this requires ``Ω_max < ω₀``.
+           Bins beyond that would alias onto negative optical frequencies where
+           the factor has no physical meaning; the historical code clamped
+           them to zero, which silently corrupted the shock physics. Failing
+           loudly is the honest alternative (design decision D2).
 
-        **Resolution floor:** with the default ``τ_shock = 1/ω₀`` and the
-        Taylor limit ``τ_shock·Ω_max ≤ 0.2``, the grid must satisfy
-        ``dt = π/Ω_max ≥ π/(0.2·ω₀)`` — about 12.9 fs at 1550 nm and 7.1 fs
-        at 850 nm. This means a self-steepening run cannot resolve a
-        femtosecond pulse: a 28.4 fs pulse sampled every 7 fs is four points
-        wide, and a 100 fs pulse ~8. This is the likely root cause of the
-        recorded deviation in ``reproductions/hult_2007_rk4ip/`` (shock
-        disabled for its 850 nm / 28.4 fs deck).
+        2. **Bandwidth of the GNLS derivation (soft, warned).** Blow & Wood
+           derive the GNLS assuming "the bandwidth of U(ω') is less than
+           ω₀/3" — a small-fractional-bandwidth expansion of the wave
+           equation, not a property of any integrator. ``τ_shock·Ω_max ≤
+           _SHOCK_TAYLOR_LIMIT = 0.2`` keeps the simulated bandwidth at
+           ω₀/5, inside that bound with margin. This is a warning, not a
+           rejection: exceeding it widens the band past the equation's
+           derivation, it does not make the operator ill-defined.
+
+        What this guard is *not* about (a corrected misdiagnosis,
+        ``CHANGELOG.md`` 2026-10-27): a ``≤0.3 % … −5.2 %`` table of
+        "photon-number drift vs τ·Ω_max" was once quoted here as evidence of a
+        first-order-truncation grid artifact. That drift was the *unweighted*
+        energy ``Σ|A|²dt`` changing, which the GNLSE does not conserve — the
+        conserved quantity is Blow & Wood's Eq. (A5) photon number
+        ``Σ|Â(ω)|²/(ω₀+ω)dω`` (see :meth:`_photon_number`). Tracking (A5)
+        instead, the same runs conserve to ≲5×10⁻⁵ relative even at
+        τ·Ω_max = 0.88.
         """
         omega_max = float(self.grid.omega_max)
         omega0 = float(self.omega0)
@@ -755,17 +896,16 @@ class SplitStepEngine:
         if tau_omega > _SHOCK_TAYLOR_LIMIT:
             fix = tau_omega / _SHOCK_TAYLOR_LIMIT
             warnings.warn(
-                "self-steepening is under-resolved on this grid: "
-                f"τ_shock·Ω_max = {tau_omega:.3f} exceeds the first-order "
-                f"ω/ω₀ expansion limit of {_SHOCK_TAYLOR_LIMIT:g}. The "
-                "Taylor form ω/ω₀ ≈ 1 + Ω·τ_shock is no longer accurate, and "
-                "the resulting photon-number drift is a grid artifact, not a "
-                "property of the model: measured on a fissioning soliton deck "
-                "(ISSUES.md #1) the drift is ≤0.3 % at τ·Ω_max = 0.073, "
-                "−3.1 % at 0.145 and −5.2 % at 0.29. Fix by increasing "
-                f"Tmax by at least {fix:.2f}× (equivalently reducing N), by "
-                "disabling self-steepening, or by using conserving_shock=True "
-                "if you need the pcGNLSE operator.",
+                "self-steepening is being run outside the GNLS derivation "
+                f"regime: τ_shock·Ω_max = {tau_omega:.3f} puts the simulated "
+                f"bandwidth above ω₀/3, the small-bandwidth assumption Blow & "
+                "Wood (1989) derive the GNLS under. The shock symbol "
+                "ω/ω₀ = 1 + Ω·τ_shock remains exact; what degrades is the "
+                "equation's own validity. The conserved quantity in this "
+                "regime is the photon number Σ|Â(ω)|²/(ω₀+ω)dω (Blow & Wood "
+                "App. Eq. A5), not the unweighted energy. Fix by increasing "
+                f"Tmax by at least {fix:.2f}× (equivalently reducing N), or "
+                "by disabling self-steepening.",
                 UserWarning,
                 stacklevel=3,
             )
@@ -943,25 +1083,29 @@ class SplitStepEngine:
         ``iγ (1 + (i/ω₀)∂_t)(A·P_NL)`` (Blow & Wood 1989;
         Dudley–Genty–Coen RMP 78, 1135 (2006), Eq. (3)).
 
-        **Photon-number balance (corrected).** The shock contribution is
-        ``iγτ_shock ∂_t(A·P_NL)`` (the ``Ω·τ`` part of the factor, with
-        ``i ∂_t → −Ω`` in this codebase's FFT convention). With a real
-        response,
+        **Photon-number balance (Blow & Wood 1989, Appendix).** The
+        conserved quantity of the GNLS with self-steepening is *not* the
+        unweighted energy ``∫|A|²dt`` but the frequency-weighted photon number
 
-        ``d/dz ∫|A|² dt = −2γτ ∫ P_NL · Im(A* ∂_t A) dt`",
+        ``Q = ∫|Â(ω)|² / (ω₀ + ω) · dω``      (their Eq. (A5)),
 
-        which vanishes only when the field evolves under a *time-independent*
-        ``P_NL`` (pure SPM with a frozen drive — then the integral is a total
-        time derivative and the step is exactly conservative; verified to
-        machine precision for the constant-``P_NL`` case). In general the
-        residual is a **physical** error of the first-order ``ω/ω₀`` shock
-        expansion, ``O(τΩ_max)`` at the band edge, and no integrator can
-        remove what the model itself does not conserve: a fully-resolved
-        (heavily substepped) classical-RK4 reference of the same flow drifts
-        identically on fissioned states. The historical ``max(1 + Ω·τ, 0)``
-        clamp was removed both because it is unphysical (see
-        :meth:`_validate_shock_grid`) and because it destroyed even this
-        approximate structure.
+        which with ``τ_shock = 1/ω₀`` is "the obvious classical analog of the
+        total photon number in the optical wave" — the frequency-dependent
+        prefactor ``n_eff/N`` may be taken outside the integral in a low-loss
+        guide. Their abstract states it plainly: "Optical energy is not
+        conserved by the equation, as indeed it is not conserved in stimulated
+        Raman scattering because photons are preferentially emitted at a lower
+        frequency." So a run may legitimately show a large change in
+        ``energy_vs_z`` while ``photon_number_vs_z`` is constant — measured on
+        a fissioning N=3 soliton: −14.4 % energy change with Q conserved to
+        1×10⁻⁵ relative (this diagnosis replaced an earlier misreading of that
+        drift as a truncation artifact; ``CHANGELOG.md`` 2026-10-27). With
+        self-steepening *off* the unweighted energy is the invariant again.
+        The shock factor ``(1 + Ω·τ_shock)`` is exactly ``ω/ω₀`` bin-by-bin in
+        this realization — there is no Taylor expansion in the operator to
+        truncate. The historical ``max(1 + Ω·τ, 0)`` clamp was removed both
+        because it is unphysical (see :meth:`_validate_shock_grid`) and because
+        it destroyed the operator whose invariant is (A5).
 
         **Integrator.** The stiff, exactly-integrable part of the step is the
         phase rotation ``exp(iγP_NL Δz)``. Following the RK4IP /
@@ -1234,6 +1378,231 @@ class SplitStepEngine:
         else:
             return 1.0
 
+    def _etdrk_linear(self, dz: float) -> NDArray:
+        """Diagonal linear operator per bin, ``L(Ω) = i·φ(Ω) − α/2`` (per m).
+
+        The dispersion phase is the same ``φ(Ω) = Σ_{k≥2} βₖΩᵏ/k!`` that
+        :meth:`_linear_step` applies, and the loss enters as a constant real
+        part ``−α/2`` (matching ``exp(−α·dz/2)`` there) so that ``exp(L·dz)``
+        carries both. Raised for z-dependent hooks — Stage S3's conditional
+        scope (``formal/PLAN.md`` §17.6).
+        """
+        if (
+            self._is_z_dependent
+            or self.include_tpa
+            or self.include_free_carriers
+            or self.gamma_fn is not None
+            or self._a_eff_fn is not None
+            or self._alpha_fn is not None
+        ):
+            raise NotImplementedError(
+                "scheme='etdrk4' currently requires the uniform GNLSE core "
+                "(Taylor betas, constant γ/α, no TPA and no free carriers). "
+                "The stiff regimes it targets — Raman cascades over km and "
+                "loss-limited fibers — are exactly those; the TPA/free-carrier "
+                "opt-ins still ride on the Strang compositions."
+            )
+        omega_ps = self.grid.w * 1e-12  # rad/s → rad/ps
+        phi = np.zeros_like(omega_ps, dtype=float)
+        for k, beta_k in enumerate(self.betas, start=2):
+            phi += beta_k * omega_ps**k / factorial(k)
+        return np.asarray(
+            1j * phi - 0.5 * float(self.fiber.alpha), dtype=complex
+        )
+
+    def _nonlinear_rhs(self, A: NDArray, gamma: float) -> NDArray:
+        """The full nonlinear remainder ``N(A)`` of the GNLSE RHS (time domain).
+
+        ``N(A) = iγ·P_NL(|A|²)·A`` (Kerr + Raman phase) plus, with
+        self-steepening, the same shock correction the RK4 path integrates:
+        ``iγ·τ_shock·∂_t(P_NL·A)`` with symbol ``iγτΩ``. With
+        ``conserving_shock`` (pcGNLSE) the instantaneous and delayed arms
+        carry the signed ``γ`` and ``|γ|`` respectively, matching
+        :meth:`_nonlinear_step`.
+
+        This is the exponential integrator's counterpart of the ``N`` of
+        ``∂_zA = L·A + N(A)``; the stiff linear part is carried entirely by
+        the φ-function weights, so no stage integrates the dispersion phase.
+        """
+        intensity = np.abs(A) ** 2
+        h_R_fft: NDArray | None = None
+        if self.include_raman:
+            if self.fiber.raman_response is None:
+                raise ValueError(
+                    "include_raman=True but fiber.raman_response is None. "
+                    "Provide a RamanResponse or set include_raman=False."
+                )
+            h_R_fft = self._get_h_R_fft()
+
+        kernel: NDArray | None = None
+        if self.include_self_steepening:
+            tau = self.tau_shock
+            kernel = 1j * tau * self.grid.w
+
+        if self.conserving_shock:
+            # pcGNLSE arms, mirroring _nonlinear_step: signed γ on the pure-SS
+            # (instantaneous) arm, |γ| on the SS–Raman (delayed) arm.
+            fR0 = float(_response_fR(self.fiber.raman_response))
+            P_inst = (1.0 - fR0) * intensity
+            P_del = self._delayed_intensity(intensity, h_R_fft)
+            g_r = abs(gamma)
+            rhs = (1j * gamma * P_inst + 1j * g_r * P_del) * A
+            if kernel is not None:
+                rhs = rhs + self.grid.ifft(
+                    (1j * gamma * tau * self.grid.w) * self.grid.fft(P_inst * A)
+                    + (1j * g_r * tau * self.grid.w) * self.grid.fft(P_del * A)
+                )
+            return np.asarray(rhs, dtype=complex)
+
+        P_NL = self._nl_intensity(intensity, h_R_fft)
+        rhs = 1j * gamma * P_NL * A
+        if kernel is not None:
+            rhs = rhs + self.grid.ifft(
+                (1j * gamma * tau * self.grid.w) * self.grid.fft(P_NL * A)
+            )
+        return np.asarray(rhs, dtype=complex)
+
+    def _etdrk4_step(self, A: NDArray, dz: float) -> NDArray:
+        """One full ETDRK4 step (Cox & Matthews 2002; Kassam–Trefethen 2005).
+
+        ``∂_zA = L·A + N(A)`` with ``L`` diagonal in the Fourier basis: the
+        linear propagator is carried *exactly* by the φ-function weights, and
+        only the nonlinear remainder is advanced by RK4. This is the scheme
+        Stage S3 evaluates; it is fourth order and, unlike the splittings,
+        its accuracy is not limited by the linear phase rotation per bin —
+        the stiff-regime motivation (``formal/PLAN.md`` §17.4(b)).
+
+        Per bin ``x = L·dz`` the coefficients follow the Kassam–Trefethen
+        diagonal case: each coefficient is evaluated as the mean of its
+        defining function over a unit circle centred at ``x``,
+
+        ``f(x) ≈ mean_j f(x + r·e^{iθ_j})``, θ_j = π(2j−1)/M,
+
+        (their Eq. (2.7) specialised to scalars, radius 1, M = 48 — 32 in
+        their paper). This is not a refinement but a correctness
+        requirement: the GNLSE linear operator has eigenvalues approaching
+        zero at the DC bin (Taylor dispersion vanishes, loss may be absent),
+        and Cox & Matthews' original explicit-formula evaluation *of exactly
+        these functions* there is catastrophically wrong — their own paper
+        warns ``"care must be taken ... |λh| is small, to avoid rounding
+        errors arising from the large amount of cancellation"``. All four
+        integrands are entire functions with removable singularities, so the
+        contour mean is well defined for every bin including DC.
+
+        Stage update and final combination (K&T diagonal code, Fig. 7):
+
+        ``a = E₂·A + Q·N₀``, ``b = E₂·A + Q·N_a``,
+        ``c = E₂·a + Q·(2N_b − N₀)``,
+        ``A' = E·A + f₁·N₀ + 2f₂·(N_a + N_b) + f₃·N_c``,
+
+        with ``E = e^{x}``, ``E₂ = e^{x/2}`` per bin.
+
+        Why the coefficients are evaluated exactly rather than by a contour:
+        the failure both papers warn about is the catastrophic cancellation of
+        the explicit formulas near ``x = 0`` (the DC bin — Cox & Matthews:
+        "care must be taken in the evaluation of the coefficients for modes
+        where |λh| is small, to avoid rounding errors arising from the large
+        amount of cancellation in the coefficients"). Kassam–Trefethen repair
+        that with a contour mean and, for real operators, discard the residue
+        with ``real()``. Their published diagonal recipe samples a *half*
+        circle (``exp(1i·π·((1:M)−.5)/M)``); its mean is exact for real
+        operators but phase-destroying for complex ``L`` — the trapezoid
+        residue is physics-sized there, of the order of the coefficient at
+        the GNLSE's dispersion phases. The exact fix for a scalar-per-bin
+        operator (each coefficient an entire function of ``x`` with a
+        removable singularity) is the one Cox & Matthews themselves
+        recommend: the Taylor series near zero, the defining formulas away
+        from it. That is :func:`_etdrk4_scalar_coeffs`; a full-circle contour
+        mean is verified equivalent (and the half-circle recipe's failure
+        reproduced) in ``tests/test_gnlse_etdrk4.py``, so the failure mode
+        stays demonstrated, not just asserted.
+        """
+        L_bin = self._etdrk_linear(dz)
+        x = np.asarray(L_bin * dz, dtype=complex)
+        E = np.exp(x)
+        E2 = np.exp(0.5 * x)
+        Q, f1, f2, f3 = _etdrk4_scalar_coeffs(x, dz)
+
+        gamma = self._get_gamma(self._current_z)
+
+        def rhs(state: NDArray) -> NDArray:
+            return self._nonlinear_rhs(state, gamma)
+
+        # Every nonlinear value enters the update in FOURIER space — the
+        # per-bin coefficients are the frequency-domain ODE's
+        # ``∂_z Â = L·Â + N̂``: N is computed in the time domain (where it
+        # acts), FFT'd, then weighted bin-wise. Multiplying a time-domain
+        # array by a frequency-domain coefficient array is the classic trap
+        # for this scheme: it leaves a dz-independent residual that looks
+        # exactly like a converged but wrong flow.
+        A_w = np.asarray(self.grid.fft(A), dtype=complex)
+        N0_w = np.asarray(self.grid.fft(rhs(A)), dtype=complex)
+        a = np.asarray(self.grid.ifft(E2 * A_w + Q * N0_w), dtype=complex)
+        Na_w = np.asarray(self.grid.fft(rhs(a)), dtype=complex)
+        b = np.asarray(self.grid.ifft(E2 * A_w + Q * Na_w), dtype=complex)
+        Nb_w = np.asarray(self.grid.fft(rhs(b)), dtype=complex)
+        c = np.asarray(
+            self.grid.ifft(E2 * (E2 * A_w + Q * N0_w) + Q * (2.0 * Nb_w - N0_w)),
+            dtype=complex,
+        )
+        Nc_w = np.asarray(self.grid.fft(rhs(c)), dtype=complex)
+        A_new_w = E * A_w + N0_w * f1 + 2.0 * (Na_w + Nb_w) * f2 + Nc_w * f3
+        return np.asarray(self.grid.ifft(A_new_w), dtype=complex)
+
+    def _strang_step(self, A: NDArray, dz: float) -> NDArray:
+        """One symmetric Strang step ``exp(L dz/2) · exp(N dz) · exp(L dz/2)``.
+
+        This is Blow & Wood (1989) Eq. (17), second order in ``dz``. The error
+        comes from the noncommutativity of ``L`` and ``N``; Blow & Wood state
+        it "is a series in odd powers of δz whose leading term is proportional
+        to δz³ … and so the scheme is globally second-order accurate."
+        """
+        A = self._linear_step(A, dz / 2)
+        A, self._U = self._nonlinear_step(A, dz)
+        A = self._linear_step(A, dz / 2)
+        return A
+
+    def _advance(self, A: NDArray, dz: float) -> NDArray:
+        """Advance the field by ``dz`` using the configured composition scheme.
+
+        ``scheme="strang"`` (default) is a single second-order symmetric step
+        and is bit-identical to the historical behaviour.
+
+        ``scheme="yoshida4"`` is the Suzuki triple-jump composition of three
+        Strang steps,
+
+            S₂(w₀·dz) S₂(w₁·dz) S₂(w₀·dz),
+
+        with ``w₀ = 1/(2 − 2^{1/3}) ≈ 1.35120719`` and
+        ``w₁ = −2^{1/3}/(2 − 2^{1/3}) ≈ −1.70241438`` (Yoshida, *Phys. Lett. A*
+        **150**(5–7), 262 (1990), Eqs. (4.1), (4.5), (4.6)). The weights
+        satisfy ``2w₀ + w₁ = 1``, so the three sub-steps advance exactly ``dz``;
+        and ``2w₀³ + w₁³ = 0`` cancels the leading ``δz³`` error term, giving a
+        globally fourth-order method at 3 Strang steps per ``dz``.
+
+        Note ``w₁`` is **negative**: one sub-step runs backwards. That is the
+        error-extrapolation half of the construction, not an oversight, and it
+        is why the scheme costs 3 Strang steps for the same distance.
+
+        ``scheme="etdrk4"`` does not split at all (Cox & Matthews 2002;
+        Kassam–Trefethen 2005): the whole step is the semilinear exponential
+        RK4 on ``∂_zA = L·A + N(A)`` with ``L`` diagonal in the Fourier basis,
+        so the stiff dispersion phase is carried exactly by the φ-function
+        weights and only the nonlinear remainder is advanced by RK4.
+        Fourth order at one RK4 stage set per ``dz`` (4 nonlinear evaluations,
+        ~12 FFTs — vs. 3 × 2 FFTs plus the shock substeps for ``yoshida4``).
+        See :meth:`_etdrk4_step` for the coefficient evaluation and the
+        DC-bin failure mode it guards against (``formal/PLAN.md`` §17.4(b),
+        Stage S3).
+        """
+        if self.scheme == "strang":
+            return self._strang_step(A, dz)
+        if self.scheme == "etdrk4":
+            return self._etdrk4_step(A, dz)
+        for weight in YOSHIDA4_WEIGHTS:
+            A = self._strang_step(A, weight * dz)
+        return A
+
     def propagate(
         self,
         num_steps: int,
@@ -1285,6 +1654,7 @@ class SplitStepEngine:
         z = 0.0
         self.evolution = []
         self._energy_vs_z = None
+        self._photon_vs_z = None
         self._z_positions = [0.0]
 
         pbar = None
@@ -1323,6 +1693,13 @@ class SplitStepEngine:
             if self._energy_vs_z is None:
                 self._energy_vs_z = []
             self._energy_vs_z.append(float(np.sum(np.abs(self.A) ** 2) * self.grid.dt))
+            if self.include_self_steepening:
+                # With self-steepening the B&W (A5) photon number — not the
+                # unweighted energy — is the invariant; record both so callers
+                # can check the conserved one.
+                if self._photon_vs_z is None:
+                    self._photon_vs_z = []
+                self._photon_vs_z.append(self._photon_number(self.A))
 
         def _maybe_save(current_z: float) -> None:
             nonlocal next_save_idx
@@ -1381,10 +1758,9 @@ class SplitStepEngine:
             # Update current z before steps
             self._current_z = z
 
-            # Half linear step
-            self.A = self._linear_step(self.A, dz / 2)
-            # Full nonlinear step
-            self.A, self._U = self._nonlinear_step(self.A, dz)
+            # Advance one step of length `dz` under the configured scheme.
+            self.A = self._advance(A=self.A, dz=dz)
+
             if noise_rng is not None:
                 from .noise import raman_noise_field
 
@@ -1395,8 +1771,6 @@ class SplitStepEngine:
                     rng=noise_rng,
                     omega0=float(self.omega0),
                 ) * np.sqrt(dz)
-            # Half linear step
-            self.A = self._linear_step(self.A, dz / 2)
 
             z_new = z + dz
             if z_new <= z:
@@ -1467,23 +1841,59 @@ class SplitStepEngine:
         return np.array(self._z_positions)
 
     def _emit_energy_drift_warning(self) -> None:
-        """Warn if recorded energy drifted >5% with loss/TPA disabled."""
-        if not self._energy_vs_z:
-            return
-        e0 = self._energy_vs_z[0]
-        e1 = self._energy_vs_z[-1]
-        if e0 <= 0.0:
-            return
-        drift = abs(e1 / e0 - 1.0)
+        """Warn if the conserved quantity drifted >5% with loss/TPA disabled.
+
+        Which quantity is *conserved* depends on the operator set (Blow & Wood
+        1989, Appendix): with self-steepening the GNLSE conserves the
+        frequency-weighted photon number (A5) and the unweighted energy
+        legitimately changes as the spectrum moves; without it, the unweighted
+        energy is the invariant. Checking the wrong invariant produces false
+        alarms on ordinary Raman+shock runs (a −14 % energy change with the
+        photon number constant to 1e-5 was the motivating case).
+        """
+        if self.include_self_steepening:
+            if not self._photon_vs_z:
+                return
+            p0 = self._photon_vs_z[0]
+            p1 = self._photon_vs_z[-1]
+            if p0 <= 0.0:
+                return
+            drift = abs(p1 / p0 - 1.0)
+            what = "photon number"
+        else:
+            if not self._energy_vs_z:
+                return
+            e0 = self._energy_vs_z[0]
+            e1 = self._energy_vs_z[-1]
+            if e0 <= 0.0:
+                return
+            drift = abs(e1 / e0 - 1.0)
+            what = "energy"
         lossless = (self._get_alpha(self._current_z) == 0.0) and not self.include_tpa
         if lossless and drift > 0.05:
             warnings.warn(
-                f"GNLSE energy drift {drift * 100:.2f}% exceeds 5% with "
-                f"loss/TPA disabled (E₀={e0:.3e}, E={e1:.3e}). "
-                f"Reduce step size (num_steps) or check shock/Raman settings.",
+                f"GNLSE {what} drift {drift * 100:.2f}% exceeds 5% with "
+                f"loss/TPA disabled. Reduce step size (num_steps) or check "
+                f"shock/Raman settings.",
                 UserWarning,
                 stacklevel=3,
             )
+
+    @property
+    def photon_number_vs_z(self) -> NDArray:
+        """Blow & Wood (1989) App. Eq. (A5) photon number at each saved step.
+
+        Recorded only when ``include_self_steepening=True`` (the condition this
+        invariant applies to, and the case where
+        :meth:`_validate_shock_grid` guarantees ``ω₀ + Ω > 0``). Same length as
+        ``z_array``. See :meth:`_photon_number`.
+        """
+        if self._photon_vs_z is None:
+            raise RuntimeError(
+                "photon_number_vs_z is only recorded when "
+                "include_self_steepening=True; call propagate() first."
+            )
+        return np.asarray(self._photon_vs_z, dtype=float)
 
     @property
     def spectra_vs_z(self) -> tuple[NDArray, NDArray]:
@@ -1494,7 +1904,14 @@ class SplitStepEngine:
 
     @property
     def energy_vs_z(self) -> NDArray:
-        """Pulse energy ``Σ|A|²·dt`` at each saved step (same length as ``z_array``)."""
+        """Pulse energy ``Σ|A|²·dt`` at each saved step (same length as ``z_array``).
+
+        **Not an invariant when self-steepening is on.** The GNLSE conserves
+        the frequency-weighted photon number (Blow & Wood 1989, App. Eq.
+        (A5)); the unweighted energy legitimately changes as the spectrum
+        moves between frequencies. With ``include_self_steepening=True`` use
+        :attr:`photon_number_vs_z` for the conserved quantity.
+        """
         if self._energy_vs_z is None:
             raise RuntimeError("Call propagate() first.")
         return np.asarray(self._energy_vs_z, dtype=float)
@@ -1560,6 +1977,7 @@ class GNLSESolver:
         betas_unit: BetasUnit = "ps^k/m",
         tau_shock: float | None = None,
         conserving_shock: bool = False,
+        scheme: Scheme = "strang",
     ):
         self.pulse = pulse
         self.fiber = fiber
@@ -1573,6 +1991,11 @@ class GNLSESolver:
         self.check_phase_matching = check_phase_matching
         self.step_size = step_size
         self.conserving_shock = bool(conserving_shock)
+        if scheme not in _SCHEMES:
+            raise ValueError(
+                f"Unknown scheme {scheme!r}; expected one of {', '.join(_SCHEMES)}."
+            )
+        self.scheme: Scheme = scheme
         if tau_shock is not None and not tau_shock > 0.0:
             raise ValueError(
                 f"tau_shock must be positive (seconds, SI), got {tau_shock!r}"
@@ -1582,6 +2005,7 @@ class GNLSESolver:
         self._z_positions: NDArray | None = None
         self._spectra_vs_z: tuple[NDArray, NDArray] | None = None
         self._energy_vs_z: NDArray | None = None
+        self._photon_vs_z: NDArray | None = None
         self._preflight_report: SimulationReadinessReport | None = None
 
     def propagate(
@@ -1612,6 +2036,7 @@ class GNLSESolver:
             conserving_shock=self.conserving_shock,
             tau_shock=self.tau_shock,
             step_size=self.step_size,
+            scheme=self.scheme,
         )
         engine.propagate(
             num_steps,
@@ -1624,6 +2049,9 @@ class GNLSESolver:
         self._z_positions = engine.z_array
         self._spectra_vs_z = engine.spectra_vs_z
         self._energy_vs_z = engine.energy_vs_z
+        self._photon_vs_z = (
+            engine.photon_number_vs_z if engine.include_self_steepening else None
+        )
 
     @classmethod
     def estimate_num_steps(
@@ -1738,6 +2166,24 @@ class GNLSESolver:
         if self._energy_vs_z is None:
             raise RuntimeError("Call propagate() first.")
         return self._energy_vs_z
+
+    # NOTE (Stage S3 session, 2026-10): this passthrough existed on
+    # :class:`SplitStepEngine` and :class:`TaperedGNLSESolver` from the
+    # photon-number work but was missing here — `test_gnlse_photon_number.py::
+    # test_solver_passthrough` caught it.
+    @property
+    def photon_number_vs_z(self) -> NDArray:
+        """Blow & Wood (1989) App. Eq. (A5) photon number at each saved step.
+
+        Recorded only when ``include_self_steepening=True``. Same length as
+        ``z_array``; raises otherwise.
+        """
+        if self._photon_vs_z is None:
+            raise RuntimeError(
+                "photon_number_vs_z is only recorded when "
+                "include_self_steepening=True; call propagate() first."
+            )
+        return self._photon_vs_z
 
     @property
     def preflight_report(self) -> SimulationReadinessReport | None:
@@ -1863,6 +2309,7 @@ class TaperedGNLSESolver:
         self._z_positions: NDArray | None = None
         self._spectra_vs_z: tuple[NDArray, NDArray] | None = None
         self._energy_vs_z: NDArray | None = None
+        self._photon_vs_z: NDArray | None = None
         self._preflight_report: SimulationReadinessReport | None = None
         self._strict_mode = False
 
@@ -1942,6 +2389,11 @@ class TaperedGNLSESolver:
         self._z_positions = self._engine.z_array
         self._spectra_vs_z = self._engine.spectra_vs_z
         self._energy_vs_z = self._engine.energy_vs_z
+        self._photon_vs_z = (
+            self._engine.photon_number_vs_z
+            if self._engine.include_self_steepening
+            else None
+        )
 
     @property
     def evolution(self) -> list[Wave]:
@@ -1969,10 +2421,28 @@ class TaperedGNLSESolver:
 
     @property
     def energy_vs_z(self) -> NDArray:
-        """Pulse energy ``Σ|A|²·dt`` at each saved step (same length as ``z_array``)."""
+        """Pulse energy ``Σ|A|²·dt`` at each saved step (same length as ``z_array``).
+
+        Not an invariant when self-steepening is on — see
+        :meth:`photon_number_vs_z`.
+        """
         if self._energy_vs_z is None:
             raise RuntimeError("Call propagate() first.")
         return self._energy_vs_z
+
+    @property
+    def photon_number_vs_z(self) -> NDArray:
+        """Blow & Wood (1989) App. Eq. (A5) photon number at each saved step.
+
+        Recorded only when ``include_self_steepening=True``. Same length as
+        ``z_array``; raises otherwise.
+        """
+        if self._photon_vs_z is None:
+            raise RuntimeError(
+                "photon_number_vs_z is only recorded when "
+                "include_self_steepening=True; call propagate() first."
+            )
+        return self._photon_vs_z
 
     @property
     def preflight_report(self) -> SimulationReadinessReport | None:
