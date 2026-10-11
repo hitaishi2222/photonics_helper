@@ -17,13 +17,19 @@ Example: the photon-conserving shock, and the self-steepening grid guard
   reduces to one substitution, ``g_r = abs(gamma)`` where the standard
   formulation uses ``g_r = gamma``, applied to the delayed arm only.
 
-* ``_validate_shock_grid`` — the construction-time guard. The shock operator is
-  ``ω/ω₀ ≈ 1 + Ω·τ_shock``, a *first-order Taylor* form, so it has two validity
-  conditions: a hard one (``Ω_max < ω₀``; beyond it the factor describes
-  negative absolute frequencies and raises ``ValueError``) and a soft one
-  (``τ_shock·Ω_max ≤ _SHOCK_TAYLOR_LIMIT = 0.2``; beyond it the Taylor form is
-  inaccurate and the resulting photon-number drift is a *grid artifact*, so it
-  raises a ``UserWarning``).
+* ``_validate_shock_grid`` — the construction-time guard. The shock operator's
+  symbol is ``1 + Ω·τ_shock``, which **is** ``ω/ω₀ = (ω₀ + Ω)/ω₀`` exactly (no
+  Taylor truncation — ``formal/Photonics/Nonlinear/Shock.lean::
+  code_symbol_is_exact``). It has two validity conditions: a hard one
+  (``Ω_max < ω₀``; beyond it the factor describes negative absolute frequencies
+  and raises ``ValueError``) and a soft one (``τ_shock·Ω_max ≤
+  _SHOCK_TAYLOR_LIMIT = 0.2``, marking the ``< ω₀/3`` bandwidth regime in which
+  Blow & Wood derive the GNLS; beyond it raises a ``UserWarning``).
+
+  Conservation note (2026-10-27): with shock on, the conserved quantity is the
+  frequency-weighted photon number of Blow & Wood's App. Eq. (A5),
+  ``∫|Û(ω)|²/(ω₀+ω)dω`` — exposed as ``engine.photon_number_vs_z`` — not the
+  unweighted energy.
 
 They are independent. ``conserving_shock=True`` is **not** a fix for
 under-resolution, and the grid guard is **not** a conservation law. The
