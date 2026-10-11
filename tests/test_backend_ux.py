@@ -7,6 +7,7 @@ interactive backend when the intent is display (no ``save_path``), and leave
 the headless backend untouched when saving. These tests pin that contract.
 """
 
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -42,20 +43,35 @@ def forced_agg(restore_backend):
     return "Agg"
 
 
-def _interactive_backend_available() -> bool:
-    """True if at least one candidate toolkit can actually be imported."""
-    import importlib.util
+_SWITCH_PROBE = """
+import matplotlib
+matplotlib.use("Agg", force=True)
+import matplotlib.pyplot as plt
 
-    mods = {
-        "qtagg": "qtpy",
-        "TkAgg": "tkinter",
-        "gtk4agg": "gtk",
-        "gtk3agg": "gi",
-        "wxagg": "wx",
-    }
-    return any(
-        importlib.util.find_spec(m) is not None for m in mods.values()
-    ) or sys.platform == "darwin"  # macosx built-in
+for candidate in {candidates!r}:
+    try:
+        plt.switch_backend(candidate)
+    except Exception:
+        continue
+    raise SystemExit(0)
+raise SystemExit(1)
+"""
+
+
+def _interactive_backend_available() -> bool:
+    """True if at least one candidate backend can actually be loaded here.
+
+    Module presence (``find_spec``) is not enough: tkinter ships with
+    CPython but ``switch_backend`` still raises ``ImportError`` on a headless
+    machine, so probe a real switch in a throwaway subprocess instead.
+    """
+    probe = _SWITCH_PROBE.format(candidates=INTERACTIVE_BACKEND_CANDIDATES)
+    result = subprocess.run(
+        [sys.executable, "-c", probe],
+        capture_output=True,
+        timeout=60,
+    )
+    return result.returncode == 0
 
 
 requires_interactive_toolkit = pytest.mark.skipif(
@@ -94,17 +110,37 @@ class TestEnsureShowableBackend:
             assert out.exists()
             assert matplotlib.get_backend().lower() == "agg"
 
-    def test_noop_on_interactive_backend(self, restore_backend):
+    def test_noop_on_interactive_backend(self, monkeypatch, restore_backend):
         """An already-interactive backend must not be switched away from.
 
-        The session may legitimately start headless (other test modules run
-        under Agg), so first park it on an interactive backend we control,
-        then require visualize() not to change it.
+        The no-op contract is tested deterministically by reporting an
+        interactive backend and recording any switch attempt, so it runs
+        even on headless machines where no real interactive backend exists.
         """
+        monkeypatch.setattr(plt, "get_backend", lambda: "TkAgg")
+        calls: list = []
+        monkeypatch.setattr(
+            plt, "switch_backend", lambda *a, **k: calls.append((a, k))
+        )
+        from photonics_helper.pulse import _ensure_showable_backend
+
+        _ensure_showable_backend()
+        assert calls == []
+
+    @requires_interactive_toolkit
+    def test_noop_on_interactive_backend_end_to_end(self, restore_backend):
+        """End-to-end: visualize() leaves a working interactive backend alone."""
         before = matplotlib.get_backend()
         if before.lower() in HEADLESS_BACKENDS:
-            before = "TkAgg"  # tkinter ships with CPython — guaranteed present
-            plt.switch_backend(before)
+            for candidate in INTERACTIVE_BACKEND_CANDIDATES:
+                try:
+                    plt.switch_backend(candidate)
+                    before = candidate
+                    break
+                except Exception:
+                    continue
+            else:  # pragma: no cover - gated by availability probe
+                pytest.fail("availability probe passed but no backend switchable")
         w = _make_wave()
         w.visualize()
         assert matplotlib.get_backend() == before
