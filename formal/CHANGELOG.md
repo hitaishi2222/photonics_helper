@@ -716,3 +716,125 @@ metric's finer ladder collapses into the round-off floor (~1e-13) for both
 The Raman+shock run's A5 photon number is conserved to 2.2e-14 under ETDRK4.
 (The finer S0/S1 ladder is retained in §17.6 for the *2nd-order* schemes,
 where it remains informative.)
+
+## 2026-10-27 — Dudley-deck edge diagnostic: the numbers, and why they are not a ranking
+
+**What an earlier draft of this entry claimed.** From example 45 (Dudley 835 nm
+deck, 400 steps) that split-step schemes produce spurious spectral artifacts
+absent from `etdrk4`, and that the (A5) photon-number drift ranked the schemes
+`strang` 63.92 %, `yoshida4` 12.21 %, `etdrk4` < 5 %.
+
+**Two errors in that draft.**
+
+1. **The photon-number column was mislabelled.** Reproduced from the same
+   example, the (A5) drift at 400 steps is `strang` **1.43 %**, `yoshida4`
+   **63.92 %**, `etdrk4` **−12.21 %** — the draft's values sit on the wrong
+   rows. (The *artifact* column, 89 / 75 / 0, reproduces exactly.)
+2. **The causal claim does not survive a fourth scheme.** `rk4ip` (Hult 2007,
+   also no-split, also fourth order) gives **114** outlier columns — *more* than
+   `strang`. "No split ⇒ clean count" is therefore false, so `etdrk4`'s 0 is not
+   evidence that splitting is the cause.
+
+**Measured (example-45 deck, 400 steps, adaptive stepping as shipped):**
+
+| Scheme | Outlier columns | Δ (A5) photon number |
+|---|---|---|
+| `strang` | 89 | 1.43 % |
+| `yoshida4` | 75 | 63.92 % |
+| `etdrk4` | **0** | −12.21 % |
+| `rk4ip` | 114 | 3.05 % |
+
+**Why neither column ranks the schemes.** The outlier count is the variance of
+the dB spectrum across `z` at each wavelength; on a supercontinuum deck the
+long-wavelength edge genuinely builds up over `z`, so a large column variance
+there is *physical*, not numerical. And the (A5) weight `1/(ω₀+Ω)` is
+near-singular at the grid's red edge (`Ω_max/ω₀ ≈ 0.91` on this deck), so that
+drift is dominated by the least-resolved bins. Both metrics are edge
+diagnostics; a ranking drawn from them is a ranking of the red edge, not of the
+integrator. The scheme-quality evidence is the fixed-grid `order_study` on a
+well-posed deck (S0/S1/S3 below, and Stage S5 for `rk4ip`) plus the
+conservation tests.
+
+**Python side.** The example header now states this, and the drift warning
+suggests `--num-steps` or the no-split schemes (`etdrk4` / `rk4ip`). `strang`
+remains the default.
+
+**Lean side:** not implicated — the composition theorems (`Composition.lean`)
+prove the commuting case they state, and no theorem claimed either metric
+measured splitting error.
+
+## 2026-10-(S5 session) — Stage S5: proper RK4IP implemented (`scheme="rk4ip"`)
+
+The stage proposed in `PLAN.md` §18. `SplitStepEngine` gained a fourth
+`scheme`, `"rk4ip"` — Hult's fourth-order Runge–Kutta *in the interaction
+picture* (J. Hult, *J. Lightwave Technol.* **25**(12), 3770 (2007), Eq. (12)).
+The outer-level transform `A_I = exp(hL̂/2)·A` is applied exactly (the linear
+operator is diagonal in the Fourier basis, so it is `_linear_step`) and only
+the nonlinear remainder is advanced by classical RK4. There is no splitting,
+so no `[L,N]` commutator error; cost is 4 half transforms + 4 nonlinear
+evaluations per step (the source's published 8 FFTs for the Kerr-only case,
+before each nonlinear evaluation's own Raman/shock transforms). `GNLSESolver`
+passes `scheme` through. TPA and free carriers are rejected with
+`NotImplementedError` (they live in the split-step nonlinear stage, not in
+`N̂`), matching the ETDRK4 scope guard.
+
+### Measured
+
+- **Fourth order.** Scalar Riccati `u' = λu − u²` against the exact solution:
+  halving ratios ≈ 1/16. N=3 soliton deck (1550 nm, fixed grid, step-only
+  ladder `[100, 200, 400, 800, 1600]`): field order **3.96** — against
+  `strang` 2.00 and `etdrk4` 3.99 on the same ladder, so `rk4ip` sits on the
+  no-split fourth-order curve.
+- **(A5) conserved** to < 1e-10 on the N=3 Raman + shock deck — the invariant
+  the scheme is expected to respect.
+- **Full suite:** 1187 passed, 6 skipped, no regressions.
+
+### The gate criterion that failed — and why it was the metric
+
+The plan's §18.5 gate 3 asked for "artifact count 0 at 400 steps" on the
+example-45 deck. Measured: `rk4ip` **114**, `strang` 89, `yoshida4` 75,
+`etdrk4` **0**. Two no-split fourth-order schemes score 0 and 114, so the
+count is not detecting splitting error at all — it is the `z`-variance of the
+dB spectrum, which mostly tracks the physical long-wavelength edge buildup
+(see the corrected 2026-10-27 entry above). Gate 4 (photon drift < 5 % at 400
+steps) **passed**: `rk4ip` 3.05 %.
+
+### A second finding: the example-45 deck is not asymptotic
+
+With the temporal grid held fixed and only `dz` varied (the S0 methodology),
+the example-45 deck does not converge under refinement for *any* scheme:
+`order_study` refuses to report an order (field order −0.09 over `[100, 200,
+400]` steps), because the consecutive field differences are not monotonically
+decreasing. The deck (`τ_shock·Ω_max ≈ 0.91`, self-steepening symbol near the
+red edge) is not in the asymptotic regime at practical step counts, so none of
+its scheme-comparison metrics can rank integrators. The example's internal
+`build_solver` now fixes `step_size = L/num_steps` so at least its ladders vary
+only `dz`, and its header says the A5/artifact panels are edge diagnostics.
+
+### Lean side
+
+`Photonics/Solvers/RK4IP.lean` — sorry-free, added to `Photonics.lean` (7
+theorems + 3 definitions):
+
+- `linStep_comp_inv`, `linStep_comp` — the per-bin transform pair is an
+  involution and the propagators form a one-parameter group.
+- `rk4ipStep_linear` — with `N = 0` the step is exactly `linStep φ h`; the
+  linear flow is carried with no approximation (no splitting error).
+- `linStep_zero`, `classicalRK4`, `rk4ipStep_no_dispersion` — with `L = 0`
+  the scheme collapses to the classical RK4 combination that `RK4.lean`
+  proves fourth-order.
+- `hasDerivAt_ipPhase`, `interactionPicture_removes_linear` — the continuous
+  statement that the picture removes the `iφA` term exactly.
+
+Register rows S24–S28 in `CONFORMANCE.md`. The scalar constant-coefficient
+shadow (`RK4.ipStep`, rows H4/H7) already existed; this file is the per-bin,
+general-`N` transcription of the shipped `_rk4ip_step`.
+
+### Tests
+
+`tests/test_gnlse_rk4ip.py` (11): transform-pair inverse, exact linear flow,
+`L = 0` ⇒ classical RK4, scalar order-4, engine benchmark vs `strang` /
+`etdrk4`, distance advanced, energy drift O(dz⁴), (A5) conservation with
+Raman + shock, scope guard, and `GNLSESolver` scheme passthrough.
+
+
