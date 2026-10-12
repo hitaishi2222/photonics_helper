@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from math import factorial
 from typing import TYPE_CHECKING, Any, Literal, TypeAlias
 
@@ -131,9 +131,9 @@ def _etdrk4_scalar_coeffs(x: NDArray, h: float) -> tuple[NDArray, NDArray, NDArr
     return Q * h, f1 * h, f2 * h, f3 * h
 
 #: Valid ``scheme`` values for :class:`SplitStepEngine`.
-Scheme: TypeAlias = Literal["strang", "yoshida4", "etdrk4"]
+Scheme: TypeAlias = Literal["strang", "yoshida4", "etdrk4", "rk4ip"]
 
-_SCHEMES = ("strang", "yoshida4", "etdrk4")
+_SCHEMES = ("strang", "yoshida4", "etdrk4", "rk4ip")
 
 
 def _validate_betas_unit(betas_unit: str) -> str:
@@ -200,6 +200,8 @@ if TYPE_CHECKING:
     FigureLike: TypeAlias = MplFigure | PlotlyFigure
 
 __all__ = [
+    "ConvergenceDiagnostics",
+    "DRIFT_WARN_PCT",
     "FiberProfile",
     "GNLSESolver",
     "SplitStepEngine",
@@ -684,8 +686,11 @@ class SplitStepEngine:
         ``iγτ_shock ∂_t(A·P_NL)`` is advanced with frequency-domain RK4 (the
         RK4IP idea of Hult 2007 / Hochbruck & Ostermann 2010). The shock
         factor is never clamped (see :meth:`_validate_shock_grid`). Enable
-        explicitly for cross-library comparisons; laserfun defaults to shock
-        on (but its shock term has the opposite linear-in-Ω asymmetry).
+        explicitly for cross-library comparisons. laserfun defaults to shock
+        on and uses the same physical factor ``ω/ω₀ = 1 + Ω/ω₀``
+        (``laserfun/laserfun/nlse.py`` sets ``gamma = gamma/ω₀`` and
+        ``w = Ω + ω₀``); the two libraries agree on the shock sign once both
+        are run at a converged step size.
 
         Sign audit (2026): the multiplier ``1 + Ω·τ_shock`` is the correct
         physical factor ``ω/ω₀`` under this codebase's FFT convention. The
@@ -698,9 +703,7 @@ class SplitStepEngine:
         (Gordon SSFS), (ii) a fundamental soliton with shock and β₂ only
         develops a blue-shifted centroid and positive spectral skew with
         ``1 + Ω·τ`` and the mirror-image red shift with ``1 − Ω·τ``, and
-        (iii) energy is conserved. laserfun's opposite raw-bin asymmetry
-        follows from its own (unshifted-FFT) convention, not from different
-        physics.
+        (iii) energy is conserved.
     include_tpa : bool
         Include TPA (legacy spatially-averaged carrier model). Default False.
     include_free_carriers : bool
@@ -728,6 +731,16 @@ class SplitStepEngine:
         — the flag is a no-op. It only has an effect when ``γ < 0`` (the
         sign bench used in ``reproductions/huang_202x_pcgnlse_attractors/``).
         Requires ``include_raman=True`` and a Raman response.
+    scheme : {"strang", "yoshida4", "etdrk4", "rk4ip"}
+        Composition/integration scheme. ``"strang"`` (default) is the
+        second-order symmetric splitting of Blow & Wood (1989) Eq. (17);
+        ``"yoshida4"`` composes three Strang steps with Suzuki weights for
+        fourth order; ``"etdrk4"`` is the fourth-order exponential RK4 of
+        Cox & Matthews (2002) — no splitting; ``"rk4ip"`` is Hult's
+        fourth-order Runge–Kutta in the interaction picture (2007) — also
+        no splitting, with the linear propagator applied exactly and the
+        nonlinear remainder advanced by classical RK4. See :meth:`_advance`
+        for the algebra and the trade-offs.
     step_size : Length | None
         Fixed step size (m). If None, adaptive stepping is used.
     min_shrink_factor : float
@@ -1120,10 +1133,11 @@ class SplitStepEngine:
 
         The shock sign ``(1 + Ω·τ_shock)`` (rather than ``1 − Ω·τ_shock``) is
         the convention that reproduces the paper's femtosecond SCG, where
-        self-steepening counteracts the Raman self-frequency red-shift.
-        laserfun applies the opposite linear-in-Ω asymmetry, so a
-        cross-library shock comparison disagrees (tracked in
-        ``tests/test_gnlse_regression.py``).
+        self-steepening counteracts the Raman self-frequency red-shift. This
+        is the same factor laserfun applies (``gamma/ω₀`` times ``Ω + ω₀`` in
+        ``laserfun/laserfun/nlse.py``); the apparent cross-library
+        disagreement reported in earlier revisions was step resolution, not
+        a sign convention.
 
         The grid must satisfy ``Ω_max < ω₀`` when self-steepening is enabled;
         :meth:`_validate_shock_grid` enforces this at construction.
@@ -1549,6 +1563,84 @@ class SplitStepEngine:
         A_new_w = E * A_w + N0_w * f1 + 2.0 * (Na_w + Nb_w) * f2 + Nc_w * f3
         return np.asarray(self.grid.ifft(A_new_w), dtype=complex)
 
+    def _rk4ip_step(self, A: NDArray, dz: float) -> NDArray:
+        """One RK4IP step in the interaction picture (Hult 2007, Eq. (12)).
+
+        The GNLSE step is ``∂_zA = L·A + N(A)`` with ``L`` diagonal in the
+        Fourier basis. Hult's fourth-order Runge–Kutta *in the interaction
+        picture* (J. Hult, *J. Lightwave Technol.* **25**(12), 3770 (2007),
+        Eq. (12); Hochbruck & Ostermann, *Acta Numerica* **19**, 209 (2010))
+        applies the interaction-picture transform at the **outer** level, so
+        the linear operator is never *split* against the nonlinearity — it is
+        carried exactly, and only the nonlinear remainder is advanced by
+        classical RK4:
+
+        ```
+        A_I = D(A, +h/2)                     # transform to the picture
+        k₁  = D(h·N̂(A), +h/2)               # N̂ evaluated in the normal picture
+        k₂  = h·N̂(A_I + k₁/2)
+        k₃  = h·N̂(A_I + k₂/2)
+        k₄  = h·N̂(D(A_I + k₃, +h/2))        # one half transform back and forth
+        A⁺  = D(A_I + (k₁ + 2k₂ + 2k₃)/6, +h/2) + k₄/6
+        ```
+
+        where :meth:`_linear_step` is the exact diagonal propagator ``D(A, h)``
+        (dispersion + loss) and :meth:`_nonlinear_rhs` is the nonlinear
+        remainder ``N̂(A)`` — the same vector field ETDRK4 advances, so
+        Raman, self-steepening and the pcGNLSE shock variant ride along.
+
+        The separation distance is the step *midpoint* (``+h/2`` transforms), which
+        is the symmetric choice of the source; the four half transforms and four
+        nonlinear evaluations are the published 8 FFTs per step of the method
+        (each nonlinear evaluation adds its own Raman convolution / shock
+        derivative transforms on top, exactly as in the splittings' ``N`` step).
+
+        **No splitting error.** ``exp(h(L+N))`` is approximated by the RK4
+        composition of the transformed flow rather than by a product of
+        ``exp(hL)`` and ``exp(hN)``, so the ``[L, N]`` commutator error that
+        the splittings carry is simply absent. (This does *not* by itself
+        make every edge diagnostic vanish: the Blow & Wood (A5) photon
+        number of example 45 is weighted by ``1/(ω₀+Ω)`` and dominated by
+        the near-singular long-wavelength edge, so on that deck it is an
+        edge-sensitive diagnostic and not a clean scheme ranking — see
+        ``formal/CHANGELOG.md`` Stage S5.) For a purely linear flow
+        (``N̂ = 0``) the scheme integrates exactly — pinned by
+        ``tests/test_gnlse_rk4ip.py``, which also measures the fourth-order
+        rate on a scalar problem with an exact reference.
+
+        Stage S5 of ``formal/PLAN.md`` §18. The TPA and free-carrier operators
+        are applied by the split-step nonlinear stage and are *not* part of
+        ``N̂``, so they are rejected here rather than silently dropped.
+        """
+        if self.include_tpa or self.include_free_carriers:
+            raise NotImplementedError(
+                "scheme='rk4ip' advances only the nonlinear remainder N̂(A) "
+                "(Kerr + Raman + shock); the TPA and free-carrier operators "
+                "live in the split-step nonlinear stage and are not part of "
+                "it. Use scheme='strang' (default) or 'yoshida4' for those "
+                "decks."
+            )
+
+        gamma = self._get_gamma(self._current_z)
+
+        def rhs(state: NDArray) -> NDArray:
+            return self._nonlinear_rhs(state, gamma)
+
+        half = 0.5 * dz
+        # Transform into the interaction picture at the step midpoint.
+        A_I = self._linear_step(A, half)
+        # k₁ is a nonlinear evaluation in the *normal* picture, projected
+        # forward by the same half transform.
+        k1 = self._linear_step(dz * rhs(A), half)
+        k2 = dz * rhs(A_I + 0.5 * k1)
+        k3 = dz * rhs(A_I + 0.5 * k2)
+        # k₄ is evaluated one half-step ahead: transform there, evaluate,
+        # and stay in the normal picture for the final combination.
+        k4 = dz * rhs(self._linear_step(A_I + k3, half))
+        return self._linear_step(
+            A_I + (k1 + 2.0 * k2 + 2.0 * k3) / 6.0, half
+        ) + k4 / 6.0
+
     def _strang_step(self, A: NDArray, dz: float) -> NDArray:
         """One symmetric Strang step ``exp(L dz/2) · exp(N dz) · exp(L dz/2)``.
 
@@ -1594,11 +1686,21 @@ class SplitStepEngine:
         See :meth:`_etdrk4_step` for the coefficient evaluation and the
         DC-bin failure mode it guards against (``formal/PLAN.md`` §17.4(b),
         Stage S3).
+
+        ``scheme="rk4ip"`` applies Hult's fourth-order Runge–Kutta in the
+        interaction picture (2007, Eq. (12)) at the *outer* level: the
+        exact linear propagator is never split against the nonlinearity, so
+        there is no ``[L, N]`` commutator error, and the scheme is fourth
+        order at 4 nonlinear evaluations plus 4 half transforms per ``dz``
+        (8 FFTs, the source's published cost). Stage S5 of
+        ``formal/PLAN.md`` §18; see :meth:`_rk4ip_step`.
         """
         if self.scheme == "strang":
             return self._strang_step(A, dz)
         if self.scheme == "etdrk4":
             return self._etdrk4_step(A, dz)
+        if self.scheme == "rk4ip":
+            return self._rk4ip_step(A, dz)
         for weight in YOSHIDA4_WEIGHTS:
             A = self._strang_step(A, weight * dz)
         return A
@@ -1870,11 +1972,13 @@ class SplitStepEngine:
             drift = abs(e1 / e0 - 1.0)
             what = "energy"
         lossless = (self._get_alpha(self._current_z) == 0.0) and not self.include_tpa
-        if lossless and drift > 0.05:
+        if lossless and drift > 0.01:
             warnings.warn(
-                f"GNLSE {what} drift {drift * 100:.2f}% exceeds 5% with "
-                f"loss/TPA disabled. Reduce step size (num_steps) or check "
-                f"shock/Raman settings.",
+                f"GNLSE {what} drift {drift * 100:.2f}% exceeds 1% with "
+                f"loss/TPA disabled. This is the coarse conservation guard; "
+                "it can stay below 1% while the spectrum is still "
+                "under-resolved. Reduce the step size (increase num_steps) "
+                "and cross-check with GNLSESolver.verify_convergence().",
                 UserWarning,
                 stacklevel=3,
             )
@@ -1918,6 +2022,164 @@ class SplitStepEngine:
 
 
 # ---------------------------------------------------------------------------
+# Conservation + self-convergence diagnostics
+# ---------------------------------------------------------------------------
+
+#: Relative drift of the conserved invariant above which a run is flagged.
+DRIFT_WARN_PCT = 1.0
+
+
+def _max_drift_pct(series: NDArray | list[float]) -> float:
+    """Maximum relative departure from the initial value, in percent."""
+    arr = np.asarray(series, dtype=float)
+    if arr.size < 2:
+        return 0.0
+    if not np.all(np.isfinite(arr)):
+        # A blown-up / NaN run must never read as "0 % drift".
+        return float("inf")
+    if arr[0] == 0.0:
+        return 0.0
+    return float(np.max(np.abs(arr - arr[0])) / abs(arr[0]) * 100.0)
+
+
+def _smooth_1d(y: NDArray, window: int) -> NDArray:
+    """Moving-average smoothing (length-preserving, edge = zero pad)."""
+    window = int(window)
+    if window <= 1 or y.size <= window:
+        return np.asarray(y, dtype=float)
+    kernel = np.ones(window, dtype=float) / float(window)
+    return np.convolve(np.asarray(y, dtype=float), kernel, mode="same")
+
+
+def _sorted_spectrum(
+    grid: Any, A: NDArray, omega0: float
+) -> tuple[NDArray, NDArray]:
+    """Power spectrum on an ascending wavelength axis.
+
+    Returns ``(wavelength_nm, |Â|²)`` both sorted by wavelength, so the pair
+    is directly comparable and plottable. Bins whose absolute frequency
+    ``ω₀ + Ω`` would be non-positive are dropped (the wavelength map is only
+    physical for positive optical frequency).
+    """
+    S = np.abs(grid.fft(np.asarray(A, dtype=complex))) ** 2
+    omega = omega0 + grid.w
+    valid = omega > 0.0
+    S = S[valid]
+    wl = 2.0 * np.pi * C_MS / omega[valid] * 1e9
+    order = np.argsort(wl)
+    return wl[order], S[order]
+
+
+def _self_convergence_metrics(
+    wl: NDArray,
+    S_coarse: NDArray,
+    S_fine: NDArray,
+    A_coarse: NDArray,
+    A_fine: NDArray,
+    *,
+    floor_db: float = -40.0,
+    smooth_window: int = 9,
+) -> tuple[float, float, float]:
+    """Phase-robust comparison of two solutions on the same wavelength axis.
+
+    Returns ``(rms_db, peak_shift_nm, overlap)`` where ``rms_db`` is the RMS
+    of the smoothed dB-spectrum difference over the band where the finer
+    solution is above ``floor_db``, ``peak_shift_nm`` the shift of the
+    spectral peak, and ``overlap`` the modal projection
+    ``|⟨A_c, A_f⟩|² / (‖A_c‖²‖A_f‖²)`` (1 = identical mode).
+
+    The raw field L2 distance is deliberately **not** used: on a
+    multi-soliton state it stays O(1) even when the spectra agree, because a
+    sub-pulse position/phase change is enough to decorrelate the fields.
+    """
+    sc = np.asarray(S_coarse, dtype=float)
+    sf = np.asarray(S_fine, dtype=float)
+    sc = sc / max(float(sc.max()), 1e-300)
+    sf = sf / max(float(sf.max()), 1e-300)
+    db_c = 10.0 * np.log10(sc + 1e-30)
+    db_f = 10.0 * np.log10(sf + 1e-30)
+    band = db_f > float(floor_db)
+    if int(band.sum()) < 8:
+        band = np.ones_like(db_f, dtype=bool)
+    diff = np.abs(
+        _smooth_1d(db_c, smooth_window) - _smooth_1d(db_f, smooth_window)
+    )[band]
+    rms_db = float(np.sqrt(np.mean(diff**2)))
+    peak_shift = float(abs(wl[int(np.argmax(sc))] - wl[int(np.argmax(sf))]))
+    a = np.asarray(A_coarse, dtype=complex).ravel()
+    b = np.asarray(A_fine, dtype=complex).ravel()
+    denom = float(np.vdot(a, a).real * np.vdot(b, b).real)
+    overlap = float(abs(np.vdot(a, b)) ** 2 / denom) if denom > 0.0 else 1.0
+    # A non-finite field (blow-up) must read as maximally unconverged, not NaN.
+    if not np.isfinite(rms_db):
+        rms_db = float("inf")
+    if not np.isfinite(peak_shift):
+        peak_shift = float("inf")
+    if not np.isfinite(overlap):
+        overlap = 0.0
+    return rms_db, peak_shift, overlap
+
+
+@dataclass
+class ConvergenceDiagnostics:
+    """Conservation + self-convergence diagnostics for one GNLSE run.
+
+    Produced by :meth:`GNLSESolver.verify_convergence`. ``drift_pct`` is the
+    maximum relative drift of the conserved invariant across the recorded
+    steps (Blow & Wood (A5) photon number with self-steepening, unweighted
+    energy otherwise). The convergence columns compare the run against a
+    second run at ``probe_steps`` steps: ``rms_db`` (in-band, smoothed),
+    ``peak_shift_nm`` and ``overlap``.
+    """
+
+    scheme: str
+    num_steps: int
+    dz_m: float
+    probe_steps: int
+    invariant: str
+    drift_pct: float
+    drift_tol_pct: float
+    rms_db: float
+    peak_shift_nm: float
+    overlap: float
+    rms_tol_db: float
+    peak_tol_nm: float
+    overlap_tol: float
+    notes: list[str] = field(default_factory=list)
+
+    @property
+    def converged(self) -> bool:
+        """True when conservation and every convergence metric are within tol."""
+        drift_ok = self.invariant == "n/a" or self.drift_pct <= self.drift_tol_pct
+        return bool(
+            drift_ok
+            and self.rms_db <= self.rms_tol_db
+            and self.peak_shift_nm <= self.peak_tol_nm
+            and self.overlap >= self.overlap_tol
+        )
+
+    def summary(self) -> str:
+        """Human-readable multi-line table; ends with the verdict."""
+        probe_factor = self.probe_steps / max(self.num_steps, 1)
+        verdict = "CONVERGED" if self.converged else "NOT CONVERGED"
+        lines = [
+            "GNLSE conservation + convergence diagnostics",
+            f"  scheme={self.scheme}  steps={self.num_steps}  "
+            f"dz={self.dz_m:.3e} m  probe={self.probe_steps} "
+            f"({probe_factor:g}x)",
+            f"  invariant drift (max): {self.drift_pct:.4f} %  "
+            f"[{self.invariant}, tol {self.drift_tol_pct:.2f} %]",
+            f"  self-convergence: rms {self.rms_db:.3f} dB "
+            f"(tol {self.rms_tol_db:g}) | peak shift {self.peak_shift_nm:.3f} nm "
+            f"(tol {self.peak_tol_nm:g}) | overlap {self.overlap:.5f} "
+            f"(tol {self.overlap_tol:g})",
+        ]
+        lines.extend(f"  note: {note}" for note in self.notes)
+        lines.append(f"  verdict: {verdict}")
+        return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
 
 
 class GNLSESolver:
@@ -1955,6 +2217,10 @@ class GNLSESolver:
         ``fiber.sigma_fca``. Default False.
     check_phase_matching : bool
         Run the phase-matching preflight and emit warnings before propagating.
+    scheme : {"strang", "yoshida4", "etdrk4", "rk4ip"}
+        Composition/integration scheme passed to :class:`SplitStepEngine`
+        (default ``"strang"``). ``"etdrk4"`` and ``"rk4ip"`` are the two
+        fourth-order no-split options; see :meth:`SplitStepEngine._advance`.
     step_size : Length | None
         Fixed split-step size (m). If ``None`` (default), the engine uses its
         adaptive step heuristic. Supply an explicit value for deterministic,
@@ -2007,25 +2273,15 @@ class GNLSESolver:
         self._energy_vs_z: NDArray | None = None
         self._photon_vs_z: NDArray | None = None
         self._preflight_report: SimulationReadinessReport | None = None
+        #: Records of the most recent :meth:`propagate` call, used by
+        #: :meth:`verify_convergence` to reconstruct a matching probe run.
+        self._last_num_steps: int = 100
+        self._last_nsaves: int | None = None
+        self._last_raman_noise: bool = False
 
-    def propagate(
-        self,
-        num_steps: int = 100,
-        *,
-        nsaves: int | None = None,
-        show_progress: bool = False,
-        raman_noise: bool = False,
-        noise_seed: int | None = None,
-    ) -> None:
-        """Run split-step simulation for num_steps steps."""
-        if self.check_phase_matching:
-            from .phase_matching import emit_readiness_warnings
-
-            report = self.preflight_report
-            if report is not None:
-                emit_readiness_warnings(report)
-
-        engine = SplitStepEngine(
+    def _make_engine(self, step_size: Length | None) -> SplitStepEngine:
+        """Build a :class:`SplitStepEngine` from this solver's configuration."""
+        return SplitStepEngine(
             pulse=self.pulse,
             fiber=self.fiber,
             betas=self.betas,
@@ -2035,9 +2291,43 @@ class GNLSESolver:
             include_free_carriers=self.include_free_carriers,
             conserving_shock=self.conserving_shock,
             tau_shock=self.tau_shock,
-            step_size=self.step_size,
+            step_size=step_size,
             scheme=self.scheme,
         )
+
+    def propagate(
+        self,
+        num_steps: int = 100,
+        *,
+        nsaves: int | None = None,
+        show_progress: bool = False,
+        raman_noise: bool = False,
+        noise_seed: int | None = None,
+        verify: bool = False,
+        verify_probe_factor: int = 2,
+        verify_kwargs: dict[str, Any] | None = None,
+    ) -> None:
+        """Run split-step simulation for num_steps steps.
+
+        Parameters
+        ----------
+        verify : bool
+            If True, run :meth:`verify_convergence` after propagating and
+            print its table (a second, finer propagation; roughly doubles the
+            runtime). Default False.
+        verify_probe_factor : int
+            Step-count multiplier for the verification probe (default 2).
+        verify_kwargs : dict, optional
+            Extra keyword arguments forwarded to :meth:`verify_convergence`.
+        """
+        if self.check_phase_matching:
+            from .phase_matching import emit_readiness_warnings
+
+            report = self.preflight_report
+            if report is not None:
+                emit_readiness_warnings(report)
+
+        engine = self._make_engine(self.step_size)
         engine.propagate(
             num_steps,
             nsaves=nsaves,
@@ -2052,6 +2342,147 @@ class GNLSESolver:
         self._photon_vs_z = (
             engine.photon_number_vs_z if engine.include_self_steepening else None
         )
+        self._last_num_steps = int(num_steps)
+        self._last_nsaves = nsaves
+        self._last_raman_noise = bool(raman_noise)
+
+        if verify:
+            probe_kwargs: dict[str, Any] = dict(verify_kwargs or {})
+            probe_kwargs.setdefault("probe_factor", verify_probe_factor)
+            self.verify_convergence(num_steps=int(num_steps), **probe_kwargs)
+
+    def verify_convergence(
+        self,
+        *,
+        num_steps: int | None = None,
+        probe_factor: int = 2,
+        drift_tol_pct: float = DRIFT_WARN_PCT,
+        rms_tol_db: float = 0.5,
+        peak_tol_nm: float = 2.0,
+        overlap_tol: float = 0.99,
+        floor_db: float = -40.0,
+        smooth_window: int = 9,
+        warn: bool = True,
+    ) -> ConvergenceDiagnostics:
+        """Conservation + self-convergence table for the last propagation.
+
+        Compares the stored result against a fresh run at ``probe_factor``
+        times the step count and reports, in one table, the maximum drift of
+        the conserved invariant and three phase-robust convergence metrics.
+        A run is only ``converged`` when **both** pass.
+
+        The probe uses uniform steps: the coarse step is ``step_size`` when it
+        was fixed, otherwise ``length / num_steps``. Verification therefore
+        describes uniform-step refinement; on an adaptive run it is a proxy,
+        not the exact adaptive schedule.
+
+        Parameters
+        ----------
+        num_steps : int, optional
+            Step count of the run being verified. Defaults to the value
+            recorded by the last :meth:`propagate` call.
+        probe_factor : int
+            Step-count multiplier for the finer run (must be >= 2).
+        warn : bool
+            Emit a :class:`UserWarning` when the verdict is not converged.
+
+        Returns
+        -------
+        ConvergenceDiagnostics
+            Also printed via :meth:`ConvergenceDiagnostics.summary`.
+        """
+        if not self._evolution:
+            raise RuntimeError("Call propagate() before verify_convergence().")
+        if probe_factor < 2:
+            raise ValueError(f"probe_factor must be >= 2, got {probe_factor!r}")
+        if self._last_raman_noise:
+            raise ValueError(
+                "verify_convergence() needs a deterministic run; raman_noise=True "
+                "requires an ensemble of trials, not a single field pair."
+            )
+
+        n_coarse = int(num_steps if num_steps is not None else self._last_num_steps)
+        length = self.fiber.length.as_m
+        if self.step_size is not None:
+            dz_coarse = self.step_size.as_m
+        else:
+            dz_coarse = length / max(n_coarse, 1)
+        n_fine = max(n_coarse * int(probe_factor), n_coarse + 1)
+        dz_fine = dz_coarse / float(probe_factor)
+
+        fine = self._make_engine(Length(dz_fine, "m"))
+        fine.propagate(n_fine, nsaves=2, show_progress=False)
+        A_fine = np.asarray(fine.evolution[-1].envelope_field, dtype=complex)
+        A_coarse = np.asarray(self._evolution[-1].envelope_field, dtype=complex)
+
+        grid = self.pulse.grid
+        omega0 = float(self.pulse.central_frequency)
+        wl, S_coarse = _sorted_spectrum(grid, A_coarse, omega0)
+        _, S_fine = _sorted_spectrum(grid, A_fine, omega0)
+        rms_db, peak_shift_nm, overlap = _self_convergence_metrics(
+            wl,
+            S_coarse,
+            S_fine,
+            A_coarse,
+            A_fine,
+            floor_db=floor_db,
+            smooth_window=smooth_window,
+        )
+
+        lossless = (
+            float(self.fiber.alpha) == 0.0
+            and not self.include_tpa
+            and not self.include_free_carriers
+        )
+        notes: list[str] = []
+        if lossless:
+            if self.include_self_steepening:
+                invariant = "photon number (Blow & Wood A5)"
+                drift = _max_drift_pct(self.photon_number_vs_z)
+            else:
+                invariant = "energy"
+                drift = _max_drift_pct(self.energy_vs_z)
+        else:
+            invariant = "n/a (loss/gain/free-carrier run)"
+            drift = 0.0
+            notes.append(
+                "drift is not an error proxy here: loss/gain/TPA/free "
+                "carriers change the invariant by design"
+            )
+        if self.step_size is None:
+            notes.append(
+                "adaptive run: probe uses uniform steps at the nominal "
+                "dz = length/num_steps"
+            )
+
+        diag = ConvergenceDiagnostics(
+            scheme=str(self.scheme),
+            num_steps=n_coarse,
+            dz_m=dz_coarse,
+            probe_steps=n_fine,
+            invariant=invariant,
+            drift_pct=drift,
+            drift_tol_pct=float(drift_tol_pct),
+            rms_db=rms_db,
+            peak_shift_nm=peak_shift_nm,
+            overlap=overlap,
+            rms_tol_db=float(rms_tol_db),
+            peak_tol_nm=float(peak_tol_nm),
+            overlap_tol=float(overlap_tol),
+            notes=notes,
+        )
+        print(diag.summary())
+        if warn and not diag.converged:
+            warnings.warn(
+                f"GNLSE {self.scheme} run at {n_coarse} steps is not "
+                f"self-converged: drift {diag.drift_pct:.3f}% "
+                f"({diag.invariant}), rms {diag.rms_db:.3f} dB, peak shift "
+                f"{diag.peak_shift_nm:.3f} nm, overlap {diag.overlap:.4f}. "
+                "Refine the step count before trusting spectral detail.",
+                UserWarning,
+                stacklevel=2,
+            )
+        return diag
 
     @classmethod
     def estimate_num_steps(

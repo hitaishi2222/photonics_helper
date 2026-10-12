@@ -121,7 +121,7 @@ def test_shock_delays_peak_trailing_edge_steepens():
 
 
 def test_energy_monitor_records_and_warns():
-    """energy_vs_z populated; >5% drift with no loss/TPA raises UserWarning."""
+    """energy_vs_z populated; >1% drift with no loss/TPA raises UserWarning."""
     wave = _shock_wave()
     fiber = _fiber()
     eng = SplitStepEngine(
@@ -147,7 +147,7 @@ def test_energy_monitor_records_and_warns():
     eng2.propagate(5, nsaves=3)
     assert len(eng2.energy_vs_z) == 3
     # Corrupt the final energy to simulate drift and check the warn branch
-    # exercises the >5% threshold with the drift magnitude named.
+    # exercises the >1% threshold with the drift magnitude named.
     eng2._energy_vs_z = [1.0, 1.0, 0.90]
     with pytest.warns(UserWarning, match="energy drift 10.00%"):
         eng2._emit_energy_drift_warning()
@@ -166,7 +166,7 @@ def test_energy_monitor_records_and_warns():
             include_self_steepening=True,
             step_size=Length(5e-5, "m"),
         )
-        eng3.propagate(10, nsaves=4)  # must not warn: drift  << 5%
+        eng3.propagate(10, nsaves=4)  # must not warn: drift  << 1%
 
 
 # ---------------------------------------------------------------------------

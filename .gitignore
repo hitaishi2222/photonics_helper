@@ -59,6 +59,9 @@ oe2001_checkpoint_A.pt
 .vscode/
 .claude/
 
+# Scratch / one-off investigation scripts (local only, do not commit)
+scratch/
+
 # Lean 4 formal development (formal/)
 formal/.lake/
 

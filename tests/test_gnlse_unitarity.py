@@ -222,7 +222,7 @@ def test_photon_number_conserved_constant_drive():
 
 
 def test_full_run_no_drift_warning_on_resolved_config():
-    """A config with drift below the 5 % monitor threshold must not warn."""
+    """A config with drift below the 1 % monitor threshold must not warn."""
     wave = _dudley_wave(n=8192, tmax_s=12.5e-12)
     engine = SplitStepEngine(
         pulse=wave,

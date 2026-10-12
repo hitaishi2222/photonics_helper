@@ -29,4 +29,5 @@ import Photonics.Solvers.RK4
 import Photonics.Solvers.Strang
 import Photonics.Solvers.Composition
 import Photonics.Solvers.Etdrk4
+import Photonics.Solvers.RK4IP
 import Photonics.Solvers.Dispersion

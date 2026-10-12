@@ -363,16 +363,17 @@ class TestSelfSteepeningConservation:
         lf_sw /= lf_sw.max()
         corr = np.corrcoef(ph_sw, lf_sw)[0, 1]
         # laserfun integrates the full RHS with an adaptive ODE solver while
-        # photonics_helper uses split-step + frequency-domain RK4.  The two
-        # libraries also apply the self-steepening Ω-asymmetry with opposite
-        # signs: photonics_helper's ``(1 + Ω/ω₀)`` reproduces the paper's
-        # femtosecond SCG (self-steepening counteracts the Raman red-shift),
-        # whereas laserfun uses the opposite asymmetry.  Matching laserfun
-        # here would require flipping the sign, which breaks the Fig. 3
-        # reproduction (red edge runs to >2 µm).  Keep this as a documented
-        # xfail; see REVIEW_STEP1.md and reproductions/dudley_2006_scg/.
+        # photonics_helper uses split-step + frequency-domain RK4; the two
+        # libraries apply the *same* self-steepening factor
+        # ω/ω₀ = 1 + Ω/ω₀ (verified against laserfun/laserfun/nlse.py:
+        # `gamma = gamma/w0`, `w = v + w0`). The correlation is high on a
+        # resolved run; a low value here indicates under-resolution, not a
+        # sign convention.
         if corr <= 0.95:
-            pytest.xfail(f"laserfun shock-sign convention differs (corr={corr:.3f})")
+            pytest.xfail(
+                f"laserfun correlation below 0.95 (corr={corr:.3f}); "
+                "check step resolution"
+            )
         assert corr > 0.95
 
 

@@ -596,6 +596,16 @@ states in a docstring is now a theorem.
 | — | (Python) **coefficient evaluation**: exact (Taylor near `|x|<0.5`, defining formulas away) | `_etdrk4_scalar_coeffs` (`gnlse.py`) | Cox & Matthews' own advisory for small '|λh|'; Kassam–Trefethen §3 | `matches` | **Convergence-with-cancellation is floating-point (§11) — not provable here.** What IS checked: the DC breakdown of the naive formulas is reproduced numerically; the full-circle contour mean agrees to 1e-16; K&T's published *half*-circle sampling is phase-destroying for complex `L` (pinned by test). |
 | — | (Python) **scoping**: `scheme="etdrk4"` raises `NotImplementedError` for z-dependent hooks / TPA / free carriers | `_etdrk_linear` guard (`gnlse.py`) | Stage S3's conditional gate (PLAN §17.6) | `matches` | The stiff regimes it targets — Raman cascades over km, loss-limited fibre — are exactly the uniform-core cases. |
 
+**Stage S5 rows (2026-10, S5 session) — RK4IP (`scheme="rk4ip"`)**
+
+| # | Theorem (Lean) | Governs (Python) | Source | State | Notes |
+|---|---|---|---|---|---|
+| S24 | **`Solvers.RK4IP.linStep_comp_inv`, `linStep_comp`** — `linStep φ h ∘ linStep φ (−h) = id`; composition adds steps | `SplitStepEngine._linear_step` half transforms | Hult 2007 §II-D | `matches` | **PROVED.** The transform pair is an involution, so "transform to the picture, advance, transform back" cannot itself bias the field. |
+| S25 | **`Solvers.RK4IP.rk4ipStep_linear`** — with `N = 0` the step is exactly `linStep φ h` | `_rk4ip_step` with `γ = 0` | Hult 2007 Eq. (12) | `matches` | **PROVED.** The outer-level interaction picture carries the linear operator *without* approximation — there is no `[L,N]` splitting residual in the flow. The scalar constant-coefficient shadow of this is `RK4.ipStep_linear` (row H7). |
+| S26 | **`Solvers.RK4IP.rk4ipStep_no_dispersion`, `linStep_zero`, `classicalRK4`** — `L = 0 ⇒ rk4ipStep = classical RK4` | `_rk4ip_step` with `betas = []` | Hult 2007 Eq. (12); `RK4.lean` | `matches` | **PROVED.** Every half transform is the identity and the scheme is exactly the classical RK4 combination whose order-4 condition `RK4.lean` proves. The bridge between the interaction-picture formulation and the trusted integrator. |
+| S27 | **`Solvers.RK4IP.hasDerivAt_ipPhase`, `interactionPicture_removes_linear`** — `A' = iφA + N(A) ⇒ A_I' = e^{−iφ(z−z₀)}·N(A)` | the outer transform `exp(∓(z−z̄)L̂)` | Hult 2007 §II-D; Hochbruck–Ostermann 2010 | `matches` | **PROVED.** The continuous statement of *why* the picture removes the linear term: the `iφA` parts cancel exactly. |
+| S28 | (Python) **fourth-order rate, (A5) conservation, and scope guard** | `_rk4ip_step` (`gnlse.py`) | — | `matches` | **Convergence order is floating-point (§11) — not provable here.** Pinned numerically by `tests/test_gnlse_rk4ip.py`: scalar order-4 halving ratios; N=3 soliton field order ≈ 3.96 (vs `strang` 2.00, `etdrk4` 3.99 on the same fixed-step ladder); (A5) photon number conserved to <1e-10 with Raman+shock; agreement with `etdrk4`; `NotImplementedError` for TPA / free carriers (they live in the split-step nonlinear stage, not in `N̂`). |
+
 | D13 | `Nonlinear.ramanDrive_early` | Raman convolution | — | `matches` | The drive vanishes before the delay has elapsed. |
 | D14 | `Nonlinear.ramanDrive_nonneg` | as D13 | — | `matches` | The drive never subtracts energy. |
 | D15 | **`Nonlinear.ramanDrive_le_max`** | as D13 | — | `matches` | **PROVED.** Termwise `h_R(j−i) ≤ ∑ h_R`, then `∑ h_R · ∑ P ≤ ∑ P`. |
@@ -755,8 +765,8 @@ this. Consumers of the specification should treat the following as preconditions
 
 ## Coverage so far
 
-- Rows in the register: **140**
-- Matching Python symbols: **~66**
+- Rows in the register: **145**
+- Matching Python symbols: **~69**
 - Findings raised: **11** (F1–F11), plus 6 corrected statements in `CHANGELOG.md`
 - Findings resolved: **3** (F2 fixed in Lean; F5 and F6 were false statements
   of mine, corrected before they were relied on)
@@ -768,6 +778,10 @@ this. Consumers of the specification should treat the following as preconditions
 - New: sign-convention theorems in `Nonlinear/Shock.lean` (S17–S21) — the
   shock factor `1 + Ωτ` vs `1 − Ωτ` resolved as a *Fourier-convention*
   consequence; Dudley and Blow–Wood shown to agree
+- New: `Solvers/RK4IP.lean` (7 theorems, S24–S27) — the outer-level
+  interaction-picture algebra for `scheme="rk4ip"`: transform involution,
+  exact linear flow, collapse to classical RK4 when `L = 0`, and the
+  continuous interaction-picture removal of the linear term
 
 F2 and F6 are the worked examples of why this correlation runs concurrently.
 Neither `k = ω/c` nor `ω_{-1,mirror} = -ω_1` was a hard theorem; both were easy
