@@ -35,10 +35,10 @@ from pathlib import Path
 
 import numpy as np
 
-from photonics_helper.base import C_MS, Length, Time, Wavelength
-from photonics_helper.gnlse import FiberProfile, GNLSESolver
+from photonics_helper.base import AngularFrequencyArray, C_MS, Length, Time, Wavelength
+from photonics_helper.gnlse import Fiber, GNLSESolver
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
-from photonics_helper.raman import RamanResponse, RamanSpec
+from photonics_helper.raman import RamanSpec
 
 HERE = Path(__file__).resolve().parent
 PARAMETERS = HERE / "parameters.json"
@@ -52,18 +52,19 @@ def _raman_response(params, grid):
         raman_linewidth_cm=r["raman_linewidth_cm"],
         fR=r["fR"],
     )
-    return RamanResponse(
-        spec=spec,
+    return spec.response(
+        grid,
         fR=r["fR"],
         tau1=r["tau1_fs"] * 1e-15,
         tau2=r["tau2_fs"] * 1e-15,
-        grid=grid,
     )
 
 
 def _peak_wavelength_nm(grid, A, wl0):
     W = np.abs(grid.fft(A)) ** 2
-    lam = 2 * np.pi * C_MS / (2 * np.pi * C_MS / wl0 + grid.w)
+    lam = AngularFrequencyArray(
+        Wavelength(wl0, "m").to_omega().as_rad_s + grid.w, "rad/s"
+    ).to_wl().as_m
     order = np.argsort(lam)
     Ws, Ls = W[order], lam[order]
     i = int(np.argmax(Ws))
@@ -91,10 +92,8 @@ def validate(params: dict | None = None, make_plot: bool = True) -> dict:
 
     env = Envelope(shape="sech", peak_amplitude=np.sqrt(P0), pulse_width=Time(T0, "s"))
     pulse = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(wl0, "m"))
-    fiber = FiberProfile.from_gamma(
+    fiber = Fiber.from_gamma(
         gamma=gamma,
-        n2=2.6e-20,
-        omega0=pulse.central_frequency,
         length=Length(params["length_m"], "m"),
         raman_response=raman,
     )
@@ -121,7 +120,9 @@ def validate(params: dict | None = None, make_plot: bool = True) -> dict:
 
         W0 = np.abs(grid.fft(pulse.envelope_field)) ** 2
         W1 = np.abs(grid.fft(out)) ** 2
-        lam = (2 * np.pi * C_MS / (2 * np.pi * C_MS / wl0 + grid.w)) * 1e9
+        lam = AngularFrequencyArray(
+            Wavelength(wl0, "m").to_omega().as_rad_s + grid.w, "rad/s"
+        ).to_wl().as_nm
         o = np.argsort(lam)
         fig, ax = plt.subplots(figsize=(8, 5))
         ax.plot(lam[o], W0[o] / W0.max(), label="input")

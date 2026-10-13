@@ -20,18 +20,18 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from photonics_helper.base import Area, C_MS, Length, Time, Wavelength
+from photonics_helper.base import Area, Length, Time, Wavelength
 from photonics_helper.gnlse import (
     ETDRK4_SMALL,
     _etdrk4_scalar_coeffs,
-    FiberProfile,
+    Fiber,
     GNLSESolver,
     SplitStepEngine,
 )
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
 WL0 = 1550e-9
-OMEGA0 = 2 * np.pi * C_MS / WL0
+OMEGA0 = Wavelength(WL0, "m").to_omega().as_rad_s
 BETA2 = -21e-27
 GAMMA = 2.0
 T0 = 50e-15 / 1.763
@@ -222,8 +222,8 @@ def _engine(scheme: str = "etdrk4", num_steps: int = 400, **kw) -> SplitStepEngi
         shape="sech", peak_amplitude=np.sqrt(peak), pulse_width=Time(T0, "s")
     )
     pulse = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(WL0, "m"))
-    fiber = FiberProfile.from_gamma(
-        gamma=GAMMA, n2=2.6e-20, omega0=OMEGA0, length=Length(LENGTH, "m")
+    fiber = Fiber.from_gamma(
+        gamma=GAMMA, length=Length(LENGTH, "m")
     )
     engine = SplitStepEngine(
         pulse=pulse,
@@ -276,17 +276,17 @@ def test_etdrk4_energy_drift_is_order_four():
 
 def test_etdrk4_photon_number_conserved_with_shock():
     """Raman + shock: the conserved quantity is B&W's (A5) photon number."""
-    from photonics_helper.raman import RamanResponse, RamanSpec
+    from photonics_helper.raman import RamanSpec
 
     spec = RamanSpec(name="Silica", raman_shift_cm=440, raman_linewidth_cm=45, fR=0.18)
     grid = TemporalGrid(N=NGRID, Tmax=Time(1.2e-11, "s"))
-    raman = RamanResponse(spec=spec, grid=grid)
+    raman = spec.response(grid)
     peak = 9 * abs(BETA2) / (GAMMA * T0**2)
     env = Envelope(
         shape="sech", peak_amplitude=np.sqrt(peak), pulse_width=Time(T0, "s")
     )
     pulse = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(WL0, "m"))
-    fiber = FiberProfile(
+    fiber = Fiber(
         n2=2.6e-20,
         alpha=0.0,
         A_eff=Area(80e-12, "m^2"),
@@ -313,8 +313,8 @@ def test_etdrk4_rejects_out_of_scope_hooks():
     grid = TemporalGrid(N=64, Tmax=Time(1e-11, "s"))
     env = Envelope(shape="sech", peak_amplitude=1.0, pulse_width=Time(T0, "s"))
     pulse = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(WL0, "m"))
-    fiber = FiberProfile.from_gamma(
-        gamma=GAMMA, n2=2.6e-20, omega0=OMEGA0, length=Length(1e-3, "m")
+    fiber = Fiber.from_gamma(
+        gamma=GAMMA, length=Length(1e-3, "m")
     )
     eng = SplitStepEngine(
         pulse=pulse, fiber=fiber, betas=np.array([BETA2 * 1e24]), scheme="etdrk4"
@@ -341,8 +341,8 @@ def test_gnlse_solver_scheme_passthrough():
             envelope=Envelope(shape="sech", peak_amplitude=1.0, pulse_width=Time(T0, "s")),
             central_wavelength=Wavelength(WL0, "m"),
         ),
-        fiber=FiberProfile.from_gamma(
-            gamma=GAMMA, n2=2.6e-20, omega0=OMEGA0, length=Length(1e-3, "m")
+        fiber=Fiber.from_gamma(
+            gamma=GAMMA, length=Length(1e-3, "m")
         ),
         betas=np.array([BETA2 * 1e24]),
         scheme="etdrk4",

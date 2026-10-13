@@ -42,7 +42,7 @@ import matplotlib.pyplot as plt
 
 from photonics_helper.base import Time
 from photonics_helper.pulse import TemporalGrid
-from photonics_helper.raman import RamanResponse, RamanSpec
+from photonics_helper.raman import RamanSpec
 
 
 def main():
@@ -56,7 +56,7 @@ def main():
         # Grid wide enough to capture damped oscillation (tau2 = 1/(π·linewidth))
         tau2 = 1.0 / (np.pi * spec.linewidth_Hz)
         grid = TemporalGrid(N=2**14, Tmax=Time(max(10e-12, 20 * tau2), "s"))
-        resp = RamanResponse(spec=spec, grid=grid)
+        resp = spec.response(grid)
         responses[name] = resp
         print(
             f"{name}: τ1={resp.tau1 * 1e15:.2f} fs, τ2={resp.tau2 * 1e15:.2f} fs, fR={resp.fR}"
@@ -175,7 +175,7 @@ def main():
 
         # Create response with custom fR
         grid = TemporalGrid(N=2**14, Tmax=Time(10e-12, "s"))
-        resp = RamanResponse(spec=silica.spec, fR=fr, grid=grid)
+        resp = silica.spec.response(grid, fR=fr)
         t_ps = resp.grid.t * 1e12
 
         inst = resp.instantaneous_response()

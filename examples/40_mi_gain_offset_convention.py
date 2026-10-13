@@ -92,7 +92,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from photonics_helper.base import C_MS
+from photonics_helper.base import AngularFrequency, C_MS, Wavelength
 from photonics_helper.gnlse_validation import mi_gain_of
 from photonics_helper.phase_matching import (
     mi_gain_spectrum,
@@ -103,7 +103,7 @@ from photonics_helper.phase_matching import (
 # ── One physical fibre: standard SMF-28-like silica at 1550 nm ───────────────
 WL0 = 1550e-9
 N_EFF = 1.44424
-OMEGA0 = 2 * np.pi * C_MS / WL0
+OMEGA0 = Wavelength(WL0, "m").to_omega().as_rad_s
 BETA0 = N_EFF * OMEGA0 / C_MS  # rad/m — the large number in the difference
 BETA1 = -1.4e-14  # s/m
 BETA2 = -21.0e-27  # s^2/m (SMF-28-ish)
@@ -479,7 +479,9 @@ def run_single_and_sidebands(closed: dict) -> dict:
         f"    [{omega_peak / omega_c:.4f}, 1] of Omega_c wide — the outermost quarter"
     )
     print("    of the band, where MI is weak, is the one usually quoted.")
-    lam_sb = (2 * np.pi * C_MS) / (2 * np.pi * C_MS / WL0 + sidebands[1]) * 1e9
+    lam_sb = AngularFrequency(
+        Wavelength(WL0, "m").to_omega().as_rad_s + sidebands[1], "rad/s"
+    ).to_wl().as_nm
     print(f"  the +sideband sits at {lam_sb:.3f} nm against a {WL0 * 1e9:.0f} nm pump")
     print(
         f"    (a {abs(lam_sb - WL0 * 1e9):.1f} nm shift — MI sidebands sit "
@@ -825,7 +827,9 @@ def sideband_figure(closed: dict, single: dict) -> None:
         label="pump (CW, no detuning)",
     )
     for s in single["sidebands"]:
-        lam = (2 * np.pi * C_MS) / (2 * np.pi * C_MS / WL0 + s) * 1e9
+        lam = AngularFrequency(
+            Wavelength(WL0, "m").to_omega().as_rad_s + s, "rad/s"
+        ).to_wl().as_nm
         ax.plot([WL0 * 1e9, lam], [0.55, 0.15], color="tab:green", lw=0.9, zorder=4)
         ax.plot(lam, 0, "v", ms=10, color="tab:green", zorder=5)
         ax.annotate(

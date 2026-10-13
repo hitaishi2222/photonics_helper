@@ -24,8 +24,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from photonics_helper.base import Area, Length, Time, Wavelength
-from photonics_helper.gnlse import FiberProfile, GNLSESolver
+from photonics_helper.base import AngularFrequencyArray, Area, Length, Time, Wavelength
+from photonics_helper.gnlse import Fiber, GNLSESolver
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
 # ── 1. The same physical fiber, expressed two ways ───────────────────────
@@ -34,7 +34,7 @@ from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 betas_ps = np.array([-2.0, -0.05])
 betas_si = np.array([-2.0e-24, -0.05e-36])
 
-fiber = FiberProfile(
+fiber = Fiber(
     n2=3.0e-20,
     alpha=0.0,
     A_eff=Area(80e-12, "m^2"),
@@ -95,7 +95,7 @@ for label, kwargs in [
 # ── 4. Visual check: both routes produce the same propagation ────────────
 fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
 omega, spectra = solver_ps.spectra_vs_z
-wl = 2 * np.pi * 299792458.0 / (omega + solver_ps.omega0) * 1e9
+wl = AngularFrequencyArray(omega + solver_ps.omega0, "rad/s").to_wl().as_nm
 o = np.argsort(wl)
 axes[0].pcolormesh(
     wl[o],

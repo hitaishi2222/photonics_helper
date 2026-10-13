@@ -41,8 +41,8 @@ import numpy as np
 from scipy.optimize import brentq
 from scipy.special import j0
 
-from photonics_helper.base import Area, Length, Time, Wavelength
-from photonics_helper.gnlse import FiberProfile, TaperedGNLSESolver
+from photonics_helper.base import AngularFrequency, AngularFrequencyArray, Area, Length, Time, Wavelength
+from photonics_helper.gnlse import Fiber, TaperedGNLSESolver
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
 HERE = Path(__file__).resolve().parent
@@ -93,14 +93,14 @@ GAMMA_MODE_FACTOR = he11_gamma_factor()
 
 
 def n_gas(omega, pressure_bar: float) -> np.ndarray:
-    lam_um = 2.0 * np.pi * C_MS / np.asarray(omega, float) * 1e6
+    lam_um = AngularFrequencyArray(np.asarray(omega, float), "rad/s").to_wl().as_um
     s1 = _B_C1 * lam_um**2 / (lam_um**2 - _B_C2)
     s2 = _B_C3 * lam_um**2 / (lam_um**2 - _B_C4)
     return np.sqrt(1.0 + (s1 + s2) * pressure_bar * (273.0 / T_GAS_K))
 
 
 def n_silica(omega) -> np.ndarray:
-    lam_um = 2.0 * np.pi * C_MS / np.asarray(omega, float) * 1e6
+    lam_um = AngularFrequencyArray(np.asarray(omega, float), "rad/s").to_wl().as_um
     B = (0.6961663, 0.4079426, 0.8974794)
     C = (0.0684043**2, 0.1162414**2, 9.896161**2)
     return np.sqrt(1.0 + sum(b * lam_um**2 / (lam_um**2 - c) for b, c in zip(B, C)))
@@ -141,7 +141,7 @@ def gamma_capillary(pressure_bar: float, a_um: float = A_UM) -> float:
     ( uniform-fill mode / <F^4> modal-overlap projection, = gamma_uniform
     x 0.6679 for the J0 capillary mode — deterministic from Eq. (2)'s mode).
     """
-    w0 = 2 * np.pi * C_MS / (LAMBDA0_NM * 1e-9)
+    w0 = Wavelength(LAMBDA0_NM, "nm").to_omega().as_rad_s
     n2 = N2_HE_STP * pressure_bar * (273.0 / T_GAS_K)
     a_eff = np.pi * (a_um * 1e-6) ** 2 / GAMMA_MODE_FACTOR
     return float(n2 * w0 / (C_MS * a_eff))
@@ -183,7 +183,7 @@ def differentiate_beta(omega, pressure_bar: float, a_um: float = A_UM):
 
 def zdw_nm(pressure_bar: float, a_um: float = A_UM) -> float:
     def f(lam_nm):
-        w = 2 * np.pi * C_MS / (lam_nm * 1e-9)
+        w = Wavelength(lam_nm, "nm").to_omega().as_rad_s
         return float(differentiate_beta(np.array([w]), pressure_bar, a_um)[2][0])
 
     grid = np.linspace(150.0, 900.0, 2000)
@@ -225,7 +225,7 @@ def build_engine(
     wave = Wave(
         grid=grid, envelope=env, central_wavelength=Wavelength(LAMBDA0_NM, "nm")
     ).with_effective_area(Area(np.pi * (a_um * 1e-6) ** 2, "m^2"))
-    fiber = FiberProfile(
+    fiber = Fiber(
         n2=0.0,
         alpha=0.0,
         A_eff=Area(np.pi * (a_um * 1e-6) ** 2, "m^2"),
@@ -259,7 +259,7 @@ def build_engine(
 
 def rdw_filter_mask(w_abs: np.ndarray) -> np.ndarray:
     """15 % relative-bandwidth mask centred on the RDW peak in the UV."""
-    lam = 2 * np.pi * C_MS / w_abs * 1e9
+    lam = AngularFrequencyArray(w_abs, "rad/s").to_wl().as_nm
     uv = (lam > 150.0) & (lam < 450.0) & (w_abs > 0)
     return uv
 
@@ -276,7 +276,7 @@ def analyse_run(solver) -> dict:
     w0 = solver.omega0
     w_abs = np.asarray(f_off) + w0
     grid = solver.pulse.grid
-    lam = 2 * np.pi * C_MS / w_abs * 1e9
+    lam = AngularFrequencyArray(w_abs, "rad/s").to_wl().as_nm
     out = S[-1]
     spec_i = np.abs(out) ** 2
 
@@ -317,7 +317,7 @@ def analyse_run(solver) -> dict:
         "rdw_energy": e_rdw / e_out,
         "rdw_energy_J": float(np.array(solver.energy_vs_z)[-1] * e_rdw / e_out),
         "arrival_time_fs": float(tau * 1e15),
-        "rdw_lambda_nm": float(2 * np.pi * C_MS / w_rdw * 1e9),
+        "rdw_lambda_nm": float(AngularFrequency(w_rdw, "rad/s").to_wl().as_nm),
         "lambda_jitter_nm": 0.0,
     }
 
@@ -389,7 +389,7 @@ def eq11_tau_fs(w_rdw_1: np.ndarray, pressure_bar: float, mean_uJ: float) -> np.
     w_rdw_1: RDW angular frequencies per resampled energy (rad/s).
     Lf from Eq. (12) with the engine deck's gamma, beta2(omega0), P0(E).
     """
-    w0 = 2 * np.pi * C_MS / (LAMBDA0_NM * 1e-9)
+    w0 = Wavelength(LAMBDA0_NM, "nm").to_omega().as_rad_s
     _, b1_0, b2_0 = differentiate_beta(np.array([w0]), pressure_bar)
     t0 = TAU_FWHM_FS * 1e-15 / 1.763
     lf = np.sqrt(
@@ -412,7 +412,7 @@ def validate(*, fast: bool = True, make_plot: bool = True) -> dict:
     results: dict = {}
 
     # [A1] Boerzsoenyi index anchor
-    w800 = 2 * np.pi * C_MS / (LAMBDA0_NM * 1e-9)
+    w800 = Wavelength(LAMBDA0_NM, "nm").to_omega().as_rad_s
     n1_bar = float(n_gas(np.array([w800]), 1.0)[0]) - 1.0
     results["n_minus_1_800nm_1bar"] = round(n1_bar, 3e1 and 8)
     assert 3.0e-5 < n1_bar < 3.8e-5, n1_bar
@@ -478,7 +478,7 @@ def _make_fig(results, solver):
     S = np.asarray(S)
     w0 = solver.omega0
     w_abs = np.asarray(f) + w0
-    lam = 2 * np.pi * C_MS / np.where(w_abs > 0, w_abs, 1) * 1e9
+    lam = AngularFrequencyArray(np.where(w_abs > 0, w_abs, 1), "rad/s").to_wl().as_nm
     fig, axes = plt.subplots(1, 2, figsize=(11, 4.2))
     axes[0].semilogy(lam[(w_abs > 0)], np.abs(S[-1])[(w_abs > 0)] ** 2)
     axes[0].set_xlim(100, 3000)

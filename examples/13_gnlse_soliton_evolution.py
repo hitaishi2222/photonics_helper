@@ -27,7 +27,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from photonics_helper.base import Area, Length, Time, Wavelength
-from photonics_helper.gnlse import FiberProfile, GNLSESolver
+from photonics_helper.gnlse import Fiber, GNLSESolver
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
 
@@ -54,13 +54,13 @@ def make_soliton_fiber(beta2_ps2_per_km=-2.0, length_m=0.1):
     """
     beta2_ps2_m = beta2_ps2_per_km * 1e-3
     n2 = 2.6e-20  # m²/W
-    omega0 = 2 * np.pi * 299792458.0 / (1064e-9)
+    omega0 = Wavelength(1064, "nm").to_omega().as_rad_s
     gamma = n2 * omega0 / (299792458.0 * 80e-12)  # ~1.45 1/(W·km)
 
     A_eff = n2 * omega0 / (gamma * 299792458.0)
 
     return (
-        FiberProfile(
+        Fiber(
             n2=n2,
             alpha=0.0,
             A_eff=Area(A_eff, "m^2"),
@@ -85,7 +85,7 @@ def main():
     # Fiber: anomalous dispersion, silica-like gamma
     n2 = 2.6e-20
     A_eff = Area(80, "um^2")
-    omega0 = 2 * np.pi * 299792458.0 / central_wl.as_m
+    omega0 = central_wl.to_omega().as_rad_s
     gamma = n2 * omega0 / (299792458.0 * A_eff.as_m2)
     beta2_ps2_m = -2.0 * 1e-3  # -2 ps²/km = -0.002 ps²/m (engine units)
 
@@ -103,7 +103,7 @@ def main():
     pulse_N1 = make_soliton_pulse(
         wavelength_nm=central_wl.as_nm, T0_fs=T0.as_fs, peak_power_W=P0_N1
     )
-    fiber = FiberProfile(n2=n2, alpha=0.0, A_eff=A_eff, length=L_D)
+    fiber = Fiber(n2=n2, alpha=0.0, A_eff=A_eff, length=L_D)
     betas = np.array([beta2_ps2_m])
 
     solver_N1 = GNLSESolver(

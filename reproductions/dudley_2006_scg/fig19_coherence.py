@@ -28,6 +28,7 @@ from pathlib import Path
 
 import numpy as np
 
+from photonics_helper.base import AngularFrequencyArray
 from photonics_helper.noise import coherence_g12
 
 from . import common
@@ -74,7 +75,7 @@ def run(n_real: int = N_REAL, fast: bool = False, show_progress: bool = False):
     spectra = np.asarray(spectra, dtype=complex)
     g12 = coherence_g12(spectra)
     w_abs = omega0 + pulse.grid.w
-    wl_nm = 2 * np.pi * 3e8 / w_abs * 1e9
+    wl_nm = AngularFrequencyArray(w_abs, "rad/s").to_wl().as_nm
     order = np.argsort(wl_nm)
     return wl_nm[order], g12[order], spectra
 

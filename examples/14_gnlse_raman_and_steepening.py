@@ -31,9 +31,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from photonics_helper.base import Area, Length, Time, Wavelength
-from photonics_helper.gnlse import FiberProfile, GNLSESolver
+from photonics_helper.gnlse import Fiber, GNLSESolver
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
-from photonics_helper.raman import RamanResponse, RamanSpec
+from photonics_helper.raman import RamanSpec
 
 
 def make_pulse(wavelength_nm=1064, T0_fs=50):
@@ -73,7 +73,7 @@ def main():
     # ── Parameters ──────────────────────────────────────────────────────────
     central_wl = Wavelength(1064, "nm")
     T0 = Time(50, "fs")
-    omega0 = 2 * np.pi * 299792458.0 / central_wl.as_m
+    omega0 = central_wl.to_omega().as_rad_s
 
     # Fiber: anomalous dispersion for soliton dynamics
     n2 = 2.6e-20
@@ -102,14 +102,13 @@ def main():
     # the same grid so its cached h_R FFT matches the engine exactly.
     sim_grid = TemporalGrid(N=2**13, Tmax=Time(16e-12, "s"))
 
-    raman_response = RamanResponse(
-        spec=silica_spec,
-        grid=sim_grid,
+    raman_response = silica_spec.response(
+        sim_grid,
         tau1=Time(12.2, "fs").as_s,
         tau2=Time(32, "fs").as_s,
     )
 
-    fiber = FiberProfile(
+    fiber = Fiber(
         n2=n2,
         alpha=0.0,
         A_eff=A_eff,

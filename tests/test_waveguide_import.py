@@ -165,7 +165,7 @@ def test_to_propagation_constant_beta2_matches_analytic(tmp_path):
 
     # Analytic beta2 via central differences of beta(omega) on a fine grid.
     wl_fine_um = np.linspace(1.45, 1.65, 20001)
-    omega = 2 * np.pi * 2.99792458e8 / (wl_fine_um * 1e-6)
+    omega = WavelengthArray(wl_fine_um, "um").to_omega().as_rad_s
     beta = _neff_um(wl_fine_um) * omega / 2.99792458e8
     beta2_fine = np.gradient(np.gradient(beta, omega), omega)
     idx = int(np.argmin(np.abs(wl_fine_um - LAM0_UM)))

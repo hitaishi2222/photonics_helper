@@ -14,7 +14,7 @@ import numpy as np
 import pytest
 
 from photonics_helper.base import Area, Length, Time, Wavelength
-from photonics_helper.gnlse import FiberProfile, SplitStepEngine
+from photonics_helper.gnlse import Fiber, SplitStepEngine
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 from photonics_helper.raman import RAMAN_MATERIALS, RamanResponse
 from photonics_helper.vector_gnlse import (
@@ -30,8 +30,8 @@ def _grid(t_ps: float = 60.0, n: int = 2**11) -> TemporalGrid:
     return TemporalGrid(N=n, Tmax=Time(t_ps * 1e-12, "s"))
 
 
-def _fiber(length_m: float) -> FiberProfile:
-    return FiberProfile(
+def _fiber(length_m: float) -> Fiber:
+    return Fiber(
         n2=2.6e-20,
         alpha=0.0,
         A_eff=Area(80e-12, "m^2"),
@@ -109,8 +109,10 @@ class TestScalarLimitReduction:
     def test_exact_field_match_with_raman(self):
         grid = _grid(200.0, 2**12)
         spec = RAMAN_MATERIALS["Silica"]
+        # Dict spec: direct construction (pydantic coerces to RamanSpec).
+        # The spec.response() facade needs a RamanSpec instance.
         raman = RamanResponse(spec=spec, fR=0.18, grid=grid)
-        fiber = FiberProfile(
+        fiber = Fiber(
             n2=2.6e-20,
             alpha=0.0,
             A_eff=Area(80e-12, "m^2"),
@@ -180,7 +182,7 @@ class TestManakovMode:
         manakov.propagate(40)
         phi_m = np.angle(manakov.evolution_x[-1].envelope_field[0] / np.sqrt(peak))
 
-        fiber_scaled = FiberProfile(
+        fiber_scaled = Fiber(
             n2=fiber.n2 * MANAKOV_FACTOR,
             alpha=0.0,
             A_eff=Area(80e-12, "m^2"),

@@ -9,7 +9,7 @@ spec = importlib.util.spec_from_file_location(
 rep = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(rep)
 from photonics_helper.base import Area, Length, Time, Wavelength
-from photonics_helper.gnlse import FiberProfile
+from photonics_helper.gnlse import Fiber
 from photonics_helper.multimode_gnlse import MultimodeSplitStepEngine
 from photonics_helper.pulse import TemporalGrid, Wave, Envelope
 
@@ -46,7 +46,7 @@ for tag, offs in [
         else:
             field = a0 * np.exp(-1j * Om * tt)
         waves.append(W.with_field(np.asarray(field, complex)))
-    fiber = FiberProfile(
+    fiber = Fiber(
         n2=rep.N2, alpha=0.0, A_eff=Area(rep.A_EFF, "m^2"), length=Length(L, "m")
     )
     eng = MultimodeSplitStepEngine(

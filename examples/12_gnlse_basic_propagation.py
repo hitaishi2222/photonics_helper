@@ -23,7 +23,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from photonics_helper.base import Area, Length, Time, Wavelength
-from photonics_helper.gnlse import FiberProfile, GNLSESolver
+from photonics_helper.gnlse import Fiber, GNLSESolver
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
 
@@ -45,7 +45,7 @@ def make_pulse(wavelength_nm=1550, T0_fs=100, peak_power_W=5000):
 
 def make_fiber(length_m=0.2):
     """Create a silica fiber profile at 1550 nm."""
-    return FiberProfile(
+    return Fiber(
         n2=2.6e-20,  # m²/W — silica nonlinear index
         alpha=0.0,  # no loss for this demo
         A_eff=Area(80e-12, "m^2"),  # m² — effective mode area

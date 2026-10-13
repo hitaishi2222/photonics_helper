@@ -71,7 +71,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
 
-from photonics_helper.gnlse import FiberProfile
+from photonics_helper.gnlse import Fiber
 from photonics_helper.base import Area, Length, Time, Wavelength
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
@@ -163,7 +163,7 @@ def engine_oracle(beta: float, gamma: float) -> tuple:
     a_eff = (
         2.0 * np.pi * n2_use / (1550.0e-9 * gamma) if gamma > 0 else 1.0e-12
     )  # case A: bounded A_eff, gamma_eff ~ 4e-11 /W/m
-    fiber = FiberProfile(
+    fiber = Fiber(
         n2=n2_use,
         alpha=0.0,
         A_eff=Area(a_eff, "m^2"),

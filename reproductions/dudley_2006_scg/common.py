@@ -36,8 +36,8 @@ from pathlib import Path
 import numpy as np
 from numpy.typing import NDArray
 
-from photonics_helper.base import C_MS, Length, Time, Wavelength
-from photonics_helper.gnlse import FiberProfile, GNLSESolver
+from photonics_helper.base import AngularFrequency, AngularFrequencyArray, Length, Time, Wavelength
+from photonics_helper.gnlse import Fiber, GNLSESolver
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 from photonics_helper.raman import RamanResponse, RamanSpec
 
@@ -204,12 +204,11 @@ def build_raman(grid: TemporalGrid, fR: float = FR) -> RamanResponse:
         raman_linewidth_cm=45.0,
         fR=fR,
     )
-    return RamanResponse(
-        spec=spec,
+    return spec.response(
+        grid,
         fR=fR,
         tau1=TAU1_S,
         tau2=TAU2_S,
-        grid=grid,
     )
 
 
@@ -218,12 +217,10 @@ def build_fiber(
     *,
     length_m: float = LENGTH_M,
     raman: bool = False,
-) -> FiberProfile:
+) -> Fiber:
     """PCF profile with γ = 0.11 /W/m (no loss, as in the paper's simulations)."""
-    return FiberProfile.from_gamma(
+    return Fiber.from_gamma(
         gamma=GAMMA,
-        n2=N2,
-        omega0=float(pulse.central_frequency),
         length=Length(length_m, "m"),
         raman_response=build_raman(pulse.grid) if raman else None,
     )
@@ -231,7 +228,7 @@ def build_fiber(
 
 def make_solver(
     pulse: Wave,
-    fiber: FiberProfile,
+    fiber: Fiber,
     betas: np.ndarray,
     *,
     raman: bool = False,
@@ -298,7 +295,7 @@ class Evolution:
 
     def wavelength_nm(self) -> np.ndarray:
         """Vacuum wavelength (nm) for each spectral bin, ascending."""
-        wl = 2.0 * pi * C_MS / (self.omega0 + self.omega)
+        wl = AngularFrequencyArray(self.omega0 + self.omega, "rad/s").to_wl().as_m
         return np.sort(wl * 1e9)
 
     def spectrum_on_wavelength(self) -> tuple[np.ndarray, np.ndarray]:
@@ -307,7 +304,7 @@ class Evolution:
         The spectral index permutation is the same for every z snapshot, so
         this is also used to sort entire evolution arrays.
         """
-        wl = 2.0 * pi * C_MS / (self.omega0 + self.omega)
+        wl = AngularFrequencyArray(self.omega0 + self.omega, "rad/s").to_wl().as_m
         order = np.argsort(wl)
         return wl[order] * 1e9, self.spectra[:, order]
 
@@ -327,7 +324,7 @@ class Evolution:
 
 def run_gnlse(
     pulse: Wave,
-    fiber: FiberProfile,
+    fiber: Fiber,
     betas: np.ndarray,
     *,
     num_steps: int,
@@ -484,7 +481,7 @@ def taylor_beta_fn(
     near 835 nm and gives a ZDW of ≈ 780 nm, matching the paper's Fig. 2.
     """
     if omega0 is None:
-        omega0 = 2.0 * pi * C_MS / (WL0_NM * 1e-9)
+        omega0 = Wavelength(WL0_NM, "nm").to_omega().as_rad_s
     coefficients = np.asarray(betas, dtype=float)
 
     def _beta(omega):
@@ -499,8 +496,8 @@ def taylor_beta_fn(
 
 def beta2_at_wavelength(wl_nm: float) -> float:
     """β₂(λ) in ps²/m from the Taylor reconstruction (for the MI check)."""
-    omega0 = 2.0 * pi * C_MS / (WL0_NM * 1e-9)
-    omega = 2.0 * pi * C_MS / (wl_nm * 1e-9)
+    omega0 = Wavelength(WL0_NM, "nm").to_omega().as_rad_s
+    omega = Wavelength(wl_nm, "nm").to_omega().as_rad_s
     offset = (omega - omega0) * 1e-12
     return sum(
         float(b) * offset ** (k - 2) / factorial(k - 2)
@@ -532,7 +529,7 @@ def dispersive_wave_wavelength_nm(
     from scipy.optimize import brentq
 
     if omega0 is None:
-        omega0 = 2.0 * pi * C_MS / (wl0_nm * 1e-9)
+        omega0 = Wavelength(wl0_nm, "nm").to_omega().as_rad_s
     rhs = (1.0 - fR) * gamma * Ps if nonlinear else 0.0
 
     def _mismatch(Omega_ps: float) -> float:
@@ -555,7 +552,7 @@ def dispersive_wave_wavelength_nm(
     if not blue:
         raise ValueError("no blue-side dispersive-wave root found")
     Omega_s = omega0 + blue[0] * 1e12  # rad/ps -> rad/s
-    return float(2.0 * pi * C_MS / Omega_s * 1e9)
+    return AngularFrequency(Omega_s, "rad/s").to_wl().as_nm
 
 
 def strongest_peak_in_band(
@@ -666,7 +663,7 @@ def default_wl_bounds(
 
 def carrier_wavelength_nm(evo: Evolution) -> float:
     """Carrier wavelength of the simulation (nm), from ``omega0``."""
-    return 2.0 * pi * C_MS / evo.omega0 * 1e9
+    return AngularFrequency(evo.omega0, "rad/s").to_wl().as_nm
 
 
 def _resolve_wl_bounds(
@@ -797,7 +794,7 @@ def temporal_feature_labels(
     :func:`temporal_evolution_data` for the same ``time_reversal`` flag.
     """
     omega = np.asarray(evo.omega, dtype=float)
-    lam = 2.0 * pi * C_MS / (evo.omega0 + omega) * 1e9
+    lam = AngularFrequencyArray(evo.omega0 + omega, "rad/s").to_wl().as_nm
     edges = np.geomspace(float(wl_range[0]), float(wl_range[1]), n_bands + 1)
     centers = np.sqrt(edges[:-1] * edges[1:])
     band_of_bin = np.digitize(lam, edges) - 1

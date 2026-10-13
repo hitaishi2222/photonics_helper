@@ -42,13 +42,13 @@ import matplotlib.pyplot as plt
 
 from photonics_helper.base import Length, Time, Wavelength
 from photonics_helper.gnlse import (
-    FiberProfile,
+    Fiber,
     GNLSESolver,
     SplitStepEngine,
     plot_spectral_temporal_summary,
 )
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
-from photonics_helper.raman import RamanResponse, RamanSpec
+from photonics_helper.raman import RamanSpec
 
 # ── Dudley / laserfun NLSE_dudley parameters ────────────────────────────────
 
@@ -99,25 +99,21 @@ def make_pulse() -> Wave:
     )
 
 
-def make_fiber(pulse: Wave) -> FiberProfile:
-    omega0 = pulse.central_frequency
+def make_fiber(pulse: Wave) -> Fiber:
     raman_spec = RamanSpec(
         name="Silica",
         raman_shift_cm=440,
         raman_linewidth_cm=45,
         fR=RAMAN_FR,
     )
-    raman = RamanResponse(
-        spec=raman_spec,
+    raman = raman_spec.response(
+        pulse.grid,
         fR=RAMAN_FR,
         tau1=RAMAN_TAU1_S,
         tau2=RAMAN_TAU2_S,
-        grid=pulse.grid,
     )
-    return FiberProfile.from_gamma(
+    return Fiber.from_gamma(
         gamma=GAMMA_W_M,
-        n2=N2,
-        omega0=omega0,
         length=Length(FIBER_LENGTH_M, "m"),
         raman_response=raman,
     )
@@ -125,7 +121,7 @@ def make_fiber(pulse: Wave) -> FiberProfile:
 
 def compute_high_accuracy_steps(
     pulse: Wave,
-    fiber: FiberProfile,
+    fiber: Fiber,
     betas: np.ndarray,
     *,
     safety_factor: float = 2.0,

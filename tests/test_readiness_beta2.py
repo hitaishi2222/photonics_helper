@@ -12,7 +12,7 @@ import numpy as np
 import photonics_helper.phase_matching as pm
 from photonics_helper.base import Area, Length, Time, Wavelength, WavelengthArray
 from photonics_helper.fiber import Dispersion, PropagationConstant
-from photonics_helper.gnlse import FiberProfile
+from photonics_helper.gnlse import Fiber
 from photonics_helper.phase_matching import (
     _estimate_beta2,
     assess_simulation_readiness,
@@ -32,7 +32,7 @@ def _setup():
         ),
         central_wavelength=Wavelength(1550, "nm"),
     )
-    fiber = FiberProfile(
+    fiber = Fiber(
         n2=6e-18,
         alpha=0.0,
         A_eff=Area(0.2e-12, "m^2"),

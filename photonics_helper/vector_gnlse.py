@@ -247,14 +247,9 @@ class VectorSplitStepEngine:
 
     def _gamma_v(self) -> float:
         """Scalar γ of the shared profile, at the carrier frequency."""
-        from photonics_helper.gnlse import _gamma
+        from photonics_helper.gnlse import _fiber_gamma
 
-        return _gamma(
-            self.fiber.n2,
-            self.omega0,
-            self.fiber.A_eff,
-            self.fiber.confinement_factor,
-        )
+        return _fiber_gamma(self.fiber, self.omega0)
 
     def _get_h_R_fft(self) -> NDArray:
         """Cached FFT of the Raman response ``h_R(t)`` on ``grid.t``."""

@@ -61,8 +61,8 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy.special import genlaguerre
 
-from photonics_helper.base import Area, Length, Time, Wavelength
-from photonics_helper.gnlse import FiberProfile
+from photonics_helper.base import AngularFrequencyArray, Area, Length, Time, Wavelength
+from photonics_helper.gnlse import Fiber
 from photonics_helper.multimode_gnlse import MultimodeSplitStepEngine
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
@@ -73,7 +73,7 @@ C_MS = 299792458.0
 
 # --- fibre (Methods, PDF p-08; taper law PDF p-02) --------------------------
 LAMBDA0 = 1550e-9  # m
-OMEGA0 = 2.0 * np.pi * C_MS / LAMBDA0
+OMEGA0 = Wavelength(LAMBDA0, "m").to_omega().as_rad_s
 N0 = 1.444
 DELTA = 1.6e-3
 N2 = 2.9e-20  # m^2/W
@@ -303,7 +303,7 @@ def propagate_taper(
     eng = None
     for k in range(NUM_CHUNKS):
         cp = chunk_params(k)
-        fiber = FiberProfile(
+        fiber = Fiber(
             n2=(N2 if nonlinear else 1e-30),
             alpha=0.0,
             A_eff=Area(cp["aeff"], "m^2"),
@@ -485,7 +485,7 @@ def _plot(results, z_arr, mfd_arr, tt, fields, eng, fields_sol) -> None:
     for p, colr in zip((0, 1, 2), ("k", "r", "b")):
         spec = np.abs(eng.grid.fft(np.asarray(fields[p], complex))) ** 2
         w = np.asarray(eng.grid.w, float)
-        lam = 2 * np.pi * C_MS / (OMEGA0 + w) * 1e9
+        lam = AngularFrequencyArray(OMEGA0 + w, "rad/s").to_wl().as_nm
         ok = (lam > 1100) & (lam < 2600)
         ax.plot(
             lam[ok],

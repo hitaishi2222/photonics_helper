@@ -7,6 +7,7 @@ import tempfile
 import numpy as np
 import pytest
 
+from photonics_helper.base import Wavelength
 from photonics_helper.fiber import ZDependentDispersion
 
 
@@ -263,7 +264,7 @@ class TestZDependentDispersion:
             beta=beta,
             central_wavelength=central_wavelength,
         )
-        omega0 = 2 * np.pi * 3e8 / central_wavelength
+        omega0 = Wavelength(central_wavelength, "m").to_omega().as_rad_s
         z = z_positions[10]
         betas = zdd.get_betas_at_z(z, order=7, omega0=omega0)
         omega_fit = np.linspace(omega0 - 0.3e15, omega0 + 0.3e15, 200)

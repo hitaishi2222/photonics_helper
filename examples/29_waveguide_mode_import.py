@@ -56,7 +56,7 @@ def neff_analytic(wl_um):
 def beta2_analytic(wl_nm, n_fine=40001):
     """d²β/dω² from a fine-grid central difference of the analytic β(ω)."""
     wl_um = np.linspace(1.40, 1.70, n_fine)
-    omega = 2 * np.pi * 2.99792458e8 / (wl_um * 1e-6)
+    omega = Wavelength(wl_um, "um").to_omega().as_rad_s
     beta = neff_analytic(wl_um) * omega / 2.99792458e8
     d2 = np.gradient(np.gradient(beta, omega), omega)
     return float(np.interp(wl_nm * 1e-3, wl_um, d2))

@@ -4,13 +4,13 @@ import numpy as np
 import pytest
 
 from photonics_helper.base import Area, Length, Time
-from photonics_helper.gnlse import FiberProfile, kerr_step, raman_step, tpa_step
+from photonics_helper.gnlse import Fiber, kerr_step, raman_step, tpa_step
 from photonics_helper.pulse import TemporalGrid
 
 
 @pytest.fixture
 def fiber():
-    return FiberProfile(
+    return Fiber(
         n2=1e-19, alpha=1e-5, A_eff=Area(5e-11, "m^2"), length=Length(1.0, "m")
     )
 

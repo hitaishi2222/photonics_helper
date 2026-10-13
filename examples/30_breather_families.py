@@ -119,7 +119,7 @@ from photonics_helper.breathers import (
     sfb_spatial_period,
     sfb_temporal_period,
 )
-from photonics_helper.gnlse import FiberProfile, SplitStepEngine
+from photonics_helper.gnlse import Fiber, SplitStepEngine
 from photonics_helper.pulse import TemporalGrid
 
 # ── Parameters ──────────────────────────────────────────────────────
@@ -518,10 +518,8 @@ def engine_comparison() -> dict:
         grid, a, z0=xi_start * L_NL, wavelength=Wavelength(LAM0, "m")
     )
 
-    fiber = FiberProfile.from_gamma(
+    fiber = Fiber.from_gamma(
         gamma=GAMMA,
-        n2=2.7e-20,
-        omega0=float(wave.central_frequency),
         length=Length(z_total, "m"),
     )
     dz = L_NL / 20.0  # 0.05 dimensionless

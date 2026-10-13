@@ -64,7 +64,7 @@ from photonics_helper.breathers import (
     sfb_peak_ratio,
 )
 from photonics_helper.base import Length, Time
-from photonics_helper.gnlse import FiberProfile, GNLSESolver
+from photonics_helper.gnlse import Fiber, GNLSESolver
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave, Wavelength
 
 HERE = Path(__file__).resolve().parent
@@ -131,10 +131,8 @@ def _propagate_modulated_cw(
     env = _cos_envelope(seed, grid, float(np.max(np.abs(seed))), T0)
     wave = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(lam0, "m"))
     length = L_fiber if L_fiber is not None else xi_end * L_NL
-    fiber = FiberProfile.from_gamma(
+    fiber = Fiber.from_gamma(
         gamma=gamma,
-        n2=2.7e-20,
-        omega0=float(wave.central_frequency),
         alpha=alpha,
         length=length,
     )
@@ -186,10 +184,8 @@ def validate(params: dict | None = None, make_plot: bool = True) -> dict:
         np.asarray(psi0), grid, float(np.sqrt(P0) * (1 + 4 * a_deck)), float(T0)
     )
     wave = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(lam0, "m"))
-    fiber = FiberProfile.from_gamma(
+    fiber = Fiber.from_gamma(
         gamma=gamma,
-        n2=2.7e-20,
-        omega0=float(wave.central_frequency),
         length=Length(2.0 * xi_deck * L_NL, "m"),
     )
     solver = GNLSESolver(
@@ -305,10 +301,8 @@ def validate(params: dict | None = None, make_plot: bool = True) -> dict:
         np.asarray(psi0_l), grid, float(np.sqrt(P0) * (1 + 4 * a_lim)), float(T0)
     )
     wave_l = Wave(grid=grid, envelope=env_l, central_wavelength=Wavelength(lam0, "m"))
-    fiber_l = FiberProfile.from_gamma(
+    fiber_l = Fiber.from_gamma(
         gamma=gamma,
-        n2=2.7e-20,
-        omega0=float(wave_l.central_frequency),
         length=Length(12.0 * L_NL, "m"),
     )
     solver_l = GNLSESolver(

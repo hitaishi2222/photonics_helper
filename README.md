@@ -77,7 +77,7 @@ from matplotlib.animation import FuncAnimation, PillowWriter
 T0 = Time(200, "fs")
 beta2 = -2.0e-3
 n2, A_eff = 2.6e-20, Area(80, "um^2")
-omega0 = 2 * np.pi * 299792458.0 / Wavelength(1064, "nm").as_m
+omega0 = Wavelength(1064, "nm").to_omega().as_rad_s
 gamma = n2 * omega0 / (299792458.0 * A_eff.as_m2)
 
 # N = 1 soliton power for these parameters; N = 3 needs 9x the power
@@ -93,7 +93,7 @@ pulse = Wave(
 
 solver = GNLSESolver(
     pulse=pulse,
-    fiber=FiberProfile(n2=n2, alpha=0.0, A_eff=A_eff, length=L_D),
+    fiber=Fiber(n2=n2, alpha=0.0, A_eff=A_eff, length=L_D),
     betas=np.array([beta2]),  # [β₂, β₃, ...] in psᵏ/m
     include_raman=False,
     include_self_steepening=False,

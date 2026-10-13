@@ -102,8 +102,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from photonics_helper.base import C_MS, Length, Time, Wavelength
-from photonics_helper.gnlse import FiberProfile
+from photonics_helper.base import Length, Time, Wavelength
+from photonics_helper.gnlse import Fiber
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 from photonics_helper.vector_gnlse import (
     MANAKOV_FACTOR,
@@ -113,7 +113,7 @@ from photonics_helper.vector_gnlse import (
 
 # ── Reference deck: PM fibre, two unequal channels ───────────────────────────
 WL0 = 1550e-9
-OMEGA0 = 2 * np.pi * C_MS / WL0
+OMEGA0 = Wavelength(WL0, "m").to_omega().as_rad_s
 BETA2 = -21.0e-27  # s^2/m — SMF-28-ish, anomalous
 BETA2_PS = BETA2 * 1e24  # ps^2/m
 
@@ -157,9 +157,9 @@ def _grid() -> TemporalGrid:
     return TemporalGrid(N=N_SAMPLES, Tmax=Time(TMAX, "s"))
 
 
-def _fiber(length: float = LENGTH) -> FiberProfile:
-    return FiberProfile.from_gamma(
-        gamma=GAMMA, n2=2.6e-20, omega0=OMEGA0, length=Length(length, "m")
+def _fiber(length: float = LENGTH) -> Fiber:
+    return Fiber.from_gamma(
+        gamma=GAMMA, length=Length(length, "m")
     )
 
 
@@ -211,8 +211,8 @@ def _build(
     ``walkoff = 0`` and identical per-axis betas, which the engine enforces —
     this example passes the walk-off only to the couplings that accept it.
     """
-    fiber = FiberProfile.from_gamma(
-        gamma=gamma, n2=2.6e-20, omega0=OMEGA0, length=Length(length, "m")
+    fiber = Fiber.from_gamma(
+        gamma=gamma, length=Length(length, "m")
     )
     pulse_x, pulse_y = _input_pair(grid, px, py)
     common = dict(
@@ -352,8 +352,8 @@ def run_manakov_check() -> tuple[float, float]:
     length = 200.0
 
     def single_channel(coupling: str, gamma: float, steps: int = 400):
-        fiber = FiberProfile.from_gamma(
-            gamma=gamma, n2=2.6e-20, omega0=OMEGA0, length=Length(length, "m")
+        fiber = Fiber.from_gamma(
+            gamma=gamma, length=Length(length, "m")
         )
         pulse_x = _wave(grid, PX)
         pulse_y = _wave(grid, 0.0)  # A_y == 0: the single-channel limit
@@ -422,8 +422,8 @@ def manakov_scaling() -> tuple[np.ndarray, np.ndarray, np.ndarray]:
             ("manakov", "manakov", GAMMA),
             ("incoherent@8/9", "incoherent", GAMMA * MANAKOV_FACTOR),
         ):
-            fiber = FiberProfile.from_gamma(
-                gamma=gamma, n2=2.6e-20, omega0=OMEGA0, length=Length(length, "m")
+            fiber = Fiber.from_gamma(
+                gamma=gamma, length=Length(length, "m")
             )
             eng = VectorSplitStepEngine(
                 _wave(grid, p, cw_width),

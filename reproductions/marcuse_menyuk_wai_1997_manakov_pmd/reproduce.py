@@ -55,7 +55,7 @@ from scipy import signal
 
 from photonics_helper.base import Area, Length, Time, Wavelength
 from photonics_helper.core.grids import TemporalGrid
-from photonics_helper.gnlse import FiberProfile
+from photonics_helper.gnlse import Fiber
 from photonics_helper.pulse import Envelope, Wave
 from photonics_helper.vector_gnlse import (
     MANAKOV_FACTOR,
@@ -98,7 +98,7 @@ class PhysicalSetup:
 
     @property
     def omega0(self) -> float:
-        return 2.0 * np.pi * C_MS / (self.wavelength_nm * 1e-9)
+        return Wavelength(self.wavelength_nm, "nm").to_omega().as_rad_s
 
     @property
     def gamma_per_W_km(self) -> float:
@@ -112,9 +112,9 @@ class PhysicalSetup:
         D_si = D_ps_nm_km * 1e-6  # ps/(nm km) → s/m²
         return -D_si * wl**2 / (2.0 * np.pi * C_MS) * 1e27
 
-    def fiber(self, length_m: float, alpha_dB_km: float = 0.0) -> FiberProfile:
+    def fiber(self, length_m: float, alpha_dB_km: float = 0.0) -> Fiber:
         alpha_np = alpha_dB_km * np.log(10.0) / 10.0 / 1e3  # dB/km → 1/m
-        return FiberProfile(
+        return Fiber(
             n2=self.n2,
             alpha=alpha_np,
             A_eff=Area(self.A_eff_um2 * 1e-12, "m^2"),

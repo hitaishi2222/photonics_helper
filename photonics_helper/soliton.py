@@ -102,11 +102,9 @@ class SolitonAnalyzer:
         self.omega, self.spectra = spectra_vs_z
 
         # Pre-compute gamma
-        from .gnlse import _gamma
+        from .gnlse import _fiber_gamma
 
-        self.gamma = _gamma(
-            fiber.n2, pulse.central_frequency, fiber.A_eff, fiber.confinement_factor
-        )
+        self.gamma = _fiber_gamma(fiber, pulse.central_frequency)
 
         # Input pulse parameters
         self.T0 = pulse.envelope.pulse_width.as_s  # s

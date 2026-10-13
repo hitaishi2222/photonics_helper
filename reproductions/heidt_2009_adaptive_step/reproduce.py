@@ -69,6 +69,9 @@ except ImportError:  # pragma: no cover
         return it
 
 
+from photonics_helper.base import Wavelength  # noqa: E402
+
+
 _cache: dict = {}
 _ref: dict = {}
 
@@ -95,7 +98,7 @@ def deck_a_operator(d: dict) -> GNLSEOperator:
     return GNLSEOperator(
         n_points=int(g["n_points"]),
         T_s=float(g["T_s"]),
-        omega0=2 * np.pi * C_LIGHT / lam0,
+        omega0=Wavelength(lam0, "m").to_omega().as_rad_s,
         gamma=float(f["gamma_per_Wm"]),
         # ps^k/m -> s^k/m: the powers run from k = 2, not 0 (the leading
         # entry is beta2). With arange(len) the array was left in ps^2/m,
@@ -420,7 +423,7 @@ def deck_b_setup(fast: bool = False) -> tuple[GNLSEOperator, np.ndarray]:
     op = GNLSEOperator(
         n_points=int(g["n_points"]),
         T_s=float(g["T_s"]),
-        omega0=2 * np.pi * C_LIGHT / 1.55e-6,  # mid-band, 1550 nm
+        omega0=Wavelength(1550, "nm").to_omega().as_rad_s,  # mid-band, 1550 nm
         gamma=float(f["gamma_per_Wm"]),
         betas_si=np.array([b2]),
         shock=False,
@@ -589,7 +592,7 @@ def check_integrators() -> dict:
         lambda lam: -2.8e-27 * 2 * np.pi * C_LIGHT / lam**2,
         n_points=4096,
         T_s=8e-12,
-        omega0=2 * np.pi * C_LIGHT / 850e-9,
+        omega0=Wavelength(850, "nm").to_omega().as_rad_s,
         gamma=0.02,
     )
     c = 3.7
@@ -608,7 +611,7 @@ def check_integrators() -> dict:
         lambda lam: -2.8e-27 * 2 * np.pi * C_LIGHT / lam**2,
         n_points=4096,
         T_s=8e-12,
-        omega0=2 * np.pi * C_LIGHT / 850e-9,
+        omega0=Wavelength(850, "nm").to_omega().as_rad_s,
         gamma=0.02,
     )
     t = op2.grid.t
@@ -625,7 +628,7 @@ def check_integrators() -> dict:
                 lambda lam: -2.8e-27 * 2 * np.pi * C_LIGHT / lam**2,
                 n_points=4096,
                 T_s=8e-12,
-                omega0=2 * np.pi * C_LIGHT / 850e-9,
+                omega0=Wavelength(850, "nm").to_omega().as_rad_s,
                 gamma=0.02,
             )
             A = A0.copy()

@@ -112,7 +112,7 @@ def test_shg_coupling_independent_maxwell_derivation():
         (1310.0, 40e-12, 3.5, 7.5),
     ]:
         Z0 = 1.0 / (EPS_0 * C_MS)
-        w = 2 * np.pi * C_MS / (lam * 1e-9)
+        w = Wavelength(lam, "nm").to_omega().as_rad_s
         kappa_expected = (w * d / C_MS) * np.sqrt(
             2.0 * Z0 / (n**3 * (a_um * 1e-12))
         )  # = (w*d/(n*C_MS))*sqrt(2*Z0/(n*A))

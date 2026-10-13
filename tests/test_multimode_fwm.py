@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 
 from photonics_helper.base import Area, Length, Time, Wavelength
-from photonics_helper.gnlse import FiberProfile
+from photonics_helper.gnlse import Fiber
 from photonics_helper.multimode_gnlse import MultimodeSplitStepEngine
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
@@ -54,7 +54,7 @@ def _waves(seed_fraction: float = 1e-4, with_idler: bool = False):
 
 
 def _engine(waves, length_m=1.0, step_m=2.5e-3):
-    fiber = FiberProfile(
+    fiber = Fiber(
         n2=2.6e-20, alpha=0.0, A_eff=Area(50e-12, "m^2"), length=Length(length_m, "m")
     )
     return MultimodeSplitStepEngine(

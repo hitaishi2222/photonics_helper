@@ -110,3 +110,55 @@ class TemporalGrid:
         # Window must cover all pulses + padding for tails
         Tmax = Time(n_pulses * spacing + 10 * pulse_width.as_s, "s")
         return cls(N=N, Tmax=Tmax)
+
+    @classmethod
+    def for_gnlse(
+        cls,
+        pulse_width: Time,
+        length_m: float,
+        beta2_pskm: float,
+        *,
+        gamma: float | None = None,
+        peak_power: float | None = None,
+        N: int = 2**13,
+        margin: float = 8.0,
+    ) -> Self:
+        """Size a grid that holds soliton-fission products without wrapping.
+
+        The plain ``envelope._make_grid`` window (≈10× T0) fits the input
+        pulse but not what the fiber makes of it: higher-order solitons shed
+        dispersive waves that walk off by ``~|β₂|·Δω·L`` and wrap around the
+        periodic FFT boundary, interfering with themselves (speckly spectral
+        fringes + diagonal streaks + percent-level energy drift). This sizes
+        the window from the dispersive spread ``|β₂|·L/T0``, inflated by the
+        soliton order ``N = sqrt(γ·P·T0²/|β₂|)`` when ``gamma`` and
+        ``peak_power`` are known::
+
+            grid = TemporalGrid.for_gnlse(pulse.pulse_width, fiber.length.as_m,
+                                          betas[0], gamma=0.045, peak_power=10e3)
+
+        Parameters
+        ----------
+        pulse_width : T₀ of the input pulse.
+        length_m : fiber length in metres.
+        beta2_pskm : β₂ in ps²/m (engine units, i.e. ``betas[0]``).
+        gamma : nonlinear coefficient γ in 1/(W·m), if known.
+        peak_power : input peak power in watts, if known.
+        N : samples (default 2¹³ — wide windows need resolving power).
+        margin : safety multiplier on the estimated spread (default 8).
+        """
+        from math import sqrt
+
+        T0 = pulse_width.as_s
+        beta2_si = abs(float(beta2_pskm)) * 1e-24  # ps²/m → s²/m
+        if beta2_si > 0.0:
+            spread = beta2_si * float(length_m) / T0
+            if gamma is not None and peak_power is not None and gamma > 0.0 and peak_power > 0.0:
+                order_sq = gamma * peak_power * T0**2 / beta2_si
+                if order_sq > 1.0:
+                    spread *= sqrt(order_sq)
+            spread *= margin
+        else:
+            spread = 0.0
+        Tmax = max(10.0 * T0, spread)
+        return cls(N=N, Tmax=Time(Tmax, "s"))

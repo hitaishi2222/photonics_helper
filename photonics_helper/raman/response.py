@@ -96,6 +96,17 @@ class RamanResponse:
         # Use grid.dt * 5 as the delta width — narrow enough to look like a spike
         return self.grid.dt * 5  # type: ignore
 
+    @property
+    def frequency(self):
+        """Frequency-domain view ``H(Ω)`` of this response.
+
+        Single entry point so users stay on one object::
+
+            resp = spec.response()
+            freq = resp.frequency  # RamanFrequencyResponse
+        """
+        return RamanFrequencyResponse(response=self, grid=self.grid)
+
     def _h_R(self, t: NDArray) -> NDArray:
         """Raw delayed response h_R(t) (without fR scaling).
 

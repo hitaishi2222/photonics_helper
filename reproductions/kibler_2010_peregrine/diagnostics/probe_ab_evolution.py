@@ -39,13 +39,11 @@ def env_of(field):
 wave = Wave(
     grid=grid, envelope=env_of(psi0), central_wavelength=Wavelength(1550e-9, "m")
 )
-fiber = rep.FiberProfile.from_gamma if hasattr(rep, "FiberProfile") else None
-from photonics_helper.gnlse import FiberProfile
+fiber = rep.Fiber.from_gamma if hasattr(rep, "Fiber") else None
+from photonics_helper.gnlse import Fiber
 
-fiber = FiberProfile.from_gamma(
+fiber = Fiber.from_gamma(
     gamma=gamma,
-    n2=2.7e-20,
-    omega0=float(wave.central_frequency),
     length=Length(2 * xi_d * L_NL, "m"),
 )
 solver = GNLSESolver(

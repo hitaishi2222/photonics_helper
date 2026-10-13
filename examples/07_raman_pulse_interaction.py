@@ -32,7 +32,7 @@ import matplotlib.pyplot as plt
 
 from photonics_helper.base import Time, Wavelength
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
-from photonics_helper.raman import RamanPulseInteraction, RamanResponse, RamanSpec
+from photonics_helper.raman import RamanPulseInteraction, RamanSpec
 
 
 def main():
@@ -64,7 +64,7 @@ def main():
 
     for name in materials:
         spec = RamanSpec.from_database(name)
-        response = RamanResponse(spec=spec, grid=grid)
+        response = spec.response(grid)
         interaction = RamanPulseInteraction(pulse=wave, response=response, spec=spec)
         interactions[name] = interaction
         P_NL = interaction.nonlinear_polarization
@@ -222,7 +222,7 @@ def main():
 
         env = Envelope(shape=shape, peak_amplitude=1.0, pulse_width=Time(100, "fs"))
         w = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(800, "nm"))
-        resp = RamanResponse(spec=silica.spec, grid=grid)
+        resp = silica.spec.response(grid)
         interact = RamanPulseInteraction(pulse=w, response=resp, spec=silica.spec)
 
         t_ps = interact.grid.t * 1e12

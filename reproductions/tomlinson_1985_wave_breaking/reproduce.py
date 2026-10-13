@@ -55,8 +55,8 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy.signal import find_peaks
 
-from photonics_helper.base import C_MS, Length, Time, Wavelength
-from photonics_helper.gnlse import FiberProfile, GNLSESolver
+from photonics_helper.base import Length, Time, Wavelength
+from photonics_helper.gnlse import Fiber, GNLSESolver
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
 # Analytic wave-breaking primitives now live in the library.
@@ -132,10 +132,8 @@ def _run(
         pulse_width=Time(wb.T0_s, "s"),
     )
     pulse = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(wb.lam_m, "m"))
-    fiber = FiberProfile.from_gamma(
+    fiber = Fiber.from_gamma(
         gamma=wb.gamma,
-        n2=float(params["n2_m2_per_W"]),
-        omega0=2 * np.pi * C_MS / wb.lam_m,
         length=Length(length_m, "m"),
     )
     solver = GNLSESolver(

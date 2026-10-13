@@ -32,6 +32,8 @@ from typing import Callable
 
 import numpy as np
 
+from photonics_helper.base import AngularFrequencyArray, Wavelength
+
 HERE = Path(__file__).resolve().parent
 C_MS = 299792458.0
 
@@ -44,11 +46,11 @@ def _load_rep():
 
 
 def omega0_from_lambda(lambda_nm: float) -> float:
-    return 2 * np.pi * C_MS / (lambda_nm * 1e-9)
+    return Wavelength(lambda_nm, "nm").to_omega().as_rad_s
 
 
 def lambda_from_omega(omega: float | np.ndarray) -> float | np.ndarray:
-    return 2 * np.pi * C_MS / np.asarray(omega, dtype=float) * 1e9
+    return AngularFrequencyArray(np.asarray(omega, dtype=float), "rad/s").to_wl().as_nm
 
 
 def absolute_arrival_time_fs(

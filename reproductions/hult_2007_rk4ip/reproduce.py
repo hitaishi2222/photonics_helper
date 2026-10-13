@@ -50,6 +50,8 @@ from pathlib import Path
 
 import numpy as np
 
+from photonics_helper.base import AngularFrequencyArray, Wavelength
+
 HERE = Path(__file__).resolve().parent
 PARAMS = json.loads((HERE / "parameters.json").read_text())
 OUT_PNG = HERE / "hult_2007_rk4ip.png"
@@ -78,9 +80,9 @@ def _engine_band_spectrum(u: np.ndarray, grid) -> tuple[np.ndarray, np.ndarray]:
     (analysis e^{+i}; ISSUES.md #0 resolution addendum)."""
     spec = np.fft.fftshift(np.conj(np.fft.fft(np.conj(np.fft.ifftshift(u)))))
     psd = np.abs(spec) ** 2
-    w0 = 2 * np.pi * C_LIGHT / (850.0 * 1e-9)  # deck B carrier
+    w0 = Wavelength(850.0, "nm").to_omega().as_rad_s  # deck B carrier
     w = np.fft.fftshift(np.fft.fftfreq(u.size, d=float(grid.dt))) * 2 * np.pi
-    lam = 2 * np.pi * C_LIGHT / (w0 + w) * 1e9
+    lam = AngularFrequencyArray(w0 + w, "rad/s").to_wl().as_nm
     order = np.argsort(lam)
     return lam[order], psd[order]
 
@@ -108,7 +110,7 @@ def _build_soliton_op(n_points: int) -> GNLSEOperator:
     """NLSE operator for the N = 2 soliton (no Raman, no shock)."""
     d = PARAMS["soliton_deck"]
     betas_si = np.array([d["beta2_ps2_per_m"] * 1e-24])
-    omega0 = 2 * np.pi * C_LIGHT / 850e-9
+    omega0 = Wavelength(850, "nm").to_omega().as_rad_s
     T_s = d.get("Tmax_s", 20e-12)
     return GNLSEOperator(
         n_points=n_points,
@@ -207,7 +209,7 @@ def _build_scg_op(n_points: int = 8192, T_s: float = 4e-12) -> GNLSEOperator:
     betas_si = np.asarray(d["betas_psN_per_m"], dtype=float) * 10.0 ** (
         -12 * np.arange(2, 2 + len(d["betas_psN_per_m"]))
     )
-    omega0 = 2 * np.pi * C_LIGHT / (d["central_wavelength_nm"] * 1e-9)
+    omega0 = Wavelength(d["central_wavelength_nm"], "nm").to_omega().as_rad_s
     return GNLSEOperator(
         n_points=n_points,
         T_s=T_s,

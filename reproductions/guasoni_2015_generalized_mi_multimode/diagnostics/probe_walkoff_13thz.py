@@ -52,7 +52,7 @@ rep = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(rep)
 
 from photonics_helper.base import Area, Length, Time, Wavelength
-from photonics_helper.gnlse import FiberProfile
+from photonics_helper.gnlse import Fiber
 from photonics_helper.multimode_gnlse import MultimodeSplitStepEngine
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
@@ -95,7 +95,7 @@ def run_single(n: int, om_thz: float, with_gvm: bool) -> dict:
         waves.append(wv.with_field(np.asarray(field, complex)))
     b2_ps = list(rep.BETA2_S2_PER_M * 1e24)  # ps^2/m
     b3_ps = [float(v) * CONV for v in rep.BETA3_S3_PER_M]  # ps^3/m
-    fiber = FiberProfile(
+    fiber = Fiber(
         n2=1.0, alpha=0.0, A_eff=Area(1.0, "m^2"), length=Length(L_M, "m")
     )
     kw = dict(group_delays=list(rep.GVM_S_PER_M)) if with_gvm else {}

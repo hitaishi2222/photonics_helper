@@ -193,9 +193,9 @@ def test_gnlse_matches_numpy_path():
         pytest.skip("pyfftw not installed")
 
     from photonics_helper.base import Area, Length, Time, Wavelength
-    from photonics_helper.gnlse import FiberProfile, GNLSESolver
+    from photonics_helper.gnlse import Fiber, GNLSESolver
     from photonics_helper.pulse import Envelope, TemporalGrid, Wave
-    from photonics_helper.raman import RamanResponse, RamanSpec
+    from photonics_helper.raman import RamanSpec
 
     grid = TemporalGrid(N=2**11, Tmax=Time(10e-12, "s"))
     env = Envelope(shape="gaussian", peak_amplitude=1.0, pulse_width=Time(100, "fs"))
@@ -203,9 +203,9 @@ def test_gnlse_matches_numpy_path():
     pulse = Wave(grid=grid, envelope=env, central_wavelength=wl)
 
     spec = RamanSpec(name="Silica", raman_shift_cm=440, raman_linewidth_cm=45, fR=0.18)
-    raman = RamanResponse(spec=spec, grid=grid)
+    raman = spec.response(grid)
 
-    fiber = FiberProfile(
+    fiber = Fiber(
         n2=2.6e-20,
         alpha=0.0,
         A_eff=Area(80e-12, "m^2"),

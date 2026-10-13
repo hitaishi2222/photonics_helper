@@ -57,8 +57,8 @@ from pathlib import Path
 import numpy as np
 from numpy.typing import NDArray
 
-from photonics_helper.base import C_MS, Length, Time, Wavelength
-from photonics_helper.gnlse import FiberProfile, GNLSESolver
+from photonics_helper.base import Length, Time, Wavelength
+from photonics_helper.gnlse import Fiber, GNLSESolver
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
 HERE = Path(__file__).resolve().parent
@@ -210,10 +210,8 @@ def propagate(
     """Propagate one KM period and return ``(z_array, evolution)``."""
     steps = int(num_steps if num_steps is not None else params["num_steps"])
     pulse = build_pulse(params, km, grid)
-    fiber = FiberProfile.from_gamma(
+    fiber = Fiber.from_gamma(
         gamma=km.gamma_per_Wm,
-        n2=float(params["n2_m2_per_W"]),
-        omega0=2 * np.pi * C_MS / (float(params["central_wavelength_nm"]) * 1e-9),
         alpha=km.alpha_per_m if lossy else 0.0,
         length=Length(km.period_m, "m"),
     )

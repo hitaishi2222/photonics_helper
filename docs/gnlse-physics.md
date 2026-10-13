@@ -68,7 +68,7 @@ h_R(t) = Z⁻¹ Σ_i w_i e^{−t/τ_i} sin(ω_i t) θ(t),   τ_i = 2/γ_i,   ω_
 with `γ_i` the angular-frequency FWHM of mode *i* (Lorentzian ↔ damped
 oscillator relation `Δω = 2/τ`, Agrawal §2.3.2) and `Z` fixed by
 `∫₀^∞ h_R dt = 1`. The solver's Raman dispatch reads `fR` and `h_R(t)` from
-whatever response object the `FiberProfile` carries — the single-mode silica
+whatever response object the `Fiber` carries — the single-mode silica
 Blow–Wood `RamanResponse` or a multi-mode `PhononResponse` — so crystalline
 materials (LiNbO₃, YAG, KTP, …) can be propagated with their real multi-mode
 response. Single-mode behaviour is unchanged.
