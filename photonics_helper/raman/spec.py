@@ -179,6 +179,38 @@ class RamanSpec:
             return PhononResponse(self.phonon_modes, fR=self.fR)
         return None
 
+    # -- unified facade (single entry point) -------------------------------
+    def response(self, grid=None, fR: float | None = None, tau1: float | None = None, tau2: float | None = None):
+        """Build the time-domain :class:`RamanResponse` for this material.
+
+        Single entry point so users never choose between ``RamanSpec`` /
+        ``RamanResponse`` / ``RamanFrequencyResponse`` directly::
+
+            spec = RamanSpec.from_database("Silica")
+            resp = spec.response()          # time domain h_R(t)
+            freq = resp.frequency           # or spec.frequency_response()
+
+        Parameters
+        ----------
+        grid : TemporalGrid | None — time grid; auto-built when omitted.
+        fR, tau1, tau2 : optional overrides (seconds for taus).
+        """
+        from .response import RamanResponse
+
+        return RamanResponse(spec=self, fR=fR if fR is not None else self.fR, tau1=tau1, tau2=tau2, grid=grid)
+
+    def frequency_response(self, grid=None):
+        """Build the frequency-domain response ``H(Ω)`` for this material."""
+        return self.response(grid=grid).frequency
+
+    def plot_response(self, backend: Literal["matplotlib", "plotly"] = "matplotlib", **kwargs):
+        """Plot instantaneous / delayed / combined response (delegates to RamanResponse)."""
+        return self.response().plot_components(backend=backend, **kwargs)
+
+    def plot_frequency_response(self, backend: Literal["matplotlib", "plotly"] = "matplotlib", **kwargs):
+        """4-panel Re/Im/|H|/phase plot (delegates to RamanFrequencyResponse)."""
+        return self.frequency_response().plot_all(backend=backend, **kwargs)
+
     def multi_stokes_wavelengths(self, pump_wl) -> list:
         """Stokes wavelength for each phonon mode.
 

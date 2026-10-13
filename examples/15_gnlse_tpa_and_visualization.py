@@ -26,7 +26,7 @@ import matplotlib.pyplot as plt
 
 from photonics_helper.base import Area, Length, Time, Wavelength
 from photonics_helper.gnlse import (
-    FiberProfile,
+    Fiber,
     GNLSESolver,
     plot_intensity_metrics,
     plot_spectrum_vs_distance,
@@ -56,7 +56,7 @@ def main():
     fiber_length = Length(2, "mm")
     A_eff = Area(80, "um^2")
 
-    omega0 = 2 * np.pi * 299792458.0 / central_wl.as_m
+    omega0 = central_wl.to_omega().as_rad_s
     n2 = 2.6e-20  # m²/W — silica nonlinear index
     # Use a moderate TPA cross-section — enhanced for visualization but
     # still shows gradual decay over 2 mm propagation (silicon ~4.5e-11 m²/W)
@@ -75,7 +75,7 @@ def main():
     # ── Case 1: No TPA ──────────────────────────────────────────────────────
 
     pulse = make_pulse(wavelength_nm=central_wl.as_nm, T0_fs=T0.as_fs, peak_power_W=1e6)
-    fiber_no_tpa = FiberProfile(
+    fiber_no_tpa = Fiber(
         n2=n2,
         alpha=0.0,
         A_eff=A_eff,
@@ -95,7 +95,7 @@ def main():
 
     # ── Case 2: With TPA ────────────────────────────────────────────────────
 
-    fiber_tpa = FiberProfile(
+    fiber_tpa = Fiber(
         n2=n2,
         alpha=0.0,
         A_eff=A_eff,

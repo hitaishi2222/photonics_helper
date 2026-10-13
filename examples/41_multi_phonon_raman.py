@@ -88,7 +88,7 @@ import numpy as np
 from photonics_helper.base import Time, Wavenumber
 from photonics_helper.phonon import TWO_PI_C_CM, PhononMode, PhononResponse
 from photonics_helper.pulse import TemporalGrid
-from photonics_helper.raman import RamanFrequencyResponse, RamanResponse, RamanSpec
+from photonics_helper.raman import RamanResponse, RamanSpec
 from photonics_helper.raman.db import RamanDatabase
 
 C_CM = 2.99792458e10  # cm/s
@@ -149,12 +149,11 @@ def two_exponential(
     )
     nu = 2.99792458e10 * spec.raman_shift_cm  # Hz
     gamma = 2.99792458e10 * spec.raman_linewidth_cm  # Hz
-    return RamanResponse(
-        spec=spec,
+    return spec.response(
+        grid or _grid(),
         fR=spec.fR if fR is None else fR,
         tau1=1.0 / (2 * np.pi * nu),
         tau2=1.0 / (np.pi * gamma),
-        grid=grid or _grid(),
     )
 
 
@@ -332,7 +331,7 @@ def run_frequency_check(db: RamanDatabase, pair: dict) -> dict:
     lorentz = modal.frequency_domain(w_cm)
 
     # The two-exponential model's frequency response, from its own h_R.
-    freq = RamanFrequencyResponse(response=two_exp, grid=grid)
+    freq = two_exp.frequency
     h_grid = freq.H_magnitude
     w_rad = np.asarray(grid.w)
     positive = w_rad > 0

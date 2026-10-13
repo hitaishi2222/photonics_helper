@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any, Literal, TypeAlias
 import numpy as np
 from numpy.typing import NDArray
 
-from photonics_helper.base import C_MS, Area, Length, Time
+from photonics_helper.base import C_MS, AngularFrequency, Area, Length, Time
 
 # Accepted unit strings for dispersion coefficients passed to the solvers.
 BetasUnit = Literal["ps^k/m", "s^k/m", "SI"]
@@ -202,6 +202,7 @@ if TYPE_CHECKING:
 __all__ = [
     "ConvergenceDiagnostics",
     "DRIFT_WARN_PCT",
+    "Fiber",
     "FiberProfile",
     "GNLSESolver",
     "SplitStepEngine",
@@ -223,22 +224,37 @@ __all__ = [
 
 
 # ---------------------------------------------------------------------------
-# FiberProfile
+# Fiber (formerly FiberProfile)
 # ---------------------------------------------------------------------------
 
 
+def _coerce_omega0(omega0: float | AngularFrequency) -> float:
+    """Carrier angular frequency in rad/s from float or :class:`AngularFrequency`."""
+    if isinstance(omega0, AngularFrequency):
+        return omega0.as_rad_s
+    return float(omega0)
+
+
 @dataclass
-class FiberProfile:
+class Fiber:
     """Optical fiber/waveguide parameters for GNLSE propagation.
 
+    Preferred name is :class:`Fiber` (``FiberProfile`` is kept as a
+    deprecated alias). Either supply ``n2`` + ``A_eff`` (γ derived as
+    ``n₂·ω₀·Γ/(c·A_eff)``) or supply ``gamma`` directly — when ``gamma``
+    is set the solver uses it and ``n2``/``A_eff`` are only kept for
+    bookkeeping, so ``from_gamma`` no longer needs ``n2``.
+
     Attributes:
-        n2: Nonlinear refractive index n₂ (m²/W).
+        n2: Nonlinear refractive index n₂ (m²/W). Optional when ``gamma`` given.
         alpha: Fiber loss coefficient α (1/m).
-        A_eff: Effective mode area (m²).
+        A_eff: Effective mode area. Optional when ``gamma`` is given directly.
+        length: Fiber length.
+        gamma: Nonlinear coefficient γ in 1/(W·m). When set, takes
+            precedence over the ``n2``/``A_eff`` derivation.
         confinement_factor: Waveguide confinement factor Γ (1.0 for fibers, <1.0 for waveguides).
         sigma_tpa: Two-photon absorption cross-section (m²·W⁻¹). Default 0.
         carrier_lifetime: Carrier recombination lifetime (s). Default None.
-        length: Fiber length (m).
         raman_response: Raman response function. Default None.
         beta_tpa: Two-photon absorption coefficient β_TPA (m/W) for the
             time-resolved free-carrier model. Default 0.
@@ -248,10 +264,11 @@ class FiberProfile:
             lifetime to a propagation length. Default None → C_MS.
     """
 
-    n2: float
-    alpha: float
-    A_eff: Area
-    length: Length
+    n2: float = 0.0
+    alpha: float = 0.0
+    A_eff: Area | None = None
+    length: Length = field(default_factory=lambda: Length(1.0, "m"))
+    gamma: float | None = None
     confinement_factor: float = 1.0
     sigma_tpa: float = 0.0
     carrier_lifetime: Time | None = None
@@ -260,14 +277,31 @@ class FiberProfile:
     sigma_fca: float = 0.0
     group_velocity: float | None = None
 
+    def effective_gamma(self, omega0: float | AngularFrequency) -> float:
+        """Nonlinear coefficient γ in 1/(W·m).
+
+        Returns the stored :attr:`gamma` when set, else derives it from
+        ``n₂·ω₀·Γ/(c·A_eff)``. Accepts a raw float (rad/s) or an
+        :class:`AngularFrequency`.
+        """
+        if self.gamma is not None:
+            return float(self.gamma)
+        if self.A_eff is None:
+            raise ValueError(
+                "Fiber has neither gamma nor A_eff: supply gamma=... directly "
+                "or n2 + A_eff to derive it."
+            )
+        a_eff: Area = self.A_eff
+        return _gamma(self.n2, _coerce_omega0(omega0), a_eff, self.confinement_factor)
+
     @classmethod
     def from_gamma(
         cls,
         gamma: float,
-        n2: float,
-        omega0: float,
+        n2: float | None = None,
+        omega0: float | AngularFrequency | None = None,
         alpha: float = 0.0,
-        length: Length = Length(1.0, "m"),
+        length: Length | None = None,
         confinement_factor: float = 1.0,
         sigma_tpa: float = 0.0,
         carrier_lifetime: Time | None = None,
@@ -275,18 +309,27 @@ class FiberProfile:
         beta_tpa: float = 0.0,
         sigma_fca: float = 0.0,
         group_velocity: float | None = None,
-    ) -> FiberProfile:
-        """Create a FiberProfile from a target nonlinear coefficient γ.
+        A_eff: Area | None = None,
+    ) -> Fiber:
+        """Create a Fiber from a target nonlinear coefficient γ.
 
-        Convenience constructor that mirrors laserfun's API where γ is
-        specified directly (e.g. ``gamma_W_m``) rather than deriving it
-        from ``n₂`` and ``A_eff``.
+        Gamma-first form needs no ``n2``::
+
+            Fiber.from_gamma(0.045, A_eff=Area(80, "um^2"), length=Length(0.1, "m"))
+            Fiber.from_gamma(0.045, length=Length(0.1, "m"))  # A_eff unknown, gamma stored
+
+        Legacy form (``n2`` + ``omega0``) still works and back-computes
+        ``A_eff = n₂·ω₀·Γ/(c·γ)`` with a deprecation warning. ``omega0``
+        accepts a float (rad/s) or :class:`AngularFrequency`.
 
         Parameters
         ----------
         gamma : float — target nonlinear coefficient γ in 1/(W·m).
-        n2 : float — nonlinear refractive index n₂ in m²/W.
-        omega0 : float — carrier angular frequency in rad/s.
+        n2 : float | None — nonlinear refractive index n₂ in m²/W.
+            Only needed for the legacy A_eff back-computation.
+        omega0 : float | AngularFrequency | None — carrier angular frequency.
+            Only needed with ``n2`` (legacy path).
+        A_eff : Area | None — effective mode area. Preferred with gamma-first.
         alpha : float — fiber loss coefficient α in 1/m. Default 0.
         length : Length — fiber length. Default 1 m.
         confinement_factor : float — waveguide confinement factor Γ. Default 1.0.
@@ -304,19 +347,55 @@ class FiberProfile:
 
         Returns
         -------
-        FiberProfile — configured with the computed A_eff.
-
-        Notes
-        -----
-        Computes ``A_eff = n₂·ω₀·Γ / (c·γ)`` from the relation
-        ``γ = n₂·ω₀·Γ / (c·A_eff)``.
+        Fiber — with ``gamma`` stored (and ``A_eff`` when known).
         """
-        A_eff_m2 = n2 * omega0 * confinement_factor / (C_MS * gamma)
+        if length is None:
+            length = Length(1.0, "m")
+        if A_eff is not None:
+            return cls(
+                n2=n2 if n2 is not None else 0.0,
+                alpha=alpha,
+                A_eff=A_eff,
+                length=length,
+                gamma=gamma,
+                confinement_factor=confinement_factor,
+                sigma_tpa=sigma_tpa,
+                carrier_lifetime=carrier_lifetime,
+                raman_response=raman_response,
+                beta_tpa=beta_tpa,
+                sigma_fca=sigma_fca,
+                group_velocity=group_velocity,
+            )
+        if n2 is not None and omega0 is not None:
+            warnings.warn(
+                "from_gamma(gamma, n2, omega0) back-computes A_eff; prefer "
+                "from_gamma(gamma, A_eff=...) or from_gamma(gamma, ...) "
+                "which needs no n2.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            A_eff_m2 = n2 * _coerce_omega0(omega0) * confinement_factor / (C_MS * gamma)
+            return cls(
+                n2=n2,
+                alpha=alpha,
+                A_eff=Area(A_eff_m2, "m^2"),
+                length=length,
+                gamma=gamma,
+                confinement_factor=confinement_factor,
+                sigma_tpa=sigma_tpa,
+                carrier_lifetime=carrier_lifetime,
+                raman_response=raman_response,
+                beta_tpa=beta_tpa,
+                sigma_fca=sigma_fca,
+                group_velocity=group_velocity,
+            )
+        # Gamma-only: no n2, no A_eff needed for propagation.
         return cls(
-            n2=n2,
+            n2=n2 if n2 is not None else 0.0,
             alpha=alpha,
-            A_eff=Area(A_eff_m2, "m^2"),
+            A_eff=None,
             length=length,
+            gamma=gamma,
             confinement_factor=confinement_factor,
             sigma_tpa=sigma_tpa,
             carrier_lifetime=carrier_lifetime,
@@ -325,6 +404,43 @@ class FiberProfile:
             sigma_fca=sigma_fca,
             group_velocity=group_velocity,
         )
+
+    @classmethod
+    def from_n2(
+        cls,
+        n2: float,
+        A_eff: Area,
+        length: Length | None = None,
+        alpha: float = 0.0,
+        confinement_factor: float = 1.0,
+        sigma_tpa: float = 0.0,
+        carrier_lifetime: Time | None = None,
+        raman_response: object | None = None,
+        beta_tpa: float = 0.0,
+        sigma_fca: float = 0.0,
+        group_velocity: float | None = None,
+    ) -> Fiber:
+        """Create a Fiber from ``n2`` + ``A_eff`` (γ derived at run time)."""
+        if length is None:
+            length = Length(1.0, "m")
+        return cls(
+            n2=n2,
+            alpha=alpha,
+            A_eff=A_eff,
+            length=length,
+            gamma=None,
+            confinement_factor=confinement_factor,
+            sigma_tpa=sigma_tpa,
+            carrier_lifetime=carrier_lifetime,
+            raman_response=raman_response,
+            beta_tpa=beta_tpa,
+            sigma_fca=sigma_fca,
+            group_velocity=group_velocity,
+        )
+
+
+#: Deprecated alias — use :class:`Fiber` instead.
+FiberProfile = Fiber
 
 
 # ---------------------------------------------------------------------------
@@ -337,18 +453,24 @@ HBAR_J_S = 1.0545718e-34
 
 
 def _gamma(
-    n2: float, omega0: float, A_eff: Area, confinement_factor: float = 1.0
+    n2: float, omega0: float | AngularFrequency, A_eff: Area, confinement_factor: float = 1.0
 ) -> float:
     """Nonlinear coefficient γ = n₂·ω₀·Γ / (c·A_eff).
 
     Parameters
     ----------
     n2 : float — Nonlinear refractive index n₂ (m²/W).
-    omega0 : float — Carrier angular frequency (rad/s).
+    omega0 : float | AngularFrequency — Carrier angular frequency (float in
+        rad/s, or unit-bearing :class:`AngularFrequency`).
     A_eff : Area — Effective mode area.
     confinement_factor : float — Waveguide confinement factor Γ (1.0 for fibers).
     """
-    return n2 * omega0 * confinement_factor / (C_MS * A_eff.as_m2)
+    return n2 * _coerce_omega0(omega0) * confinement_factor / (C_MS * A_eff.as_m2)
+
+
+def _fiber_gamma(fiber: Fiber, omega0: float | AngularFrequency) -> float:
+    """Resolve the effective γ for *fiber*: stored ``gamma`` wins, else derive."""
+    return fiber.effective_gamma(omega0)
 
 
 def kerr_step(
@@ -356,7 +478,7 @@ def kerr_step(
     fiber: FiberProfile,
     grid: TemporalGrid,
     dz: float,
-    omega0: float,
+    omega0: float | AngularFrequency,
 ) -> NDArray:
     """Apply instantaneous Kerr effect: A ← A · exp(i·γ·|A|²·Δz).
 
@@ -372,7 +494,7 @@ def kerr_step(
     -------
     A : updated complex array.
     """
-    gamma = _gamma(fiber.n2, omega0, fiber.A_eff, fiber.confinement_factor)
+    gamma = _fiber_gamma(fiber, omega0)
     phase = np.exp(1j * gamma * np.abs(A) ** 2 * dz)
     return np.asarray(A * phase)
 
@@ -460,7 +582,7 @@ def raman_step(
     grid: TemporalGrid,
     dz: float,
     include_raman: bool,
-    omega0: float = 0.0,
+    omega0: float | AngularFrequency = 0.0,
 ) -> NDArray:
     """Apply Raman convolution: P_NL = (1-fR)|A|² + fR·(h_R ⊗ |A|²).
 
@@ -502,7 +624,7 @@ def raman_step(
 
     P_Raman = _raman_polarization(intensity, fR, grid, h_R_fft)
 
-    gamma = _gamma(fiber.n2, omega0, fiber.A_eff, fiber.confinement_factor)
+    gamma = _fiber_gamma(fiber, omega0)
     raman_phase = np.exp(1j * gamma * P_Raman * dz)
     return np.asarray(A * raman_phase)
 
@@ -513,7 +635,7 @@ def free_carrier_step(
     grid: TemporalGrid,
     dz: float,
     N: NDArray | None,
-    omega0: float,
+    omega0: float | AngularFrequency,
 ) -> tuple[NDArray, NDArray | None]:
     """Time-resolved TPA / free-carrier absorption step (opt-in).
 
@@ -554,6 +676,7 @@ def free_carrier_step(
     """
     beta = fiber.beta_tpa
     sigma = fiber.sigma_fca
+    omega0_f = _coerce_omega0(omega0)
     if beta <= 0 and sigma <= 0:
         return A, N
 
@@ -575,7 +698,7 @@ def free_carrier_step(
     v = fiber.group_velocity if fiber.group_velocity is not None else C_MS
     L = max(tau_c * v, 1e-300)  # m — carrier recombination length
     decay = np.exp(-dz / L)
-    source = beta * intensity**2 / (2.0 * HBAR_J_S * omega0) if beta > 0 else 0.0
+    source = beta * intensity**2 / (2.0 * HBAR_J_S * omega0_f) if beta > 0 else 0.0
     N_mid = N * decay + source * L * (1.0 - decay)
 
     # FCA loss with the mid-step carrier density.
@@ -592,7 +715,7 @@ def tpa_step(
     dz: float,
     include_tpa: bool,
     U: float = 0.0,
-    omega0: float = 0.0,
+    omega0: float | AngularFrequency = 0.0,
 ) -> tuple[NDArray, float]:
     """Apply two-photon absorption with carrier dynamics.
 
@@ -621,7 +744,8 @@ def tpa_step(
     if not include_tpa:
         return A, U
 
-    if omega0 <= 0:
+    omega0_f = _coerce_omega0(omega0)
+    if omega0_f <= 0:
         raise ValueError(
             "tpa_step: omega0 (carrier angular frequency in rad/s) is required when include_tpa=True"
         )
@@ -633,7 +757,7 @@ def tpa_step(
         return A, U
 
     hbar = 1.0545718e-34  # J·s
-    hbar_omega = hbar * omega0
+    hbar_omega = hbar * omega0_f
 
     # Intensity |A|^2 (W/m² for proper TPA)
     intensity = np.abs(A) ** 2
@@ -1018,11 +1142,14 @@ class SplitStepEngine:
             return np.asarray(self._dispersion_profile.fn(omega, z))
 
     def _get_gamma(self, z: float) -> float:
-        """Compute γ(z) from a_eff_fn(z) or fallback to fiber.A_eff."""
+        """Compute γ(z) from gamma_fn/a_eff_fn(z) or the fiber's stored gamma."""
         if self.gamma_fn is not None:
             return self.gamma_fn(z)
         if self._a_eff_fn is not None:
             a_eff = self._a_eff_fn(z)
+            if self.fiber.gamma is not None:
+                # Stored gamma wins; a_eff_fn only matters for n2-derived fibers.
+                return float(self.fiber.gamma)
             return _gamma(
                 self.fiber.n2,
                 self.omega0,
@@ -1030,12 +1157,7 @@ class SplitStepEngine:
                 self.fiber.confinement_factor,
             )
         else:
-            return _gamma(
-                self.fiber.n2,
-                self.omega0,
-                self.fiber.A_eff,
-                self.fiber.confinement_factor,
-            )
+            return _fiber_gamma(self.fiber, self.omega0)
 
     def _get_alpha(self, z: float) -> float:
         """Get α(z) from alpha_fn(z) or fallback to fiber.alpha."""
@@ -2486,6 +2608,107 @@ class GNLSESolver:
             )
         return diag
 
+    def propagate_auto(
+        self,
+        *,
+        energy_tol: float = 0.01,
+        edge_tol: float = 1e-3,
+        max_rounds: int = 4,
+        max_steps: int = 50000,
+        max_N: int = 2**17,
+        nsaves: int = 200,
+        start_steps: int | None = None,
+        show_progress: bool = False,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """Propagate, retrying with finer steps / wider grid until clean.
+
+        Automates the two manual knobs that produce the classic “noisy”
+        GNLSE plot: too few steps (energy drift) and too narrow a time
+        window (fission products wrap around the periodic FFT boundary and
+        interfere with themselves — speckly fringes + diagonal streaks).
+        Each round propagates, then checks:
+
+        - **drift**: ``|E_end − E_start| / E_start`` ≤ ``energy_tol``
+          (skipped for loss/gain/TPA runs, where drift is physical);
+        - **edges**: energy fraction in the outer 5% of the time window at
+          the output ≤ ``edge_tol`` — a direct wrap-around detector.
+
+        A drift failure doubles the steps; an edge failure doubles the
+        window at fixed ``dt`` (``N`` doubles too). Returns a report dict
+        with ``converged``, ``steps``, ``rounds``, ``drift``, ``edge_frac``
+        and ``widened``. Warns instead of raising when ``max_rounds`` is
+        exhausted, so a long run's data is never thrown away.
+        """
+        from photonics_helper.core.grids import TemporalGrid
+        from photonics_helper.pulse import Wave
+
+        steps = int(start_steps) if start_steps is not None else max(
+            10, type(self).estimate_num_steps(self.pulse, self.fiber, np.asarray(self.betas))
+        )
+        widened = False
+        report: dict[str, Any] = {}
+        for _round in range(max(1, max_rounds)):
+            steps = min(steps, max_steps)
+            self.propagate(num_steps=steps, nsaves=nsaves, show_progress=show_progress, **kwargs)
+            energy = np.asarray(self.energy_vs_z, dtype=float)
+            lossless = (
+                self.fiber.alpha == 0.0
+                and not self.include_tpa
+                and not self.include_free_carriers
+            )
+            drift = float(abs(energy[-1] - energy[0]) / max(energy[0], 1e-300)) if lossless else 0.0
+            final_A = np.asarray(self._evolution[-1].envelope_field)
+            edge_n = max(1, int(0.05 * final_A.shape[0]))
+            edge_frac = float(
+                (np.sum(np.abs(final_A[:edge_n]) ** 2) + np.sum(np.abs(final_A[-edge_n:]) ** 2))
+                / max(np.sum(np.abs(final_A) ** 2), 1e-300)
+            )
+            report = {
+                "converged": (drift <= energy_tol) and (edge_frac <= edge_tol),
+                "steps": steps,
+                "rounds": _round + 1,
+                "drift": drift,
+                "edge_frac": edge_frac,
+                "widened": widened,
+                "N": int(self.pulse.grid.N),
+                "Tmax_s": float(self.pulse.grid.Tmax.as_s),
+            }
+            if report["converged"]:
+                return report
+            if _round + 1 >= max_rounds:
+                break
+            if edge_frac > edge_tol:
+                old = self.pulse.grid
+                new_N = min(int(old.N * 2), max_N)
+                if new_N <= old.N:
+                    warnings.warn(
+                        f"propagate_auto: edges hot ({edge_frac:.2g}) but N is at max_N={max_N}; "
+                        "keeping the grid.",
+                        UserWarning,
+                        stacklevel=2,
+                    )
+                else:
+                    new_grid = TemporalGrid(N=new_N, Tmax=Time(old.Tmax.as_s * 2.0, "s"))
+                    self.pulse = Wave.from_envelope(
+                        self.pulse.envelope,
+                        self.pulse.central_wavelength,
+                        grid=new_grid,
+                        refractive_index=self.pulse.refractive_index,
+                        repetition_rate=self.pulse.repetition_rate,
+                    )
+                    widened = True
+            if drift > energy_tol and lossless:
+                steps = min(steps * 2, max_steps)
+        warnings.warn(
+            f"propagate_auto: not converged after {report.get('rounds', max_rounds)} round(s) "
+            f"(drift={report.get('drift', float('nan')):.3g}, edge_frac={report.get('edge_frac', float('nan')):.2g}); "
+            "results kept — refine manually.",
+            UserWarning,
+            stacklevel=2,
+        )
+        return report
+
     @classmethod
     def estimate_num_steps(
         cls,
@@ -2507,7 +2730,7 @@ class GNLSESolver:
         length = fiber.length.as_m
         T0 = pulse.envelope.pulse_width.as_s
         omega0 = pulse.central_frequency
-        gamma = _gamma(fiber.n2, omega0, fiber.A_eff, fiber.confinement_factor)
+        gamma = _fiber_gamma(fiber, omega0)
         I_max = max(pulse.peak_power(), 1e-30)
 
         betas_arr = np.asarray(betas, dtype=float)

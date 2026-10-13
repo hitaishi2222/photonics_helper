@@ -1,12 +1,12 @@
 """Tests for photonics_helper.gnlse.fiber."""
 
 from photonics_helper.base import Area, Length, Time
-from photonics_helper.gnlse import FiberProfile
+from photonics_helper.gnlse import Fiber
 
 
 def test_fiber_profile_construction():
-    """FiberProfile can be constructed with required fields."""
-    fp = FiberProfile(
+    """Fiber can be constructed with required fields."""
+    fp = Fiber(
         n2=1.0e-19, alpha=1e-5, A_eff=Area(5e-11, "m^2"), length=Length(1.0, "m")
     )
     assert fp.n2 == 1.0e-19
@@ -17,7 +17,7 @@ def test_fiber_profile_construction():
 
 def test_fiber_profile_defaults():
     """Optional fields default correctly."""
-    fp = FiberProfile(
+    fp = Fiber(
         n2=1.0e-19, alpha=1e-5, A_eff=Area(5e-11, "m^2"), length=Length(1.0, "m")
     )
     assert fp.sigma_tpa == 0.0
@@ -27,7 +27,7 @@ def test_fiber_profile_defaults():
 
 def test_fiber_profile_optional_fields():
     """Optional fields can be set explicitly."""
-    fp = FiberProfile(
+    fp = Fiber(
         n2=1.0e-19,
         alpha=1e-5,
         A_eff=Area(5e-11, "m^2"),

@@ -20,7 +20,7 @@ import numpy as np
 
 from photonics_helper.base import Length, Time, Wavelength
 from photonics_helper.gnlse import (
-    FiberProfile,
+    Fiber,
     SplitStepEngine,
     free_carrier_step,
 )
@@ -43,10 +43,8 @@ def _engine(
         "sech", peak_amplitude=np.sqrt(peak), fwhm=Time(50e-15, "s")
     )
     wave = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(1550.0, "nm"))
-    fiber = FiberProfile.from_gamma(
+    fiber = Fiber.from_gamma(
         gamma=0.05,
-        n2=3e-20,
-        omega0=float(wave.central_frequency),
         length=Length(length_m, "m"),
         beta_tpa=beta_tpa,
         sigma_fca=sigma_fca,
@@ -155,10 +153,8 @@ def test_legacy_tpa_path_untouched():
         "sech", peak_amplitude=np.sqrt(1e3), fwhm=Time(50e-15, "s")
     )
     wave = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(1550.0, "nm"))
-    fiber = FiberProfile.from_gamma(
+    fiber = Fiber.from_gamma(
         gamma=0.05,
-        n2=3e-20,
-        omega0=float(wave.central_frequency),
         length=Length(0.05, "m"),
         sigma_tpa=1e13,
         carrier_lifetime=Time(1e-9, "s"),
@@ -183,10 +179,8 @@ def test_free_carrier_step_fca_only_limit():
         "sech", peak_amplitude=np.sqrt(100.0), fwhm=Time(50e-15, "s")
     )
     wave = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(1550.0, "nm"))
-    fiber = FiberProfile.from_gamma(
+    fiber = Fiber.from_gamma(
         gamma=0.05,
-        n2=3e-20,
-        omega0=float(wave.central_frequency),
         length=Length(0.05, "m"),
         beta_tpa=0.0,
         sigma_fca=1e-14,

@@ -91,7 +91,7 @@ from photonics_helper.base import (  # noqa: E402
     Time,
     Wavelength,
 )
-from photonics_helper.gnlse import FiberProfile  # noqa: E402
+from photonics_helper.gnlse import Fiber  # noqa: E402
 from photonics_helper.multimode_gnlse import MultimodeSplitStepEngine  # noqa: E402
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave  # noqa: E402
 
@@ -369,7 +369,7 @@ def _launch(idx: list[int], live: list[int]) -> dict[int, float]:
 
 
 def _make_engine(waves, weights, *, include_fwm: bool, oam_l=None) -> object:
-    fiber = FiberProfile(
+    fiber = Fiber(
         n2=1.0, alpha=0.0, A_eff=Area(1.0, "m^2"), length=Length(L_FIBER, "m")
     )
     eng = MultimodeSplitStepEngine(

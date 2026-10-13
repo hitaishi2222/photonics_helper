@@ -59,7 +59,7 @@ from photonics_helper.base import (
     WavelengthArray,
 )
 from photonics_helper.fiber import Dispersion
-from photonics_helper.gnlse import FiberProfile, GNLSESolver
+from photonics_helper.gnlse import Fiber, GNLSESolver
 from photonics_helper.phase_matching import (
     DispersionAdaptor,
     assess_simulation_readiness,
@@ -236,7 +236,7 @@ def main():
     P_peak = 2000.0
     pulse = make_gaussian_pulse(central_wl_nm, T0_ps, P_peak)
 
-    fiber = FiberProfile(
+    fiber = Fiber(
         n2=2.6e-20,
         alpha=0.0,
         A_eff=Area(80, "um^2"),

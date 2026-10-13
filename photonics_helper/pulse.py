@@ -36,6 +36,7 @@ from photonics_helper.base import (
     AngularFrequencyArray,
     Area,
     Frequency,
+    Power,
     Time,
     Wavelength,
     WavelengthArray,
@@ -250,6 +251,94 @@ class Envelope:
                 peak_amplitude=peak_amplitude,
                 pulse_width=T0,
             )
+
+    @staticmethod
+    def amplitude_from_peak_power(
+        peak_power: Power,
+        A_eff: Area,
+        refractive_index: float = 1.0,
+    ) -> float:
+        """Peak amplitude A0 for a target physical peak power.
+
+        Inverts ``P = ½·n·c·ε₀·A_eff·|A0|²`` (see
+        :class:`~photonics_helper.base.PeakPower`). Shape-independent:
+        every built-in shape peaks at ``|A| = A0`` (for ``gauss-hermite``
+        with ``hg_mode > 0`` the true maximum exceeds ``A0`` by the
+        Hermite-polynomial factor, so treat the result as the on-axis
+        scale, not the lobe maximum).
+        """
+        if peak_power.as_W <= 0:
+            raise ValueError(f"peak_power must be positive, got {peak_power}")
+        if A_eff.as_m2 <= 0:
+            raise ValueError("A_eff must be positive")
+        if refractive_index <= 0:
+            raise ValueError(f"refractive index must be positive, got {refractive_index}")
+        scale = 0.5 * refractive_index * C_MS * EPS_0 * A_eff.as_m2
+        return float(sqrt(peak_power.as_W / scale))
+
+    @classmethod
+    def from_peak_power(
+        cls,
+        shape: Literal[
+            "gaussian",
+            "sech",
+            "lorentzian",
+            "rectangular",
+            "super-gaussian",
+            "triangular",
+            "parabolic",
+            "cosine",
+            "exponential",
+            "gauss-hermite",
+            "airy",
+        ],
+        peak_power: Power,
+        pulse_width: Time,
+        A_eff: Area,
+        refractive_index: float = 1.0,
+        chirp: float = 0.0,
+        **kwargs: Any,
+    ) -> Self:
+        """Construct an Envelope from a physical peak power.
+
+        Preferred over passing raw ``peak_amplitude`` (V/m): users think in
+        watts, and the ``A0`` conversion needs ``A_eff`` and ``n`` anyway.
+        """
+        A0 = cls.amplitude_from_peak_power(peak_power, A_eff, refractive_index)
+        return cls(
+            shape=shape,  # type: ignore[arg-type]
+            peak_amplitude=A0,
+            pulse_width=pulse_width,
+            chirp=chirp,
+            **kwargs,
+        )
+
+    @classmethod
+    def from_fwhm_peak_power(
+        cls,
+        shape: Literal[
+            "gaussian",
+            "sech",
+            "lorentzian",
+            "rectangular",
+            "super-gaussian",
+            "triangular",
+            "cosine",
+            "exponential",
+            "airy",
+        ],
+        peak_power: Power,
+        fwhm: Time,
+        A_eff: Area,
+        refractive_index: float = 1.0,
+        chirp: float = 0.0,
+        **kwargs: Any,
+    ) -> Self:
+        """Construct an Envelope from FWHM + physical peak power."""
+        A0 = cls.amplitude_from_peak_power(peak_power, A_eff, refractive_index)
+        base = cls.from_fwhm(shape, A0, fwhm, **kwargs)  # type: ignore[arg-type]
+        base.chirp = chirp
+        return base
 
     def field(self, t: NDArray | None = None) -> NDArray:
         """Returns complex envelope A(t).
@@ -1006,14 +1095,14 @@ class ElectricField:
     # -- construction ------------------------------------------------------
 
     @classmethod
-    def from_envelope(
+    def from_array(
         cls,
         A: NDArray,
         grid: TemporalGrid,
         central_wavelength: Wavelength,
         refractive_index: float = 1.0,
     ) -> ElectricField:
-        """Reconstruct the field from a complex envelope ``A(t)``.
+        """Reconstruct the field from raw complex envelope samples ``A(t)``.
 
         The single authoritative carrier reconstruction of the library:
         ``E(t) = A(t)·e^{−iω₀t}`` where ``ω₀ = 2πc/λ₀``. Note ``A`` carries
@@ -1034,6 +1123,37 @@ class ElectricField:
             grid=grid,
             central_frequency=central_wavelength.to_omega(),
             refractive_index=refractive_index,
+        )
+
+    @classmethod
+    def from_envelope(
+        cls,
+        envelope: Envelope | NDArray,
+        grid: TemporalGrid,
+        central_wavelength: Wavelength,
+        refractive_index: float = 1.0,
+    ) -> ElectricField:
+        """Reconstruct the field from an :class:`Envelope` (or raw samples).
+
+        Preferred form takes an ``Envelope`` and samples it on ``grid.t``::
+
+            field = ElectricField.from_envelope(env, grid, Wavelength(1550, "nm"))
+
+        Passing a raw ``NDArray`` still works (deprecated — use
+        :meth:`from_array` instead) so existing call sites keep running.
+        """
+        if isinstance(envelope, Envelope):
+            A = envelope.field(grid.t)
+        else:
+            warnings.warn(
+                "ElectricField.from_envelope(array, ...) is deprecated; pass an "
+                "Envelope or use ElectricField.from_array(array, ...) instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            A = np.asarray(envelope)
+        return cls.from_array(
+            A, grid, central_wavelength, refractive_index=refractive_index
         )
 
     def to_envelope(self) -> NDArray:
@@ -1264,38 +1384,111 @@ class Wave:
         scaled._effective_area = A_eff
         return scaled
 
-    def average_power(self, repetition_rate: Frequency) -> float:
+    def average_power(self, repetition_rate: Frequency | None = None) -> float:
         """Average power = pulse energy × repetition_rate.
 
         Parameters
         ----------
-        repetition_rate : Hz
+        repetition_rate : Frequency | None — pulse repetition rate. When
+            omitted, falls back to the wave's stored ``repetition_rate``
+            (set by :meth:`from_pulse_train`); single-pulse waves built with
+            :meth:`from_envelope` must pass one explicitly.
         """
-        return float(self.pulse_energy() * repetition_rate.as_Hz)
+        rate = repetition_rate if repetition_rate is not None else self.repetition_rate
+        if rate is None:
+            raise ValueError(
+                "average_power() needs a repetition rate: pass one explicitly "
+                "or build the wave with Wave.from_pulse_train(...)."
+            )
+        return float(self.pulse_energy() * rate.as_Hz)
+
+    @classmethod
+    def from_envelope(
+        cls,
+        envelope: Envelope,
+        central_wavelength: Wavelength,
+        grid: TemporalGrid | None = None,
+        N: int = 2**12,
+        refractive_index: float = 1.0,
+        repetition_rate: Frequency | None = None,
+    ) -> Self:
+        """Construct a single-pulse Wave from an envelope.
+
+        Parameters
+        ----------
+        envelope : the single-pulse envelope shape
+        central_wavelength : carrier wavelength λ₀
+        grid : explicit :class:`TemporalGrid`. When ``None`` (default) it is
+            built automatically via ``envelope._make_grid(N)`` (≈10× T0
+            window), so callers never need to think about sampling.
+        N : samples for the auto-built grid (default 2¹²).
+        refractive_index : background n (default 1.0).
+        repetition_rate : optional repetition rate for later
+            :meth:`average_power` convenience.
+        """
+        if grid is None:
+            grid = envelope._make_grid(N)
+        return cls(
+            grid=grid,
+            envelope=envelope,
+            central_wavelength=central_wavelength,
+            refractive_index=refractive_index,
+            repetition_rate=repetition_rate,
+        )
 
     @classmethod
     def from_pulse_train(
         cls,
         envelope: Envelope,
         central_wavelength: Wavelength,
-        grid: TemporalGrid,
-        repetition_rate: Frequency,
+        grid: TemporalGrid | None = None,
+        repetition_rate: Frequency | None = None,
         n_pulses: int = 10,
         refractive_index: float = 1.0,
+        N: int = 2**12,
     ) -> Self:
         """Construct a pulse train Wave from a single-envelope shape.
+
+        ``grid`` is optional: when omitted it is built automatically with
+        :meth:`TemporalGrid.for_pulse_train` (multi-pulse) or
+        ``envelope._make_grid`` (single pulse, ``n_pulses == 1`` without a
+        repetition rate). ``repetition_rate`` is optional for a single
+        pulse and required for ``n_pulses > 1``.
 
         Parameters
         ----------
         envelope : The single-pulse envelope shape to repeat
         central_wavelength : Central wavelength of the carrier
-        grid : TemporalGrid covering the full window (all pulses + padding)
-        repetition_rate : Hz — spacing between consecutive pulses
+        grid : TemporalGrid covering the full window (all pulses + padding).
+            ``None`` → auto-built (recommended).
+        repetition_rate : Frequency | None — spacing between consecutive
+            pulses (``None`` allowed only for ``n_pulses == 1``).
         n_pulses : number of pulses (default 10)
         refractive_index : background refractive index (default 1.0)
+        N : samples for the auto-built grid (default 2¹²).
         """
+        if n_pulses > 1 and repetition_rate is None:
+            raise ValueError(
+                "from_pulse_train() with n_pulses > 1 requires repetition_rate; "
+                "for a single pulse use Wave.from_envelope() or pass n_pulses=1."
+            )
+        if grid is None:
+            if repetition_rate is None:
+                grid = envelope._make_grid(N)
+            else:
+                grid = TemporalGrid.for_pulse_train(
+                    repetition_rate, n_pulses, envelope.pulse_width, N
+                )
         # Build the multi-pulse envelope field, centered at t=0
         full_field = np.zeros_like(grid.t, dtype=complex)
+        # Single pulse without a repetition rate → delegate to from_envelope.
+        if repetition_rate is None:
+            return cls.from_envelope(
+                envelope,
+                central_wavelength,
+                grid=grid,
+                refractive_index=refractive_index,
+            )
         spacing = 1.0 / repetition_rate.as_Hz
         window = float(grid.time_window) if grid.time_window else 0.0
         # Sanity checks — a grid that cannot resolve the train makes the
@@ -1368,6 +1561,8 @@ class Wave:
         """Return this ``Wave`` with an explicit envelope-field override.
 
         Used by :meth:`from_pulse_train` for precomputed multi-pulse fields.
+        Mutates and returns ``self`` (so both ``w.with_field(f)`` and
+        ``w = w.with_field(f)`` work).
         """
         self._pulse_train_field = np.asarray(field)
         return self

@@ -8,7 +8,7 @@ matplotlib.use("Agg")  # Non-interactive backend for tests
 import matplotlib.pyplot as plt
 
 from photonics_helper.base import C_MS, PI, Area, Length, Time, Wavelength
-from photonics_helper.gnlse import FiberProfile
+from photonics_helper.gnlse import Fiber
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 from photonics_helper.soliton import (
     SolitonAnalyzer,
@@ -38,7 +38,7 @@ def _make_analyzer_manual(
     A_eff_val = n2 * omega0 * confinement / (C_MS * gamma_val)
     A_eff = Area(A_eff_val, "m^2")
 
-    fiber = FiberProfile(
+    fiber = Fiber(
         n2=n2,
         alpha=0.0,
         A_eff=A_eff,
@@ -237,7 +237,7 @@ def test_waveguide_confinement_factor():
     env = Envelope(shape="sech", peak_amplitude=1.0, pulse_width=Time(100e-15, "s"))
     pulse = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(1550, "nm"))
 
-    fiber = FiberProfile(
+    fiber = Fiber(
         n2=n2,
         alpha=0.0,
         A_eff=A_eff,
@@ -277,7 +277,7 @@ def _make_solver(
     n2 = 1e-19
     A_eff_val = n2 * omega0 / (C_MS * gamma_val)
     A_eff = Area(A_eff_val, "m^2")
-    fiber = FiberProfile(n2=n2, alpha=0.0, A_eff=A_eff, length=Length(1e-3, "m"))
+    fiber = Fiber(n2=n2, alpha=0.0, A_eff=A_eff, length=Length(1e-3, "m"))
 
     betas_ps2 = beta2_si * 1e24
     betas = (

@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 from photonics_helper.base import Area, Length, Time, Wavelength
-from photonics_helper.gnlse import FiberProfile, GNLSESolver, SplitStepEngine
+from photonics_helper.gnlse import Fiber, GNLSESolver, SplitStepEngine
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
 
@@ -27,7 +27,7 @@ def shock_setup():
         envelope=env,
         central_wavelength=Wavelength(1064, "nm"),
     )
-    fiber = FiberProfile(
+    fiber = Fiber(
         n2=2.6e-20,
         alpha=0.0,
         A_eff=Area(80, "um^2"),

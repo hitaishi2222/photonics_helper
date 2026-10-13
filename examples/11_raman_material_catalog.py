@@ -27,7 +27,6 @@ from photonics_helper.pulse import TemporalGrid
 from photonics_helper.raman import (
     COMMON_COMPARISONS,
     MaterialComparison,
-    RamanResponse,
     RamanSpec,
 )
 
@@ -145,7 +144,7 @@ def main():
 
         for name in names:
             spec = all_materials[name]
-            resp = RamanResponse(spec=spec, grid=grid)
+            resp = spec.response(grid)
             delayed = resp.delayed_response()
             t_ps = resp.grid.t * 1e12
             mask = (t_ps >= 0) & (t_ps <= 5)

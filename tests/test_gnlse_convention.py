@@ -29,10 +29,10 @@ import math
 import numpy as np
 
 from photonics_helper.base import Length, Time, Wavelength
-from photonics_helper.gnlse import FiberProfile, SplitStepEngine
+from photonics_helper.gnlse import Fiber, SplitStepEngine
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
-OMEGA0 = 2 * np.pi * 3e8 / (835e-9)  # rad/s
+OMEGA0 = Wavelength(835, "nm").to_omega().as_rad_s  # rad/s
 
 BETAS_PS = np.array(
     [-0.02, 0.1]
@@ -77,10 +77,8 @@ def _dudley_wave(n=1024, tmax_s=10e-12):
 def _linear_engine(betas_ps, wave=None, step_size=None):
     """Engine with dispersion only (no Raman, no shock)."""
     wave = wave or _dudley_wave()
-    fiber = FiberProfile.from_gamma(
+    fiber = Fiber.from_gamma(
         gamma=0.1,
-        n2=2.6e-20,
-        omega0=float(wave.central_frequency),
         length=Length(1.0, "m"),
     )
     engine = SplitStepEngine(

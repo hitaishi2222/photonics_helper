@@ -109,7 +109,7 @@ from numpy.typing import NDArray
 
 from photonics_helper.base import Area, Length, Time, Wavelength
 from photonics_helper.core.grids import TemporalGrid
-from photonics_helper.gnlse import FiberProfile
+from photonics_helper.gnlse import Fiber
 from photonics_helper.pulse import Envelope, Wave
 from photonics_helper.vector_gnlse import RandomBirefringenceEngine
 
@@ -171,7 +171,9 @@ def physical_setup() -> dict:
     """Paper-derived engine quantities (same conversions as Menyuk 1987)."""
     T0 = T0_S
     beta2 = -pi * T0**2 / (2.0 * Z0_M)  # from the paper's z_0 = 55 km
-    gamma = N2 * (2 * pi * C_MS / LAMBDA_M) / (C_MS * A_EFF_UM2 * 1e-12)
+    gamma = (
+        N2 * Wavelength(LAMBDA_M, "m").to_omega().as_rad_s / (C_MS * A_EFF_UM2 * 1e-12)
+    )
     P1 = abs(beta2) / (gamma * T0**2)  # scalar fundamental soliton peak
     return {
         "T0": T0,
@@ -442,7 +444,7 @@ def _make_engine(
         central_wavelength=Wavelength(LAMBDA_M * 1e9, "nm"),
     )
     wy = Wave(grid=grid, envelope=env(0.0), central_wavelength=wx.central_wavelength)
-    fiber = FiberProfile(
+    fiber = Fiber(
         n2=N2,
         alpha=0.0,
         A_eff=Area(A_EFF_UM2 * 1e-12, "m^2"),

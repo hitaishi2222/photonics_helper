@@ -10,11 +10,11 @@ import numpy as np
 import pytest
 
 from photonics_helper.base import Length, Time, Wavelength
-from photonics_helper.gnlse import FiberProfile, GNLSESolver, SplitStepEngine
+from photonics_helper.gnlse import Fiber, GNLSESolver, SplitStepEngine
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
 WL0_NM = 835.0
-OMEGA0 = 2 * np.pi * 3e8 / (WL0_NM * 1e-9)
+OMEGA0 = Wavelength(WL0_NM, "nm").to_omega().as_rad_s
 TAU_0 = 1.0 / OMEGA0  # 0.443 fs
 TAU_DUDLEY = 0.56e-15  # effective-area-corrected, RMP 2006 Sec. V.B
 
@@ -31,11 +31,9 @@ def _shock_wave(n: int = 2**12) -> Wave:
     return Wave(envelope=env, central_wavelength=Wavelength(WL0_NM, "nm"), grid=grid)
 
 
-def _fiber() -> FiberProfile:
-    return FiberProfile.from_gamma(
+def _fiber() -> Fiber:
+    return Fiber.from_gamma(
         gamma=0.11,
-        n2=2.6e-20,
-        omega0=OMEGA0,
         alpha=0.0,
         length=Length(2e-3, "m"),
     )
@@ -204,10 +202,8 @@ def _fissioning_shock_engine(n_pts: int, tmax_s: float = 20e-12):
         pulse_width=Time(_SHOCK_DECK_T0, "s"),
     )
     wave = Wave(envelope=env, central_wavelength=Wavelength(850.0, "nm"), grid=grid)
-    fiber = FiberProfile.from_gamma(
+    fiber = Fiber.from_gamma(
         gamma=_SHOCK_DECK_GAMMA,
-        n2=2.6e-20,
-        omega0=2 * np.pi * 3e8 / 850e-9,
         alpha=0.0,
         length=Length(_SHOCK_DECK_L, "m"),
         raman_response=_raman_response_for(grid),

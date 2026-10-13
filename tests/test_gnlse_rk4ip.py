@@ -31,16 +31,16 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from photonics_helper.base import Area, C_MS, Length, Time, Wavelength
+from photonics_helper.base import Area, Length, Time, Wavelength
 from photonics_helper.gnlse import (
-    FiberProfile,
+    Fiber,
     GNLSESolver,
     SplitStepEngine,
 )
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
 WL0 = 1550e-9
-OMEGA0 = 2 * np.pi * C_MS / WL0
+OMEGA0 = Wavelength(WL0, "m").to_omega().as_rad_s
 BETA2 = -21e-27
 GAMMA = 2.0
 T0 = 50e-15 / 1.763
@@ -64,8 +64,8 @@ def test_interaction_picture_transform_pair_is_inverse():
     grid = TemporalGrid(N=256, Tmax=Time(2e-11, "s"))
     env = Envelope(shape="sech", peak_amplitude=1.0, pulse_width=Time(T0, "s"))
     pulse = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(WL0, "m"))
-    fiber = FiberProfile.from_gamma(
-        gamma=GAMMA, n2=2.6e-20, omega0=OMEGA0, length=Length(1e-3, "m")
+    fiber = Fiber.from_gamma(
+        gamma=GAMMA, length=Length(1e-3, "m")
     )
     eng = SplitStepEngine(
         pulse=pulse, fiber=fiber, betas=np.array([BETA2 * 1e24])
@@ -89,7 +89,7 @@ def test_rk4ip_is_exact_for_a_purely_linear_flow():
     env = Envelope(shape="sech", peak_amplitude=1.0, pulse_width=Time(T0, "s"))
     pulse = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(WL0, "m"))
     # n2 = 0 ⇒ γ = 0 ⇒ N̂ = 0.
-    fiber = FiberProfile(
+    fiber = Fiber(
         n2=0.0, alpha=0.0, A_eff=Area(80e-12, "m^2"), length=Length(1e-3, "m")
     )
     eng = SplitStepEngine(
@@ -114,8 +114,8 @@ def test_rk4ip_reduces_to_classical_rk4_when_linear_part_vanishes():
     grid = TemporalGrid(N=256, Tmax=Time(2e-11, "s"))
     env = Envelope(shape="sech", peak_amplitude=np.sqrt(2.0), pulse_width=Time(T0, "s"))
     pulse = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(WL0, "m"))
-    fiber = FiberProfile.from_gamma(
-        gamma=GAMMA, n2=2.6e-20, omega0=OMEGA0, length=Length(1e-3, "m")
+    fiber = Fiber.from_gamma(
+        gamma=GAMMA, length=Length(1e-3, "m")
     )
     eng = SplitStepEngine(
         pulse=pulse, fiber=fiber, betas=np.array([]), scheme="rk4ip"
@@ -202,8 +202,8 @@ def _engine(scheme: str = "rk4ip", num_steps: int = 400, **kw) -> SplitStepEngin
         shape="sech", peak_amplitude=np.sqrt(peak), pulse_width=Time(T0, "s")
     )
     pulse = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(WL0, "m"))
-    fiber = FiberProfile.from_gamma(
-        gamma=GAMMA, n2=2.6e-20, omega0=OMEGA0, length=Length(LENGTH, "m")
+    fiber = Fiber.from_gamma(
+        gamma=GAMMA, length=Length(LENGTH, "m")
     )
     engine = SplitStepEngine(
         pulse=pulse,
@@ -277,7 +277,7 @@ def test_rk4ip_photon_number_conserved_with_shock():
         shape="sech", peak_amplitude=np.sqrt(peak), pulse_width=Time(T0, "s")
     )
     pulse = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(WL0, "m"))
-    fiber = FiberProfile(
+    fiber = Fiber(
         n2=2.6e-20,
         alpha=0.0,
         A_eff=Area(80e-12, "m^2"),
@@ -309,8 +309,8 @@ def test_rk4ip_rejects_out_of_scope_operators():
     grid = TemporalGrid(N=64, Tmax=Time(1e-11, "s"))
     env = Envelope(shape="sech", peak_amplitude=1.0, pulse_width=Time(T0, "s"))
     pulse = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(WL0, "m"))
-    fiber = FiberProfile.from_gamma(
-        gamma=GAMMA, n2=2.6e-20, omega0=OMEGA0, length=Length(1e-3, "m")
+    fiber = Fiber.from_gamma(
+        gamma=GAMMA, length=Length(1e-3, "m")
     )
     for kw in ({"include_tpa": True}, {"include_free_carriers": True}):
         eng = SplitStepEngine(
@@ -333,8 +333,8 @@ def test_gnlse_solver_scheme_passthrough():
             ),
             central_wavelength=Wavelength(WL0, "m"),
         ),
-        fiber=FiberProfile.from_gamma(
-            gamma=GAMMA, n2=2.6e-20, omega0=OMEGA0, length=Length(1e-3, "m")
+        fiber=Fiber.from_gamma(
+            gamma=GAMMA, length=Length(1e-3, "m")
         ),
         betas=np.array([BETA2 * 1e24]),
         scheme="rk4ip",

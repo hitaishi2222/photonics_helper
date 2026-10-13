@@ -21,7 +21,7 @@ import numpy as np
 import pytest
 
 from photonics_helper.base import Area, Length, Time, Wavelength
-from photonics_helper.gnlse import FiberProfile
+from photonics_helper.gnlse import Fiber
 from photonics_helper.multimode_gnlse import MultimodeSplitStepEngine
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
@@ -32,8 +32,8 @@ def _grid(t_ps: float = 60.0, n: int = 2**10) -> TemporalGrid:
     return TemporalGrid(N=n, Tmax=Time(t_ps * 1e-12, "s"))
 
 
-def _fiber(length_m: float) -> FiberProfile:
-    return FiberProfile(
+def _fiber(length_m: float) -> Fiber:
+    return Fiber(
         n2=2.6e-20,
         alpha=0.0,
         A_eff=Area(80e-12, "m^2"),

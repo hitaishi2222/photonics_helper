@@ -572,11 +572,11 @@ class TestSimulationReadiness:
     def test_readiness_coverage_check_passes(self, omega0, beta2, gamma):
         """Coverage check passes when grid is within dispersion bounds."""
         from photonics_helper.base import Area, Length
-        from photonics_helper.gnlse import FiberProfile
+        from photonics_helper.gnlse import Fiber
         from photonics_helper.phase_matching import assess_simulation_readiness
 
         pulse = self._make_pulse(omega0, T0_ps=1.0, power_W=100)
-        fiber = FiberProfile(
+        fiber = Fiber(
             n2=2.6e-20,
             alpha=0.0,
             A_eff=Area(80, "um^2"),
@@ -595,13 +595,13 @@ class TestSimulationReadiness:
     def test_soliton_order_matches_analytic(self, omega0, beta2):
         """Soliton order matches analytic N = √(γ·P·T₀²/|β₂|)."""
         from photonics_helper.base import Area, Length
-        from photonics_helper.gnlse import FiberProfile, _gamma
+        from photonics_helper.gnlse import Fiber, _gamma
         from photonics_helper.phase_matching import assess_simulation_readiness
 
         T0_ps = 1.0
         P_peak = 1000.0
         pulse = self._make_pulse(omega0, T0_ps=T0_ps, power_W=P_peak)
-        fiber = FiberProfile(
+        fiber = Fiber(
             n2=2.6e-20,
             alpha=0.0,
             A_eff=Area(80, "um^2"),
@@ -620,11 +620,11 @@ class TestSimulationReadiness:
         """assess_simulation_readiness works with a Dispersion table (not just Taylor betas)."""
         from photonics_helper.base import AngularFrequencyArray, Area, Length
         from photonics_helper.fiber import PropagationConstant
-        from photonics_helper.gnlse import FiberProfile
+        from photonics_helper.gnlse import Fiber
         from photonics_helper.phase_matching import assess_simulation_readiness
 
         pulse = self._make_pulse(omega0, T0_ps=1.0, power_W=100)
-        fiber = FiberProfile(
+        fiber = Fiber(
             n2=2.6e-20,
             alpha=0.0,
             A_eff=Area(80, "um^2"),
@@ -650,11 +650,11 @@ class TestSimulationReadiness:
         import photonics_helper.phase_matching as pm
         from photonics_helper.base import AngularFrequencyArray, Area, Length
         from photonics_helper.fiber import PropagationConstant
-        from photonics_helper.gnlse import FiberProfile
+        from photonics_helper.gnlse import Fiber
         from photonics_helper.phase_matching import assess_simulation_readiness
 
         pulse = self._make_pulse(omega0, T0_ps=1.0, power_W=100)
-        fiber = FiberProfile(
+        fiber = Fiber(
             n2=2.6e-20,
             alpha=0.0,
             A_eff=Area(80, "um^2"),
@@ -685,11 +685,11 @@ class TestSimulationReadiness:
         """Coverage check fails when pulse grid exceeds narrow dispersion table."""
         from photonics_helper.base import Area, Length
         from photonics_helper.fiber import Dispersion
-        from photonics_helper.gnlse import FiberProfile
+        from photonics_helper.gnlse import Fiber
         from photonics_helper.phase_matching import assess_simulation_readiness
 
         pulse = self._make_pulse(omega0, T0_ps=0.05, power_W=100)
-        fiber = FiberProfile(
+        fiber = Fiber(
             n2=2.6e-20,
             alpha=0.0,
             A_eff=Area(80, "um^2"),
@@ -720,7 +720,7 @@ class TestSolverIntegration:
     def test_preflight_report_none_when_disabled(self, omega0):
         """preflight_report is None when check_phase_matching=False."""
         from photonics_helper.base import Area, Length, Time, Wavelength
-        from photonics_helper.gnlse import FiberProfile, GNLSESolver
+        from photonics_helper.gnlse import Fiber, GNLSESolver
         from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
         t0 = 1e-12
@@ -743,7 +743,7 @@ class TestSolverIntegration:
         )
         pulse._pulse_train_field = envelope_field
 
-        fiber = FiberProfile(
+        fiber = Fiber(
             n2=2.6e-20, alpha=0.0, A_eff=Area(80, "um^2"), length=Length(1, "m")
         )
         betas = np.array([-20e-24 * 1e24, 0.1e27 * 1e24])  # ps²/m
@@ -754,7 +754,7 @@ class TestSolverIntegration:
     def test_preflight_report_when_enabled(self, omega0):
         """preflight_report builds when check_phase_matching=True."""
         from photonics_helper.base import Area, Length, Time, Wavelength
-        from photonics_helper.gnlse import FiberProfile, GNLSESolver
+        from photonics_helper.gnlse import Fiber, GNLSESolver
         from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
         t0 = 1e-12
@@ -777,7 +777,7 @@ class TestSolverIntegration:
         )
         pulse._pulse_train_field = envelope_field
 
-        fiber = FiberProfile(
+        fiber = Fiber(
             n2=2.6e-20, alpha=0.0, A_eff=Area(80, "um^2"), length=Length(1, "m")
         )
         betas = np.array([-20e-24 * 1e24, 0.1e27 * 1e24])
@@ -793,7 +793,7 @@ class TestSolverIntegration:
 
         from photonics_helper.base import Area, Length, Time, Wavelength
         from photonics_helper.fiber import Dispersion
-        from photonics_helper.gnlse import FiberProfile, GNLSESolver
+        from photonics_helper.gnlse import Fiber, GNLSESolver
         from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
         t0 = 0.05e-12
@@ -816,7 +816,7 @@ class TestSolverIntegration:
         )
         pulse._pulse_train_field = envelope_field
 
-        fiber = FiberProfile(
+        fiber = Fiber(
             n2=2.6e-20, alpha=0.0, A_eff=Area(80, "um^2"), length=Length(0.01, "m")
         )
         betas = np.array([-20e-24 * 1e24, 0.1e27 * 1e24])
@@ -849,7 +849,7 @@ class TestSolverIntegration:
         import warnings
 
         from photonics_helper.base import Area, Length, Time, Wavelength
-        from photonics_helper.gnlse import FiberProfile, TaperedGNLSESolver
+        from photonics_helper.gnlse import Fiber, TaperedGNLSESolver
         from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
         t0 = 0.1e-12  # Very short pulse → wide spectrum
@@ -870,7 +870,7 @@ class TestSolverIntegration:
         )
         pulse._pulse_train_field = envelope_field
 
-        fiber = FiberProfile(
+        fiber = Fiber(
             n2=2.6e-20, alpha=0.0, A_eff=Area(1, "um^2"), length=Length(0.01, "m")
         )
 
@@ -906,7 +906,7 @@ class TestSolverIntegration:
     def test_strict_mode_raises_on_clip(self, omega0):
         """strict=True raises ValueError on excessive clipping."""
         from photonics_helper.base import Area, Length, Time, Wavelength
-        from photonics_helper.gnlse import FiberProfile, TaperedGNLSESolver
+        from photonics_helper.gnlse import Fiber, TaperedGNLSESolver
         from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
         t0 = 0.1e-12
@@ -927,7 +927,7 @@ class TestSolverIntegration:
         )
         pulse._pulse_train_field = envelope_field
 
-        fiber = FiberProfile(
+        fiber = Fiber(
             n2=2.6e-20, alpha=0.0, A_eff=Area(1, "um^2"), length=Length(0.01, "m")
         )
 
@@ -961,7 +961,7 @@ class TestPostFlightValidation:
     def _make_solver_with_spectrum(self, omega0, has_peak_at=0.0):
         """Create a mock solver with a known spectrum containing a peak."""
         from photonics_helper.base import Area, Length, Time, Wavelength
-        from photonics_helper.gnlse import FiberProfile, GNLSESolver
+        from photonics_helper.gnlse import Fiber, GNLSESolver
         from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
         t0 = 1e-12
@@ -984,7 +984,7 @@ class TestPostFlightValidation:
         )
         pulse._pulse_train_field = envelope_field
 
-        fiber = FiberProfile(
+        fiber = Fiber(
             n2=2.6e-20, alpha=0.0, A_eff=Area(80, "um^2"), length=Length(0.01, "m")
         )
         betas = np.array([-20e-24 * 1e24])
@@ -1166,7 +1166,7 @@ class TestVisualization:
         from photonics_helper.base import Area, Length, Time, Wavelength
 
         # Create a mock solver
-        from photonics_helper.gnlse import FiberProfile, GNLSESolver
+        from photonics_helper.gnlse import Fiber, GNLSESolver
         from photonics_helper.phase_matching import (
             SimulationReadinessReport,
             plot_spectrum_with_pm_overlay,
@@ -1193,7 +1193,7 @@ class TestVisualization:
         )
         pulse._pulse_train_field = envelope_field
 
-        fiber = FiberProfile(
+        fiber = Fiber(
             n2=2.6e-20, alpha=0.0, A_eff=Area(80, "um^2"), length=Length(0.01, "m")
         )
         betas = np.array([-20e-24 * 1e24])

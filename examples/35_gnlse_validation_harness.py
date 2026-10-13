@@ -108,7 +108,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from photonics_helper.base import C_MS, Length, Time, Wavelength
-from photonics_helper.gnlse import FiberProfile, SplitStepEngine
+from photonics_helper.gnlse import Fiber, SplitStepEngine
 from photonics_helper.gnlse_validation import (
     DEFAULT_OBSERVABLES,
     ConvergenceReport,
@@ -122,10 +122,10 @@ from photonics_helper.gnlse_validation import (
     mi_gain_of,
 )
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
-from photonics_helper.raman import RamanResponse, RamanSpec
+from photonics_helper.raman import RamanSpec
 
 WL0 = 1550e-9
-OMEGA0 = 2 * np.pi * C_MS / WL0
+OMEGA0 = Wavelength(WL0, "m").to_omega().as_rad_s
 
 # ── Reference configurations (one per closed form) ───────────────────────────
 SPM = dict(gamma=11.0, peak_power=1e-3, t0=100e-15, wavelength_m=WL0, phi_max=4 * np.pi)
@@ -210,8 +210,8 @@ def run_spm() -> dict:
     pulse = Wave(
         grid=grid, envelope=env, central_wavelength=Wavelength(SPM["wavelength_m"], "m")
     )
-    fiber = FiberProfile.from_gamma(
-        gamma=SPM["gamma"], n2=2.6e-20, omega0=OMEGA0, length=Length(L, "m")
+    fiber = Fiber.from_gamma(
+        gamma=SPM["gamma"], length=Length(L, "m")
     )
     from photonics_helper.gnlse import GNLSESolver
 
@@ -327,8 +327,8 @@ def run_soliton() -> dict:
         envelope=env,
         central_wavelength=Wavelength(SOLITON["wavelength_m"], "m"),
     )
-    fiber = FiberProfile.from_gamma(
-        gamma=gamma, n2=2.6e-20, omega0=OMEGA0, length=Length(L, "m")
+    fiber = Fiber.from_gamma(
+        gamma=gamma, length=Length(L, "m")
     )
     solver = GNLSESolver(
         pulse=pulse,
@@ -357,7 +357,7 @@ def run_ssfs() -> dict:
     spec = RamanSpec(
         name="Silica", raman_shift_cm=440.0, raman_linewidth_cm=45.0, fR=0.18
     )
-    response = RamanResponse(spec=spec, fR=0.18, tau1=12.2e-15, tau2=32e-15, grid=grid)
+    response = spec.response(grid, fR=0.18, tau1=12.2e-15, tau2=32e-15)
     beta2, gamma, t0 = SSFS["beta2"], SSFS["gamma"], SSFS["t0"]
     peak = abs(beta2) / (gamma * t0**2)  # N = 1
     metrics = check_gordon_ssfs(
@@ -420,8 +420,8 @@ def build_solver(**overrides):
     pulse = Wave(
         grid=grid, envelope=env, central_wavelength=Wavelength(cfg["wavelength_m"], "m")
     )
-    fiber = FiberProfile.from_gamma(
-        gamma=gamma, n2=2.6e-20, omega0=OMEGA0, length=Length(length, "m")
+    fiber = Fiber.from_gamma(
+        gamma=gamma, length=Length(length, "m")
     )
     engine = SplitStepEngine(
         pulse=pulse,

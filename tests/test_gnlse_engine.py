@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from photonics_helper.base import Area, Length, Time, Wavelength
-from photonics_helper.gnlse import FiberProfile, SplitStepEngine
+from photonics_helper.gnlse import Fiber, SplitStepEngine
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
 
@@ -18,7 +18,7 @@ def setup():
         envelope=env,
         central_wavelength=Wavelength(1550, "nm"),
     )
-    fiber = FiberProfile(
+    fiber = Fiber(
         n2=1e-19, alpha=1e-5, A_eff=Area(5e-11, "m^2"), length=Length(1e-3, "m")
     )
     betas = np.array([0.02])  # beta2 = +20 ps²/km (= 0.02 ps²/m)
@@ -104,11 +104,10 @@ def test_engine_dispersion_spreads_pulse(setup):
 
 def test_confinement_factor_backward_compatibility():
     """Γ=1.0 gives same γ as fiber-only formula (task 2.5)."""
-    from photonics_helper.base import C_MS
     from photonics_helper.gnlse import _gamma
 
     n2 = 1e-19
-    omega0 = 2 * np.pi * C_MS / 1550e-9
+    omega0 = Wavelength(1550, "nm").to_omega().as_rad_s
     A_eff = Area(5e-11, "m^2")
 
     gamma_default = _gamma(n2, omega0, A_eff)  # confinement_factor defaults to 1.0
@@ -119,11 +118,10 @@ def test_confinement_factor_backward_compatibility():
 
 def test_confinement_factor_reduces_gamma():
     """Γ=0.8 reduces γ by 20% (task 2.6)."""
-    from photonics_helper.base import C_MS
     from photonics_helper.gnlse import _gamma
 
     n2 = 1e-19
-    omega0 = 2 * np.pi * C_MS / 1550e-9
+    omega0 = Wavelength(1550, "nm").to_omega().as_rad_s
     A_eff = Area(5e-11, "m^2")
 
     gamma_full = _gamma(n2, omega0, A_eff, confinement_factor=1.0)

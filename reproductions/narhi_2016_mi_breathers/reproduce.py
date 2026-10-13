@@ -44,7 +44,7 @@ from pathlib import Path
 import numpy as np
 from numpy.typing import NDArray
 
-from photonics_helper.base import C_MS, Length, Time, Wavelength
+from photonics_helper.base import Length, Time, Wavelength
 
 # The exact breather solutions and the stochastic seed now live in the library;
 # this reproduction validates the solver against them.
@@ -54,7 +54,7 @@ from photonics_helper.breathers import (
 from photonics_helper.breathers import (
     peregrine_soliton as peregrine,
 )
-from photonics_helper.gnlse import FiberProfile, GNLSESolver, SplitStepEngine
+from photonics_helper.gnlse import Fiber, GNLSESolver, SplitStepEngine
 from photonics_helper.noise import add_noise
 from photonics_helper.phase_matching import mi_gain_spectrum
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
@@ -151,10 +151,8 @@ def _propagate_soliton(
 ) -> tuple[NDArray, list[Wave]]:
     """Propagate a pure-NLSE (beta2-only) breather and return ``(z, evolution)``."""
     pulse = _soliton_pulse(mp, grid, initial, "breather")
-    fiber = FiberProfile.from_gamma(
+    fiber = Fiber.from_gamma(
         gamma=mp.gamma,
-        n2=2.6e-20,
-        omega0=2 * np.pi * C_MS / mp.lam_m,
         length=Length(length_m, "m"),
     )
     solver = GNLSESolver(
@@ -193,10 +191,8 @@ def deterministic_mi_growth(mp: MIParameters, params: dict, fast: bool) -> dict:
     dw = 2 * np.pi / Tmax
     length = 2000.0
     dz = 20.0
-    fiber = FiberProfile.from_gamma(
+    fiber = Fiber.from_gamma(
         gamma=mp.gamma,
-        n2=2.6e-20,
-        omega0=2 * np.pi * C_MS / mp.lam_m,
         length=Length(length, "m"),
     )
     omega = mp.omega_peak
@@ -324,10 +320,8 @@ def spontaneous_mi(mp: MIParameters, params: dict, fast: bool) -> dict:
     n_real = int(cfg["fast_realizations"]) if fast else int(cfg["num_realizations"])
     eps = float(params["noise_amplitude_contrast"])
 
-    fiber = FiberProfile.from_gamma(
+    fiber = Fiber.from_gamma(
         gamma=mp.gamma,
-        n2=2.6e-20,
-        omega0=2 * np.pi * C_MS / mp.lam_m,
         alpha=mp.alpha_per_m,
         length=Length(length, "m"),
     )

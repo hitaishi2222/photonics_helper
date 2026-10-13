@@ -82,8 +82,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from numpy.typing import NDArray
 
-from photonics_helper.base import C_MS, Length, Time, Wavelength
-from photonics_helper.gnlse import FiberProfile, SplitStepEngine
+from photonics_helper.base import Length, Time, Wavelength
+from photonics_helper.gnlse import Fiber, SplitStepEngine
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 from photonics_helper.wave_breaking import (
     WaveBreaking,
@@ -245,15 +245,13 @@ def _propagate(wb: WaveBreaking, r: float, n_steps: int = N_STEPS) -> dict:
     )
     wave = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(LAM0, "m"))
 
-    fiber = FiberProfile.from_gamma(
+    fiber = Fiber.from_gamma(
         gamma=GAMMA,
-        n2=2.7e-20,
-        omega0=float(wave.central_frequency),
         length=Length(L, "m"),
     )
-    # from_gamma solves A_eff from the target gamma; confirm the engine really
-    # runs at GAMMA and not at some gamma implied by a hand-picked A_eff.
-    gamma_eff = fiber.n2 * float(wave.central_frequency) / (C_MS * fiber.A_eff.as_m2)
+    # Gamma-first fiber stores gamma directly; confirm the engine really
+    # runs at GAMMA.
+    gamma_eff = fiber.effective_gamma(float(wave.central_frequency))
     assert abs(gamma_eff - GAMMA) / GAMMA < 1e-3, (
         f"fiber gamma {gamma_eff} does not match the target {GAMMA}"
     )

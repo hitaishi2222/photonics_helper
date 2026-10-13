@@ -7,10 +7,10 @@ red-shifting solitons).
 
 import numpy as np
 
-from photonics_helper.base import C_MS, Length, Time, Wavelength
-from photonics_helper.gnlse import FiberProfile, GNLSESolver
+from photonics_helper.base import AngularFrequencyArray, C_MS, Length, Time, Wavelength
+from photonics_helper.gnlse import Fiber, GNLSESolver
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
-from photonics_helper.raman import RamanResponse, RamanSpec
+from photonics_helper.raman import RamanSpec
 
 # Reproduction-validated regression (house policy: reproductions stay out of
 # the published test suite; this wrapper lives in the LOCAL-ONLY
@@ -23,7 +23,7 @@ def _raman(grid):
     spec = RamanSpec(
         name="Silica", raman_shift_cm=440.0, raman_linewidth_cm=45.0, fR=0.18
     )
-    return RamanResponse(spec=spec, fR=0.18, tau1=12.2e-15, tau2=32e-15, grid=grid)
+    return spec.response(grid, fR=0.18, tau1=12.2e-15, tau2=32e-15)
 
 
 def test_raman_amplifies_stokes_not_anti_stokes():
@@ -41,10 +41,8 @@ def test_raman_amplifies_stokes_not_anti_stokes():
     pulse = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(wl0, "m"))
     field = np.sqrt(5.0) * (1 + 1e-3 * np.cos(omega_r * t))
     pulse = pulse.with_field(field)
-    fiber = FiberProfile.from_gamma(
+    fiber = Fiber.from_gamma(
         gamma=2.0e-3,
-        n2=2.6e-20,
-        omega0=pulse.central_frequency,
         length=Length(2.0, "m"),
         raman_response=_raman(grid),
     )
@@ -69,10 +67,8 @@ def test_fundamental_soliton_is_stable_and_red_shifts():
     grid = TemporalGrid(N=2**12, Tmax=Time(20e-12, "s"))
     env = Envelope(shape="sech", peak_amplitude=np.sqrt(P0), pulse_width=Time(T0, "s"))
     pulse = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(wl0, "m"))
-    fiber = FiberProfile.from_gamma(
+    fiber = Fiber.from_gamma(
         gamma=gamma,
-        n2=2.6e-20,
-        omega0=pulse.central_frequency,
         length=Length(20.0, "m"),
         raman_response=_raman(grid),
     )
@@ -86,5 +82,7 @@ def test_fundamental_soliton_is_stable_and_red_shifts():
     fwhm = (grid.t[idx[-1]] - grid.t[idx[0]]) * 1e15
     assert fwhm < 2.0 * 234.375, "fundamental soliton must stay intact (no dispersion)"
     W = np.abs(grid.fft(A)) ** 2
-    wl = 2 * np.pi * C_MS / (2 * np.pi * C_MS / wl0 + grid.w)
+    wl = AngularFrequencyArray(
+        Wavelength(wl0, "m").to_omega().as_rad_s + grid.w, "rad/s"
+    ).to_wl().as_m
     assert wl[int(np.argmax(W))] > wl0, "Raman soliton must red-shift"

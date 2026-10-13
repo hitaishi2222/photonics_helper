@@ -73,7 +73,7 @@ from numpy.typing import NDArray
 from scipy.optimize import brentq
 
 from photonics_helper.base import Area, Length, Time, Wavelength
-from photonics_helper.gnlse import FiberProfile
+from photonics_helper.gnlse import Fiber
 from photonics_helper.multimode_gnlse import MultimodeSplitStepEngine
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
@@ -141,8 +141,8 @@ def beta0(f_thz: float) -> float:
 def beta1_silica(lambda_um: float) -> float:
     """beta1(omega) = d beta0/d omega (s/m), central differences in lambda."""
     h = 1e-4  # um
-    om_hi = 2.0 * np.pi * C_MS / ((lambda_um - h) * 1e-6)
-    om_lo = 2.0 * np.pi * C_MS / ((lambda_um + h) * 1e-6)
+    om_hi = Wavelength(lambda_um - h, "um").to_omega().as_rad_s
+    om_lo = Wavelength(lambda_um + h, "um").to_omega().as_rad_s
     b_hi = beta0(C_THZ / (lambda_um - h))
     b_lo = beta0(C_THZ / (lambda_um + h))
     return float((b_hi - b_lo) / (om_hi - om_lo))
@@ -352,7 +352,7 @@ def build_engine(
         wave = wave.with_field(field)
         waves.append(wave)
 
-    fiber = FiberProfile(
+    fiber = Fiber(
         n2=N2, alpha=0.0, A_eff=Area(A_EFF, "m^2"), length=Length(length_m, "m")
     )
     return MultimodeSplitStepEngine(
@@ -420,7 +420,7 @@ def probe_gain(n_ord: int, f_thz: float | None = None, L: float = 0.5) -> dict:
             else:
                 field = a_sig * seed[1] * np.conj(tone)
             waves.append(ww.with_field(np.asarray(field, complex)))
-        fiber = FiberProfile(
+        fiber = Fiber(
             n2=N2, alpha=0.0, A_eff=Area(A_EFF, "m^2"), length=Length(L, "m")
         )
         eng = MultimodeSplitStepEngine(

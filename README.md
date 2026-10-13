@@ -58,7 +58,7 @@ breathing and fissioning over one dispersion length.
 ```python
 from photonics_helper import (
     Area, Length, Time, Wavelength,
-    FiberProfile, GNLSESolver, Envelope, TemporalGrid, Wave,
+    Fiber, GNLSESolver, Envelope, TemporalGrid, Wave,
 )
 
 import numpy as np
@@ -87,7 +87,7 @@ pulse = Wave(
 
 solver = GNLSESolver(
     pulse=pulse,
-    fiber=FiberProfile(n2=n2, alpha=0.0, A_eff=A_eff, length=L_D),
+    fiber=Fiber(n2=n2, alpha=0.0, A_eff=A_eff, length=L_D),
     betas=np.array([beta2]),          # [β₂, β₃, ...] in psᵏ/m
     include_raman=False,
     include_self_steepening=False,

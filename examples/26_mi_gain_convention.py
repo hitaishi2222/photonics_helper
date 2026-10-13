@@ -34,6 +34,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
+from photonics_helper.base import AngularFrequency, Wavelength
 from photonics_helper.phase_matching import (
     mi_gain_spectrum,
     mi_gain_spectrum_extended,
@@ -69,9 +70,9 @@ assert np.isclose(info["g_max"], g_max)
 # 3. Sideband frequencies and their wavelengths relative to a 1550 nm pump
 omega_sb = mi_sideband_frequencies(beta2, gamma, P0)
 lam0 = 1550e-9
-lam_side = (
-    2 * np.pi * 299792458.0 / (2 * np.pi * 299792458.0 / lam0 + omega_sb[1]) * 1e9
-)
+lam_side = AngularFrequency(
+    Wavelength(lam0, "m").to_omega().as_rad_s + omega_sb[1], "rad/s"
+).to_wl().as_nm
 print(f"  sideband detuning       : ±{omega_sb[1]:.4e} rad/s")
 print(f"  sideband wavelength     : {lam_side:.2f} nm (pump 1550 nm)")
 
@@ -80,7 +81,7 @@ Omega = np.linspace(0, 1.5 * Omega_c, 800)
 gain = mi_gain_spectrum(beta2, gamma, P0, Omega)
 
 
-omega0 = 2 * np.pi * 299792458.0 / lam0
+omega0 = Wavelength(lam0, "m").to_omega().as_rad_s
 # Numerics note: Δ(Ω) needs the β₁ cancellation applied BEFORE any large-
 # carrier arithmetic. The extended solver offers two offset-aware contracts:
 #   1. betas=<ψ₂…ψₖ s^k/m array> — analytic Δ, exact by construction;

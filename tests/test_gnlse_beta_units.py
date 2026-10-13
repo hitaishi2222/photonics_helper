@@ -13,7 +13,7 @@ import pytest
 from photonics_helper.base import Area, Length, Time, Wavelength
 from photonics_helper.fiber import ZDependentDispersion
 from photonics_helper.gnlse import (
-    FiberProfile,
+    Fiber,
     GNLSESolver,
     SplitStepEngine,
     TaperedGNLSESolver,
@@ -29,7 +29,7 @@ def _setup():
         envelope=env,
         central_wavelength=Wavelength(1550, "nm"),
     )
-    fiber = FiberProfile(
+    fiber = Fiber(
         n2=1e-19, alpha=0.0, A_eff=Area(5e-11, "m^2"), length=Length(1e-3, "m")
     )
     return pulse, fiber

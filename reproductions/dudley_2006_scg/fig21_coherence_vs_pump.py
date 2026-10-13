@@ -33,11 +33,11 @@ Validation (fast & full):
 
 from __future__ import annotations
 
-from math import pi
 from pathlib import Path
 
 import numpy as np
 
+from photonics_helper.base import AngularFrequencyArray
 from photonics_helper.noise import coherence_g12
 
 from . import common
@@ -88,7 +88,7 @@ def run_pump(wl_nm: float, dur_fs: float, n_real: int, n_steps: int):
     spectra = np.asarray(spectra, dtype=complex)
     g12 = coherence_g12(spectra)
     omega0 = float(pulse.central_frequency)
-    wl_full = 2 * pi * 2.99792458e8 / (omega0 + pulse.grid.w) * 1e9
+    wl_full = AngularFrequencyArray(omega0 + pulse.grid.w, "rad/s").to_wl().as_nm
     mean_spec = np.mean(np.abs(spectra) ** 2, axis=0)
     order = np.argsort(wl_full)
     wl, sp = wl_full[order], mean_spec[order]

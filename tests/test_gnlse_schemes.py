@@ -18,18 +18,18 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from photonics_helper.base import C_MS, Length, Time, Wavelength
+from photonics_helper.base import Length, Time, Wavelength
 from photonics_helper.gnlse import (
     YOSHIDA4_W0,
     YOSHIDA4_W1,
     YOSHIDA4_WEIGHTS,
-    FiberProfile,
+    Fiber,
     SplitStepEngine,
 )
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
 WL0 = 1550e-9
-OMEGA0 = 2 * np.pi * C_MS / WL0
+OMEGA0 = Wavelength(WL0, "m").to_omega().as_rad_s
 BETA2 = -21e-27
 GAMMA = 2.0
 T0 = 50e-15 / 1.763
@@ -76,8 +76,8 @@ def _engine(scheme: str, num_steps: int = 200) -> SplitStepEngine:
     pulse = Wave(
         grid=grid, envelope=env, central_wavelength=Wavelength(WL0, "m")
     )
-    fiber = FiberProfile.from_gamma(
-        gamma=GAMMA, n2=2.6e-20, omega0=OMEGA0, length=Length(LENGTH, "m")
+    fiber = Fiber.from_gamma(
+        gamma=GAMMA, length=Length(LENGTH, "m")
     )
     engine = SplitStepEngine(
         pulse=pulse,
@@ -101,8 +101,8 @@ def test_strang_is_the_default():
     pulse = Wave(
         grid=grid, envelope=env, central_wavelength=Wavelength(WL0, "m")
     )
-    fiber = FiberProfile.from_gamma(
-        gamma=GAMMA, n2=2.6e-20, omega0=OMEGA0, length=Length(LENGTH, "m")
+    fiber = Fiber.from_gamma(
+        gamma=GAMMA, length=Length(LENGTH, "m")
     )
     engine = SplitStepEngine(
         pulse=pulse, fiber=fiber, betas=np.array([BETA2 * 1e24])

@@ -23,11 +23,11 @@ incoherence is expected from the paper's own argument):
 
 from __future__ import annotations
 
-from math import pi
 from pathlib import Path
 
 import numpy as np
 
+from photonics_helper.base import AngularFrequencyArray
 from photonics_helper.noise import coherence_g12
 
 from . import common
@@ -71,7 +71,7 @@ def run(n_real: int, n_steps: int, fast: bool = False):
         )
         spectra.append(np.asarray(pulse.grid.fft(solver.evolution[-1].envelope_field)))
     omega0 = float(pulse.central_frequency)
-    wl = 2 * pi * 2.99792458e8 / (omega0 + pulse.grid.w) * 1e9
+    wl = AngularFrequencyArray(omega0 + pulse.grid.w, "rad/s").to_wl().as_nm
     order = np.argsort(wl)
     spec = np.asarray(spectra, dtype=complex)
     g12 = coherence_g12(spec)  # per-bin at the output

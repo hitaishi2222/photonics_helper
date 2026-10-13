@@ -15,9 +15,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from photonics_helper.base import C_MS, PI, Area, Length, Time, Wavelength
-from photonics_helper.gnlse import FiberProfile, GNLSESolver
+from photonics_helper.gnlse import Fiber, GNLSESolver
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
-from photonics_helper.raman import RamanResponse, RamanSpec
+from photonics_helper.raman import RamanSpec
 from photonics_helper.soliton import SolitonAnalyzer
 
 
@@ -36,7 +36,7 @@ def main():
 
     # ── Waveguide parameters (GeAsSe) ─────────────────────────────────
     # Confinement factor Gamma < 1.0 for waveguide (vs 1.0 for fiber)
-    fiber = FiberProfile(
+    fiber = Fiber(
         n2=6.0e-18,  # GeAsSe n2
         alpha=0.0,
         A_eff=Area(0.2e-12, "m^2"),  # 0.2 um^2 effective area
@@ -51,11 +51,7 @@ def main():
     # ── Raman response for GeAsSe ─────────────────────────────────────
     geasse_spec = RamanSpec.from_database("GeAsSe")
     raman_grid = TemporalGrid(N=2**14, Tmax=Time(50e-12, "s"))
-    raman_response = RamanResponse(
-        spec=geasse_spec,
-        grid=raman_grid,
-        response_type="time_domain",
-    )
+    raman_response = geasse_spec.response(raman_grid)
     fiber.raman_response = raman_response
 
     # ── Run GNLSE simulation ──────────────────────────────────────────

@@ -7,11 +7,11 @@ import warnings
 import numpy as np
 import pytest
 
-from photonics_helper.base import C_MS, Length, Time, Wavelength
+from photonics_helper.base import Length, Time, Wavelength
 from photonics_helper.gnlse import (
     ConvergenceDiagnostics,
     DRIFT_WARN_PCT,
-    FiberProfile,
+    Fiber,
     GNLSESolver,
     _max_drift_pct,
     _self_convergence_metrics,
@@ -20,7 +20,7 @@ from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 from photonics_helper.raman import RamanResponse, RamanSpec
 
 WL0 = 835.0
-OMEGA0 = 2 * np.pi * C_MS / (WL0 * 1e-9)
+OMEGA0 = Wavelength(WL0, "nm").to_omega().as_rad_s
 BETAS = np.array(
     [
         -11.830e-3,
@@ -56,10 +56,8 @@ def _dudley_solver(step_size: Length, *, alpha: float = 0.0) -> GNLSESolver:
         tau2=0.032e-12,
         grid=grid,
     )
-    fiber = FiberProfile.from_gamma(
+    fiber = Fiber.from_gamma(
         gamma=0.11,
-        n2=2.7e-20,
-        omega0=pulse.central_frequency,
         alpha=alpha,
         length=Length(0.15, "m"),
         raman_response=raman,
@@ -172,10 +170,8 @@ def test_verify_convergence_converges_on_dispersionless_run():
     # With no dispersion the Strang split is exact, so any step count is
     # converged and the drift is zero.
     pulse = _wave(1024)
-    fiber = FiberProfile.from_gamma(
+    fiber = Fiber.from_gamma(
         gamma=0.11,
-        n2=2.7e-20,
-        omega0=pulse.central_frequency,
         length=Length(0.01, "m"),
     )
     solver = GNLSESolver(

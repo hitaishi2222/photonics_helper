@@ -6,7 +6,7 @@ import pytest
 from photonics_helper.base import Area, Length, Time, Wavelength
 from photonics_helper.fiber import ZDependentDispersion
 from photonics_helper.gnlse import (
-    FiberProfile,
+    Fiber,
     GNLSESolver,
     SplitStepEngine,
     TaperedGNLSESolver,
@@ -23,7 +23,7 @@ def _make_tapered_setup():
         envelope=env,
         central_wavelength=Wavelength(1550, "nm"),
     )
-    fiber = FiberProfile(
+    fiber = Fiber(
         n2=1e-19, alpha=1e-5, A_eff=Area(5e-11, "m^2"), length=Length(1e-3, "m")
     )
     return pulse, fiber
@@ -200,7 +200,7 @@ class TestTaperedGNLSESolver:
         """Uniform β(ω,z) conserves energy (no gain/loss in pure Kerr)."""
         pulse, fiber = _make_tapered_setup()
         # Use a fiber with zero loss for energy conservation test
-        fiber_no_loss = FiberProfile(
+        fiber_no_loss = Fiber(
             n2=1e-19,
             alpha=0.0,
             A_eff=Area(5e-11, "m^2"),
@@ -297,7 +297,7 @@ class TestTaperedGNLSESolver:
             envelope=env,
             central_wavelength=Wavelength(1550, "nm"),
         )
-        fiber = FiberProfile(
+        fiber = Fiber(
             n2=1e-19, alpha=1e-5, A_eff=Area(5e-11, "m^2"), length=Length(1e-3, "m")
         )
 
@@ -353,7 +353,7 @@ class TestTaperedGNLSESolver:
             envelope=env,
             central_wavelength=Wavelength(1550, "nm"),
         )
-        fiber = FiberProfile(
+        fiber = Fiber(
             n2=1e-19, alpha=1e-5, A_eff=Area(5e-11, "m^2"), length=Length(5e-3, "m")
         )
 

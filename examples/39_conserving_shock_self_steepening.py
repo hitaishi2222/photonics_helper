@@ -90,7 +90,7 @@ from numpy.typing import NDArray
 from photonics_helper.base import Length, Time, Wavelength
 from photonics_helper.gnlse import (
     _SHOCK_TAYLOR_LIMIT,
-    FiberProfile,
+    Fiber,
     SplitStepEngine,
 )
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
@@ -147,7 +147,7 @@ def _silica(grid: TemporalGrid, tau2: float = 236e-15) -> RamanResponse:
     spec = RamanSpec(
         name="Silica", raman_shift_cm=440.0, raman_linewidth_cm=45.0, fR=0.18
     )
-    return RamanResponse(spec=spec, fR=0.18, tau1=12.2e-15, tau2=tau2, grid=grid)
+    return spec.response(grid, fR=0.18, tau1=12.2e-15, tau2=tau2)
 
 
 def _fiber(
@@ -156,11 +156,9 @@ def _fiber(
     length_m: float,
     resp: RamanResponse,
     grid: TemporalGrid,
-) -> FiberProfile:
-    return FiberProfile.from_gamma(
+) -> Fiber:
+    return Fiber.from_gamma(
         gamma=gamma,
-        n2=2.6e-20 * np.sign(gamma),
-        omega0=omega0,
         alpha=0.0,
         length=Length(length_m, "m"),
         raman_response=resp,
@@ -175,7 +173,7 @@ def _pulse(grid: TemporalGrid, lam: float, t0: float, p0: float) -> Wave:
 
 
 def _omega0(lam: float) -> float:
-    return 2.0 * np.pi * C_LIGHT / lam
+    return Wavelength(lam, "m").to_omega().as_rad_s
 
 
 def _tau_omega_max(tmax_s: float, omega0: float, n_points: int = N_POINTS) -> float:

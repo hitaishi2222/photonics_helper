@@ -34,12 +34,12 @@ import numpy as np
 import pytest
 
 from photonics_helper.base import Length, Time, Wavelength
-from photonics_helper.gnlse import FiberProfile, SplitStepEngine
+from photonics_helper.gnlse import Fiber, SplitStepEngine
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 from photonics_helper.raman import RamanResponse, RamanSpec
 
 WL0_NM = 835.0  # Dudley Fig. 3 carrier
-OMEGA0 = 2 * np.pi * 3e8 / (WL0_NM * 1e-9)
+OMEGA0 = Wavelength(WL0_NM, "nm").to_omega().as_rad_s
 
 
 def _dudley_wave(n: int = 8192, tmax_s: float = 14e-12) -> Wave:
@@ -53,12 +53,10 @@ def _dudley_wave(n: int = 8192, tmax_s: float = 14e-12) -> Wave:
     )
 
 
-def _dudley_fiber(wave: Wave, raman: bool = False) -> FiberProfile:
+def _dudley_fiber(wave: Wave, raman: bool = False) -> Fiber:
     response = _dudley_raman(wave.grid) if raman else None
-    return FiberProfile.from_gamma(
+    return Fiber.from_gamma(
         gamma=0.11,  # /W/m — Table I
-        n2=2.6e-20,
-        omega0=float(wave.central_frequency),
         length=Length(0.15, "m"),
         raman_response=response,
     )
@@ -68,7 +66,7 @@ def _dudley_raman(grid: TemporalGrid) -> RamanResponse:
     spec = RamanSpec(
         name="Silica", raman_shift_cm=440.0, raman_linewidth_cm=45.0, fR=0.18
     )
-    return RamanResponse(spec=spec, fR=0.18, tau1=12.2e-15, tau2=32e-15, grid=grid)
+    return spec.response(grid, fR=0.18, tau1=12.2e-15, tau2=32e-15)
 
 
 BETAS_34 = np.array([-0.0755, -1.5, 3.0])  # Table I β₂…β₄ (ps^k/m)

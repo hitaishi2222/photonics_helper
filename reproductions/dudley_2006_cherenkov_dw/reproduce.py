@@ -41,9 +41,9 @@ from pathlib import Path
 import numpy as np
 from scipy.signal import find_peaks
 
-from photonics_helper.base import C_MS, AngularFrequencyArray, Length, Time, Wavelength
+from photonics_helper.base import AngularFrequency, AngularFrequencyArray, Length, Time, Wavelength, WavelengthArray
 from photonics_helper.fiber import PropagationConstant
-from photonics_helper.gnlse import FiberProfile, GNLSESolver
+from photonics_helper.gnlse import Fiber, GNLSESolver
 from photonics_helper.phase_matching import (
     PropagationConstantAdaptor,
     dispersive_wave_roots,
@@ -74,11 +74,11 @@ def validate(params: dict | None = None, make_plot: bool = True) -> dict:
 
     # Analytic Cherenkov condition (beta2, beta3 only).
     omega_dw = -3 * beta2 / beta3 * 1e12  # rad/ps → rad/s
-    lambda_analytic = 2 * np.pi * C_MS / (w0 + omega_dw) * 1e9
+    lambda_analytic = AngularFrequency(w0 + omega_dw, "rad/s").to_wl().as_nm
 
     # Full-beta root finder.
     wl_arr = np.linspace(300, 2500, 5000) * 1e-9
-    om = 2 * np.pi * C_MS / wl_arr
+    om = WavelengthArray(wl_arr, "m").to_omega().as_rad_s
     om_ps = (om - w0) * 1e-12
     beta_vals = np.zeros_like(om)
     for k, bk in enumerate(betas, start=2):
@@ -102,16 +102,14 @@ def validate(params: dict | None = None, make_plot: bool = True) -> dict:
     )
 
     # GNLSE spectrum and the blue DW peak.
-    fiber = FiberProfile.from_gamma(
+    fiber = Fiber.from_gamma(
         gamma=params["gamma_per_Wm"],
-        n2=2.7e-20,
-        omega0=w0,
         length=Length(params["length_m"], "m"),
     )
     solver = GNLSESolver(pulse=pulse, fiber=fiber, betas=betas, include_raman=False)
     solver.propagate(num_steps=3000)
     W = np.abs(grid.fft(solver.evolution[-1].envelope_field)) ** 2
-    lam = (2 * np.pi * C_MS / (w0 + grid.w)) * 1e9
+    lam = AngularFrequencyArray(w0 + grid.w, "rad/s").to_wl().as_nm
     order = np.argsort(lam)
     Ls, Ws = lam[order], W[order]
 

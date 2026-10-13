@@ -58,8 +58,8 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy.special import eval_genlaguerre as eval_lg
 
-from photonics_helper.base import Area, Length, Time, Wavelength
-from photonics_helper.gnlse import FiberProfile
+from photonics_helper.base import AngularFrequencyArray, Area, Length, Time, Wavelength
+from photonics_helper.gnlse import Fiber
 from photonics_helper.multimode_gnlse import MultimodeSplitStepEngine
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
@@ -69,7 +69,7 @@ PARAMETERS = HERE / "parameters.json"
 C_MS = 299792458.0
 N0 = 1.444
 LAMBDA0 = 1550e-9
-OMEGA0 = 2.0 * np.pi * C_MS / LAMBDA0
+OMEGA0 = Wavelength(LAMBDA0, "m").to_omega().as_rad_s
 R_CORE = 31.25e-6
 DELTA = 0.029
 N2 = 3.2e-20
@@ -205,7 +205,7 @@ def fwhm(t: NDArray, power: NDArray) -> float:
 
 def spectral_centroid_nm(omega: NDArray, spectrum: NDArray) -> float:
     """Intensity-weighted centre wavelength of a baseband spectrum (nm)."""
-    lam = 2.0 * np.pi * C_MS / (OMEGA0 + omega) * 1e9
+    lam = AngularFrequencyArray(OMEGA0 + omega, "rad/s").to_wl().as_nm
     return float(np.sum(lam * spectrum) / np.sum(spectrum))
 
 
@@ -270,7 +270,7 @@ def build_engine(n2: float) -> MultimodeSplitStepEngine:
         )
         for p in range(3)
     ]
-    fiber = FiberProfile(
+    fiber = Fiber(
         n2=n2, alpha=0.0, A_eff=Area(aeff, "m^2"), length=Length(LEN_M, "m")
     )
     return MultimodeSplitStepEngine(
@@ -321,7 +321,7 @@ def run_si_direct(db0: NDArray, z_span: float, step: float, nsaves: int):
         )
         for p in range(3)
     ]
-    fiber = FiberProfile(
+    fiber = Fiber(
         n2=1e-30,
         alpha=0.0,
         A_eff=Area(aeff, "m^2"),
@@ -599,7 +599,7 @@ def _plot(result: dict) -> None:
     # (b) per-mode output spectra
     ax = axes[0, 1]
     omega = d["omega"]
-    lam = 2.0 * np.pi * C_MS / (OMEGA0 + omega) * 1e9
+    lam = AngularFrequencyArray(OMEGA0 + omega, "rad/s").to_wl().as_nm
     keep = (lam > 1500) & (lam < 1600)
     for p in range(3):
         spec = d["spectra_nl"][p]

@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 
 from photonics_helper.base import Area, Length, Time, Wavelength
-from photonics_helper.gnlse import FiberProfile, GNLSESolver, SplitStepEngine
+from photonics_helper.gnlse import Fiber, GNLSESolver, SplitStepEngine
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
 
@@ -26,7 +26,7 @@ def linear_setup():
         central_wavelength=Wavelength(1550, "nm"),
     )
     # Low loss for measurable but small attenuation
-    fiber = FiberProfile(
+    fiber = Fiber(
         n2=0.0, alpha=0.1, A_eff=Area(1e-10, "m^2"), length=Length(0.1, "m")
     )
     # Zero dispersion for pure loss test
@@ -44,7 +44,7 @@ def dispersion_setup():
         envelope=env,
         central_wavelength=Wavelength(1550, "nm"),
     )
-    fiber = FiberProfile(
+    fiber = Fiber(
         n2=0.0, alpha=0.0, A_eff=Area(1e-10, "m^2"), length=Length(0.01, "m")
     )
     # Some dispersion but no loss
@@ -176,7 +176,7 @@ class TestRamanFullResponse:
         )
         raman = RamanResponse(spec=spec, grid=grid)
 
-        fiber = FiberProfile(
+        fiber = Fiber(
             n2=2.6e-20,
             alpha=0.0,
             A_eff=Area(5e-11, "m^2"),
@@ -224,14 +224,14 @@ class TestRamanFullResponse:
         )
         raman = RamanResponse(spec=spec, grid=grid)
 
-        fiber_raman = FiberProfile(
+        fiber_raman = Fiber(
             n2=2.6e-20,
             alpha=0.0,
             A_eff=Area(5e-11, "m^2"),
             length=Length(0.1, "m"),
             raman_response=raman,
         )
-        fiber_kerr = FiberProfile(
+        fiber_kerr = Fiber(
             n2=2.6e-20,
             alpha=0.0,
             A_eff=Area(5e-11, "m^2"),
@@ -274,8 +274,7 @@ class TestSelfSteepeningConservation:
         wl = 1550.0
         length_m = 0.01
         gamma = 1.0
-        n2 = 2.6e-20
-        omega0 = 2 * np.pi * 299792458 / (wl * 1e-9)
+        omega0 = Wavelength(wl, "nm").to_omega().as_rad_s
 
         pulse_lf = lf.Pulse(
             pulse_type="sech",
@@ -316,8 +315,8 @@ class TestSelfSteepeningConservation:
             central_wavelength=Wavelength(wl, "nm"),
         )
         pulse._pulse_train_field = at_interp
-        fiber = FiberProfile.from_gamma(
-            gamma=gamma, n2=n2, omega0=omega0, length=Length(length_m, "m")
+        fiber = Fiber.from_gamma(
+            gamma=gamma, length=Length(length_m, "m")
         )
         betas = np.array([-0.12, 0.0, 5e-6])
 
@@ -428,10 +427,8 @@ class TestGNLSEPhysics:
                 tau2=32.0e-15,
                 grid=grid,
             )
-        fiber = FiberProfile.from_gamma(
+        fiber = Fiber.from_gamma(
             gamma=0.11,
-            n2=2.7e-20,
-            omega0=pulse.central_frequency,
             length=Length(0.15, "m"),
             raman_response=raman_resp,
         )
@@ -470,10 +467,8 @@ class TestGNLSEPhysics:
         omega0 = -2 * np.pi * 1.0e12  # 1 THz red shift
         pulse = pulse.with_field((1.0 / np.cosh(t / T0)) * np.exp(-1j * omega0 * t))
         beta2 = -1.7917e-26  # standard anomalous dispersion
-        fiber = FiberProfile.from_gamma(
+        fiber = Fiber.from_gamma(
             gamma=1e-30,
-            n2=2.6e-20,
-            omega0=pulse.central_frequency,
             length=Length(20.0, "m"),
         )
         solver = GNLSESolver(
@@ -507,10 +502,8 @@ class TestGNLSEPhysics:
         )
         custom = np.exp(-((grid.t / 2e-12) ** 2)).astype(complex)
         pulse.with_field(custom)
-        fiber = FiberProfile.from_gamma(
+        fiber = Fiber.from_gamma(
             gamma=1e-4,
-            n2=2.6e-20,
-            omega0=pulse.central_frequency,
             length=Length(0.1, "m"),
         )
         engine = SplitStepEngine(pulse=pulse, fiber=fiber, betas=np.array([0.0]))

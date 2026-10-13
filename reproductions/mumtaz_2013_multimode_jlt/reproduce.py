@@ -73,8 +73,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from numpy.typing import NDArray
 
-from photonics_helper.base import Area, Length, Time, Wavelength
-from photonics_helper.gnlse import FiberProfile
+from photonics_helper.base import AngularFrequencyArray, Area, Length, Time, Wavelength
+from photonics_helper.gnlse import Fiber
 from photonics_helper.multimode_gnlse import MultimodeSplitStepEngine
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
@@ -83,7 +83,7 @@ PARAMETERS = HERE / "parameters.json"
 
 C_MS = 299792458.0
 LAMBDA0 = 1550e-9
-OMEGA0 = 2.0 * np.pi * C_MS / LAMBDA0
+OMEGA0 = Wavelength(LAMBDA0, "m").to_omega().as_rad_s
 
 # fiber (paper section IV)
 GAMMA = 1.4e-3  # W^-1 m^-1 (1.4 W^-1 km^-1)
@@ -232,7 +232,7 @@ def engine_manakov_run(A0: NDArray, beta2: float, length: float, xpm: NDArray):
             )
             wv._pulse_train_field = A0[m, s].copy()
             waves.append(wv)
-    fiber = FiberProfile(
+    fiber = Fiber(
         n2=1.0, alpha=0.0, A_eff=Area(1.0, "m^2"), length=Length(length, "m")
     )
     # gamma absorbed into xpm weights: engine gamma = n2*omega0/(c*A_eff);
@@ -292,7 +292,7 @@ def check1_table2(results: dict) -> None:
         )
         wv._pulse_train_field = gauss_channel(grid, 1e-6, t0=0.0)
         waves.append(wv)
-    fiber = FiberProfile(
+    fiber = Fiber(
         n2=1e-30,
         alpha=0.0,
         A_eff=Area(80e-12, "m^2"),
@@ -466,7 +466,7 @@ def _plot(results: dict) -> None:
     grid2, I2_e, I2_m, S2_e, S2_m, I_fixed = results["_m2"]
     fig, axes = plt.subplots(1, 3, figsize=(16, 4.5))
     w = grid.w
-    lam = 2 * np.pi * C_MS / (OMEGA0 + w) * 1e9
+    lam = AngularFrequencyArray(OMEGA0 + w, "rad/s").to_wl().as_nm
     keep = np.abs(w) < 1.5e12
 
     ax = axes[0]
@@ -486,7 +486,7 @@ def _plot(results: dict) -> None:
     ax.legend(fontsize=8)
 
     w2 = grid2.w
-    lam2 = 2 * np.pi * C_MS / (OMEGA0 + w2) * 1e9
+    lam2 = AngularFrequencyArray(OMEGA0 + w2, "rad/s").to_wl().as_nm
     ax = axes[1]
     for m, (Se, Sm) in enumerate(((S2_e[0], S2_m[0]), (S2_e[1], S2_m[1]))):
         ax.plot(

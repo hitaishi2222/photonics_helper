@@ -88,7 +88,7 @@ from numpy.typing import NDArray
 from scipy.constants import hbar, k as k_B
 
 from photonics_helper.base import Length, Time, Wavelength
-from photonics_helper.gnlse import FiberProfile, SplitStepEngine
+from photonics_helper.gnlse import Fiber, SplitStepEngine
 from photonics_helper.noise import (
     add_ase_noise,
     ase_noise_field,
@@ -555,11 +555,10 @@ def _silica_response(grid: TemporalGrid) -> RamanResponse:
     the response identical to the one ``examples/05`` prints.
     """
     spec = RamanSpec.from_database("Silica")
-    return RamanResponse(
-        spec=spec,
+    return spec.response(
+        grid,
         tau1=1.0 / (2.0 * np.pi * spec.raman_shift_Hz),
         tau2=1.0 / (np.pi * spec.linewidth_Hz),
-        grid=grid,
     )
 
 
@@ -567,7 +566,7 @@ def raman_floor_panel(ctx: dict) -> dict:
     print(_rule("3. The Raman thermal floor: thermodynamic, not empirical"))
 
     grid: TemporalGrid = ctx["grid"]
-    omega0 = 2.0 * np.pi * 299792458.0 / LAM0
+    omega0 = Wavelength(LAM0, "m").to_omega().as_rad_s
     resp = _silica_response(grid)
     # raman_noise_field wants the FFT of the *delayed* response on the grid --
     # the same h_R_fft the GNLSE passes to its delayed-intensity convolution.
@@ -753,11 +752,8 @@ def raman_floor_panel(ctx: dict) -> dict:
 # ── 4. Through a fiber ────────────────────────────────────────────
 def _propagate(wave: Wave, resp: RamanResponse, seed: int | None = None) -> Wave:
     """Propagate ``wave`` over L_FIBER with the deterministic Raman term."""
-    omega0 = 2.0 * np.pi * 299792458.0 / LAM0
-    fiber = FiberProfile.from_gamma(
+    fiber = Fiber.from_gamma(
         gamma=1.5e-3,
-        n2=2.7e-20,
-        omega0=omega0,
         length=Length(L_FIBER, "m"),
         raman_response=resp,
     )

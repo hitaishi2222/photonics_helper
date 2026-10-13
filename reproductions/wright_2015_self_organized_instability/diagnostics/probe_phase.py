@@ -9,7 +9,7 @@ spec = importlib.util.spec_from_file_location(
 rep = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(rep)
 from photonics_helper.base import Area, Length, Time, Wavelength
-from photonics_helper.gnlse import FiberProfile
+from photonics_helper.gnlse import Fiber
 from photonics_helper.multimode_gnlse import MultimodeSplitStepEngine
 from photonics_helper.pulse import TemporalGrid, Wave, Envelope
 
@@ -83,7 +83,7 @@ def probe(f_target, seed="growing", offs_sign=-1):
                 a0 * np.exp(1j * (-om * tt)) if False else a0 * np.exp(-1j * om * tt)
             )
         waves.append(W.with_field(np.asarray(field, complex)))
-    fiber = FiberProfile(
+    fiber = Fiber(
         n2=rep.N2, alpha=0.0, A_eff=Area(rep.A_EFF, "m^2"), length=Length(L, "m")
     )
     eng = MultimodeSplitStepEngine(
@@ -128,7 +128,7 @@ for phi in [0.0, np.pi / 2, np.pi, 3 * np.pi / 2, np.pi / 4, -np.pi / 4]:
         else:
             field = a0 * np.exp(1j * (-om * tt + phi))
         waves.append(W.with_field(np.asarray(field, complex)))
-    fiber = FiberProfile(
+    fiber = Fiber(
         n2=rep.N2, alpha=0.0, A_eff=Area(rep.A_EFF, "m^2"), length=Length(L, "m")
     )
     eng = MultimodeSplitStepEngine(

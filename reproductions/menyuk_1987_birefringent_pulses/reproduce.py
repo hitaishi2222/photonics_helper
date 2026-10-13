@@ -37,7 +37,7 @@ from numpy.typing import NDArray
 
 from photonics_helper.base import Area, Length, Time, Wavelength
 from photonics_helper.core.grids import TemporalGrid
-from photonics_helper.gnlse import FiberProfile
+from photonics_helper.gnlse import Fiber
 from photonics_helper.pulse import Envelope, Wave
 from photonics_helper.vector_gnlse import VectorSplitStepEngine
 
@@ -80,7 +80,7 @@ DELTA_STAR_WINDOW = (0.02, 0.08)
 
 def gamma_per_W_m() -> float:
     """gamma = n2 omega0 / (c A_eff), W^-1 m^-1."""
-    omega0 = 2.0 * pi * C_MS / 1.55e-6
+    omega0 = Wavelength(1550, "nm").to_omega().as_rad_s
     return N2 * omega0 / (C_MS * A_EFF_UM2 * 1e-12)
 
 
@@ -164,7 +164,7 @@ def make_engine(
         envelope=make_env(chirp_y, peak_y),
         central_wavelength=wx.central_wavelength,
     )
-    fiber = FiberProfile(
+    fiber = Fiber(
         n2=n2,
         alpha=0.0,
         A_eff=Area(A_EFF_UM2 * 1e-12, "m^2"),

@@ -63,9 +63,9 @@ def _beta_fn():
 
 
 def _pump_omega(wl_nm: float) -> float:
-    from photonics_helper.base import C_MS
+    from photonics_helper.base import Wavelength
 
-    return 2.0 * np.pi * C_MS / (wl_nm * 1e-9)
+    return Wavelength(wl_nm, "nm").to_omega().as_rad_s
 
 
 def gain_curve(wl_nm: float, omega_m: np.ndarray | None = None) -> dict:

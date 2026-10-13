@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 
 from photonics_helper.base import Area, Length, Time, Wavelength
 from photonics_helper.gnlse import (
-    FiberProfile,
+    Fiber,
     GNLSESolver,
     plot_intensity_metrics,
     plot_spectrum_vs_distance,
@@ -28,7 +28,7 @@ def solver():
         envelope=env,
         central_wavelength=Wavelength(1550, "nm"),
     )
-    fiber = FiberProfile(
+    fiber = Fiber(
         n2=1e-19, alpha=1e-5, A_eff=Area(5e-11, "m^2"), length=Length(1e-3, "m")
     )
     betas = np.array([0.02])  # 20 ps²/km

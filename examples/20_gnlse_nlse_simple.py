@@ -23,7 +23,7 @@ import matplotlib.pyplot as plt
 
 from photonics_helper.base import Length, Time, Wavelength
 from photonics_helper.gnlse import (
-    FiberProfile,
+    Fiber,
     GNLSESolver,
     plot_spectral_evolution,
     plot_temporal_evolution,
@@ -86,10 +86,8 @@ def temporal_db(A: np.ndarray, t_ps: np.ndarray) -> tuple[np.ndarray, np.ndarray
 def main() -> None:
     pulse = make_pulse()
     omega0 = pulse.central_frequency
-    fiber = FiberProfile.from_gamma(
+    fiber = Fiber.from_gamma(
         gamma=GAMMA_W_M,
-        n2=N2,
-        omega0=omega0,
         length=Length(FIBER_LENGTH_M, "m"),
     )
 

@@ -36,8 +36,8 @@ from pathlib import Path
 import numpy as np
 from scipy.signal import find_peaks
 
-from photonics_helper.base import C_MS, Length, Time, Wavelength
-from photonics_helper.gnlse import FiberProfile, GNLSESolver
+from photonics_helper.base import Length, Time, Wavelength
+from photonics_helper.gnlse import Fiber, GNLSESolver
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
 HERE = Path(__file__).resolve().parent
@@ -60,8 +60,8 @@ def _simulated_field(grid, P0, T0, gamma, phi_max, lam):
         shape="gaussian", peak_amplitude=np.sqrt(P0), pulse_width=Time(T0, "s")
     )
     pulse = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(lam, "m"))
-    fiber = FiberProfile.from_gamma(
-        gamma=gamma, n2=2.6e-20, omega0=2 * np.pi * C_MS / lam, length=Length(L, "m")
+    fiber = Fiber.from_gamma(
+        gamma=gamma, length=Length(L, "m")
     )
     solver = GNLSESolver(
         pulse=pulse,

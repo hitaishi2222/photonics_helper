@@ -482,14 +482,9 @@ class MultimodeSplitStepEngine:
 
     def _gamma_v(self) -> float:
         """Scalar γ of the shared profile, at the carrier frequency."""
-        from photonics_helper.gnlse import _gamma
+        from photonics_helper.gnlse import _fiber_gamma
 
-        return _gamma(
-            self.fiber.n2,
-            self.omega0,
-            self.fiber.A_eff,
-            self.fiber.confinement_factor,
-        )
+        return _fiber_gamma(self.fiber, self.omega0)
 
     def _linear_step(self, field: NDArray, dz: float, m: int) -> NDArray:
         """Linear step (dispersion + group delay + phase offset + shared loss)

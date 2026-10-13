@@ -20,8 +20,8 @@ and the RMS bandwidth.
 import numpy as np
 import pytest
 
-from photonics_helper.base import Length, Time, Wavelength, C_MS
-from photonics_helper.gnlse import FiberProfile, GNLSESolver
+from photonics_helper.base import Length, Time, Wavelength
+from photonics_helper.gnlse import Fiber, GNLSESolver
 from photonics_helper.gnlse_validation import (
     DEFAULT_OBSERVABLES,
     ConvergenceReport,
@@ -36,11 +36,11 @@ from photonics_helper.gnlse_validation import (
     mi_gain_of,
 )
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
-from photonics_helper.raman import RamanResponse, RamanSpec
+from photonics_helper.raman import RamanSpec
 
 WL0 = 1550e-9
 BETA2 = -21e-27  # s²/m — SMF-28-ish at 1550 nm
-OMEGA0 = 2 * np.pi * C_MS / WL0
+OMEGA0 = Wavelength(WL0, "m").to_omega().as_rad_s
 
 
 def _fission_build(N: int, Tmax_s: float, num_steps: int) -> GNLSESolver:
@@ -54,8 +54,8 @@ def _fission_build(N: int, Tmax_s: float, num_steps: int) -> GNLSESolver:
         shape="sech", peak_amplitude=np.sqrt(peak), pulse_width=Time(t0, "s")
     )
     pulse = Wave(grid=grid, envelope=envelope, central_wavelength=Wavelength(WL0, "m"))
-    fiber = FiberProfile.from_gamma(
-        gamma=gamma, n2=2.6e-20, omega0=OMEGA0, length=Length(length, "m")
+    fiber = Fiber.from_gamma(
+        gamma=gamma, length=Length(length, "m")
     )
     solver = GNLSESolver(
         pulse=pulse,
@@ -276,7 +276,7 @@ def test_check_gordon_ssfs_matches_gordon():
     spec = RamanSpec(
         name="Silica", raman_shift_cm=440.0, raman_linewidth_cm=45.0, fR=0.18
     )
-    response = RamanResponse(spec=spec, fR=0.18, tau1=12.2e-15, tau2=32e-15, grid=grid)
+    response = spec.response(grid, fR=0.18, tau1=12.2e-15, tau2=32e-15)
     beta2 = -7.0e-27
     gamma = 0.11
     t0 = 50e-15 / 1.763  # soliton width from 50 fs FWHM sech

@@ -107,7 +107,7 @@ from photonics_helper.base import (
     Time,
     Wavelength,
 )
-from photonics_helper.gnlse import FiberProfile
+from photonics_helper.gnlse import Fiber
 from photonics_helper.multimode_gnlse import MultimodeSplitStepEngine
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
@@ -122,7 +122,7 @@ DELTA = 8.8e-3  # (n_co^2 - n_cl^2) / (2 n_co^2) (PRL p.3)
 KAPPA2 = 16.55e-27  # kappa'' = beta_2 at 1064 nm (s^2/m)
 N2 = 3.2e-20  # m^2/W
 LAMBDA0 = 1064e-9
-OMEGA0 = 2.0 * np.pi * C_MS / LAMBDA0
+OMEGA0 = Wavelength(LAMBDA0, "m").to_omega().as_rad_s
 
 # --- Fig. 14 experiment-side parameters (PRL p.3) --------------------------
 LEN_EXP = 6.0  # m
@@ -294,7 +294,7 @@ def build_engine(
         wave._pulse_train_field = field
         waves.append(wave)
 
-    fiber = FiberProfile(
+    fiber = Fiber(
         n2=N2,
         alpha=0.0,
         length=Length(length_m, "m"),

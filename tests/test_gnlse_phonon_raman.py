@@ -15,7 +15,7 @@ from scipy.signal import hilbert
 
 from photonics_helper.base import Length, Time, Wavelength
 from photonics_helper.gnlse import (
-    FiberProfile,
+    Fiber,
     GNLSESolver,
     SplitStepEngine,
     _delayed_h_R,
@@ -149,11 +149,9 @@ def _two_tone_wave(grid: TemporalGrid) -> Wave:
     return wave.with_field(np.sqrt(5.0) * (1 + 1e-3 * np.cos(omega_r * t)))
 
 
-def _fiber(wave: Wave, response: object) -> FiberProfile:
-    return FiberProfile.from_gamma(
+def _fiber(wave: Wave, response: object) -> Fiber:
+    return Fiber.from_gamma(
         gamma=2.0e-3,
-        n2=2.6e-20,
-        omega0=wave.central_frequency,
         length=Length(2.0, "m"),
         raman_response=response,
     )

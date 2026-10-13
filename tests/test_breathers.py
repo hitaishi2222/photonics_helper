@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from photonics_helper.base import C_MS, Length, Time, Wavelength
+from photonics_helper.base import Length, Time, Wavelength
 from photonics_helper.breathers import (
     SolitonOnBackground,
     akhmediev_breather,
@@ -14,7 +14,7 @@ from photonics_helper.breathers import (
     sfb_spatial_period,
     sfb_temporal_period,
 )
-from photonics_helper.gnlse import FiberProfile, GNLSESolver
+from photonics_helper.gnlse import Fiber, GNLSESolver
 from photonics_helper.pulse import TemporalGrid
 
 
@@ -120,10 +120,8 @@ def test_breather_propagates_with_gnlse():
     sob = _km_parameters()
     grid = TemporalGrid(N=1024, Tmax=Time(80e-12, "s"))
     wave = sob.initial_wave(grid, 0.66, z0=0.0)
-    fiber = FiberProfile.from_gamma(
+    fiber = Fiber.from_gamma(
         gamma=sob.gamma,
-        n2=2.6e-20,
-        omega0=2 * np.pi * C_MS / 1550e-9,
         length=Length(sob.L_NL, "m"),
     )
     solver = GNLSESolver(

@@ -29,13 +29,13 @@ import warnings
 import numpy as np
 import pytest
 
-from photonics_helper.base import C_MS, Length, Time, Wavelength
-from photonics_helper.gnlse import FiberProfile, GNLSESolver, SplitStepEngine
+from photonics_helper.base import Length, Time, Wavelength
+from photonics_helper.gnlse import Fiber, GNLSESolver, SplitStepEngine
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 from photonics_helper.raman import RamanResponse, RamanSpec
 
 WL0 = 1550e-9
-OMEGA0 = 2 * np.pi * C_MS / WL0
+OMEGA0 = Wavelength(WL0, "m").to_omega().as_rad_s
 BETA2 = -21e-27  # s^2/m
 GAMMA = 2.0
 T0 = 50e-15 / 1.763
@@ -49,7 +49,7 @@ def _raman(grid: TemporalGrid) -> RamanResponse:
     spec = RamanSpec(
         name="Silica", raman_shift_cm=440.0, raman_linewidth_cm=45.0, fR=0.18
     )
-    return RamanResponse(spec=spec, fR=0.18, tau1=12.2e-15, tau2=32e-15, grid=grid)
+    return spec.response(grid, fR=0.18, tau1=12.2e-15, tau2=32e-15)
 
 
 def _engine(N: int, Tmax: float, *, shock: bool, raman: bool) -> SplitStepEngine:
@@ -58,10 +58,8 @@ def _engine(N: int, Tmax: float, *, shock: bool, raman: bool) -> SplitStepEngine
         shape="sech", peak_amplitude=np.sqrt(PEAK), pulse_width=Time(T0, "s")
     )
     pulse = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(WL0, "m"))
-    fiber = FiberProfile.from_gamma(
+    fiber = Fiber.from_gamma(
         gamma=GAMMA,
-        n2=2.6e-20,
-        omega0=OMEGA0,
         length=Length(LENGTH, "m"),
         raman_response=_raman(grid) if raman else None,
     )
@@ -140,10 +138,8 @@ def test_solver_passthrough():
         shape="sech", peak_amplitude=np.sqrt(PEAK), pulse_width=Time(T0, "s")
     )
     pulse = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(WL0, "m"))
-    fiber = FiberProfile.from_gamma(
+    fiber = Fiber.from_gamma(
         gamma=GAMMA,
-        n2=2.6e-20,
-        omega0=OMEGA0,
         length=Length(LENGTH, "m"),
         raman_response=_raman(grid),
     )

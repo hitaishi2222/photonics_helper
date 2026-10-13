@@ -69,7 +69,7 @@ def probe_ztraj(
             else:
                 field = a_sig * seed[1] * np.conj(tone)
             waves.append(ww.with_field(np.asarray(field, complex)))
-        fiber = rep.FiberProfile(
+        fiber = rep.Fiber(
             n2=rep.N2,
             alpha=0.0,
             A_eff=rep.Area(rep.A_EFF, "m^2"),

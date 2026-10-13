@@ -526,16 +526,16 @@ def engine_sign_bench() -> dict:
 
     warnings.filterwarnings("ignore")
     from photonics_helper.base import Length, Time, Wavelength
-    from photonics_helper.gnlse import FiberProfile, SplitStepEngine
+    from photonics_helper.gnlse import Fiber, SplitStepEngine
     from photonics_helper.pulse import Envelope, TemporalGrid, Wave
-    from photonics_helper.raman import RamanResponse, RamanSpec
+    from photonics_helper.raman import RamanSpec
 
     def one(conserving: bool, g_signed: float, length: float = 2.5, p0: float = 1333.0):
         grid = TemporalGrid(N=8192, Tmax=Time(32e-12, "s"))
         spec = RamanSpec(
             name="Silica", raman_shift_cm=440.0, raman_linewidth_cm=45.0, fR=0.18
         )
-        resp = RamanResponse(spec=spec, fR=0.18, tau1=12.2e-15, tau2=32e-15, grid=grid)
+        resp = spec.response(grid, fR=0.18, tau1=12.2e-15, tau2=32e-15)
         env = Envelope(
             shape="gaussian", peak_amplitude=np.sqrt(p0), pulse_width=Time(1.0, "s")
         )
@@ -545,10 +545,8 @@ def engine_sign_bench() -> dict:
         )
         f_in = np.sqrt(p0) * np.exp(-((tt / 1e-13) ** 2) / 2)
         pulse = pulse.with_field(f_in)
-        fiber = FiberProfile.from_gamma(
+        fiber = Fiber.from_gamma(
             gamma=1.5e-3 * g_signed,
-            n2=2.5e-20 * g_signed,
-            omega0=2 * np.pi * 3e8 / 1.55e-6,
             alpha=0.0,
             length=Length(length, "m"),
             raman_response=resp,

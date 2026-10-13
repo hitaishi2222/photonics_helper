@@ -9,6 +9,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (smooth-UX pass)
+
+- **`Envelope.from_peak_power` / `from_fwhm_peak_power`**: build envelopes from
+  physical `Power` + `A_eff` (`A0 = sqrt(P / (½·n·c·ε₀·A_eff))`) instead of raw V/m
+  amplitude. Raw `peak_amplitude` constructors are unchanged.
+- **`Wave.from_envelope`** (new, auto-grid) + **`Wave.from_pulse_train` with optional
+  `grid`/`repetition_rate`**: single pulses never need a grid or rep-rate;
+  trains auto-build via `TemporalGrid.for_pulse_train`. `average_power(rate=None)`
+  falls back to the stored rate.
+- **`ElectricField.from_array`** (new) + **`ElectricField.from_envelope(Envelope, ...)`**:
+  the old `from_envelope(array, ...)` still works with a deprecation warning.
+- **`Fiber` renames `FiberProfile`** (`FiberProfile` kept as alias); **gamma-first**
+  `Fiber.from_gamma(gamma, A_eff=...)` / `Fiber.from_gamma(gamma, ...)` needs no
+  `n2` (legacy `from_gamma(gamma, n2, omega0)` still works with a warning), plus
+  `Fiber.from_n2`, `Fiber.effective_gamma`, and `float | AngularFrequency` omega0
+  everywhere.
+- **Raman single entry point**: `RamanSpec.response()` → `RamanResponse`,
+  `RamanResponse.frequency` / `RamanSpec.frequency_response()` →
+  `RamanFrequencyResponse`, plus `plot_response` / `plot_frequency_response`
+  delegates. The three classes stay separate internally.
+- Docs (`quickstart`, `gnlse-physics`, `README`) updated to the new forms.
+- **`TemporalGrid.for_gnlse` + `GNLSESolver.propagate_auto`**: fission-aware grid
+  sizing (dispersive spread × soliton order) plus a converge-and-retry loop —
+  doubles steps on energy drift, doubles the window at fixed dt on edge-energy
+  (wrap-around) detection. Returns a report dict; warns instead of raising
+  when `max_rounds` is exhausted.
+- **Reproductions migrated to the new syntax** (`Fiber`, gamma-first
+  `from_gamma` without `n2`/`omega0`, `spec.response()` facade). No numerics
+  changed: every migrated `from_gamma` stored the same γ the legacy path
+  back-computed, and all grids/steps are untouched.
+- **Examples migrated too**, plus hand-rolled `2πc/λ` conversions now go
+  through `Wavelength.to_omega()` (scalars), `AngularFrequency.to_wl()` /
+  `AngularFrequencyArray.to_wl()` (spectra/plot axes) and `WavelengthArray`
+  (tabulated spectra). Verified bit-identical except three plot axes that
+  used the truncated `3e8`/`2.99792458e8` and now use exact *c*. Composite
+  physics formulas (D→β₂, detunings) are deliberately untouched.
+
 ### Added
 
 - **`photonics_helper.raman_cavity`**: N-channel Raman cavity solver — arbitrary orders, per-channel direction, per-end FBG mirrors, **six steady-state solvers** (bidirectional fixed point with under-relaxation; Newton on the shooting residual; continuation in launched power; **trapezoidal collocation with a sparse Newton**; **null-vector branch switching**; and **full continuation that also ladders the backward-pump fraction**), an implicit `method="BDF"` integrator, and a linearized noise transfer solved by superposition. All are validated against the single-order RFL (exact 0.12449 W). Key numerical finding: a bidirectional pump breaks a plain collocation Newton even at 0.01 W backward power, and the backward-fraction continuation fixes it — see PLAN.md.

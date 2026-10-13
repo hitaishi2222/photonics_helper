@@ -66,8 +66,8 @@ from pathlib import Path
 import numpy as np
 from tqdm import tqdm
 
-from photonics_helper.base import C_MS, Length, Time, Wavelength
-from photonics_helper.gnlse import FiberProfile, GNLSESolver
+from photonics_helper.base import Length, Time, Wavelength
+from photonics_helper.gnlse import Fiber, GNLSESolver
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
 HERE = Path(__file__).resolve().parent
@@ -115,10 +115,8 @@ def _run_engine(
     else:
         peak, z_span = em["peak_power_W"], em["z_span_m"]
     pulse = _make_pulse(grid, params, peak, em["T0_ps"])
-    fiber = FiberProfile.from_gamma(
+    fiber = Fiber.from_gamma(
         gamma=em["gamma_per_W_m"],
-        n2=2.6e-20,
-        omega0=2 * np.pi * C_MS / (em["central_wavelength_nm"] * 1e-9),
         length=Length(z_span, "m"),
     )
     solver = GNLSESolver(

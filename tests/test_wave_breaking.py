@@ -3,8 +3,8 @@
 import numpy as np
 import pytest
 
-from photonics_helper.base import C_MS, Length, Time, Wavelength
-from photonics_helper.gnlse import FiberProfile, GNLSESolver
+from photonics_helper.base import Length, Time, Wavelength
+from photonics_helper.gnlse import Fiber, GNLSESolver
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 from photonics_helper.wave_breaking import (
     WaveBreaking,
@@ -84,10 +84,8 @@ def test_wavebreaking_analyze_with_gnlse():
         shape="gaussian", peak_amplitude=np.sqrt(_P0), pulse_width=Time(_T0, "s")
     )
     pulse = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(1060, "nm"))
-    fiber = FiberProfile.from_gamma(
+    fiber = Fiber.from_gamma(
         gamma=_GAMMA,
-        n2=2.6e-20,
-        omega0=2 * np.pi * C_MS / 1060e-9,
         length=Length(4 * wb.z_WB, "m"),
     )
     solver = GNLSESolver(

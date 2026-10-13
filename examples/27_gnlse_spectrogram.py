@@ -33,9 +33,9 @@ import numpy as np
 matplotlib.use("Agg")
 
 from photonics_helper.base import Length, Time, Wavelength
-from photonics_helper.gnlse import FiberProfile, GNLSESolver, plot_spectrogram
+from photonics_helper.gnlse import Fiber, GNLSESolver, plot_spectrogram
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
-from photonics_helper.raman import RamanResponse, RamanSpec
+from photonics_helper.raman import RamanSpec
 
 # ── Dudley et al. (2006) Table I PCF at 835 nm ──────────────────────────────
 CENTRAL_WL_NM = 835.0
@@ -70,15 +70,13 @@ def make_pulse(N: int = 4096, Tmax_ps: float = 10.0) -> Wave:
     )
 
 
-def make_fiber(pulse: Wave, length_m: float = 0.08) -> FiberProfile:
+def make_fiber(pulse: Wave, length_m: float = 0.08) -> Fiber:
     spec = RamanSpec(name="Silica", raman_shift_cm=440, raman_linewidth_cm=45, fR=0.18)
-    raman = RamanResponse(
-        spec=spec, fR=0.18, tau1=0.0122e-12, tau2=0.032e-12, grid=pulse.grid
+    raman = spec.response(
+        pulse.grid, fR=0.18, tau1=0.0122e-12, tau2=0.032e-12
     )
-    return FiberProfile.from_gamma(
+    return Fiber.from_gamma(
         gamma=GAMMA,
-        n2=N2,
-        omega0=float(pulse.central_frequency),
         length=Length(length_m, "m"),
         raman_response=raman,
     )

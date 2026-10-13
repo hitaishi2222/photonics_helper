@@ -1129,7 +1129,7 @@ def assess_simulation_readiness(
     -------
     report : SimulationReadinessReport
     """
-    from .gnlse import _gamma
+    from .gnlse import _fiber_gamma
 
     if length is None:
         length_m = fiber.length.as_m
@@ -1141,7 +1141,7 @@ def assess_simulation_readiness(
     omega0 = pulse.central_frequency
     T0 = pulse.envelope.pulse_width.as_s
     P_peak = pulse.peak_power()
-    gamma = _gamma(fiber.n2, omega0, fiber.A_eff, fiber.confinement_factor)
+    gamma = _fiber_gamma(fiber, omega0)
     omega0_val = omega0.as_rad_s if isinstance(omega0, AngularFrequency) else omega0
 
     # Absolute angular frequencies on the simulation FFT grid

@@ -46,9 +46,9 @@ import numpy as np
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from photonics_helper.base import C_MS, Length, Time, Wavelength
+from photonics_helper.base import AngularFrequencyArray, Length, Time, Wavelength
 from photonics_helper.gnlse import (
-    FiberProfile,
+    Fiber,
     GNLSESolver,
 )
 from photonics_helper.gnlse_validation import (
@@ -59,7 +59,7 @@ from photonics_helper.gnlse_validation import (
     order_study,
 )
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
-from photonics_helper.raman import RamanResponse, RamanSpec
+from photonics_helper.raman import RamanSpec
 
 # ── Dudley / laserfun NLSE_dudley parameters ────────────────────────────────
 
@@ -107,25 +107,21 @@ def make_pulse() -> Wave:
     )
 
 
-def make_fiber(pulse: Wave) -> FiberProfile:
-    omega0 = pulse.central_frequency
+def make_fiber(pulse: Wave) -> Fiber:
     raman_spec = RamanSpec(
         name="Silica",
         raman_shift_cm=440,
         raman_linewidth_cm=45,
         fR=RAMAN_FR,
     )
-    raman = RamanResponse(
-        spec=raman_spec,
+    raman = raman_spec.response(
+        pulse.grid,
         fR=RAMAN_FR,
         tau1=RAMAN_TAU1_S,
         tau2=RAMAN_TAU2_S,
-        grid=pulse.grid,
     )
-    return FiberProfile.from_gamma(
+    return Fiber.from_gamma(
         gamma=GAMMA_W_M,
-        n2=N2,
-        omega0=omega0,
         length=Length(FIBER_LENGTH_M, "m"),
         raman_response=raman,
     )
@@ -133,7 +129,7 @@ def make_fiber(pulse: Wave) -> FiberProfile:
 
 def run_scheme(
     pulse: Wave,
-    fiber: FiberProfile,
+    fiber: Fiber,
     scheme: str,
     num_steps: int,
     show_progress: bool = False,
@@ -172,7 +168,7 @@ def get_spectrum_and_wavelength(solver: GNLSESolver) -> tuple[np.ndarray, np.nda
     grid = solver.pulse.grid
     field = np.asarray(solver.evolution[-1].envelope_field, dtype=complex)
     spectrum = np.abs(grid.fft(field)) ** 2
-    wavelength = 2.0 * np.pi * C_MS / (solver.omega0 + grid.w) * 1e9
+    wavelength = AngularFrequencyArray(solver.omega0 + grid.w, "rad/s").to_wl().as_nm
     order = np.argsort(wavelength)
     wavelength, spectrum = wavelength[order], spectrum[order]
     return wavelength, spectrum
@@ -191,7 +187,7 @@ def get_spectral_evolution(
     for wave in solver.evolution:
         field = np.asarray(wave.envelope_field, dtype=complex)
         spectrum = np.abs(grid.fft(field)) ** 2
-        wl = 2.0 * np.pi * C_MS / (solver.omega0 + grid.w) * 1e9
+        wl = AngularFrequencyArray(solver.omega0 + grid.w, "rad/s").to_wl().as_nm
         order = np.argsort(wl)
         wl, spectrum = wl[order], spectrum[order]
         if wavelengths is None:

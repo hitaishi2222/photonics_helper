@@ -17,20 +17,17 @@ sign preserved, blue-skew sign preserved, and the default path untouched.
 import numpy as np
 import pytest
 
-from photonics_helper.base import Length, Time, Wavelength
-from photonics_helper.gnlse import FiberProfile, GNLSESolver, SplitStepEngine
+from photonics_helper.base import AngularFrequencyArray, Length, Time, Wavelength
+from photonics_helper.gnlse import Fiber, GNLSESolver, SplitStepEngine
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 from photonics_helper.raman import RamanResponse, RamanSpec
 
 WL0_NM = 835.0
 
 
-def _fiber_raman(response: RamanResponse, length_m: float = 2e-3) -> FiberProfile:
-    omega0 = 2 * np.pi * 3e8 / (WL0_NM * 1e-9)
-    return FiberProfile.from_gamma(
+def _fiber_raman(response: RamanResponse, length_m: float = 2e-3) -> Fiber:
+    return Fiber.from_gamma(
         gamma=0.11,
-        n2=2.6e-20,
-        omega0=omega0,
         alpha=0.0,
         length=Length(length_m, "m"),
         raman_response=response,
@@ -38,15 +35,10 @@ def _fiber_raman(response: RamanResponse, length_m: float = 2e-3) -> FiberProfil
 
 
 def _raman_response(grid: TemporalGrid) -> RamanResponse:
-    return RamanResponse(
-        spec=RamanSpec(
-            name="Silica", raman_shift_cm=440.0, raman_linewidth_cm=45.0, fR=0.18
-        ),
-        fR=0.18,
-        tau1=12.2e-15,
-        tau2=32e-15,
-        grid=grid,
+    spec = RamanSpec(
+        name="Silica", raman_shift_cm=440.0, raman_linewidth_cm=45.0, fR=0.18
     )
+    return spec.response(grid, fR=0.18, tau1=12.2e-15, tau2=32e-15)
 
 
 def _shock_wave(n: int = 2**12) -> Wave:
@@ -57,7 +49,7 @@ def _shock_wave(n: int = 2**12) -> Wave:
     return Wave(envelope=env, central_wavelength=Wavelength(WL0_NM, "nm"), grid=grid)
 
 
-def _engine(wave: Wave, fiber: FiberProfile, conserving: bool) -> SplitStepEngine:
+def _engine(wave: Wave, fiber: Fiber, conserving: bool) -> SplitStepEngine:
     return SplitStepEngine(
         pulse=wave,
         fiber=fiber,
@@ -70,9 +62,8 @@ def _engine(wave: Wave, fiber: FiberProfile, conserving: bool) -> SplitStepEngin
 
 def test_conserving_shock_requires_raman():
     wave = _shock_wave()
-    omega0 = 2 * np.pi * 3e8 / (WL0_NM * 1e-9)
-    fiber = FiberProfile.from_gamma(
-        gamma=0.11, n2=2.6e-20, omega0=omega0, length=Length(1e-3, "m")
+    fiber = Fiber.from_gamma(
+        gamma=0.11, length=Length(1e-3, "m")
     )
     eng = _engine(wave, fiber, conserving=True)
     with pytest.raises(ValueError, match="Raman response|set include_raman=False"):
@@ -156,7 +147,7 @@ def test_conserving_shock_default_path_unchanged_when_gamma_positive():
         w = np.asarray(eng.grid.w, dtype=float)
         S = np.abs(eng.grid.fft(a)) ** 2
         freq = eng.omega0 + w
-        lam = 2 * np.pi * 3e8 / freq * 1e9
+        lam = AngularFrequencyArray(freq, "rad/s").to_wl().as_nm
         order = np.argsort(lam)
         peak_lambda = lam[order[int(np.argmax(S[order]))]]
         mean_lam = float((lam[order] * S[order]).sum() / S[order].sum())

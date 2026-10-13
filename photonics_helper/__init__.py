@@ -75,7 +75,7 @@ if TYPE_CHECKING:  # pragma: no cover - static analyzers/IDEs only
         WaveguideMode,
         ZDependentDispersion,
     )
-    from .gnlse import FiberProfile, GNLSESolver, SplitStepEngine, TaperedGNLSESolver
+    from .gnlse import Fiber, FiberProfile, GNLSESolver, SplitStepEngine, TaperedGNLSESolver
     from .gnlse_validation import (
         DEFAULT_OBSERVABLES,
         ConvergenceReport,
@@ -202,6 +202,7 @@ __all__ = [
     "Energy",
     "Envelope",
     "FROGTrace",
+    "Fiber",
     "FiberProfile",
     "FitResult",
     "Frequency",
@@ -419,6 +420,7 @@ _LAZY_MODULES: dict[str, str] = {
     **{
         n: ".gnlse"
         for n in (
+            "Fiber",
             "FiberProfile",
             "GNLSESolver",
             "SplitStepEngine",

@@ -45,7 +45,7 @@ from photonics_helper.base import (
     Wavelength,
 )
 from photonics_helper.fiber import ZDependentDispersion
-from photonics_helper.gnlse import FiberProfile, TaperedGNLSESolver
+from photonics_helper.gnlse import Fiber, TaperedGNLSESolver
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
 # ── SiN material parameters ──────────────────────────────────────────
@@ -276,9 +276,9 @@ def make_fiber(
     alpha: float = 0.0,
     A_eff_um2: float = 0.3,
     confinement: float = 0.7,
-) -> FiberProfile:
+) -> Fiber:
     """SiN waveguide fiber profile."""
-    return FiberProfile(
+    return Fiber(
         n2=n2,
         alpha=alpha,
         A_eff=Area(A_eff_um2 * 1e-12, "m^2"),
