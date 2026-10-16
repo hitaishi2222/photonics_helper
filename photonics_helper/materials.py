@@ -534,8 +534,11 @@ class RefractiveIndex:
                     canonical = resolved
                     break
             if canonical is None:
+                first_guess = parts[0]
                 raise ValueError(
-                    f"Unknown material in '{material}'. "
+                    f"Unknown material in '{material}' "
+                    f"(tried longest-known-material-prefix match; "
+                    f"first-hyphen split would give material={first_guess!r}). "
                     "Known materials: "
                     f"{', '.join(db.list_materials())}"
                 )

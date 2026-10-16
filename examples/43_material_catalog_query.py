@@ -382,22 +382,23 @@ def run_consistency(catalog: list[MaterialDataset]) -> dict:
 
     print()
     print(
-        f"  source resolvability: {len(unresolvable)} tabulated dataset(s) "
-        f"are listed in the"
+        f"  source resolvability: {len(resolvable)} of "
+        f"{len(resolvable) + len(unresolvable)} tabulated datasets load "
+        "through the public entry point"
     )
-    print("  catalog but cannot be loaded through the public entry point:")
     for key, reason in unresolvable:
         print(f"     {key:<22} {reason}")
-    print("  The `material-author` key is split on the first hyphen, so any key")
-    print("  whose *author* field itself contains a hyphen is mangled. This is a")
-    print("  defect in the loader, not in the data, and it is reported here")
-    print("  rather than patched: see the `fix-material-dataset-key-split`")
-    print("  change. The example therefore does NOT assert resolvability.")
+    print("  Keys resolve by longest-known-material-prefix match, so")
+    print("  hyphenated authors (e.g. si3n4-vogt-1-91) load correctly.")
+    assert not unresolvable, (
+        "tabulated source_key(s) listed in the catalog but not loadable:\n  "
+        + "\n  ".join(f"{k}: {r}" for k, r in unresolvable)
+    )
 
     assert not problems, (
         "the shipped database is internally inconsistent:\n  " + "\n  ".join(problems)
     )
-    print("  no structural violations ✓  (resolvability reported, not asserted)")
+    print("  no structural violations ✓  (source resolvability asserted)")
     return {
         "problems": problems,
         "resolvable": resolvable,
