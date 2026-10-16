@@ -233,14 +233,16 @@ def overlap_tensors_from_fields(
 ) -> ModePairParameters:
     """Grid quadrature overlaps with no circular-symmetry assumption.
 
-    Normalised profiles ``∬|F_m|² = 1`` on the Cartesian grid; then
+    Fields are the transverse vector ``F = (Ex, Ey)`` evaluated at the **pump**
+    wavelength; normalised profiles ``∬|F_m|² = 1`` on the Cartesian grid; then
     ``A_eff,m = (∬|F_m|²)²/∬|F_m|⁴``, ``γ_m = n₂ω₀/(c·A_eff,m)`` (Afshar
     Part I Kerr), ``S⁽¹⁾_mn = ∬|F_m|²|F_n|² → xpm_weights``,
-    ``S⁽²⁾_mnpq = ∬F_m*F_nF_pF_q* → fwm_weights`` (Poletti–Horak Eq. 7;
-    in the real basis ``Q⁽¹⁾ = Q⁽²⁾``), ``oam_l`` the azimuthal labels from
-    the export (real LP-like fields carry no winding phase to recover
-    numerically), ``coupling_tensor`` the absolute ``γ_mn`` matrix for the
-    engine slot.
+    ``S⁽²⁾_mnpq = ∬(F_m*·F_n)(F_p·F_q*) → fwm_weights`` (Poletti–Horak Eq. 7;
+    in the real basis ``Q⁽¹⁾ = Q⁽²⁾``; the vector form reduces to
+    ``∬F_m*F_nF_pF_q*`` for single-component / LP fields), ``oam_l`` the
+    azimuthal labels from the export (real LP-like fields carry no winding
+    phase to recover numerically), ``coupling_tensor`` the absolute ``γ_mn``
+    matrix for the engine slot.
 
     Confinement ``Γ_m`` is unity: the loader contract carries fields and
     ``n_eff(λ)`` only, no core mask, so a power-in-core fraction cannot be
@@ -249,23 +251,33 @@ def overlap_tensors_from_fields(
     the result through the engine's per-mode coupling slots.
     """
     n = len(modes)
-    iw = min(m.Ex.shape[0] for m in modes) // 2
     dx = float(np.mean(np.diff(modes[0].x_um))) * 1e-6
     dy = float(np.mean(np.diff(modes[0].y_um))) * 1e-6
     dA = dx * dy
     omega0 = 2.0 * PI * C_MS / (float(lambda0) * 1e-6)
 
-    Fn: list[NDArray] = []
+    # Fields are the two TRANSVERSE components (Ex, Ey) of the vector mode.
+    # Two corrections over the first cut (STATUS finding #10):
+    #  * evaluate at the PUMP wavelength, not the grid-median index — a
+    #    nonlinear deck is defined at the pump, and the median of a broad
+    #    export can sit microns away from it;
+    #  * contract the FULL transverse vector (|Ex|²+|Ey|² and the vector dot
+    #    products below), not |Ex|² alone — for a mode whose plane is normal
+    #    to x, Ex is the *longitudinal* component and |Ex|² is not the
+    #    intensity.
+    Fx: list[NDArray] = []
+    Fy: list[NDArray] = []
     for ld in modes:
-        # Quasi-fundamental exports dominate in Ex; the overlap quadrature
-        # takes the dominant transverse component (|Ex|² here); a fully
-        # vectorial ∬(|Ex|² + |Ey|²) contraction is a follow-up once a
-        # geometry that ships |Ey| ≠ 0 actually reaches the deck path.
-        F = ld.Ex[iw].astype(complex)
-        norm = float(np.sum(np.abs(F) ** 2) * dA)
-        Fn.append(F / np.sqrt(norm))
-    Fstack = np.asarray(Fn)  # (N, Ny, Nx)
-    I2 = np.abs(Fstack) ** 2  # (N, Ny, Nx)
+        wl = np.asarray(ld.wavelengths_um, dtype=float)
+        iw = int(np.argmin(np.abs(wl - float(lambda0))))
+        fx = ld.Ex[iw].astype(complex)
+        fy = ld.Ey[iw].astype(complex)
+        norm = float(np.sum(np.abs(fx) ** 2 + np.abs(fy) ** 2) * dA)
+        Fx.append(fx / np.sqrt(norm))
+        Fy.append(fy / np.sqrt(norm))
+    Fx = np.asarray(Fx)  # (N, Ny, Nx)
+    Fy = np.asarray(Fy)
+    I2 = np.abs(Fx) ** 2 + np.abs(Fy) ** 2  # (N, Ny, Nx)
 
     Aeff = np.empty(n)
     Gamma = np.ones(n)
@@ -275,9 +287,13 @@ def overlap_tensors_from_fields(
     gamma = n2 * omega0 * Gamma / (C_MS * Aeff)
 
     S1 = np.einsum("mij,nij->mn", I2, I2) * dA
-    # S2 with full conjugation structure F_m* F_n F_p F_q*
-    Fc = np.conj(Fstack)
-    S2 = np.einsum("mij,nij,pij,qij->mnpq", Fc, Fstack, Fstack, Fc) * dA
+    # S2 with the full vector conjugation structure (F_m*·F_n)(F_p·F_q*),
+    # which reduces exactly to F_m* F_n F_p F_q* when the field lives in a
+    # single transverse component (the scalar / real-LP case).
+    D = np.einsum("mij,nij->mnij", np.conj(Fx), Fx) + np.einsum(
+        "mij,nij->mnij", np.conj(Fy), Fy
+    )
+    S2 = np.einsum("mnij,pqij->mnpq", D, np.conj(D)) * dA
     # Keep the dtype honest: S2 is real for real (LP-like) mode sets but
     # genuinely complex for propagating-mode field exports — never clip
     # the imaginary part silently (the engine now accepts complex

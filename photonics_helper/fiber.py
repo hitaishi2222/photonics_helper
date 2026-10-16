@@ -215,6 +215,7 @@ class Dispersion:
         wavelength: Wavelength | None = None,
         make_plot=False,
         return_diagnostics=False,
+        halfwidth: float | None = None,
     ):
         """Fit dispersion data to a polynomial in ω and return beta coefficients.
 
@@ -224,6 +225,14 @@ class Dispersion:
         coefficients (``s^k/m``), pass them with
         ``GNLSESolver(..., betas_unit="s^k/m")`` and they will be converted.
         If return_diagnostics is True, returns (betas, fit_x_axis, data, fit).
+
+        The polynomial is a **local Taylor fit about the pump**, so the data is
+        windowed to ``|ω − ω₀| ≤ halfwidth`` first (default ``0.3e15`` rad/s, or
+        the full span when the table is narrower — the same convention as
+        :meth:`ZDependentDispersion.get_betas_at_z`). Fitting one polynomial
+        over a broad table instead is *not* a Taylor expansion: a 1.4–6 µm
+        multimode export returns ``β₂ ≈ −3 ps²/km`` where the local value is
+        ``−441``.
         """
 
         if wavelength is None:
@@ -238,8 +247,8 @@ class Dispersion:
                 f"[{minimum:.3f}, {maximum:.3f}] nm"
             )
 
-        # omega - omega_0
-        omegaAxis = 2 * np.pi * C_MS / (self.get_wls().as_m) - 2 * np.pi * C_MS / (
+        # omega - omega_0, in rad/s
+        omega_s = 2 * np.pi * C_MS / (self.get_wls().as_m) - 2 * np.pi * C_MS / (
             wavelength.as_m
         )
 
@@ -247,11 +256,26 @@ class Dispersion:
         betaTwo = -self.as_s_m_m * (self.get_wls().as_m) ** 2 / (2 * np.pi * C_MS)
         # The units of beta2 for the GNLSE solver are ps^2/m; convert
         betaTwo = betaTwo * 1e24
-        # Also convert angular frequency to rad/ps
-        omegaAxis = omegaAxis * 1e-12  #  s/ps
 
-        # Fit beta2 with high-order polynomial
-        polyFitCo = np.polyfit(omegaAxis, betaTwo, polyOrder)
+        # Window the Taylor fit about the pump (see docstring). The default
+        # mirrors get_betas_at_z: 0.3e15 rad/s, or the full span if narrower.
+        if halfwidth is None:
+            halfwidth = min(
+                0.3e15, (float(np.max(omega_s)) - float(np.min(omega_s))) / 2.0
+            )
+        mask = np.abs(omega_s) <= halfwidth
+        if int(np.count_nonzero(mask)) < polyOrder + 1:
+            raise ValueError(
+                f"only {int(np.count_nonzero(mask))} dispersion point(s) within "
+                f"halfwidth={halfwidth:.3e} rad/s of the pump; need >= {polyOrder + 1} "
+                "(widen the table or pass a larger halfwidth)"
+            )
+        # Convert angular frequency offset to rad/ps for the ps^k/m convention
+        omegaAxis = omega_s[mask] * 1e-12  #  s/ps
+        betaWindow = betaTwo[mask]
+
+        # Fit beta2 with high-order polynomial (local window)
+        polyFitCo = np.polyfit(omegaAxis, betaWindow, polyOrder)
 
         Betas = polyFitCo[::-1]
 
@@ -262,11 +286,11 @@ class Dispersion:
             polyFit = polyFit + Betas[i] / factorial(i) * omegaAxis**i
 
         if make_plot:
-            plt.plot(omegaAxis, betaTwo, "o")
+            plt.plot(omegaAxis, betaWindow, "o")
             plt.plot(omegaAxis, polyFit)
             plt.show()
         if return_diagnostics:
-            return Betas, omegaAxis, betaTwo, polyFit
+            return Betas, omegaAxis, betaWindow, polyFit
         else:
             return Betas
 

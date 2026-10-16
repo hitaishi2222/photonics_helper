@@ -181,3 +181,33 @@ def test_propagation_constant_from_neff_omega_error_handling():
 
     expected = omega.as_rad_s * neff / C_MS
     np.testing.assert_allclose(pc.values, expected, rtol=1e-12)
+
+
+def test_get_betas_windows_the_local_taylor_fit():
+    """``get_betas`` must be a *local* Taylor fit about the pump.
+
+    Fitting one polynomial over a broad table is not a Taylor expansion: on a
+    1.4–6 µm multimode export the global fit returns β₂ ≈ −3 ps²/km where the
+    local value is −441.  Pin that the default (windowed) fit tracks the local
+    ``D(λ)`` while a full-range fit does not.
+    """
+    from photonics_helper.base import C_MS
+
+    wl = np.linspace(1000.0, 5000.0, 401)  # nm, a broad table
+    D = 50.0 + 200.0 * (wl - 1000.0) / 4000.0  # ps/(nm·km), strongly λ-dependent
+    disp = Dispersion(
+        values=D,
+        unit="ps/nm.km",
+        wavelengths=WavelengthArray(wl, "nm"),
+        central_wavelength=Wavelength(2000.0, "nm"),
+    )
+    pump = Wavelength(2000.0, "nm")
+    b2_windowed = float(disp.get_betas(2, wavelength=pump)[0])
+    b2_global = float(disp.get_betas(2, wavelength=pump, halfwidth=1e30)[0])
+
+    # analytic β₂ at the pump from the local D
+    d0 = float(D[np.argmin(np.abs(wl - 2000.0))])
+    b2_local = -d0 * 1e-6 * (2000e-9) ** 2 / (2 * np.pi * C_MS) * 1e24  # ps²/m
+
+    assert abs(b2_windowed - b2_local) < 0.15 * abs(b2_local)  # tracks the local value
+    assert abs(b2_global - b2_local) > 0.5 * abs(b2_local)     # global fit does not

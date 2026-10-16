@@ -86,25 +86,35 @@ def test_single_mode_reduction():
 
 
 def test_complex_s2_kept_for_complex_fields():
-    """A propagating-mode (complex-field) export keeps its imaginary S⁽²⁾."""
+    """A propagating-mode (complex-field) export keeps its imaginary S⁽²⁾.
+
+    A *single* mode cannot have a complex ``S⁽²⁾`` — ``S2[0,0,0,0] = ∬|F|⁴`` is
+    real for any field (the first cut of this test pinned floating-point noise
+    instead).  The genuine case needs ≥2 modes whose relative phase varies
+    across the grid, which is what a complex-field export carries.
+    """
     import tempfile
     from pathlib import Path
 
     with tempfile.TemporaryDirectory() as tmp:
-        src = np.load(Path(EXPORT) / "mode-00.npz", allow_pickle=False)
-        Ex = np.asarray(src["Ex"], dtype=complex)
-        Ex = Ex * np.exp(1j * 0.4 * np.asarray(src["y_um"])[None, :, None])
-        np.savez(
-            Path(tmp) / "mode-00.npz",
-            wavelength_um=src["wavelength_um"],
-            neff=src["neff"],
-            ng=src["ng"],
-            Ex=Ex,
-            Ey=src["Ey"],
-            x_um=src["x_um"],
-            y_um=src["y_um"],
-            label=src["label"],
-        )
+        for i in (0, 1):
+            src = np.load(Path(EXPORT) / f"mode-{i:02d}.npz", allow_pickle=False)
+            Ex = np.asarray(src["Ex"], dtype=complex)
+            # y-dependent phase ramp, different slope per mode
+            Ex = Ex * np.exp(
+                1j * (0.4 + 0.7 * i) * np.asarray(src["y_um"])[None, :, None]
+            )
+            np.savez(
+                Path(tmp) / f"mode-{i:02d}.npz",
+                wavelength_um=src["wavelength_um"],
+                neff=src["neff"],
+                ng=src["ng"],
+                Ex=Ex,
+                Ey=src["Ey"],
+                x_um=src["x_um"],
+                y_um=src["y_um"],
+                label=src["label"],
+            )
         modes = load_modes(tmp)
         p = overlap_tensors_from_fields(modes, n2=1e-18, lambda0=2.0)
     assert np.iscomplexobj(p.fwm_weights)
@@ -128,3 +138,62 @@ def test_two_mode_deck_contract():
     assert d["fwm_weights"].shape == (2, 2, 2, 2)
     assert d["coupling_tensor"].shape == (2, 2)
     assert len(d["betas"]) == 2 and float(d["group_delays"][0]) == 0.0
+
+
+def _write_single(tmp, src, Ex, Ey):
+    """Save a one-mode export to ``tmp`` with the given fields."""
+    from pathlib import Path
+
+    np.savez(
+        Path(tmp) / "mode-00.npz",
+        wavelength_um=src["wavelength_um"],
+        neff=src["neff"],
+        ng=src["ng"],
+        Ex=Ex,
+        Ey=Ey,
+        x_um=src["x_um"],
+        y_um=src["y_um"],
+        label=src["label"],
+    )
+
+
+def test_overlap_evaluates_at_the_pump_wavelength():
+    """The field slice is chosen at ``lambda0``, not the grid median.
+
+    (The committed example export is λ-independent, so build a fixture whose
+    transverse width varies with λ: then A_eff must depend on ``lambda0``.)
+    """
+    import tempfile
+    from pathlib import Path
+
+    src = np.load(Path(EXPORT) / "mode-00.npz", allow_pickle=False)
+    Ex = np.asarray(src["Ex"], dtype=complex).copy()
+    y = np.asarray(src["y_um"])
+    for k in range(Ex.shape[0]):  # λ-dependent Gaussian taper -> λ-dependent shape
+        w = 0.4 + 0.15 * k
+        Ex[k] *= np.exp(-(((y - y.mean()) / w) ** 2))[:, None]
+    with tempfile.TemporaryDirectory() as tmp:
+        _write_single(tmp, src, Ex, np.asarray(src["Ey"], dtype=complex))
+        modes = load_modes(tmp)
+        a2 = overlap_tensors_from_fields(modes, 1e-18, 2.0).A_eff[0]
+        a4 = overlap_tensors_from_fields(modes, 1e-18, 4.0).A_eff[0]
+    assert not np.isclose(a2, a4, rtol=1e-3, atol=0.0)
+
+
+def test_overlap_uses_both_transverse_components():
+    """A non-trivial ``Ey`` must enter ``A_eff`` (the old code used |Ex|² only)."""
+    import tempfile
+    from pathlib import Path
+
+    src = np.load(Path(EXPORT) / "mode-00.npz", allow_pickle=False)
+    Ex = np.asarray(src["Ex"], dtype=complex)
+    y = np.asarray(src["y_um"])
+    Ey_zero = np.zeros_like(Ex)
+    Ey_shape = Ex * (y - y.mean())[None, :, None]  # different transverse shape
+    with tempfile.TemporaryDirectory() as tmp:
+        _write_single(tmp, src, Ex, Ey_zero)
+        a_no = overlap_tensors_from_fields(load_modes(tmp), 1e-18, 2.0).A_eff[0]
+    with tempfile.TemporaryDirectory() as tmp:
+        _write_single(tmp, src, Ex, Ey_shape)
+        a_yes = overlap_tensors_from_fields(load_modes(tmp), 1e-18, 2.0).A_eff[0]
+    assert not np.isclose(a_no, a_yes, rtol=1e-3, atol=0.0)
