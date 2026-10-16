@@ -269,6 +269,75 @@ def stmi_shift_thz(n_ord: int) -> float:
     return float(brentq(f, xs[idx[0]], xs[idx[0] + 1]))
 
 
+def gain_curve_corrected(om_thz_grid: NDArray, n_ord: int) -> NDArray:
+    """Analytic gain g(Ω) = sqrt(c² − d̄²) with the corrected mismatch.
+
+    ``c = (2/3)·γ·P₀`` (FWM creation coupling), ``d̄(Ω) = 0.5·sym(Ω) −
+    N·κ − γ·P₀/3`` (engine-effective pair mismatch, ISSUES.md #10). The
+    measured curve comes from coherent-tone probes (``probe_gain``), never
+    from peak-picking a noise floor.
+    """
+    gamma_full = 2.0 * np.pi * N2 / LAMBDA0 / A_EFF
+    c = (2.0 / 3.0) * gamma_full * P0_W
+    out = np.empty_like(np.asarray(om_thz_grid, dtype=float))
+    for i, om in enumerate(np.asarray(om_thz_grid, dtype=float)):
+        sym = beta0(PUMP_THZ + om) + beta0(PUMP_THZ - om) - 2.0 * beta0(PUMP_THZ)
+        dbar = 0.5 * sym - n_ord * KAPPA - gamma_full * P0_W / 3.0
+        out[i] = np.sqrt(max(c**2 - dbar**2, 0.0))
+    return out
+
+
+def render_gain_spectrum_figure(
+    *, L: float = 0.3, n_grid: int = 32768, n_pts: int = 9, span_thz: float = 0.02
+) -> dict:
+    """Measured-vs-analytic gain spectrum figure (task 6.4).
+
+    For orders 1–2: coherent-tone ``probe_gain`` sweep across
+    ``root ± span_thz`` (linear scale, no log noise floor) against
+    ``gain_curve_corrected``. Saves ``wright_2015_gain_spectrum.png`` and
+    returns the metrics dict.
+    """
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    global N_GRID
+    old_n = N_GRID
+    N_GRID = n_grid
+    try:
+        fig, axes = plt.subplots(1, 2, figsize=(11, 4.2))
+        summary = {}
+        for ax, n_ord in zip(axes, (1, 2)):
+            root = stmi_shift_thz_corrected(n_ord)
+            oms = np.linspace(root - span_thz, root + span_thz, n_pts)
+            g_an = gain_curve_corrected(oms, n_ord)
+            g_meas = np.empty_like(oms)
+            for i, om in enumerate(oms):
+                res = probe_gain(n_ord, f_thz=float(om), L=L)
+                g_meas[i] = float(np.arcsinh(max(float(res["cols_a1"][1]), 0.0)) / L)
+            ax.plot(oms, g_an, "k-", label="analytic (corrected d̄)")
+            ax.plot(oms, g_meas, "ro", ms=5, mfc="none", label="measured (tone probe)")
+            ax.axvline(root, color="0.7", ls="--", lw=1.0)
+            ax.set_xlabel("detuning (THz)")
+            ax.set_ylabel("gain (1/m)")
+            ax.set_title(f"order {n_ord} (root {root:.3f} THz, L={L} m)")
+            ax.legend(fontsize=8)
+            err = float(np.max(np.abs(g_meas - g_an)) / max(g_an.max(), 1e-30))
+            summary[n_ord] = {
+                "root_thz": round(root, 4),
+                "max_rel_err": round(err, 4),
+            }
+        fig.suptitle("Wright et al. 2015 — measured vs analytic gain spectrum")
+        fig.tight_layout()
+        out = HERE / "wright_2015_gain_spectrum.png"
+        fig.savefig(out, dpi=150)
+        plt.close(fig)
+        return {"figure": str(out), "orders": summary}
+    finally:
+        N_GRID = old_n
+
+
 def mi_gain_analytic(om_thz_grid: NDArray, n_ord: int) -> NDArray:
     """g(Omega) = sqrt((gamma_f P0)^2 - Delta(Omega)^2), 1/m."""
     gf = gamma_eff() * P0_W

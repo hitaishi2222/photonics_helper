@@ -36,7 +36,7 @@ from pathlib import Path
 import numpy as np
 from numpy.typing import NDArray
 
-from photonics_helper.base import AngularFrequency, AngularFrequencyArray, Length, Time, Wavelength
+from photonics_helper.base import AngularFrequency, AngularFrequencyArray, C_MS, Length, Time, Wavelength
 from photonics_helper.gnlse import Fiber, GNLSESolver
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 from photonics_helper.raman import RamanResponse, RamanSpec

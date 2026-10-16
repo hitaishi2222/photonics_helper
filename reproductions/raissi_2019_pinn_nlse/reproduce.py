@@ -602,6 +602,17 @@ def train_pinn(
             return loss
 
         opt2.step(closure)
+        # Closure-count correction (task 8.1): torch LBFGS counts closure
+        # evaluations, not accepted steps — keep stepping (history persists
+        # in opt2.state) until accepted iterations reach the budget or the
+        # hard closure ceiling trips. Leaves the run as accepted-otherwise
+        # if the ceiling trips first.
+        closure_ceiling = 5 * lbfgs_iters + 1000
+        while (
+            int(opt2.state[params_nn[0]].get("n_iter", 0)) < lbfgs_iters
+            and count[0] < closure_ceiling
+        ):
+            opt2.step(closure)
         pbar.close()
         print(f"  LBFGS done in {time.time() - t0:.0f}s, final loss {hist[-1]:.3e}")
         metrics_lbfgs = {

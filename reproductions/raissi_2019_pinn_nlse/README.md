@@ -177,6 +177,8 @@ can be factored out of it later if more PINN reproductions land.
 
 ## Outcome (2026-09-22, run 7 — PASSED; revisited 2026-10-02)
 
+**2026-10-16 (task 8.1):** closure-count correction landed in `reproduce.py` — LBFGS now re-steps until accepted iterations ≥ `max_iter` under a hard closure ceiling (`5×budget + 1000`), instead of one `step()` call whose closure count overshoots the budget. Accepted-otherwise: no full retraining run yet, so movement toward 1.97e-3 on this loop is unverified; next full training run measures it.
+
 | Metric | This reproduction | Paper |
 |---|---|---|
 | PINN rel-L2, **complex field** `h` | **6.11e-3** | — |

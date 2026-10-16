@@ -4,7 +4,7 @@
 **doi:10.1103/PhysRevA.92.033849**. PDF: `PhysRevA.92.033849.pdf`; 14 pages
 under `pages/`.
 
-**Status:** `[~]` parameters fully extracted (below), `reproduce.py` to be written.
+**Status (2026-10-16):** engine deck runs; eigen solver implemented; Eq.-12 banded readout still flat — local-gain contrast probes show banded dynamics with pump-scale washout in the end-to-end readout (`diagnostics/probe_sweep_post0.md`). Task 7.3 walk-off audit CLOSED: per-channel pump–sideband walk-off at 13 THz exact in the channel-0 frame (`diagnostics/walkoff_13thz_summary.md`, second run 2026-09-30) — no dedicated delay arm added, evidence says the linear layer is not the cause. Remaining gap: deck noise statistics / seed-level / readout windowing.
 **Target:** `multimode_gnlse` (engine SSFM) + a linear-stability eigen solver
 implemented in the script (the paper's 4N×4N matrix M, Eq. 8/9) — this gives
 the analytic gain curves to compare against.
