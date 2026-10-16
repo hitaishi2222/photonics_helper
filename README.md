@@ -1,3 +1,5 @@
+![Photonics Helper banner](docs/img/banner.png)
+
 # Photonics Helper
 
 A comprehensive helper library for photonics and optics calculations.

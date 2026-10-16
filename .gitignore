@@ -69,3 +69,4 @@ formal/.lake/
 # The citations they support ARE tracked, in formal/PLAN.md section 17.7 and
 # paper/paper.bib; the PDFs themselves are not, so do not commit these.
 formal/refs/*.pdf
+ph_pdfs/
