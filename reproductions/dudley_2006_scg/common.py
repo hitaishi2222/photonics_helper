@@ -425,8 +425,8 @@ def spectrogram(
         # Same analysis kernel family as the engine pair (ISSUES.md #0):
         # a raw np.fft (e^{−i}) mirrors the ω-axis assignment of complex
         # fields and rotates the spectrogram trace in λ.
-        S[i] = np.fft.fftshift(np.conj(np.fft.fft(np.conj(np.fft.ifftshift(gated)))))
-        S[i] = np.abs(S[i]) ** 2
+        spec = np.fft.fftshift(np.conj(np.fft.fft(np.conj(np.fft.ifftshift(gated)))))
+        S[i] = np.abs(spec) ** 2
     return delays * 1e12, omega, S
 
 

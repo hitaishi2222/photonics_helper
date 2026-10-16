@@ -50,9 +50,7 @@ def test_multimode_group_delays_centroid_walkoff():
         )
         waves.append(wv.with_field(np.asarray(1e-3 * envelope, complex)))
 
-    fiber = Fiber(
-        n2=1e-9, alpha=0.0, A_eff=Area(1.0, "m^2"), length=Length(0.5, "m")
-    )
+    fiber = Fiber(n2=1e-9, alpha=0.0, A_eff=Area(1.0, "m^2"), length=Length(0.5, "m"))
     eng = MultimodeSplitStepEngine(
         waves,
         fiber,
@@ -87,9 +85,7 @@ def test_multimode_group_delays_sign_flips_with_gvm():
             central_wavelength=Wavelength(1064.0, "nm"),
         )
         waves.append(wv.with_field(np.asarray(1e-3 * envelope, complex)))
-    fiber = Fiber(
-        n2=1e-9, alpha=0.0, A_eff=Area(1.0, "m^2"), length=Length(0.5, "m")
-    )
+    fiber = Fiber(n2=1e-9, alpha=0.0, A_eff=Area(1.0, "m^2"), length=Length(0.5, "m"))
     eng_neg = MultimodeSplitStepEngine(
         waves,
         fiber,

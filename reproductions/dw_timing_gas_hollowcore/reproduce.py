@@ -41,7 +41,14 @@ import numpy as np
 from scipy.optimize import brentq
 from scipy.special import j0
 
-from photonics_helper.base import AngularFrequency, AngularFrequencyArray, Area, Length, Time, Wavelength
+from photonics_helper.base import (
+    AngularFrequency,
+    AngularFrequencyArray,
+    Area,
+    Length,
+    Time,
+    Wavelength,
+)
 from photonics_helper.gnlse import Fiber, TaperedGNLSESolver
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 
@@ -255,13 +262,6 @@ def build_engine(
 
 
 # --- RDW extraction helpers (paper Sec. II/III: filtered field IFFT) -------
-
-
-def rdw_filter_mask(w_abs: np.ndarray) -> np.ndarray:
-    """15 % relative-bandwidth mask centred on the RDW peak in the UV."""
-    lam = AngularFrequencyArray(w_abs, "rad/s").to_wl().as_nm
-    uv = (lam > 150.0) & (lam < 450.0) & (w_abs > 0)
-    return uv
 
 
 def analyse_run(solver) -> dict:

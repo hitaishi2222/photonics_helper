@@ -1,0 +1,110 @@
+{
+  "schema": "photonics-helper/raman-noise-fixture/1",
+  "paper": {
+    "key": "zhu2007",
+    "citation": "Y. Zhu, X. Zhang, G. Zhang, \"Mean relative intensity noise transfer in fiber Raman amplifiers using multiple-wavelength pumps,\" J. Lightwave Technol. 25(6), 1458-1465 (2007).",
+    "doi": "10.1109/JLT.2007.895532",
+    "local_pdf": "literature/R08_mean_rin_transfer.pdf"
+  },
+  "equations": {
+    "eq_7": {
+      "description": "Analytical RIN transfer for a single-wavelength counterpumped fiber Raman amplifier.",
+      "expression": "|H(f)|^2 = [ln G_R]^2 * (V_s / L_eff)^2 / ((alpha_p * V_s)^2 + (4 pi f)^2)",
+      "consequences": {
+        "dc_level": "ln G_R / (alpha_p * L_eff)",
+        "corner_frequency_hz": "alpha_p * V_s / (4 pi)"
+      },
+      "source": "Zhu 2007 Eq. 7",
+      "doi": "10.1109/JLT.2007.895532",
+      "kind": "equation"
+    },
+    "eq_6": {
+      "description": "Numerical mean RIN transfer, summed over pumps as |sum_j P_j^2(L) m_j(L)|^2 / P_eq^2(L).",
+      "source": "Zhu 2007 Eq. 6",
+      "doi": "10.1109/JLT.2007.895532",
+      "kind": "equation"
+    }
+  },
+  "fiber": {
+    "name": {"value": "TrueWave Reach", "unit": "-", "source": "Zhu 2007 Section II text", "doi": "10.1109/JLT.2007.895532", "kind": "text"},
+    "span_length": {"value": 60.0, "unit": "km", "source": "Zhu 2007 Section II text", "doi": "10.1109/JLT.2007.895532", "kind": "text"},
+    "zero_dispersion_wavelength": {"value": 1400.0, "unit": "nm", "source": "Zhu 2007 Section II text", "doi": "10.1109/JLT.2007.895532", "kind": "text"},
+    "dispersion_slope": {"value": 0.04, "unit": "ps/(nm^2 km)", "source": "Zhu 2007 Section II text", "doi": "10.1109/JLT.2007.895532", "kind": "text"}
+  },
+  "pump_sets": {
+    "two_counter": [
+      {"wavelength_nm": 1441.0, "power_w": 0.330},
+      {"wavelength_nm": 1484.0, "power_w": 0.218}
+    ],
+    "four_counter": [
+      {"wavelength_nm": 1429.0, "power_w": 0.223},
+      {"wavelength_nm": 1445.0, "power_w": 0.125},
+      {"wavelength_nm": 1462.0, "power_w": 0.100},
+      {"wavelength_nm": 1491.0, "power_w": 0.140}
+    ],
+    "six_counter": [
+      {"wavelength_nm": 1425.0, "power_w": 0.171},
+      {"wavelength_nm": 1436.0, "power_w": 0.126},
+      {"wavelength_nm": 1447.0, "power_w": 0.080},
+      {"wavelength_nm": 1461.0, "power_w": 0.078},
+      {"wavelength_nm": 1485.0, "power_w": 0.104},
+      {"wavelength_nm": 1500.0, "power_w": 0.042}
+    ],
+    "pump_set_source": "Zhu 2007 Section II and III text",
+    "pump_set_doi": "10.1109/JLT.2007.895532",
+    "pump_set_kind": "text"
+  },
+  "signals": {
+    "range_nm": [1530.0, 1605.0],
+    "spacing_ghz": 50.0,
+    "channel_count": 184,
+    "power_per_channel_w": 0.0005,
+    "probe_nm": 1539.43,
+    "source": "Zhu 2007 Section II text",
+    "doi": "10.1109/JLT.2007.895532",
+    "kind": "text"
+  },
+  "on_off_gain_db": {"value": 9.1, "unit": "dB", "source": "Zhu 2007 Section II text", "doi": "10.1109/JLT.2007.895532", "kind": "text"},
+  "targets": {
+    "fig1": {
+      "description": "Mean RIN transfer against frequency, 1e-2 to 1e2 kHz, for the six-wavelength counterpumped amplifier under three treatments.",
+      "x_axis": {"quantity": "frequency_hz", "range": [1.0e-2, 1.0e2], "unit": "kHz"},
+      "curves": [
+        {"label": "analytic one pump (Eq. 7)", "kind": "analytic", "expected_dc_db": 6.8, "expected_corner_hz": 1.0e3, "dc_tolerance_db": 1.5, "dc_verifiable": false},
+        {"label": "numerical, equivalent one pump (Eq. 6)", "kind": "numeric_virtual", "expected_dc_db": 5.3, "expected_corner_hz": 1.0e3, "dc_tolerance_db": 1.5, "dc_verifiable": false},
+        {"label": "numerical, real six pumps (Eq. 6)", "kind": "numeric_real", "expected_dc_db": 13.0, "expected_corner_hz": 1.0e3, "dc_tolerance_db": 2.5, "dc_verifiable": false}
+      ],
+      "dc_values_read_from": "Fig. 1 rendered at 200 dpi. Dashed about +13 dB, solid about +5.3 dB, dotted about +6.8 dB.",
+      "derived": {
+        "virtual_vs_analytic_gap_db": {"expected": -1.5, "tolerance_db": 1.5, "note": "Zhu 2007 reports the two one-pump RIN transfers are almost overlapped. The figure shows the numerical solid about 1.5 dB BELOW the analytic dotted."},
+        "real_vs_virtual_gap_db": {"expected": 7.7, "tolerance_db": 3.0, "note": "The rise is attributed mainly to pump-to-pump RIN transfer among the uncorrelated pumps."}
+      },
+      "source": "Zhu 2007 Fig. 1",
+      "doi": "10.1109/JLT.2007.895532",
+      "kind": "figure",
+      "note": "All values read by eye from Fig. 1 and treated as approximate."
+    },
+    "eq7_verifiability": {
+      "description": "What about Zhu 2007 Eq. 7 can be checked against Fig. 1 without the paper's external references.",
+      "corner_frequency_verifiable": {
+        "verifiable": true,
+        "reason": "The corner alpha_p * V_s / (4 pi) depends on the pump loss only weakly through alpha_p itself. For pump wavelengths 1425 to 1500 nm a standard fiber loss of 0.19 to 0.25 dB/km gives a corner between 0.6 and 0.9 kHz, matching the roll-off onset visible near 0.5 to 1 kHz in Fig. 1.",
+        "gate": "corner within a factor of two of 1 kHz"
+      },
+      "rolloff_slope_verifiable": {
+        "verifiable": true,
+        "reason": "Beyond the corner the response falls as 1/f in amplitude, i.e. 20 dB per decade. This is independent of alpha_p and of G_R.",
+        "gate": "slope within 3 dB per decade of 20 dB per decade, measured one decade past the corner"
+      },
+      "dc_level_verifiable": {
+        "verifiable": false,
+        "reason": "Zhu 2007 does not state the fiber loss or the effective area. Its text reads 'The other measured parameters of the fiber are given in [11] and [12]', referring to T. Zhang, X. Zhang, and G. Zhang, 'Distributed fiber Raman amplifiers...'. The DC level ln(G_R)/(alpha_p L_eff) therefore cannot be evaluated from the paper alone, and the implementation returns about 1 dB for a nominal 0.19 dB/km pump loss against the about 6.8 dB read from Fig. 1.",
+        "resolution_required": "Obtain refs [11] and [12] and their stated loss, or fit alpha_p once against Fig. 1 and record the fitted value with an explicit note that it was fitted.",
+        "do_not": "Do not tune alpha_p to match the figure and then present Eq. 7 as verified. The corner and the roll-off slope are the verified parts."
+      }
+    }
+  },
+  "acceptance": {
+    "justification": "Eq. 7 is gated on its corner frequency and roll-off slope, which are verifiable without the paper's external references, and NOT on its DC level, which is not. The DC is recorded as unresolved with the specific reference needed."
+  }
+}

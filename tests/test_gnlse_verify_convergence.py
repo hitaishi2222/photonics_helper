@@ -115,9 +115,7 @@ def test_self_convergence_overlap_is_phase_robust():
     A = rng.standard_normal(256) + 1j * rng.standard_normal(256)
     S = np.abs(A) ** 2
     wl = np.linspace(400.0, 1350.0, 256)
-    _, _, overlap_phase = _self_convergence_metrics(
-        wl, S, S, A, A * np.exp(1j * 0.7)
-    )
+    _, _, overlap_phase = _self_convergence_metrics(wl, S, S, A, A * np.exp(1j * 0.7))
     assert overlap_phase == pytest.approx(1.0)
 
 

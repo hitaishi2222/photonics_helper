@@ -258,9 +258,7 @@ def make_engine(length: float, seed: int):
         # cw pump sqrt(1000 W) + white Gaussian noise (ASE-like) per sample
         wv._pulse_train_field = np.full(GRID_N, np.sqrt(P_MODE), dtype=complex) + noise
         waves.append(wv)
-    fiber = Fiber(
-        n2=1.0, alpha=0.0, A_eff=Area(1.0, "m^2"), length=Length(length, "m")
-    )
+    fiber = Fiber(n2=1.0, alpha=0.0, A_eff=Area(1.0, "m^2"), length=Length(length, "m"))
     eng = MultimodeSplitStepEngine(
         waves,
         fiber,

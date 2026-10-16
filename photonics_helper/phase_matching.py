@@ -1105,6 +1105,277 @@ def emit_readiness_warnings(report: SimulationReadinessReport) -> None:
         warnings.warn(f"Recommendation: {msg}", UserWarning, stacklevel=3)
 
 
+def _resolve_readiness_length(
+    length: Length | float | None, fiber: FiberProfile
+) -> float:
+    """Propagation length in metres (a bare float reads as metres)."""
+    if length is None:
+        return fiber.length.as_m
+    if isinstance(length, Length):
+        return length.as_m
+    # tolerate a bare float in metres for backwards compatibility
+    return float(length)
+
+
+@dataclass
+class _ReadinessGrid:
+    """Pulse-grid vs dispersion-model coverage."""
+
+    covers: bool
+    omega_min: float
+    omega_max: float
+    disp_min_omega: AngularFrequency
+    disp_max_omega: AngularFrequency
+
+
+def _readiness_grid_coverage(
+    pulse: Wave, dispersion, omega0_val: float
+) -> _ReadinessGrid:
+    """Check the pulse FFT grid against the dispersion model bounds."""
+    margin = 1e12
+    if dispersion is not None and (
+        hasattr(dispersion, "omegas")
+        or hasattr(dispersion, "wavelengths")
+        or hasattr(dispersion, "x_values")
+    ):
+        disp_min_omega, disp_max_omega = _dispersion_omega_bounds(dispersion)
+    else:
+        # Taylor mode — use a wide estimate
+        disp_min_omega = AngularFrequency(omega0_val - 5e15, "rad/s")
+        disp_max_omega = AngularFrequency(omega0_val + 5e15, "rad/s")
+
+    omega_abs = omega0_val + pulse.grid.w
+    phys_mask = omega_abs > 0
+    if phys_mask.any():
+        omega_pos = omega_abs[phys_mask]
+        in_bounds = (omega_pos >= disp_min_omega.as_rad_s - margin) & (
+            omega_pos <= disp_max_omega.as_rad_s + margin
+        )
+        return _ReadinessGrid(
+            covers=bool(np.all(in_bounds)),
+            omega_min=float(np.min(omega_pos)),
+            omega_max=float(np.max(omega_abs)),
+            disp_min_omega=disp_min_omega,
+            disp_max_omega=disp_max_omega,
+        )
+    return _ReadinessGrid(
+        covers=False,
+        omega_min=float(np.min(omega_abs)),
+        omega_max=float(np.max(omega_abs)),
+        disp_min_omega=disp_min_omega,
+        disp_max_omega=disp_max_omega,
+    )
+
+
+@dataclass
+class _ReadinessScales:
+    """Soliton / length scales for the proposed simulation."""
+
+    beta2_si: float
+    L_D: float
+    L_NL: float
+    N_sol: float
+    L_fiss: float
+
+
+def _readiness_soliton_scales(
+    T0: float,
+    P_peak: float,
+    gamma: float,
+    betas: NDArray | None,
+    dispersion,
+    omega0,
+) -> _ReadinessScales:
+    """Soliton order and dispersion/nonlinear/fission lengths."""
+    if betas is not None and len(betas) > 0:
+        beta2_si = betas[0] * 1e-24  # ps²/m → s²/m
+    else:
+        # Try to extract from dispersion
+        beta2_si = _estimate_beta2(dispersion, omega0)
+        if beta2_si is None:
+            if dispersion is not None:
+                warnings.warn(
+                    "Could not estimate beta2 from the supplied dispersion "
+                    "source; soliton order and dispersion length are undefined.",
+                    UserWarning,
+                    stacklevel=3,
+                )
+            beta2_si = 0.0
+
+    L_D = T0**2 / abs(beta2_si) if beta2_si != 0 else float("inf")
+    L_NL = 1.0 / (gamma * P_peak) if gamma * P_peak > 0 else float("inf")
+
+    if beta2_si != 0 and gamma * P_peak > 0:
+        N_sol = np.sqrt(gamma * P_peak * T0**2 / abs(beta2_si))
+    else:
+        N_sol = 0.0
+
+    L_fiss = L_D / (N_sol * 0.7) if N_sol > 0 else float("inf")
+    return _ReadinessScales(
+        beta2_si=beta2_si, L_D=L_D, L_NL=L_NL, N_sol=N_sol, L_fiss=L_fiss
+    )
+
+
+def _readiness_recommended_steps(length_m: float, L_D: float, L_NL: float) -> int:
+    """Step count resolving the shortest nonlinear scale."""
+    dz_base = (
+        min(L_D, L_NL) * 0.01
+        if L_D < float("inf") and L_NL < float("inf")
+        else length_m / 100
+    )
+    return max(int(length_m / max(dz_base, 1e-30)), 100)
+
+
+def _readiness_predicted_processes(
+    N_sol: float, beta2_si: float, gamma_P: float, length_m: float, L_NL: float
+) -> list[str]:
+    """Which nonlinear processes should matter for these scales."""
+    predicted = []
+    if N_sol > 1:
+        predicted.append("soliton_fission")
+        predicted.append("dispersive_wave")
+    if beta2_si < 0 and gamma_P > 0:
+        predicted.append("modulation_instability")
+    if length_m > L_NL:
+        predicted.append("four_wave_mixing")
+    return predicted
+
+
+def _readiness_warnings(
+    pulse: Wave,
+    grid: _ReadinessGrid,
+    scales: _ReadinessScales,
+    betas: NDArray | None,
+    adaptor,
+    omega0_val: float,
+    length_m: float,
+    recommended_steps: int,
+) -> tuple[list[str], list[str]]:
+    """Human-readable warnings and recommendations for the proposed setup."""
+    warnings_list = []
+    recommendations_list = []
+
+    if not grid.covers:
+        warnings_list.append(
+            f"Dispersion model does not cover the full pulse grid: "
+            f"[{grid.omega_min:.2e}, {grid.omega_max:.2e}] rad/s "
+            f"vs model [{grid.disp_min_omega.as_rad_s:.2e}, {grid.disp_max_omega.as_rad_s:.2e}] rad/s"
+        )
+        recommendations_list.append(
+            "Consider using a broader dispersion table or Taylor expansion "
+            "with higher order coefficients."
+        )
+
+    if scales.L_D < length_m and scales.N_sol > 3:
+        warnings_list.append(
+            f"High soliton order N={scales.N_sol:.1f} with L_D << L — expect strong fission."
+        )
+        recommendations_list.append(
+            f"Increase num_steps to at least {recommended_steps} for accurate fission."
+        )
+
+    if betas is not None and len(betas) > 0 and adaptor is not None and grid.covers:
+        try:
+            max_phi_err = _taylor_phase_max_error(
+                pulse, np.asarray(betas), adaptor, omega0_val
+            )
+            if max_phi_err is not None and max_phi_err > PI / 4:
+                warnings_list.append(
+                    f"Taylor dispersion phase error up to {max_phi_err:.3f} rad/m "
+                    f"(> π/4) across the pulse grid — Taylor betas may be inadequate."
+                )
+                recommendations_list.append(
+                    "Use full β(ω) dispersion (e.g. TaperedGNLSESolver) for this bandwidth."
+                )
+        except (ValueError, TypeError, RuntimeError) as exc:
+            warnings.warn(
+                f"Taylor phase-error check failed: {exc}",
+                UserWarning,
+                stacklevel=3,
+            )
+    return warnings_list, recommendations_list
+
+
+def _readiness_mi_predictions(
+    beta2_si: float, gamma: float, P_peak: float, omega0
+) -> dict:
+    """MI sideband predictions (empty unless in the anomalous-gain regime)."""
+    if not (beta2_si < 0 and gamma * P_peak > 0):
+        return {}
+    mi_result = mi_gain_spectrum(beta2_si, gamma, P_peak)
+    mi_info = mi_result if isinstance(mi_result, dict) else {}
+    if not isinstance(mi_info, dict):
+        return {}
+    omega_peak = AngularFrequency(mi_info["Omega_peak"], "rad/s")
+    omega_cutoff = AngularFrequency(mi_info["Omega_cutoff"], "rad/s")
+    sideband_plus = AngularFrequency(omega0 + mi_info["Omega_peak"], "rad/s").to_wl()
+    sideband_minus = AngularFrequency(omega0 - mi_info["Omega_peak"], "rad/s").to_wl()
+    # Create WavelengthArray from raw meter values
+    sb_values = np.array([sideband_plus.as_m, sideband_minus.as_m])
+    return {
+        "Omega_peak": omega_peak,
+        "Omega_cutoff": omega_cutoff,
+        "g_max": mi_info["g_max"],
+        "sideband_wavelengths": WavelengthArray(sb_values, "m"),
+    }
+
+
+def _readiness_dw_predictions(
+    adaptor, N_sol: float, betas: NDArray | None, beta2_si: float, omega0_val: float
+) -> WavelengthArray:
+    """Dispersive-wave wavelengths (full root finder, β₃ fallback)."""
+    dw_preds = WavelengthArray(np.array([]), "nm")
+    if adaptor is not None and N_sol > 1:
+        try:
+            dw_result = dispersive_wave_roots(
+                adaptor,
+                AngularFrequency(omega0_val, "rad/s"),
+            )
+            dw_preds = dw_result.wavelengths
+        except (ValueError, TypeError, RuntimeError) as exc:
+            warnings.warn(
+                f"Dispersive-wave root finder failed: {exc}",
+                UserWarning,
+                stacklevel=3,
+            )
+    elif betas is not None and len(betas) >= 2 and beta2_si != 0:
+        try:
+            beta3_si = betas[1] * 1e-27 if len(betas) > 1 else 0.0
+            if beta3_si != 0 and abs(beta3_si) > 1e-40:
+                delta_omega_dw = -2 * beta2_si / beta3_si
+                omega_dw = omega0_val + delta_omega_dw
+                if omega_dw > 0:
+                    dw_wavelength = AngularFrequency(omega_dw, "rad/s").to_wl()
+                    dw_preds = WavelengthArray(np.array([dw_wavelength.as_m]), "m")
+        except (ValueError, TypeError, ZeroDivisionError) as exc:
+            warnings.warn(
+                f"beta2/beta3 dispersive-wave estimate failed: {exc}",
+                UserWarning,
+                stacklevel=3,
+            )
+    return dw_preds
+
+
+def _readiness_fwm_predictions(
+    dw_preds: WavelengthArray, omega0_val: float
+) -> list[dict]:
+    """Degenerate-FWM idler for a signal at each DW wavelength."""
+    fwm_preds: list[dict] = []
+    if dw_preds.as_m.shape[0] == 0:
+        return fwm_preds
+    # Predict FWM idler for signal near DW
+    for dw_wavelength in dw_preds:
+        omega_s = dw_wavelength.to_omega().as_rad_s
+        omega_i = fwm_idler_frequency(omega0_val, omega_s)
+        fwm_preds.append(
+            {
+                "idler_wavelength": AngularFrequency(omega_i, "rad/s").to_wl(),
+                "signal_wavelength": dw_wavelength,
+            }
+        )
+    return fwm_preds
+
+
 def assess_simulation_readiness(
     pulse: Wave,
     fiber: FiberProfile,
@@ -1131,220 +1402,39 @@ def assess_simulation_readiness(
     """
     from .gnlse import _fiber_gamma
 
-    if length is None:
-        length_m = fiber.length.as_m
-    elif isinstance(length, Length):
-        length_m = length.as_m
-    else:  # tolerate a bare float in metres for backwards compatibility
-        length_m = float(length)
-
+    length_m = _resolve_readiness_length(length, fiber)
     omega0 = pulse.central_frequency
     T0 = pulse.envelope.pulse_width.as_s
     P_peak = pulse.peak_power()
     gamma = _fiber_gamma(fiber, omega0)
     omega0_val = omega0.as_rad_s if isinstance(omega0, AngularFrequency) else omega0
-
-    # Absolute angular frequencies on the simulation FFT grid
-    omega_abs = omega0_val + pulse.grid.w
-
     adaptor = _make_dispersion_adaptor(dispersion, omega0_val)
 
-    # Determine dispersion bounds
-    if dispersion is not None and (
-        hasattr(dispersion, "omegas")
-        or hasattr(dispersion, "wavelengths")
-        or hasattr(dispersion, "x_values")
-    ):
-        disp_min_omega, disp_max_omega = _dispersion_omega_bounds(dispersion)
-    else:
-        # Taylor mode — use a wide estimate
-        disp_min_omega = AngularFrequency(omega0_val - 5e15, "rad/s")
-        disp_max_omega = AngularFrequency(omega0_val + 5e15, "rad/s")
-
-    margin = 1e12
-    phys_mask = omega_abs > 0
-    if phys_mask.any():
-        omega_pos = omega_abs[phys_mask]
-        omega_min = float(np.min(omega_pos))
-        omega_max = float(np.max(omega_abs))
-        in_bounds = (omega_pos >= disp_min_omega.as_rad_s - margin) & (
-            omega_pos <= disp_max_omega.as_rad_s + margin
-        )
-        covers = bool(np.all(in_bounds))
-    else:
-        omega_min = float(np.min(omega_abs))
-        omega_max = float(np.max(omega_abs))
-        covers = False
-
-    # Compute soliton parameters
-    if betas is not None and len(betas) > 0:
-        beta2_si = betas[0] * 1e-24  # ps²/m → s²/m
-    else:
-        # Try to extract from dispersion
-        beta2_si = _estimate_beta2(dispersion, omega0)
-        if beta2_si is None:
-            if dispersion is not None:
-                warnings.warn(
-                    "Could not estimate beta2 from the supplied dispersion "
-                    "source; soliton order and dispersion length are undefined.",
-                    UserWarning,
-                    stacklevel=2,
-                )
-            beta2_si = 0.0
-
-    L_D = T0**2 / abs(beta2_si) if beta2_si != 0 else float("inf")
-    L_NL = 1.0 / (gamma * P_peak) if gamma * P_peak > 0 else float("inf")
-
-    if beta2_si != 0 and gamma * P_peak > 0:
-        N_sol = np.sqrt(gamma * P_peak * T0**2 / abs(beta2_si))
-    else:
-        N_sol = 0.0
-
-    L_fiss = L_D / (N_sol * 0.7) if N_sol > 0 else float("inf")
-
-    # Recommended num_steps
-    dz_base = (
-        min(L_D, L_NL) * 0.01
-        if L_D < float("inf") and L_NL < float("inf")
-        else length_m / 100
+    grid = _readiness_grid_coverage(pulse, dispersion, omega0_val)
+    scales = _readiness_soliton_scales(T0, P_peak, gamma, betas, dispersion, omega0)
+    recommended_steps = _readiness_recommended_steps(length_m, scales.L_D, scales.L_NL)
+    predicted = _readiness_predicted_processes(
+        scales.N_sol, scales.beta2_si, gamma * P_peak, length_m, scales.L_NL
     )
-    recommended_steps = max(int(length_m / max(dz_base, 1e-30)), 100)
-
-    # Predict processes
-    predicted = []
-    if N_sol > 1:
-        predicted.append("soliton_fission")
-        predicted.append("dispersive_wave")
-    if beta2_si < 0 and gamma * P_peak > 0:
-        predicted.append("modulation_instability")
-    if length_m > L_NL:
-        predicted.append("four_wave_mixing")
-
-    # Build warnings and recommendations
-    warnings_list = []
-    recommendations_list = []
-
-    if not covers:
-        warnings_list.append(
-            f"Dispersion model does not cover the full pulse grid: "
-            f"[{omega_min:.2e}, {omega_max:.2e}] rad/s "
-            f"vs model [{disp_min_omega.as_rad_s:.2e}, {disp_max_omega.as_rad_s:.2e}] rad/s"
-        )
-        recommendations_list.append(
-            "Consider using a broader dispersion table or Taylor expansion "
-            "with higher order coefficients."
-        )
-
-    if L_D < length_m and N_sol > 3:
-        warnings_list.append(
-            f"High soliton order N={N_sol:.1f} with L_D << L — expect strong fission."
-        )
-        recommendations_list.append(
-            f"Increase num_steps to at least {recommended_steps} for accurate fission."
-        )
-
-    if betas is not None and len(betas) > 0 and adaptor is not None and covers:
-        try:
-            max_phi_err = _taylor_phase_max_error(
-                pulse, np.asarray(betas), adaptor, omega0_val
-            )
-            if max_phi_err is not None and max_phi_err > PI / 4:
-                warnings_list.append(
-                    f"Taylor dispersion phase error up to {max_phi_err:.3f} rad/m "
-                    f"(> π/4) across the pulse grid — Taylor betas may be inadequate."
-                )
-                recommendations_list.append(
-                    "Use full β(ω) dispersion (e.g. TaperedGNLSESolver) for this bandwidth."
-                )
-        except (ValueError, TypeError, RuntimeError) as exc:
-            warnings.warn(
-                f"Taylor phase-error check failed: {exc}",
-                UserWarning,
-                stacklevel=2,
-            )
-
-    # MI predictions
-    mi_info: dict = {}
-    if beta2_si < 0 and gamma * P_peak > 0:
-        mi_result = mi_gain_spectrum(beta2_si, gamma, P_peak)
-        mi_info = mi_result if isinstance(mi_result, dict) else {}
-        if isinstance(mi_info, dict):
-            omega_peak = AngularFrequency(mi_info["Omega_peak"], "rad/s")
-            omega_cutoff = AngularFrequency(mi_info["Omega_cutoff"], "rad/s")
-            sideband_plus = AngularFrequency(
-                omega0 + mi_info["Omega_peak"], "rad/s"
-            ).to_wl()
-            sideband_minus = AngularFrequency(
-                omega0 - mi_info["Omega_peak"], "rad/s"
-            ).to_wl()
-            # Create WavelengthArray from raw meter values
-            sb_values = np.array([sideband_plus.as_m, sideband_minus.as_m])
-            mi_predictions = {
-                "Omega_peak": omega_peak,
-                "Omega_cutoff": omega_cutoff,
-                "g_max": mi_info["g_max"],
-                "sideband_wavelengths": WavelengthArray(sb_values, "m"),
-            }
-        else:
-            mi_predictions = {}
-    else:
-        mi_predictions = {}
-
-    # DW predictions
-    dw_preds = WavelengthArray(np.array([]), "nm")
-    if adaptor is not None and N_sol > 1:
-        try:
-            dw_result = dispersive_wave_roots(
-                adaptor,
-                AngularFrequency(omega0_val, "rad/s"),
-            )
-            dw_preds = dw_result.wavelengths
-        except (ValueError, TypeError, RuntimeError) as exc:
-            warnings.warn(
-                f"Dispersive-wave root finder failed: {exc}",
-                UserWarning,
-                stacklevel=2,
-            )
-    elif betas is not None and len(betas) >= 2 and beta2_si != 0:
-        try:
-            beta3_si = betas[1] * 1e-27 if len(betas) > 1 else 0.0
-            if beta3_si != 0 and abs(beta3_si) > 1e-40:
-                delta_omega_dw = -2 * beta2_si / beta3_si
-                omega_dw = omega0_val + delta_omega_dw
-                if omega_dw > 0:
-                    dw_wavelength = AngularFrequency(omega_dw, "rad/s").to_wl()
-                    dw_preds = WavelengthArray(np.array([dw_wavelength.as_m]), "m")
-        except (ValueError, TypeError, ZeroDivisionError) as exc:
-            warnings.warn(
-                f"beta2/beta3 dispersive-wave estimate failed: {exc}",
-                UserWarning,
-                stacklevel=2,
-            )
-
-    # FWM predictions (degenerate, signal at DW wavelength if available)
-    fwm_preds: list[dict] = []
-    if dw_preds.as_m.shape[0] > 0 and len(fwm_preds) == 0:
-        # Predict FWM idler for signal near DW
-        for dw_wavelength in dw_preds:
-            omega_s = dw_wavelength.to_omega().as_rad_s
-            omega_i = fwm_idler_frequency(omega0_val, omega_s)
-            fwm_preds.append(
-                {
-                    "idler_wavelength": AngularFrequency(omega_i, "rad/s").to_wl(),
-                    "signal_wavelength": dw_wavelength,
-                }
-            )
+    warnings_list, recommendations_list = _readiness_warnings(
+        pulse, grid, scales, betas, adaptor, omega0_val, length_m, recommended_steps
+    )
+    mi_predictions = _readiness_mi_predictions(scales.beta2_si, gamma, P_peak, omega0)
+    dw_preds = _readiness_dw_predictions(
+        adaptor, scales.N_sol, betas, scales.beta2_si, omega0_val
+    )
+    fwm_preds = _readiness_fwm_predictions(dw_preds, omega0_val)
 
     return SimulationReadinessReport(
-        dispersion_covers_grid=covers,
-        grid_omega_min=AngularFrequency(omega_min, "rad/s"),
-        grid_omega_max=AngularFrequency(omega_max, "rad/s"),
-        dispersion_min_omega=disp_min_omega,
-        dispersion_max_omega=disp_max_omega,
-        soliton_order=N_sol,
-        dispersion_length=L_D,
-        nonlinear_length=L_NL,
-        fission_length=L_fiss,
+        dispersion_covers_grid=grid.covers,
+        grid_omega_min=AngularFrequency(grid.omega_min, "rad/s"),
+        grid_omega_max=AngularFrequency(grid.omega_max, "rad/s"),
+        dispersion_min_omega=grid.disp_min_omega,
+        dispersion_max_omega=grid.disp_max_omega,
+        soliton_order=scales.N_sol,
+        dispersion_length=scales.L_D,
+        nonlinear_length=scales.L_NL,
+        fission_length=scales.L_fiss,
         recommended_num_steps=recommended_steps,
         predicted_processes=predicted,
         warnings=warnings_list,

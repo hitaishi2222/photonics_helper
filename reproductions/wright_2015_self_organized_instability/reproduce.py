@@ -287,64 +287,6 @@ def gain_curve_corrected(om_thz_grid: NDArray, n_ord: int) -> NDArray:
     return out
 
 
-def render_gain_spectrum_figure(
-    *, L: float = 0.3, n_grid: int = 32768, n_pts: int = 9, span_thz: float = 0.02
-) -> dict:
-    """Measured-vs-analytic gain spectrum figure (task 6.4).
-
-    For orders 1–2: coherent-tone ``probe_gain`` sweep across
-    ``root ± span_thz`` (linear scale, no log noise floor) against
-    ``gain_curve_corrected``. Saves ``wright_2015_gain_spectrum.png`` and
-    returns the metrics dict.
-    """
-    import matplotlib
-
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-
-    global N_GRID
-    old_n = N_GRID
-    N_GRID = n_grid
-    try:
-        fig, axes = plt.subplots(1, 2, figsize=(11, 4.2))
-        summary = {}
-        for ax, n_ord in zip(axes, (1, 2)):
-            root = stmi_shift_thz_corrected(n_ord)
-            oms = np.linspace(root - span_thz, root + span_thz, n_pts)
-            g_an = gain_curve_corrected(oms, n_ord)
-            g_meas = np.empty_like(oms)
-            for i, om in enumerate(oms):
-                res = probe_gain(n_ord, f_thz=float(om), L=L)
-                g_meas[i] = float(np.arcsinh(max(float(res["cols_a1"][1]), 0.0)) / L)
-            ax.plot(oms, g_an, "k-", label="analytic (corrected d̄)")
-            ax.plot(oms, g_meas, "ro", ms=5, mfc="none", label="measured (tone probe)")
-            ax.axvline(root, color="0.7", ls="--", lw=1.0)
-            ax.set_xlabel("detuning (THz)")
-            ax.set_ylabel("gain (1/m)")
-            ax.set_title(f"order {n_ord} (root {root:.3f} THz, L={L} m)")
-            ax.legend(fontsize=8)
-            err = float(np.max(np.abs(g_meas - g_an)) / max(g_an.max(), 1e-30))
-            summary[n_ord] = {
-                "root_thz": round(root, 4),
-                "max_rel_err": round(err, 4),
-            }
-        fig.suptitle("Wright et al. 2015 — measured vs analytic gain spectrum")
-        fig.tight_layout()
-        out = HERE / "wright_2015_gain_spectrum.png"
-        fig.savefig(out, dpi=150)
-        plt.close(fig)
-        return {"figure": str(out), "orders": summary}
-    finally:
-        N_GRID = old_n
-
-
-def mi_gain_analytic(om_thz_grid: NDArray, n_ord: int) -> NDArray:
-    """g(Omega) = sqrt((gamma_f P0)^2 - Delta(Omega)^2), 1/m."""
-    gf = gamma_eff() * P0_W
-    dk = np.array([delta_kappa(float(o), n_ord) for o in om_thz_grid])
-    return np.sqrt(np.clip(gf**2 - dk**2, 0.0, None))
-
-
 # ---------------------------------------------------------------------------
 # engine runs
 # ---------------------------------------------------------------------------
@@ -489,9 +431,7 @@ def probe_gain(n_ord: int, f_thz: float | None = None, L: float = 0.5) -> dict:
             else:
                 field = a_sig * seed[1] * np.conj(tone)
             waves.append(ww.with_field(np.asarray(field, complex)))
-        fiber = Fiber(
-            n2=N2, alpha=0.0, A_eff=Area(A_EFF, "m^2"), length=Length(L, "m")
-        )
+        fiber = Fiber(n2=N2, alpha=0.0, A_eff=Area(A_EFF, "m^2"), length=Length(L, "m"))
         eng = MultimodeSplitStepEngine(
             waves,
             fiber,

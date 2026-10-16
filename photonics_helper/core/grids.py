@@ -153,7 +153,12 @@ class TemporalGrid:
         beta2_si = abs(float(beta2_pskm)) * 1e-24  # ps²/m → s²/m
         if beta2_si > 0.0:
             spread = beta2_si * float(length_m) / T0
-            if gamma is not None and peak_power is not None and gamma > 0.0 and peak_power > 0.0:
+            if (
+                gamma is not None
+                and peak_power is not None
+                and gamma > 0.0
+                and peak_power > 0.0
+            ):
                 order_sq = gamma * peak_power * T0**2 / beta2_si
                 if order_sq > 1.0:
                     spread *= sqrt(order_sq)

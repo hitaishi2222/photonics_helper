@@ -119,9 +119,7 @@ class TestEnsureShowableBackend:
         """
         monkeypatch.setattr(plt, "get_backend", lambda: "TkAgg")
         calls: list = []
-        monkeypatch.setattr(
-            plt, "switch_backend", lambda *a, **k: calls.append((a, k))
-        )
+        monkeypatch.setattr(plt, "switch_backend", lambda *a, **k: calls.append((a, k)))
         from photonics_helper.pulse import _ensure_showable_backend
 
         _ensure_showable_backend()

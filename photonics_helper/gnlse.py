@@ -59,7 +59,9 @@ ETDRK4_M = 48
 ETDRK4_SMALL = 0.5
 
 
-def _etdrk4_scalar_coeffs(x: NDArray, h: float) -> tuple[NDArray, NDArray, NDArray, NDArray]:
+def _etdrk4_scalar_coeffs(
+    x: NDArray, h: float
+) -> tuple[NDArray, NDArray, NDArray, NDArray]:
     """ETDRK4 coefficients ``(Q, f1, f2, f3)`` per bin (Cox & Matthews 2002).
 
     Evaluated exactly for each ``x = λ·h`` per bin: the defining formulas
@@ -98,21 +100,47 @@ def _etdrk4_scalar_coeffs(x: NDArray, h: float) -> tuple[NDArray, NDArray, NDArr
         x7 = x6 * x1
         x8 = x7 * x1
         Q[small] = (
-            0.5 + x1 / 8.0 + x2 / 48.0 + x3 / 384.0 + x4 / 3840.0
-            + x5 / 46080.0 + x6 / 645120.0 + x7 / 10321920.0 + x8 / 185794560.0
+            0.5
+            + x1 / 8.0
+            + x2 / 48.0
+            + x3 / 384.0
+            + x4 / 3840.0
+            + x5 / 46080.0
+            + x6 / 645120.0
+            + x7 / 10321920.0
+            + x8 / 185794560.0
         )
         f1[small] = (
-            1.0 / 6.0 + x1 / 6.0 + 3.0 * x2 / 40.0 + x3 / 45.0
-            + 5.0 * x4 / 1008.0 + x5 / 1120.0 + 7.0 * x6 / 51840.0
-            + x7 / 56700.0 + x8 / 492800.0
+            1.0 / 6.0
+            + x1 / 6.0
+            + 3.0 * x2 / 40.0
+            + x3 / 45.0
+            + 5.0 * x4 / 1008.0
+            + x5 / 1120.0
+            + 7.0 * x6 / 51840.0
+            + x7 / 56700.0
+            + x8 / 492800.0
         )
         f2[small] = (
-            1.0 / 6.0 + x1 / 12.0 + x2 / 40.0 + x3 / 180.0 + x4 / 1008.0
-            + x5 / 6720.0 + x6 / 51840.0 + x7 / 453600.0 + x8 / 4435200.0
+            1.0 / 6.0
+            + x1 / 12.0
+            + x2 / 40.0
+            + x3 / 180.0
+            + x4 / 1008.0
+            + x5 / 6720.0
+            + x6 / 51840.0
+            + x7 / 453600.0
+            + x8 / 4435200.0
         )
         f3[small] = (
-            1.0 / 6.0 - x2 / 120.0 - x3 / 360.0 - x4 / 1680.0
-            - x5 / 10080.0 - x6 / 72576.0 - x7 / 604800.0 - x8 / 5702400.0
+            1.0 / 6.0
+            - x2 / 120.0
+            - x3 / 360.0
+            - x4 / 1680.0
+            - x5 / 10080.0
+            - x6 / 72576.0
+            - x7 / 604800.0
+            - x8 / 5702400.0
         )
 
     big = ~small
@@ -120,15 +148,12 @@ def _etdrk4_scalar_coeffs(x: NDArray, h: float) -> tuple[NDArray, NDArray, NDArr
     if xb.size:
         exb = np.exp(xb)
         Q[big] = (np.exp(xb * 0.5) - 1.0) / xb
-        f1[big] = (
-            (-4.0 - xb + exb * (4.0 - 3.0 * xb + xb**2)) / xb**3
-        )
+        f1[big] = (-4.0 - xb + exb * (4.0 - 3.0 * xb + xb**2)) / xb**3
         f2[big] = (2.0 + xb + exb * (-2.0 + xb)) / xb**3
-        f3[big] = (
-            (-4.0 - 3.0 * xb - xb**2 + exb * (4.0 - xb)) / xb**3
-        )
+        f3[big] = (-4.0 - 3.0 * xb - xb**2 + exb * (4.0 - xb)) / xb**3
 
     return Q * h, f1 * h, f2 * h, f3 * h
+
 
 #: Valid ``scheme`` values for :class:`SplitStepEngine`.
 Scheme: TypeAlias = Literal["strang", "yoshida4", "etdrk4", "rk4ip"]
@@ -453,7 +478,10 @@ HBAR_J_S = 1.0545718e-34
 
 
 def _gamma(
-    n2: float, omega0: float | AngularFrequency, A_eff: Area, confinement_factor: float = 1.0
+    n2: float,
+    omega0: float | AngularFrequency,
+    A_eff: Area,
+    confinement_factor: float = 1.0,
 ) -> float:
     """Nonlinear coefficient γ = n₂·ω₀·Γ / (c·A_eff).
 
@@ -1455,9 +1483,7 @@ class SplitStepEngine:
         # fibers), so the warning would be unactionable noise here — direct
         # user calls to Wave.peak_power() still warn as before.
         with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore", message=".*normalized envelope units.*"
-            )
+            warnings.filterwarnings("ignore", message=".*normalized envelope units.*")
             I_ref = max(self.pulse.peak_power(), 1e-30)
         if gamma > 0.0:
             # Cap nonlinear phase per step: γ P₀ Δz < π/4 (stricter with steepening).
@@ -1550,9 +1576,7 @@ class SplitStepEngine:
         phi = np.zeros_like(omega_ps, dtype=float)
         for k, beta_k in enumerate(self.betas, start=2):
             phi += beta_k * omega_ps**k / factorial(k)
-        return np.asarray(
-            1j * phi - 0.5 * float(self.fiber.alpha), dtype=complex
-        )
+        return np.asarray(1j * phi - 0.5 * float(self.fiber.alpha), dtype=complex)
 
     def _nonlinear_rhs(self, A: NDArray, gamma: float) -> NDArray:
         """The full nonlinear remainder ``N(A)`` of the GNLSE RHS (time domain).
@@ -1767,9 +1791,9 @@ class SplitStepEngine:
         # k₄ is evaluated one half-step ahead: transform there, evaluate,
         # and stay in the normal picture for the final combination.
         k4 = dz * rhs(self._linear_step(A_I + k3, half))
-        return self._linear_step(
-            A_I + (k1 + 2.0 * k2 + 2.0 * k3) / 6.0, half
-        ) + k4 / 6.0
+        return (
+            self._linear_step(A_I + (k1 + 2.0 * k2 + 2.0 * k3) / 6.0, half) + k4 / 6.0
+        )
 
     def _strang_step(self, A: NDArray, dz: float) -> NDArray:
         """One symmetric Strang step ``exp(L dz/2) · exp(N dz) · exp(L dz/2)``.
@@ -2181,9 +2205,7 @@ def _smooth_1d(y: NDArray, window: int) -> NDArray:
     return np.convolve(np.asarray(y, dtype=float), kernel, mode="same")
 
 
-def _sorted_spectrum(
-    grid: Any, A: NDArray, omega0: float
-) -> tuple[NDArray, NDArray]:
+def _sorted_spectrum(grid: Any, A: NDArray, omega0: float) -> tuple[NDArray, NDArray]:
     """Power spectrum on an ascending wavelength axis.
 
     Returns ``(wavelength_nm, |Â|²)`` both sorted by wavelength, so the pair
@@ -2231,9 +2253,9 @@ def _self_convergence_metrics(
     band = db_f > float(floor_db)
     if int(band.sum()) < 8:
         band = np.ones_like(db_f, dtype=bool)
-    diff = np.abs(
-        _smooth_1d(db_c, smooth_window) - _smooth_1d(db_f, smooth_window)
-    )[band]
+    diff = np.abs(_smooth_1d(db_c, smooth_window) - _smooth_1d(db_f, smooth_window))[
+        band
+    ]
     rms_db = float(np.sqrt(np.mean(diff**2)))
     peak_shift = float(abs(wl[int(np.argmax(sc))] - wl[int(np.argmax(sf))]))
     a = np.asarray(A_coarse, dtype=complex).ravel()
@@ -2680,24 +2702,40 @@ class GNLSESolver:
                     UserWarning,
                     stacklevel=2,
                 )
-        steps = int(start_steps) if start_steps is not None else max(
-            10, type(self).estimate_num_steps(self.pulse, self.fiber, np.asarray(self.betas))
+        steps = (
+            int(start_steps)
+            if start_steps is not None
+            else max(
+                10,
+                type(self).estimate_num_steps(
+                    self.pulse, self.fiber, np.asarray(self.betas)
+                ),
+            )
         )
         report: dict[str, Any] = {}
         for _round in range(max(1, max_rounds)):
             steps = min(steps, max_steps)
-            self.propagate(num_steps=steps, nsaves=nsaves, show_progress=show_progress, **kwargs)
+            self.propagate(
+                num_steps=steps, nsaves=nsaves, show_progress=show_progress, **kwargs
+            )
             energy = np.asarray(self.energy_vs_z, dtype=float)
             lossless = (
                 self.fiber.alpha == 0.0
                 and not self.include_tpa
                 and not self.include_free_carriers
             )
-            drift = float(abs(energy[-1] - energy[0]) / max(energy[0], 1e-300)) if lossless else 0.0
+            drift = (
+                float(abs(energy[-1] - energy[0]) / max(energy[0], 1e-300))
+                if lossless
+                else 0.0
+            )
             final_A = np.asarray(self._evolution[-1].envelope_field)
             edge_n = max(1, int(0.05 * final_A.shape[0]))
             edge_frac = float(
-                (np.sum(np.abs(final_A[:edge_n]) ** 2) + np.sum(np.abs(final_A[-edge_n:]) ** 2))
+                (
+                    np.sum(np.abs(final_A[:edge_n]) ** 2)
+                    + np.sum(np.abs(final_A[-edge_n:]) ** 2)
+                )
                 / max(np.sum(np.abs(final_A) ** 2), 1e-300)
             )
             report = {
@@ -2725,7 +2763,9 @@ class GNLSESolver:
                         stacklevel=2,
                     )
                 else:
-                    new_grid = TemporalGrid(N=new_N, Tmax=Time(old.Tmax.as_s * 2.0, "s"))
+                    new_grid = TemporalGrid(
+                        N=new_N, Tmax=Time(old.Tmax.as_s * 2.0, "s")
+                    )
                     self.pulse = Wave.from_envelope(
                         self.pulse.envelope,
                         self.pulse.central_wavelength,
@@ -2771,9 +2811,7 @@ class GNLSESolver:
         # normalized-units warning is suppressed here (envelope convention),
         # direct user calls to Wave.peak_power() still warn as before.
         with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore", message=".*normalized envelope units.*"
-            )
+            warnings.filterwarnings("ignore", message=".*normalized envelope units.*")
             I_max = max(pulse.peak_power(), 1e-30)
 
         betas_arr = np.asarray(betas, dtype=float)

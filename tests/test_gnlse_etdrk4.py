@@ -93,9 +93,7 @@ def test_naive_evaluation_breaks_at_dc():
     """
     x = np.array([1e-6], dtype=complex)
     _, f1, _, _ = _etdrk4_scalar_coeffs(x, 1.0)
-    naive_f1 = (
-        -4.0 - x + np.exp(x) * (4.0 - 3.0 * x + x**2)
-    ) / x**3
+    naive_f1 = (-4.0 - x + np.exp(x) * (4.0 - 3.0 * x + x**2)) / x**3
     # the naive number's relative deviation from the true 1/6:
     err = abs(naive_f1[0] - f1[0]) / abs(f1[0])
     assert err > 1e-3, "expected the naive formula to be visibly wrong at DC"
@@ -205,8 +203,10 @@ def test_scalar_linear_invariance():
     k = 0.35
     T = 1.0
     exact = np.exp((lam + k) * T)
-    errs = [abs(_scalar_etdrk4(lam, lambda s: k * s, 1.0, T, n) - exact) / abs(exact)
-            for n in (10, 20, 40, 80)]
+    errs = [
+        abs(_scalar_etdrk4(lam, lambda s: k * s, 1.0, T, n) - exact) / abs(exact)
+        for n in (10, 20, 40, 80)
+    ]
     assert errs[-1] < errs[0] / 100
 
 
@@ -222,9 +222,7 @@ def _engine(scheme: str = "etdrk4", num_steps: int = 400, **kw) -> SplitStepEngi
         shape="sech", peak_amplitude=np.sqrt(peak), pulse_width=Time(T0, "s")
     )
     pulse = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(WL0, "m"))
-    fiber = Fiber.from_gamma(
-        gamma=GAMMA, length=Length(LENGTH, "m")
-    )
+    fiber = Fiber.from_gamma(gamma=GAMMA, length=Length(LENGTH, "m"))
     engine = SplitStepEngine(
         pulse=pulse,
         fiber=fiber,
@@ -251,7 +249,9 @@ def test_etdrk4_beats_strang_and_matches_fine_splitting():
     nrm = np.linalg.norm(refA)
     err_etd = np.linalg.norm(np.asarray(etd.A, complex) - refA) / nrm
     err_strang = np.linalg.norm(np.asarray(strong.A, complex) - refA) / nrm
-    assert err_etd < 3e-3, f"ETDRK4 at 1600 steps off the fine reference by {err_etd:.2e}"
+    assert err_etd < 3e-3, (
+        f"ETDRK4 at 1600 steps off the fine reference by {err_etd:.2e}"
+    )
     assert err_etd < err_strang / 3, (
         f"ETDRK4 ({err_etd:.2e}) should be far below strang ({err_strang:.2e})"
     )
@@ -263,6 +263,7 @@ def test_etdrk4_energy_drift_is_order_four():
     drift is an O(dz⁴) quantity — shrinking ~16× per halving and ≪1e-4 by
     800 steps.
     """
+
     def drift(steps: int) -> float:
         e = _engine("etdrk4", steps)
         energy = e.energy_vs_z
@@ -313,9 +314,7 @@ def test_etdrk4_rejects_out_of_scope_hooks():
     grid = TemporalGrid(N=64, Tmax=Time(1e-11, "s"))
     env = Envelope(shape="sech", peak_amplitude=1.0, pulse_width=Time(T0, "s"))
     pulse = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(WL0, "m"))
-    fiber = Fiber.from_gamma(
-        gamma=GAMMA, length=Length(1e-3, "m")
-    )
+    fiber = Fiber.from_gamma(gamma=GAMMA, length=Length(1e-3, "m"))
     eng = SplitStepEngine(
         pulse=pulse, fiber=fiber, betas=np.array([BETA2 * 1e24]), scheme="etdrk4"
     )
@@ -338,12 +337,12 @@ def test_gnlse_solver_scheme_passthrough():
     solver = GNLSESolver(
         pulse=Wave(
             grid=TemporalGrid(N=64, Tmax=Time(1e-11, "s")),
-            envelope=Envelope(shape="sech", peak_amplitude=1.0, pulse_width=Time(T0, "s")),
+            envelope=Envelope(
+                shape="sech", peak_amplitude=1.0, pulse_width=Time(T0, "s")
+            ),
             central_wavelength=Wavelength(WL0, "m"),
         ),
-        fiber=Fiber.from_gamma(
-            gamma=GAMMA, length=Length(1e-3, "m")
-        ),
+        fiber=Fiber.from_gamma(gamma=GAMMA, length=Length(1e-3, "m")),
         betas=np.array([BETA2 * 1e24]),
         scheme="etdrk4",
     )

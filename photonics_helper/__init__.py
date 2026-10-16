@@ -75,7 +75,13 @@ if TYPE_CHECKING:  # pragma: no cover - static analyzers/IDEs only
         WaveguideMode,
         ZDependentDispersion,
     )
-    from .gnlse import Fiber, FiberProfile, GNLSESolver, SplitStepEngine, TaperedGNLSESolver
+    from .gnlse import (
+        Fiber,
+        FiberProfile,
+        GNLSESolver,
+        SplitStepEngine,
+        TaperedGNLSESolver,
+    )
     from .gnlse_validation import (
         DEFAULT_OBSERVABLES,
         ConvergenceReport,

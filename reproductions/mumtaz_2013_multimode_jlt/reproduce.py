@@ -232,9 +232,7 @@ def engine_manakov_run(A0: NDArray, beta2: float, length: float, xpm: NDArray):
             )
             wv._pulse_train_field = A0[m, s].copy()
             waves.append(wv)
-    fiber = Fiber(
-        n2=1.0, alpha=0.0, A_eff=Area(1.0, "m^2"), length=Length(length, "m")
-    )
+    fiber = Fiber(n2=1.0, alpha=0.0, A_eff=Area(1.0, "m^2"), length=Length(length, "m"))
     # gamma absorbed into xpm weights: engine gamma = n2*omega0/(c*A_eff);
     # rescale so the effective gamma equals GAMMA: choose n2/A_eff product.
     # Simplest: set n2, A_eff such that _gamma(...) == GAMMA exactly.

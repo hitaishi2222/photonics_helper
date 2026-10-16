@@ -19,12 +19,15 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import dataclass
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from numpy.typing import NDArray
 
 from ..base import WavelengthArray
 from ..materials import RefractiveIndex
+
+if TYPE_CHECKING:
+    from .data import MaterialsDatabase
 
 __all__ = ["Material", "OpticalMaterial", "material"]
 
@@ -106,58 +109,82 @@ class Material:
         return self.index.group_index(wavelength)
 
 
+def _text(value: object) -> str | None:
+    """``str(value)`` unless it is missing/empty, else ``None``."""
+    return str(value) if value else None
+
+
+def _fill_from_sellmeier(
+    db: MaterialsDatabase,
+    name: str,
+    axis: str | None,
+    source: str | None,
+    license_id: str | None,
+) -> tuple[str | None, str | None]:
+    """Fill gaps from Sellmeier rows (axis variant first, then the base key)."""
+    candidates = [name]
+    if axis is not None:
+        suffix = "_or" if axis.lower() in ("ordinary", "o") else "_er"
+        candidates.insert(0, f"{name}{suffix}")
+    for candidate in candidates:
+        row = db.get_sellmeier(candidate)  # type: ignore[arg-type]
+        if not row:
+            continue
+        if source is None:
+            source = _text(row.get("source"))
+        if license_id is None:
+            license_id = _text(row.get("license"))
+    return source, license_id
+
+
+def _fill_from_spec(
+    db: MaterialsDatabase, name: str, source: str | None, license_id: str | None
+) -> tuple[str | None, str | None]:
+    """Fill remaining gaps from the material-spec row."""
+    spec = db.get_material(name)
+    if not spec:
+        return source, license_id
+    if source is None:
+        source = _text(spec.get("references"))
+    if license_id is None:
+        license_id = _text(spec.get("license"))
+    return source, license_id
+
+
+def _fill_from_nk_sources(
+    db: MaterialsDatabase, name: str, source: str | None, license_id: str | None
+) -> tuple[str | None, str | None]:
+    """Fill from the first licensed tabulated-data source."""
+    for source_key in db.list_nk_sources(name):  # type: ignore[arg-type]
+        prov = db.get_provenance(source_key)
+        if not prov or not prov.get("license"):
+            continue
+        license_id = str(prov["license"])
+        if source is None:
+            source = _text(prov.get("citation"))
+        break
+    return source, license_id
+
+
 def _lookup_metadata(name: str, axis: str | None) -> tuple[str | None, str | None]:
     """Best-effort ``(source, license)`` lookup in the bundled database.
 
     Returns ``(None, None)`` when no row (or no provenance string) is found;
     provenance is metadata, so a lookup miss must not break ``material()``.
+    Falls back through direct provenance, Sellmeier rows, the material spec,
+    and tabulated-data sources in that order.
     """
     try:
         from .data import MaterialsDatabase
 
         db = MaterialsDatabase()
-
-        # A tabulated key ("material-author") is itself a provenance source
-        # key, so look it up directly first.
-        direct = db.get_provenance(name)
-        direct_source = (
-            str(direct["citation"]) if direct and direct.get("citation") else None
-        )
-        direct_license = (
-            str(direct["license"]) if direct and direct.get("license") else None
-        )
-
-        candidates = [name]
-        if axis is not None:
-            suffix = "_or" if axis.lower() in ("ordinary", "o") else "_er"
-            candidates.insert(0, f"{name}{suffix}")
-
-        source: str | None = direct_source
-        license_id: str | None = direct_license
-        for candidate in candidates:
-            row = db.get_sellmeier(candidate)  # type: ignore[arg-type]
-            if row:
-                if source is None and row.get("source"):
-                    source = str(row["source"])
-                if license_id is None and row.get("license"):
-                    license_id = str(row["license"])
-
-        spec = db.get_material(name)
-        if spec:
-            if source is None and spec.get("references"):
-                source = str(spec["references"])
-            if license_id is None and spec.get("license"):
-                license_id = str(spec["license"])
-
+        direct = db.get_provenance(name) or {}
+        source = _text(direct.get("citation"))
+        license_id = _text(direct.get("license"))
+        source, license_id = _fill_from_sellmeier(db, name, axis, source, license_id)
+        source, license_id = _fill_from_spec(db, name, source, license_id)
         if license_id is None:
-            for source_key in db.list_nk_sources(name):  # type: ignore[arg-type]
-                prov = db.get_provenance(source_key)
-                if prov and prov.get("license"):
-                    license_id = str(prov["license"])
-                    if source is None and prov.get("citation"):
-                        source = str(prov["citation"])
-                    break
-
+            source, license_id = _fill_from_nk_sources(db, name, source, license_id)
         return source, license_id
     except (sqlite3.Error, ValueError, KeyError, TypeError, OSError):
         return None, None

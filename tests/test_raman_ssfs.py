@@ -82,7 +82,11 @@ def test_fundamental_soliton_is_stable_and_red_shifts():
     fwhm = (grid.t[idx[-1]] - grid.t[idx[0]]) * 1e15
     assert fwhm < 2.0 * 234.375, "fundamental soliton must stay intact (no dispersion)"
     W = np.abs(grid.fft(A)) ** 2
-    wl = AngularFrequencyArray(
-        Wavelength(wl0, "m").to_omega().as_rad_s + grid.w, "rad/s"
-    ).to_wl().as_m
+    wl = (
+        AngularFrequencyArray(
+            Wavelength(wl0, "m").to_omega().as_rad_s + grid.w, "rad/s"
+        )
+        .to_wl()
+        .as_m
+    )
     assert wl[int(np.argmax(W))] > wl0, "Raman soliton must red-shift"

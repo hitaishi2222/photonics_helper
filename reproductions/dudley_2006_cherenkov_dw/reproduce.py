@@ -41,7 +41,14 @@ from pathlib import Path
 import numpy as np
 from scipy.signal import find_peaks
 
-from photonics_helper.base import AngularFrequency, AngularFrequencyArray, Length, Time, Wavelength, WavelengthArray
+from photonics_helper.base import (
+    AngularFrequency,
+    AngularFrequencyArray,
+    Length,
+    Time,
+    Wavelength,
+    WavelengthArray,
+)
 from photonics_helper.fiber import PropagationConstant
 from photonics_helper.gnlse import Fiber, GNLSESolver
 from photonics_helper.phase_matching import (

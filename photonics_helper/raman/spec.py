@@ -180,7 +180,13 @@ class RamanSpec:
         return None
 
     # -- unified facade (single entry point) -------------------------------
-    def response(self, grid=None, fR: float | None = None, tau1: float | None = None, tau2: float | None = None):
+    def response(
+        self,
+        grid=None,
+        fR: float | None = None,
+        tau1: float | None = None,
+        tau2: float | None = None,
+    ):
         """Build the time-domain :class:`RamanResponse` for this material.
 
         Single entry point so users never choose between ``RamanSpec`` /
@@ -197,17 +203,27 @@ class RamanSpec:
         """
         from .response import RamanResponse
 
-        return RamanResponse(spec=self, fR=fR if fR is not None else self.fR, tau1=tau1, tau2=tau2, grid=grid)
+        return RamanResponse(
+            spec=self,
+            fR=fR if fR is not None else self.fR,
+            tau1=tau1,
+            tau2=tau2,
+            grid=grid,
+        )
 
     def frequency_response(self, grid=None):
         """Build the frequency-domain response ``H(Ω)`` for this material."""
         return self.response(grid=grid).frequency
 
-    def plot_response(self, backend: Literal["matplotlib", "plotly"] = "matplotlib", **kwargs):
+    def plot_response(
+        self, backend: Literal["matplotlib", "plotly"] = "matplotlib", **kwargs
+    ):
         """Plot instantaneous / delayed / combined response (delegates to RamanResponse)."""
         return self.response().plot_components(backend=backend, **kwargs)
 
-    def plot_frequency_response(self, backend: Literal["matplotlib", "plotly"] = "matplotlib", **kwargs):
+    def plot_frequency_response(
+        self, backend: Literal["matplotlib", "plotly"] = "matplotlib", **kwargs
+    ):
         """4-panel Re/Im/|H|/phase plot (delegates to RamanFrequencyResponse)."""
         return self.frequency_response().plot_all(backend=backend, **kwargs)
 

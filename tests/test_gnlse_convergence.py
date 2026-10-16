@@ -54,9 +54,7 @@ def _fission_build(N: int, Tmax_s: float, num_steps: int) -> GNLSESolver:
         shape="sech", peak_amplitude=np.sqrt(peak), pulse_width=Time(t0, "s")
     )
     pulse = Wave(grid=grid, envelope=envelope, central_wavelength=Wavelength(WL0, "m"))
-    fiber = Fiber.from_gamma(
-        gamma=gamma, length=Length(length, "m")
-    )
+    fiber = Fiber.from_gamma(gamma=gamma, length=Length(length, "m"))
     solver = GNLSESolver(
         pulse=pulse,
         fiber=fiber,

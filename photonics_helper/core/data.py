@@ -45,7 +45,35 @@ _LICENSE_DEFAULTS: dict[str, str] = {
     "phonon_modes": "see-note",
 }
 
-# ─── MaterialsDatabase ───────────────────────────────────────────────────────
+# ─── MaterialsDatabase ─────────────────────────────────────────────────
+
+
+def _central_nk(
+    gw: NDArray, gn: NDArray, gk: NDArray, wl_min: float, wl_max: float, n_points: int
+) -> tuple[float | None, float | None]:
+    """Central-wavelength n/k by linear interpolation onto a fine grid.
+
+    ``(gw, gn, gk)`` is the material's full wavelength-sorted table; the
+    interpolation window is the dataset's ``[wl_min, wl_max]`` range.
+    Returns ``(None, None)`` when the table cannot support the lookup.
+    """
+    if not (n_points > 1 and wl_min > 0):
+        return None, None
+    try:
+        central = 0.5 * (wl_min + wl_max)
+        grid = np.linspace(wl_min, wl_max, 4096)
+        sel = np.clip(np.searchsorted(gw, grid), 1, len(gw) - 1)
+        lo = sel - 1
+        w = (grid - gw[lo]) / (gw[sel] - gw[lo])
+        n_at = gn[lo] + w * (gn[sel] - gn[lo])
+        k_at = gk[lo] + w * (gk[sel] - gk[lo])
+        idx = int(np.argmin(np.abs(gw - central)))
+        return float(n_at[idx]), float(k_at[idx])
+    except Exception:
+        return None, None
+
+
+# ─── MaterialsDatabase ─────────────────────────────────────────────────
 
 
 @dataclass(config={"arbitrary_types_allowed": True})
@@ -777,24 +805,24 @@ class MaterialsDatabase:
         ).fetchall()
         conn.close()
 
+        # One query per material, not per dataset: datasets sharing a
+        # material reuse its wavelength-sorted table.
+        tables: dict[str, tuple[NDArray, NDArray, NDArray, NDArray] | None] = {}
+
         summaries: list[dict] = []
         for material, source, wl_min, wl_max, n_points in rows:
             central = 0.5 * (wl_min + wl_max)
-            n_central, k_central = None, None
-            if n_points > 1 and wl_min > 0:
+            if material not in tables:
                 try:
-                    gw, gn, gk, _gs = self.get_nk_data(material, with_source=True)
-                    grid = np.linspace(wl_min, wl_max, 4096)
-                    sel = np.clip(np.searchsorted(gw, grid), 1, len(gw) - 1)
-                    lo = sel - 1
-                    w = (grid - gw[lo]) / (gw[sel] - gw[lo])
-                    n_at = gn[lo] + w * (gn[sel] - gn[lo])
-                    k_at = gk[lo] + w * (gk[sel] - gk[lo])
-                    idx = int(np.argmin(np.abs(gw - central)))
-                    n_central = float(n_at[idx])
-                    k_central = float(k_at[idx])
+                    tables[material] = self.get_nk_data(material, with_source=True)
                 except Exception:
-                    pass
+                    tables[material] = None
+            table = tables[material]
+            if table is None:
+                n_central, k_central = None, None
+            else:
+                gw, gn, gk, _gs = table
+                n_central, k_central = _central_nk(gw, gn, gk, wl_min, wl_max, n_points)
             summaries.append(
                 {
                     "material": material,

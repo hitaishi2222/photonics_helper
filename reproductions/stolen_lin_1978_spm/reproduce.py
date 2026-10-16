@@ -60,9 +60,7 @@ def _simulated_field(grid, P0, T0, gamma, phi_max, lam):
         shape="gaussian", peak_amplitude=np.sqrt(P0), pulse_width=Time(T0, "s")
     )
     pulse = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(lam, "m"))
-    fiber = Fiber.from_gamma(
-        gamma=gamma, length=Length(L, "m")
-    )
+    fiber = Fiber.from_gamma(gamma=gamma, length=Length(L, "m"))
     solver = GNLSESolver(
         pulse=pulse,
         fiber=fiber,

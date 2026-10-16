@@ -62,9 +62,7 @@ def _engine(wave: Wave, fiber: Fiber, conserving: bool) -> SplitStepEngine:
 
 def test_conserving_shock_requires_raman():
     wave = _shock_wave()
-    fiber = Fiber.from_gamma(
-        gamma=0.11, length=Length(1e-3, "m")
-    )
+    fiber = Fiber.from_gamma(gamma=0.11, length=Length(1e-3, "m"))
     eng = _engine(wave, fiber, conserving=True)
     with pytest.raises(ValueError, match="Raman response|set include_raman=False"):
         eng.propagate(num_steps=2)

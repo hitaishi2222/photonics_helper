@@ -73,12 +73,8 @@ def _engine(scheme: str, num_steps: int = 200) -> SplitStepEngine:
     env = Envelope(
         shape="sech", peak_amplitude=np.sqrt(peak), pulse_width=Time(T0, "s")
     )
-    pulse = Wave(
-        grid=grid, envelope=env, central_wavelength=Wavelength(WL0, "m")
-    )
-    fiber = Fiber.from_gamma(
-        gamma=GAMMA, length=Length(LENGTH, "m")
-    )
+    pulse = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(WL0, "m"))
+    fiber = Fiber.from_gamma(gamma=GAMMA, length=Length(LENGTH, "m"))
     engine = SplitStepEngine(
         pulse=pulse,
         fiber=fiber,
@@ -98,15 +94,9 @@ def test_unknown_scheme_rejected():
 def test_strang_is_the_default():
     grid = TemporalGrid(N=NGRID, Tmax=Time(8e-12, "s"))
     env = Envelope(shape="sech", peak_amplitude=1.0, pulse_width=Time(T0, "s"))
-    pulse = Wave(
-        grid=grid, envelope=env, central_wavelength=Wavelength(WL0, "m")
-    )
-    fiber = Fiber.from_gamma(
-        gamma=GAMMA, length=Length(LENGTH, "m")
-    )
-    engine = SplitStepEngine(
-        pulse=pulse, fiber=fiber, betas=np.array([BETA2 * 1e24])
-    )
+    pulse = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(WL0, "m"))
+    fiber = Fiber.from_gamma(gamma=GAMMA, length=Length(LENGTH, "m"))
+    engine = SplitStepEngine(pulse=pulse, fiber=fiber, betas=np.array([BETA2 * 1e24]))
     assert engine.scheme == "strang"
 
 

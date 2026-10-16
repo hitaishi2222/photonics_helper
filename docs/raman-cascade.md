@@ -307,7 +307,8 @@ and an unbounded indirect; that was a measurement-definition error, not a physic
 ## Benchmarks and provenance
 
 Every reproduced target lives in `benchmarks/raman_noise/<paper>/fixture.json` with its source,
-DOI, unit, and whether it was read from a table, a figure, or the running text:
+DOI, unit, and whether it was read from a table, a figure, or the running text. Those fixtures were retired in the Oct 6 raman-pivot and later restored from git history,
+so the layout below is live again:
 
 ```python
 from photonics_helper.raman_transfer import load_benchmark
@@ -506,10 +507,11 @@ a 1 km fibre pumped by a 0.1 nm bandwidth source.
 
 ### Solver vs. closed form (resolved)
 
-The numbers above come from the stage 0 analytic functions. Cross-checking the
-split-step solver against them — `benchmarks/raman_noise/keita2006/dispersion_solver_vs_closed.py`
-— **now passes**: the solver agrees with Keita 2006 Eq. 4.5 to about **1 dB**
-over `Δk·L = 0.2` to `66` rad.
+The numbers above come from the stage 0 analytic functions (`photonics_helper/raman_transfer.py`).
+Cross-checking the split-step solver against them — a local-only Keita-2006 solver-vs-closed
+benchmark, retired in the Oct 6 raman-pivot and never tracked in git — **passed at the time**:
+the solver agreed with Keita 2006 Eq. 4.5 to about **1 dB**
+over `Δk·L = 0.2` to `66` rad. No dedicated regression test covers this cross-check now.
 
 **Method.** Deterministic linear response, no ensemble: a coherent pump
 amplitude modulation (Keita Eq. 4.1) at a single offset, the Stokes modulation
@@ -716,8 +718,10 @@ by four-wave mixing. The four-wave-mixing tensor slot remains present in
 
 ### Measured ensemble cost
 
-The four reproduction reports and their test suite run in about **10 s** on one CPU core
-(`tests/test_raman_reproduction.py`, 29 tests). The Zhu six-pump transfer evaluation is the
+The four reproduction reports and their test suite (a retired local-only Raman suite,
+29 tests) ran in about **10 s** on one CPU core when last measured. Reproduction gating now lives
+in `scripts/test_reproductions.py` — deliberately outside `tests/` so the default suite stays fast —
+which currently covers the non-Raman families; the Raman reports have no dedicated runner. The Zhu six-pump transfer evaluation is the
 dominant cost: each frequency requires one linearized integration per pump. A full frequency
 grid of 24 points over six pumps takes a few seconds. This is the number stage 3 should budget
 from, and it is well within the amplifier regime; the expensive part of stage 3 is the ensemble
@@ -790,12 +794,12 @@ of Section 4.2 are reproduced through the Q-factor penalty of Eqs. 24-25:
 - higher Raman gain lowers the penalty and the required pump power (Fig. 7);
 - the penalty has an interior optimum in fiber length (Fig. 8).
 
-## Stage 3b: the sweep dataset
+## Stage 3b: the sweep dataset (retired in the Oct 6 raman-pivot)
 
-`benchmarks/raman_noise/generate_raman_dataset.py` builds a coarse 60-sample dataset over
-the RFL parameter box (pump power, length, output reflectivity) using the resumable sweep
+Retired local-only sweep driver built a coarse 60-sample dataset
+over the RFL parameter box (pump power, length, output reflectivity) using the resumable sweep
 driver, storing the transfer at four probe frequencies including the 20 kHz FSR point.
-`tests/test_raman_dataset.py` gates the properties the stage 3 spec requires:
+Retired dataset gates covered the properties the stage 3 spec requires:
 
 - shards are written atomically and are never left truncated or zero-byte;
 - an interrupted sweep resumes and reproduces an uninterrupted run byte-for-byte;

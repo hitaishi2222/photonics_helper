@@ -1,0 +1,60 @@
+{
+  "reference": "D.-K. Xing, J.-Y. He, P. Wang, H.-Y. Guo, K. Chang, C.-C. Liu, Y.-G. Liu, Z. Wang, 'Intermodal dispersive waves and soliton collision during multimode supercontinuum generation in chalcogenide glass fiber', Laser Phys. 32, 115401 (2022)",
+  "doi": "10.1088/1555-6611/ac979a",
+  "original_paper_pdf": null,
+  "access_note": "Not open access (Unpaywall is_oa = False). No PDF archived (paywall/copyright). The full text was read via the IOP landing page (full HTML; curl/scrapers hit a Radware captcha). Every number below is quoted directly from that text unless flagged.",
+  "description": "A step-index As2Se3/As2S3 multimode chalcogenide fibre pumped at the HE11 zero-dispersion wavelength, reported to generate an intermodal dispersive wave at 10.8 um (TE01 <-> HE21b) via the phase-matching condition of its Eq. (7). This deck re-solves the paper's own inputs (Sellmeier Eqs. 5/6, the 10 um-core step-index modes, Eq. 7) from first principles and checks the outputs. Verdict: the material model is reproducible (after restoring a dropped square in Eq. 6), but neither the HE11 ZDW (6.104 um) nor the 10.8 um intermodal DW is reproducible from the stated inputs.",
+  "fiber": {
+    "type": "step-index multimode fibre (circular, cylindrically symmetric)",
+    "core_material": "As2Se3",
+    "core_diameter_um": 10.0,
+    "core_radius_um": 5.0,
+    "cladding_material": "As2S3",
+    "cladding_diameter_um": 246.0,
+    "cladding_radius_um": 123.0,
+    "index_model": "Sellmeier, paper Eqs. (5) and (6): Eq. (5) = As2S3 (5 terms), Eq. (6) = As2Se3 (3 terms)",
+    "index_sources": "cited in the paper to its refs [30], [31]; the reference list did not render in the session, so the primary fits are UNVERIFIED. Eq. (6) is recognisably the Thompson-2008 As2Se3 fit.",
+    "mode_solver_paper": "COMSOL Multiphysics (full-vector FEM)"
+  },
+  "modes": {
+    "considered": ["HE11a", "HE11b", "TE01", "TM01", "HE21a", "HE21b"],
+    "count": 6,
+    "dispersion_order": "Taylor expansion up to 20th order (paper)",
+    "zdw_he11_um": 6.104,
+    "zdw_other_modes": "TE01, TM01, HE21 stay in normal dispersion across the whole band (paper)",
+    "he21_cutoff_um": 11.722
+  },
+  "pump": {
+    "wavelength_um": 6.104,
+    "wavelength_note": "= the paper's HE11 ZDW",
+    "peak_power_W": 1000.0,
+    "peak_power_swept_range_W": [500.0, 2500.0],
+    "pulse_fwhm_fs": 200.0,
+    "pulse_shape": "sech",
+    "length_mm": 50.0
+  },
+  "raman": {
+    "f_R": 0.148,
+    "tau1_fs": 23.0,
+    "tau2_fs": 164.5,
+    "source": "paper Table 1, cited to its ref [32]",
+    "caveat": "f_R = 0.148, tau1 = 23 fs, tau2 = 164.5 fs are classic As2S3 (Agrawal) Raman parameters, yet the CORE is As2Se3. A reproduction should treat this as 'as published' and flag the possible material mismatch."
+  },
+  "propagation_model": {
+    "equation": "MM-GNLSE (Wright-type), paper Eq. (1)",
+    "includes": ["Raman + Kerr coupling tensors S^(R)/S^(K) (Eqs. 3-4)", "self-steepening", "full non-degenerate multimode FWM sum over l,m,n"],
+    "nondegenerate_fwm": true
+  },
+  "headline_result": {
+    "intermodal_dw_um": 10.8,
+    "pair": "TE01 <-> HE21b",
+    "condition": "paper Eq. (7): beta_cr(w) = beta_s(w_s) + beta1_s (w - w_s) + gamma P / 2"
+  },
+  "reproduction_status": {
+    "material_as2s3_eq5": "reproduced; matches the repository's validated As2S3 row",
+    "material_as2se3_eq6": "eq (6) as printed is broken (B = 19, pole at sqrt(19) = 4.359 um, wrong material ZDW); restored to B = 19^2 = 361 it matches the repository's validated As2Se3 row (n(4) = 2.783, material ZDW 7.22 um)",
+    "he11_zdw": "NOT reproduced: the exact vector solver puts the HE11 ZDW ~1.3 um short of the paper's 6.104 um (vector HE11 ZDW = 4.849 um; scalar LP01 = 4.962 um)",
+    "higher_order_modes": "NOT reproduced: the paper states TE01/TM01/HE21 stay normal across the band, but the exact vector solver puts all three anomalous at the pump, with ZDWs at 3.79-3.90 um (the scalar-LP LP11 ZDW is 3.901 um, so this is a property of the guide, not a solver artefact)",
+    "intermodal_dw": "NOT reproduced: no pair has an Eq. (7) root in the 8-13 um red window, so the paper's 10.8 um DW is not supported by the stated inputs; the paper's own pair (TE01<->HE21) instead phase-matches a BLUE DW at ~1.94 um (HE11-soliton partners ~2.24 um). The repository's phase_matching.dispersive_wave_roots is intramodal-only and cannot express this intermodal condition (fed the partner it returns the soliton wavelength as a spurious root); the scan is instead re-checked with a 2-point vs 5-point beta1 scheme"
+  }
+}

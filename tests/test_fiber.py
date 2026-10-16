@@ -210,4 +210,4 @@ def test_get_betas_windows_the_local_taylor_fit():
     b2_local = -d0 * 1e-6 * (2000e-9) ** 2 / (2 * np.pi * C_MS) * 1e24  # ps²/m
 
     assert abs(b2_windowed - b2_local) < 0.15 * abs(b2_local)  # tracks the local value
-    assert abs(b2_global - b2_local) > 0.5 * abs(b2_local)     # global fit does not
+    assert abs(b2_global - b2_local) > 0.5 * abs(b2_local)  # global fit does not

@@ -83,9 +83,7 @@ def test_fiber_alias_and_gamma_first():
     # Legacy path still back-computes A_eff.
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)
-        legacy = Fiber.from_gamma(
-            0.045, 2.6e-20, Wavelength(1550, "nm").to_omega()
-        )
+        legacy = Fiber.from_gamma(0.045, 2.6e-20, Wavelength(1550, "nm").to_omega())
     assert legacy.A_eff is not None
     # n2-derived path still works.
     f2 = Fiber.from_n2(2.6e-20, Area(80, "um^2"), Length(0.1, "m"))

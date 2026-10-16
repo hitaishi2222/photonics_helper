@@ -265,18 +265,18 @@ def overlap_tensors_from_fields(
     #    products below), not |Ex|² alone — for a mode whose plane is normal
     #    to x, Ex is the *longitudinal* component and |Ex|² is not the
     #    intensity.
-    Fx: list[NDArray] = []
-    Fy: list[NDArray] = []
+    Fx_list: list[NDArray] = []
+    Fy_list: list[NDArray] = []
     for ld in modes:
         wl = np.asarray(ld.wavelengths_um, dtype=float)
         iw = int(np.argmin(np.abs(wl - float(lambda0))))
         fx = ld.Ex[iw].astype(complex)
         fy = ld.Ey[iw].astype(complex)
         norm = float(np.sum(np.abs(fx) ** 2 + np.abs(fy) ** 2) * dA)
-        Fx.append(fx / np.sqrt(norm))
-        Fy.append(fy / np.sqrt(norm))
-    Fx = np.asarray(Fx)  # (N, Ny, Nx)
-    Fy = np.asarray(Fy)
+        Fx_list.append(fx / np.sqrt(norm))
+        Fy_list.append(fy / np.sqrt(norm))
+    Fx = np.asarray(Fx_list)  # (N, Ny, Nx)
+    Fy = np.asarray(Fy_list)
     I2 = np.abs(Fx) ** 2 + np.abs(Fy) ** 2  # (N, Ny, Nx)
 
     Aeff = np.empty(n)

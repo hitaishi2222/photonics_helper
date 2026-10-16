@@ -54,14 +54,16 @@ class TestConstruction:
     def test_length_mismatch_raises(self, grid):
         with pytest.raises(ValueError, match="match grid time samples"):
             ElectricField(
-                field=np.ones(N - 1, dtype=complex), grid=grid,
+                field=np.ones(N - 1, dtype=complex),
+                grid=grid,
                 central_frequency=LAMBDA0.to_omega(),
             )
 
     def test_non_1d_raises(self, grid):
         with pytest.raises(ValueError, match="1-D array"):
             ElectricField(
-                field=np.ones((4, 4), dtype=complex), grid=grid,
+                field=np.ones((4, 4), dtype=complex),
+                grid=grid,
                 central_frequency=LAMBDA0.to_omega(),
             )
 
@@ -87,7 +89,9 @@ class TestCarrierConvention:
 
     def test_real_field_matches_carried_carrier(self, efield, envelope, grid):
         """Re[E(t)] must be the standard A·cos reconstruction."""
-        expected = np.real(envelope * np.exp(-1j * LAMBDA0.to_omega().as_rad_s * grid.t))
+        expected = np.real(
+            envelope * np.exp(-1j * LAMBDA0.to_omega().as_rad_s * grid.t)
+        )
         np.testing.assert_allclose(efield.real_field, expected)
 
 
@@ -99,8 +103,9 @@ class TestEnvelopeRoundtrip:
         recovered = efield.to_envelope()
         # Focus on the pulse bulk (convolution edge smearing lives in the tails).
         mask = np.abs(envelope) > 1e-2
-        np.testing.assert_allclose(np.abs(recovered[mask]), np.abs(envelope[mask]),
-                                   rtol=1e-2)
+        np.testing.assert_allclose(
+            np.abs(recovered[mask]), np.abs(envelope[mask]), rtol=1e-2
+        )
 
     def test_roundtrip_preserves_phase(self, efield, envelope):
         recovered = efield.to_envelope()
@@ -122,8 +127,10 @@ class TestIntensityScale:
     def test_absolute_intensity_of_known_field(self, grid):
         """A plane wave with E₀ = 1e8 V/m in vacuum → I = ½cε₀E₀² ≈ 1.33e13 W/m²."""
         ef = ElectricField(
-            field=np.full(N, 1e8, dtype=complex), grid=grid,
-            central_frequency=LAMBDA0.to_omega(), refractive_index=1.0,
+            field=np.full(N, 1e8, dtype=complex),
+            grid=grid,
+            central_frequency=LAMBDA0.to_omega(),
+            refractive_index=1.0,
         )
         expected = 0.5 * C_MS * EPS_0 * 1e16  # ≈ 1.327e13 W/m²
         assert ef.intensity[0] == pytest.approx(expected)
@@ -169,8 +176,9 @@ class TestParseval:
         assert e_w == pytest.approx(e_t, rel=1e-6)
 
     def test_iffft_inverts_fft(self, efield):
-        np.testing.assert_allclose(efield.grid.ifft(efield.spectrum), efield.field,
-                                   atol=1e-9)
+        np.testing.assert_allclose(
+            efield.grid.ifft(efield.spectrum), efield.field, atol=1e-9
+        )
 
 
 # -- phase helper ------------------------------------------------------------------

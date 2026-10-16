@@ -86,6 +86,286 @@ _LP_XPM = 2.0 / 3.0
 #: Inter-modal FWM factor of the same degenerate LP model.
 _LP_FWM = 2.0 / 3.0
 
+#: Accepted ``coef_model`` values (also aliased as ``MultimodeSplitStepEngine._COEF_MODELS``).
+_MM_COEF_MODELS = ("lp_degenerate", "isotropic")
+
+
+def _mm_check_channels(waves: list) -> int:
+    """Validate the channel list; return the channel count."""
+    if len(waves) < 1:
+        raise ValueError("at least one channel is required")
+    if any(w.grid is not waves[0].grid for w in waves):
+        raise ValueError(
+            "all channels must share one TemporalGrid object "
+            "(wave.grid is waves[0].grid)"
+        )
+    return len(waves)
+
+
+def _mm_check_topology(
+    n: int,
+    coef_model: CoeffModel,
+    include_fwm: bool,
+    oam_l: list[int] | None,
+    group_delays: list[float] | None,
+    phase_offsets: list[float] | None,
+) -> None:
+    """Validate mode-model selection and per-channel frame arguments."""
+    if coef_model not in _MM_COEF_MODELS:
+        raise ValueError(
+            f"Unknown coef_model {coef_model!r}; accepted values are "
+            f"{', '.join(repr(c) for c in _MM_COEF_MODELS)}."
+        )
+    if include_fwm and coef_model == "lp_degenerate" and oam_l is None:
+        warnings.warn(
+            "include_fwm=True with coef_model='lp_degenerate' but no "
+            "oam_l: every FWM triplet is treated as allowed (isotropic "
+            "selection rule). Pass oam_l for angular-momentum gating.",
+            UserWarning,
+            stacklevel=3,
+        )
+    if oam_l is not None and len(oam_l) != n:
+        raise ValueError("oam_l must match the channel count exactly.")
+    if group_delays is not None:
+        if len(group_delays) != n:
+            raise ValueError("group_delays must match the channel count exactly.")
+        if abs(group_delays[0]) > 0:
+            raise ValueError("group_delays[0] must be 0 (the reference frame).")
+    if phase_offsets is not None:
+        if len(phase_offsets) != n:
+            raise ValueError("phase_offsets must match the channel count exactly.")
+
+
+def _mm_check_lengths(
+    fiber: FiberProfile,
+    step_size: Length | None,
+    fwm_pump_depletion: bool,
+    include_fwm: bool,
+) -> None:
+    """Validate shared length/step sizes and FWM option combinations."""
+    if fiber.length.as_m <= 0:
+        raise ValueError(f"fiber.length must be positive, got {fiber.length!r}")
+    if step_size is not None and step_size.as_m <= 0:
+        raise ValueError(f"step_size must be positive, got {step_size!r}")
+    if fwm_pump_depletion and not include_fwm:
+        raise ValueError(
+            "fwm_pump_depletion=True requires include_fwm=True (the "
+            "back-conversion pump arm lives in the FWM substep)."
+        )
+
+
+def _mm_coerce_xpm_weights(xpm_weights, n: int):
+    """Validate and copy XPM weights (``None`` stays ``None``)."""
+    if xpm_weights is None:
+        return None
+    w = np.asarray(xpm_weights, dtype=float)
+    if w.shape != (n, n):
+        raise ValueError(f"xpm_weights must be ({n}, {n}), got {w.shape}.")
+    if not np.all(np.isfinite(w)):
+        raise ValueError("xpm_weights must be finite.")
+    return np.asarray(xpm_weights, dtype=float).copy()
+
+
+def _mm_coerce_fwm_weights(fwm_weights, n: int):
+    """Validate and copy FWM weights, preserving a complex overlap."""
+    if fwm_weights is None:
+        return None
+    # Complex-capable: full-vectorial S⁽²⁾ overlaps (step7) can carry
+    # an imaginary part; it is physically meaningful and must not be
+    # silently discarded.
+    fw = np.asarray(fwm_weights)
+    if not np.iscomplexobj(fw):
+        fw = fw.astype(float)
+    if fw.shape != (n,) * 4:
+        raise ValueError(f"fwm_weights must be ({n},)*4 = {(n,) * 4}, got {fw.shape}.")
+    if not np.all(np.isfinite(fw)):
+        raise ValueError("fwm_weights must be finite.")
+    return (
+        np.asarray(fwm_weights).astype(float, copy=True)
+        if not np.iscomplexobj(fwm_weights)
+        else np.asarray(fwm_weights, dtype=complex).copy()
+    )
+
+
+def _mm_coerce_coupling_tensor(coupling_tensor, n: int):
+    """Validate and copy the absolute coupling tensor."""
+    if coupling_tensor is None:
+        return None
+    ct = np.asarray(coupling_tensor, dtype=complex)
+    if ct.shape != (n, n):
+        raise ValueError(f"coupling_tensor must be ({n}, {n}), got {ct.shape}.")
+    if not np.all(np.isfinite(ct)):
+        raise ValueError("coupling_tensor must be finite.")
+    return np.asarray(coupling_tensor, dtype=complex).copy()
+
+
+def _mm_coerce_fwm_coupling_tensor(fwm_coupling_tensor, include_fwm: bool, n: int):
+    """Validate and copy the absolute FWM tensor."""
+    if fwm_coupling_tensor is None:
+        return None
+    if not include_fwm:
+        raise ValueError(
+            "fwm_coupling_tensor requires include_fwm=True (it fills "
+            "the FWM arm, which is only integrated when FWM is on)."
+        )
+    fc = np.asarray(fwm_coupling_tensor, dtype=complex)
+    if fc.shape != (n,) * 4:
+        raise ValueError(
+            f"fwm_coupling_tensor must be ({n},)*4 = {(n,) * 4}, got {fc.shape}."
+        )
+    if not np.all(np.isfinite(fc)):
+        raise ValueError("fwm_coupling_tensor must be finite.")
+    return np.asarray(fwm_coupling_tensor, dtype=complex).copy()
+
+
+def _mm_betas_per_mode(betas, betas_unit: BetasUnit, n: int) -> list:
+    """Broadcast one shared betas array, or check a per-mode list."""
+    if betas is None:
+        raise ValueError("betas is required")
+    if (
+        isinstance(betas, list)
+        and betas
+        and isinstance(betas[0], (list, tuple, np.ndarray))
+    ):
+        if len(betas) != n:
+            raise ValueError(
+                "betas list must match the channel count exactly, or "
+                "pass a single array to share across modes."
+            )
+        per_mode = list(betas)
+    else:
+        per_mode = [betas] * n
+    # betas: one shared array broadcast to every channel, or a list
+    # with one array per channel.
+    return [_normalize_betas(b, betas_unit) for b in per_mode]
+
+
+def _mm_coerce_raman_tensors(
+    raman_tensors, include_raman: bool, n: int
+) -> tuple[NDArray | None, NDArray | None]:
+    """Validate Raman tensors; return ``(tensors, sparsity mask)``."""
+    if raman_tensors is None:
+        return None, None
+    rt = np.asarray(raman_tensors, dtype=complex)
+    if rt.shape != (n,) * 4:
+        raise ValueError(
+            f"raman_tensors must be ({n},)*4 = {(n,) * 4}, got {rt.shape}."
+        )
+    if not np.all(np.isfinite(rt)):
+        raise ValueError("raman_tensors must be finite.")
+    if not include_raman:
+        raise ValueError(
+            "raman_tensors rides on include_raman=True (they share the "
+            "same h_R memory kernel and f_R weight); pass "
+            "include_raman=True with it, or use coupling_tensor for "
+            "instantaneous-only coupling."
+        )
+    # Poletti-type sparsity pruning: mask of significant entries.
+    scale = float(np.abs(rt).max())
+    return rt.copy(), np.abs(rt) > 1e-12 * max(scale, 1e-300)
+
+
+def _mm_coerce_channel_alpha(channel_alpha, n: int):
+    """Validate per-channel loss (``None`` stays ``None``)."""
+    if channel_alpha is None:
+        return None
+    ca = np.asarray(channel_alpha, dtype=float)
+    if ca.shape != (n,):
+        raise ValueError(f"channel_alpha must be ({n},), got {ca.shape}.")
+    if not np.all(np.isfinite(ca)) or np.any(ca < 0):
+        raise ValueError("channel_alpha must be finite and non-negative.")
+    return np.asarray(channel_alpha, dtype=float)
+
+
+def _mm_coerce_cavity(
+    cavity_reflectivity_input, cavity_reflectivity_output, n: int
+) -> tuple[NDArray | None, NDArray | None]:
+    """Validate the cavity mirror pair (both given or both omitted)."""
+    if cavity_reflectivity_input is not None or cavity_reflectivity_output is not None:
+        if cavity_reflectivity_input is None or cavity_reflectivity_output is None:
+            raise ValueError(
+                "cavity_reflectivity_input and cavity_reflectivity_output must "
+                "be supplied together"
+            )
+        r_in = np.asarray(cavity_reflectivity_input, dtype=float)
+        r_out = np.asarray(cavity_reflectivity_output, dtype=float)
+        if r_in.shape != (n,) or r_out.shape != (n,):
+            raise ValueError(
+                f"cavity reflectivity must have shape ({n},), got "
+                f"input {r_in.shape} and output {r_out.shape}"
+            )
+        if (
+            np.any(r_in < 0)
+            or np.any(r_in > 1)
+            or np.any(r_out < 0)
+            or np.any(r_out > 1)
+        ):
+            raise ValueError("cavity reflectivity must be in [0, 1]")
+        return r_in, r_out
+    return None, None
+
+
+def _mm_coerce_full_beta(
+    full_beta, n: int, group_delays, phase_offsets, grid, omega0: float
+) -> tuple[list | None, list | None]:
+    """Validate full-β(ω) curves and build the retarded-frame phases."""
+    if full_beta is None:
+        return None, None
+    if len(full_beta) != n:
+        raise ValueError(
+            f"full_beta must carry one β(ω) per mode ({n}), got {len(full_beta)}."
+        )
+    if group_delays is not None or phase_offsets is not None:
+        raise ValueError(
+            "full_beta carries group delay and β₀ phase itself; pass "
+            "group_delays=None and phase_offsets=None with it."
+        )
+    w = np.asarray(grid.w, dtype=float)
+    w0 = float(omega0)
+    curves = []
+    for b in full_beta:
+        curves.append(
+            np.asarray(b(w + w0), dtype=float)
+            if callable(b)
+            else np.asarray(b, dtype=float)
+        )
+    for m, B in enumerate(curves):
+        if B.shape != w.shape:
+            raise ValueError(
+                f"full_beta[{m}] must match the grid ({w.shape}), got {B.shape}."
+            )
+        if not np.all(np.isfinite(B)):
+            raise ValueError(f"full_beta[{m}] must be finite.")
+    # Reference-frame subtraction (retarded frame of channel 0):
+    # φ_m(Ω) = [B_m(Ω) − B_0(0)] − B1_0·Ω. Narrowband this is exactly
+    # (β1,m − β1,0)·Ω + Σ_{k≥2} βk,m·Ω^k/k! (decision 1.1: full-β
+    # operator, not Taylor-order bump — octave MIR is where truncated
+    # Taylor fails; scalar TaperedGNLSESolver precedent).
+    B0 = curves[0]
+    i0 = int(np.argmin(np.abs(w)))
+    dw = float(w[1] - w[0])
+    # 4th-order centre slope + cubic centre value: nearest-sample
+    # errors (O(dw²)) would leave O(0.1) rad/m phases at the band
+    # edge — fatal for the narrowband-agreement contract (task 1.2).
+    lo = max(i0 - 2, 0)
+    seg_w = w[lo : lo + 5]
+    seg_b = B0[lo : lo + 5]
+    # Cubic Lagrange value at Ω = 0.
+    b_at_0 = 0.0
+    for j in range(5):
+        lj = 1.0
+        for k in range(5):
+            if k != j:
+                lj *= (0.0 - seg_w[k]) / (seg_w[j] - seg_w[k])
+        b_at_0 += seg_b[j] * lj
+    # 4th-order central slope at the centre sample.
+    ci = i0 - lo
+    dB0 = float(
+        (-seg_b[ci + 2] + 8.0 * seg_b[ci + 1] - 8.0 * seg_b[ci - 1] + seg_b[ci - 2])
+        / (12.0 * dw)
+    )
+    return curves, [(B - float(b_at_0) - dB0 * w) for B in curves]
+
 
 class CavityResult:
     """Result of a cavity iteration.
@@ -269,7 +549,7 @@ class MultimodeSplitStepEngine:
         positive.
     """
 
-    _COEF_MODELS = ("lp_degenerate", "isotropic")
+    _COEF_MODELS = _MM_COEF_MODELS
 
     def __init__(
         self,
@@ -310,109 +590,16 @@ class MultimodeSplitStepEngine:
         rayleigh_backscatter: float | None = None,
     ):
         waves = list(waves)
-        if len(waves) < 1:
-            raise ValueError("at least one channel is required")
-        self._n = len(waves)
-        if any(w.grid is not waves[0].grid for w in waves):
-            raise ValueError(
-                "all channels must share one TemporalGrid object "
-                "(wave.grid is waves[0].grid)"
-            )
-        if coef_model not in self._COEF_MODELS:
-            raise ValueError(
-                f"Unknown coef_model {coef_model!r}; accepted values are "
-                f"{', '.join(repr(c) for c in self._COEF_MODELS)}."
-            )
-        if include_fwm and coef_model == "lp_degenerate" and oam_l is None:
-            warnings.warn(
-                "include_fwm=True with coef_model='lp_degenerate' but no "
-                "oam_l: every FWM triplet is treated as allowed (isotropic "
-                "selection rule). Pass oam_l for angular-momentum gating.",
-                UserWarning,
-                stacklevel=2,
-            )
-        if oam_l is not None and len(oam_l) != self._n:
-            raise ValueError("oam_l must match the channel count exactly.")
-        if group_delays is not None:
-            if len(group_delays) != self._n:
-                raise ValueError("group_delays must match the channel count exactly.")
-            if abs(group_delays[0]) > 0:
-                raise ValueError("group_delays[0] must be 0 (the reference frame).")
-        if phase_offsets is not None:
-            if len(phase_offsets) != self._n:
-                raise ValueError("phase_offsets must match the channel count exactly.")
-        if fiber.length.as_m <= 0:
-            raise ValueError(f"fiber.length must be positive, got {fiber.length!r}")
-        if step_size is not None and step_size.as_m <= 0:
-            raise ValueError(f"step_size must be positive, got {step_size!r}")
-        if fwm_pump_depletion and not include_fwm:
-            raise ValueError(
-                "fwm_pump_depletion=True requires include_fwm=True (the "
-                "back-conversion pump arm lives in the FWM substep)."
-            )
-        if xpm_weights is not None:
-            w = np.asarray(xpm_weights, dtype=float)
-            if w.shape != (self._n, self._n):
-                raise ValueError(
-                    f"xpm_weights must be ({self._n}, {self._n}), got {w.shape}."
-                )
-            if not np.all(np.isfinite(w)):
-                raise ValueError("xpm_weights must be finite.")
-        if fwm_weights is not None:
-            # Complex-capable: full-vectorial S⁽²⁾ overlaps (step7) can carry
-            # an imaginary part; it is physically meaningful and must not be
-            # silently discarded.
-            fw = np.asarray(fwm_weights)
-            if not np.iscomplexobj(fw):
-                fw = fw.astype(float)
-            if fw.shape != (self._n,) * 4:
-                raise ValueError(
-                    f"fwm_weights must be ({self._n},)*4 = "
-                    f"{(self._n,) * 4}, got {fw.shape}."
-                )
-            if not np.all(np.isfinite(fw)):
-                raise ValueError("fwm_weights must be finite.")
-        if coupling_tensor is not None:
-            ct = np.asarray(coupling_tensor, dtype=complex)
-            if ct.shape != (self._n, self._n):
-                raise ValueError(
-                    f"coupling_tensor must be ({self._n}, {self._n}), got {ct.shape}."
-                )
-            if not np.all(np.isfinite(ct)):
-                raise ValueError("coupling_tensor must be finite.")
-        if fwm_coupling_tensor is not None:
-            if not include_fwm:
-                raise ValueError(
-                    "fwm_coupling_tensor requires include_fwm=True (it fills "
-                    "the FWM arm, which is only integrated when FWM is on)."
-                )
-            fc = np.asarray(fwm_coupling_tensor, dtype=complex)
-            if fc.shape != (self._n,) * 4:
-                raise ValueError(
-                    f"fwm_coupling_tensor must be ({self._n},)*4 = "
-                    f"{(self._n,) * 4}, got {fc.shape}."
-                )
-            if not np.all(np.isfinite(fc)):
-                raise ValueError("fwm_coupling_tensor must be finite.")
-        if betas is None:
-            raise ValueError("betas is required")
-
-        # betas: one shared array broadcast to every channel, or a list
-        # with one array per channel.
-        if (
-            isinstance(betas, list)
-            and betas
-            and isinstance(betas[0], (list, tuple, np.ndarray))
-        ):
-            if len(betas) != self._n:
-                raise ValueError(
-                    "betas list must match the channel count exactly, or "
-                    "pass a single array to share across modes."
-                )
-            per_mode = list(betas)
-        else:
-            per_mode = [betas] * self._n
-        self.betas = [_normalize_betas(b, betas_unit) for b in per_mode]
+        self._n = _mm_check_channels(waves)
+        _mm_check_topology(
+            self._n, coef_model, include_fwm, oam_l, group_delays, phase_offsets
+        )
+        _mm_check_lengths(fiber, step_size, fwm_pump_depletion, include_fwm)
+        _xpm = _mm_coerce_xpm_weights(xpm_weights, self._n)
+        _fwm_w = _mm_coerce_fwm_weights(fwm_weights, self._n)
+        _ct = _mm_coerce_coupling_tensor(coupling_tensor, self._n)
+        _fct = _mm_coerce_fwm_coupling_tensor(fwm_coupling_tensor, include_fwm, self._n)
+        self.betas = _mm_betas_per_mode(betas, betas_unit, self._n)
 
         self.waves = waves
         self.fiber = fiber
@@ -421,52 +608,17 @@ class MultimodeSplitStepEngine:
         self.coef_model: CoeffModel = coef_model
         self.include_fwm = include_fwm
         self.oam_l = None if oam_l is None else list(oam_l)
-        self.xpm_weights = (
-            None if xpm_weights is None else np.asarray(xpm_weights, dtype=float).copy()
-        )
-        self.fwm_weights = (
-            None
-            if fwm_weights is None
-            else np.asarray(fwm_weights).astype(float, copy=True)
-            if not np.iscomplexobj(fwm_weights)
-            else np.asarray(fwm_weights, dtype=complex).copy()
-        )
-        self.coupling_tensor = (
-            None
-            if coupling_tensor is None
-            else np.asarray(coupling_tensor, dtype=complex).copy()
-        )
-        self.fwm_coupling_tensor = (
-            None
-            if fwm_coupling_tensor is None
-            else np.asarray(fwm_coupling_tensor, dtype=complex).copy()
-        )
+        self.xpm_weights = _xpm
+        self.fwm_weights = _fwm_w
+        self.coupling_tensor = _ct
+        self.fwm_coupling_tensor = _fct
         self.fwm_pump_depletion = fwm_pump_depletion
         self.include_raman = bool(include_raman)
         self.raman_response = raman_response
-        if raman_tensors is not None:
-            rt = np.asarray(raman_tensors, dtype=complex)
-            if rt.shape != (self._n,) * 4:
-                raise ValueError(
-                    f"raman_tensors must be ({self._n},)*4 = "
-                    f"{(self._n,) * 4}, got {rt.shape}."
-                )
-            if not np.all(np.isfinite(rt)):
-                raise ValueError("raman_tensors must be finite.")
-            if not self.include_raman:
-                raise ValueError(
-                    "raman_tensors rides on include_raman=True (they share the "
-                    "same h_R memory kernel and f_R weight); pass "
-                    "include_raman=True with it, or use coupling_tensor for "
-                    "instantaneous-only coupling."
-                )
-            self.raman_tensors: NDArray | None = rt.copy()
-            # Poletti-type sparsity pruning: mask of significant entries.
-            scale = float(np.abs(rt).max())
-            self._raman_mask = np.abs(rt) > 1e-12 * max(scale, 1e-300)
-        else:
-            self.raman_tensors = None
-            self._raman_mask = None
+        self.raman_tensors: NDArray | None
+        self.raman_tensors, self._raman_mask = _mm_coerce_raman_tensors(
+            raman_tensors, include_raman, self._n
+        )
         if self.include_raman and raman_response is None:
             raise ValueError(
                 "include_raman=True but raman_response is None. "
@@ -475,44 +627,13 @@ class MultimodeSplitStepEngine:
             )
         self._h_R_fft: NDArray | None = None
         self._raman_fR: float = 0.0
-        if channel_alpha is not None:
-            ca = np.asarray(channel_alpha, dtype=float)
-            if ca.shape != (self._n,):
-                raise ValueError(f"channel_alpha must be ({self._n},), got {ca.shape}.")
-            if not np.all(np.isfinite(ca)) or np.any(ca < 0):
-                raise ValueError("channel_alpha must be finite and non-negative.")
-        self.channel_alpha = (
-            None if channel_alpha is None else np.asarray(channel_alpha, dtype=float)
-        )
+        self.channel_alpha = _mm_coerce_channel_alpha(channel_alpha, self._n)
         self.step_size = step_size
 
         # Cavity configuration
-        if (
-            cavity_reflectivity_input is not None
-            or cavity_reflectivity_output is not None
-        ):
-            if cavity_reflectivity_input is None or cavity_reflectivity_output is None:
-                raise ValueError(
-                    "cavity_reflectivity_input and cavity_reflectivity_output must "
-                    "be supplied together"
-                )
-            r_in = np.asarray(cavity_reflectivity_input, dtype=float)
-            r_out = np.asarray(cavity_reflectivity_output, dtype=float)
-            if r_in.shape != (self._n,) or r_out.shape != (self._n,):
-                raise ValueError(
-                    f"cavity reflectivity must have shape ({self._n},), got "
-                    f"input {r_in.shape} and output {r_out.shape}"
-                )
-            if (
-                np.any(r_in < 0)
-                or np.any(r_in > 1)
-                or np.any(r_out < 0)
-                or np.any(r_out > 1)
-            ):
-                raise ValueError("cavity reflectivity must be in [0, 1]")
-        else:
-            r_in = None
-            r_out = None
+        r_in, r_out = _mm_coerce_cavity(
+            cavity_reflectivity_input, cavity_reflectivity_output, self._n
+        )
         self.cavity_reflectivity_input = r_in
         self.cavity_reflectivity_output = r_out
         self.cavity_round_trip_length = (
@@ -543,67 +664,17 @@ class MultimodeSplitStepEngine:
                 "fwm_pump_depletion=True would double-count the back-conversion."
             )
         self.full_beta: list[NDArray] | None = None
-        if full_beta is not None:
-            if len(full_beta) != self._n:
-                raise ValueError(
-                    f"full_beta must carry one β(ω) per mode ({self._n}), got {len(full_beta)}."
-                )
-            if group_delays is not None or phase_offsets is not None:
-                raise ValueError(
-                    "full_beta carries group delay and β₀ phase itself; pass "
-                    "group_delays=None and phase_offsets=None with it."
-                )
-            w = np.asarray(self.grid.w, dtype=float)
-            w0 = float(self.omega0)
-            curves = []
-            for b in full_beta:
-                curves.append(
-                    np.asarray(b(w + w0), dtype=float)
-                    if callable(b)
-                    else np.asarray(b, dtype=float)
-                )
-            for m, B in enumerate(curves):
-                if B.shape != w.shape:
-                    raise ValueError(
-                        f"full_beta[{m}] must match the grid ({w.shape}), got {B.shape}."
-                    )
-                if not np.all(np.isfinite(B)):
-                    raise ValueError(f"full_beta[{m}] must be finite.")
-            # Reference-frame subtraction (retarded frame of channel 0):
-            # φ_m(Ω) = [B_m(Ω) − B_0(0)] − B1_0·Ω. Narrowband this is exactly
-            # (β1,m − β1,0)·Ω + Σ_{k≥2} βk,m·Ω^k/k! (decision 1.1: full-β
-            # operator, not Taylor-order bump — octave MIR is where truncated
-            # Taylor fails; scalar TaperedGNLSESolver precedent).
-            B0 = curves[0]
-            i0 = int(np.argmin(np.abs(w)))
-            dw = float(w[1] - w[0])
-            # 4th-order centre slope + cubic centre value: nearest-sample
-            # errors (O(dw²)) would leave O(0.1) rad/m phases at the band
-            # edge — fatal for the narrowband-agreement contract (task 1.2).
-            lo = max(i0 - 2, 0)
-            seg_w = w[lo : lo + 5]
-            seg_b = B0[lo : lo + 5]
-            # Cubic Lagrange value at Ω = 0.
-            b_at_0 = 0.0
-            for j in range(5):
-                lj = 1.0
-                for k in range(5):
-                    if k != j:
-                        lj *= (0.0 - seg_w[k]) / (seg_w[j] - seg_w[k])
-                b_at_0 += seg_b[j] * lj
-            # 4th-order central slope at the centre sample.
-            ci = i0 - lo
-            dB0 = float(
-                (
-                    -seg_b[ci + 2]
-                    + 8.0 * seg_b[ci + 1]
-                    - 8.0 * seg_b[ci - 1]
-                    + seg_b[ci - 2]
-                )
-                / (12.0 * dw)
-            )
-            self.full_beta = curves
-            self._full_phi = [(B - float(b_at_0) - dB0 * w) for B in curves]
+        _full_curves, _full_phi = _mm_coerce_full_beta(
+            full_beta,
+            self._n,
+            group_delays,
+            phase_offsets,
+            self.grid,
+            self.omega0,
+        )
+        if _full_curves is not None:
+            self.full_beta = _full_curves
+            self._full_phi = _full_phi
         self.include_shock = bool(include_shock)
         if tau_shock is not None and not tau_shock > 0.0:
             raise ValueError(
@@ -970,7 +1041,11 @@ class MultimodeSplitStepEngine:
         with ``S^R = S^K`` per Eq. (2) — one FFT convolution per (p, q) pair
         per RK4 stage, Poletti-type sparsity pruning via ``_raman_mask``.
         """
-        assert self.raman_tensors is not None and self._h_R_fft is not None
+        assert (
+            self.raman_tensors is not None
+            and self._h_R_fft is not None
+            and self._raman_mask is not None
+        )
         N = self._n
         gamma = self._gamma_v()
         fR = self._raman_fR

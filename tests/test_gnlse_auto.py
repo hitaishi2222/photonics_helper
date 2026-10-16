@@ -5,7 +5,15 @@ import warnings
 import numpy as np
 import pytest
 
-from photonics_helper import Envelope, Fiber, GNLSESolver, Length, Time, Wave, Wavelength
+from photonics_helper import (
+    Envelope,
+    Fiber,
+    GNLSESolver,
+    Length,
+    Time,
+    Wave,
+    Wavelength,
+)
 from photonics_helper.core.grids import TemporalGrid
 
 
@@ -31,10 +39,16 @@ def test_propagate_auto_converges_small_case():
     beta2_si = abs(beta2) * 1e-24
     P0 = beta2_si / (gamma * T0**2)  # N=1 power
     fiber = Fiber.from_gamma(gamma, length=Length(0.05, "m"))
-    pulse = Envelope(shape="sech", peak_amplitude=np.sqrt(4 * P0), pulse_width=Time(100, "fs"))
-    grid = TemporalGrid.for_gnlse(pulse.pulse_width, fiber.length.as_m, beta2, gamma=gamma, peak_power=4 * P0)
+    pulse = Envelope(
+        shape="sech", peak_amplitude=np.sqrt(4 * P0), pulse_width=Time(100, "fs")
+    )
+    grid = TemporalGrid.for_gnlse(
+        pulse.pulse_width, fiber.length.as_m, beta2, gamma=gamma, peak_power=4 * P0
+    )
     wave = Wave.from_envelope(pulse, Wavelength(1550, "nm"), grid=grid)
-    gs = GNLSESolver(wave, fiber, np.array([beta2]), scheme="strang", include_raman=False)
+    gs = GNLSESolver(
+        wave, fiber, np.array([beta2]), scheme="strang", include_raman=False
+    )
     report = gs.propagate_auto()
     assert report["converged"]
     assert report["drift"] <= 0.01

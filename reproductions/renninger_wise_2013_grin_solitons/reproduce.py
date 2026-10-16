@@ -270,9 +270,7 @@ def build_engine(n2: float) -> MultimodeSplitStepEngine:
         )
         for p in range(3)
     ]
-    fiber = Fiber(
-        n2=n2, alpha=0.0, A_eff=Area(aeff, "m^2"), length=Length(LEN_M, "m")
-    )
+    fiber = Fiber(n2=n2, alpha=0.0, A_eff=Area(aeff, "m^2"), length=Length(LEN_M, "m"))
     return MultimodeSplitStepEngine(
         waves,
         fiber,

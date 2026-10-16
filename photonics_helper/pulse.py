@@ -81,7 +81,11 @@ def _ensure_showable_backend() -> None:
             plt.switch_backend(candidate)
         except Exception:
             continue  # toolkit not installed — try the next candidate
-        logger.info("Switched matplotlib backend %r → %r for interactive show", backend, candidate)
+        logger.info(
+            "Switched matplotlib backend %r → %r for interactive show",
+            backend,
+            candidate,
+        )
         return
     logger.warning(
         "matplotlib is on the headless backend %r and no interactive backend "
@@ -272,7 +276,9 @@ class Envelope:
         if A_eff.as_m2 <= 0:
             raise ValueError("A_eff must be positive")
         if refractive_index <= 0:
-            raise ValueError(f"refractive index must be positive, got {refractive_index}")
+            raise ValueError(
+                f"refractive index must be positive, got {refractive_index}"
+            )
         scale = 0.5 * refractive_index * C_MS * EPS_0 * A_eff.as_m2
         return float(sqrt(peak_power.as_W / scale))
 
@@ -1253,9 +1259,7 @@ class Wave:
         of hand-rolled ``2π·c/ω`` arithmetic, so the returned object carries
         its own unit handling (``.as_nm``, ``.as_m``, ``to_freq()``).
         """
-        omega_abs = AngularFrequencyArray(
-            self.central_frequency + self.grid.w, "rad/s"
-        )
+        omega_abs = AngularFrequencyArray(self.central_frequency + self.grid.w, "rad/s")
         return omega_abs.to_wl()
 
     @property

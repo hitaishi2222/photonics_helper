@@ -26,9 +26,7 @@ def linear_setup():
         central_wavelength=Wavelength(1550, "nm"),
     )
     # Low loss for measurable but small attenuation
-    fiber = Fiber(
-        n2=0.0, alpha=0.1, A_eff=Area(1e-10, "m^2"), length=Length(0.1, "m")
-    )
+    fiber = Fiber(n2=0.0, alpha=0.1, A_eff=Area(1e-10, "m^2"), length=Length(0.1, "m"))
     # Zero dispersion for pure loss test
     betas = np.array([])
     return pulse, fiber, betas
@@ -44,9 +42,7 @@ def dispersion_setup():
         envelope=env,
         central_wavelength=Wavelength(1550, "nm"),
     )
-    fiber = Fiber(
-        n2=0.0, alpha=0.0, A_eff=Area(1e-10, "m^2"), length=Length(0.01, "m")
-    )
+    fiber = Fiber(n2=0.0, alpha=0.0, A_eff=Area(1e-10, "m^2"), length=Length(0.01, "m"))
     # Some dispersion but no loss
     betas = np.array([0.01])  # 10 ps²/km (= 0.01 ps²/m)
     return pulse, fiber, betas
@@ -315,9 +311,7 @@ class TestSelfSteepeningConservation:
             central_wavelength=Wavelength(wl, "nm"),
         )
         pulse._pulse_train_field = at_interp
-        fiber = Fiber.from_gamma(
-            gamma=gamma, length=Length(length_m, "m")
-        )
+        fiber = Fiber.from_gamma(gamma=gamma, length=Length(length_m, "m"))
         betas = np.array([-0.12, 0.0, 5e-6])
 
         nsteps = GNLSESolver.estimate_num_steps(

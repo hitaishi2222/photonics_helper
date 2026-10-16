@@ -62,9 +62,13 @@ def _raman_response(params, grid):
 
 def _peak_wavelength_nm(grid, A, wl0):
     W = np.abs(grid.fft(A)) ** 2
-    lam = AngularFrequencyArray(
-        Wavelength(wl0, "m").to_omega().as_rad_s + grid.w, "rad/s"
-    ).to_wl().as_m
+    lam = (
+        AngularFrequencyArray(
+            Wavelength(wl0, "m").to_omega().as_rad_s + grid.w, "rad/s"
+        )
+        .to_wl()
+        .as_m
+    )
     order = np.argsort(lam)
     Ws, Ls = W[order], lam[order]
     i = int(np.argmax(Ws))
@@ -120,9 +124,13 @@ def validate(params: dict | None = None, make_plot: bool = True) -> dict:
 
         W0 = np.abs(grid.fft(pulse.envelope_field)) ** 2
         W1 = np.abs(grid.fft(out)) ** 2
-        lam = AngularFrequencyArray(
-            Wavelength(wl0, "m").to_omega().as_rad_s + grid.w, "rad/s"
-        ).to_wl().as_nm
+        lam = (
+            AngularFrequencyArray(
+                Wavelength(wl0, "m").to_omega().as_rad_s + grid.w, "rad/s"
+            )
+            .to_wl()
+            .as_nm
+        )
         o = np.argsort(lam)
         fig, ax = plt.subplots(figsize=(8, 5))
         ax.plot(lam[o], W0[o] / W0.max(), label="input")

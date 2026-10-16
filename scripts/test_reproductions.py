@@ -32,6 +32,7 @@ from reproductions.narhi_2016_mi_breathers.reproduce import validate as validate
 from reproductions.shg_textbook.reproduce import validate as validate_shg
 from reproductions.stolen_lin_1978_spm.reproduce import validate as validate_spm
 from reproductions.tomlinson_1985_wave_breaking.reproduce import validate as validate_wb
+from reproductions.xing_2022_multimode_chg.reproduce import validate as validate_xing
 
 
 def test_stolen_lin_1978_spm():
@@ -55,6 +56,29 @@ def test_gordon_1986_ssfs():
     result = validate_gordon(make_plot=False)
     assert result["measured_nm"] > 0.0
     assert 0.5 <= result["ratio"] <= 2.0
+
+
+def test_xing_2022_multimode_chg():
+    """Xing 2022 MMF: material reproduces exactly, dispersion headline does not.
+
+    ``validate`` is assert-carrying (guided band, Eq. 6 typo, no red intermodal
+    DW); here we additionally pin the headline verdicts so a regression is legible.
+    """
+    result = validate_xing(make_plot=False)
+    # material: Eq. (6) as printed is broken; corrected it matches the repo row
+    assert result["material"]["eq6_fixed_as2se3_vs_repo_max_relerr"] < 2e-5
+    assert result["material"]["material_zdw_fixed_um"] == [7.225]
+    # dispersion: the paper's HE11 ZDW is NOT reproduced, and its higher-order
+    # modes are anomalous at the pump (the paper claims normal)
+    assert result["he11_zdw"]["zdw_gap_um"] > 0.5
+    assert result["he11_zdw"]["higher_order_anomalous_at_pump"] is True
+    # the red 10.8 um intermodal DW does not exist; the pair phase-matches blue
+    assert not any(
+        8.0 < z < 13.0
+        for r in result["intermodal_dw"]["eq7_roots_um"].values()
+        for z in r
+    )
+    assert result["intermodal_dw"]["eq7_blue_root_2pt_recheck_um"]
 
 
 def test_dudley_2006_cherenkov_dw():

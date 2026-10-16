@@ -330,8 +330,10 @@ class OrderReport:
         return self.field.order_best if self.field is not None else None
 
     def summary(self) -> str:
-        lines = [f"order study over {len(self.step_sizes)} steps "
-                f"({'coarse->fine' if self.descending else 'fine->coarse'}):"]
+        lines = [
+            f"order study over {len(self.step_sizes)} steps "
+            f"({'coarse->fine' if self.descending else 'fine->coarse'}):"
+        ]
         if self.field is not None:
             f = self.field
             got = "n/a" if f.order_best is None else f"{f.order_best:.2f}"
@@ -351,17 +353,17 @@ def _relative_diff(a: np.ndarray, b: np.ndarray) -> float:
     return num / den
 
 
-def _estimate_order(name: str, values: list[Any], step_sizes: list[float]) -> OrderEstimate:
+def _estimate_order(
+    name: str, values: list[Any], step_sizes: list[float]
+) -> OrderEstimate:
     """Richardson observed order from successive relative differences."""
     diffs: list[float | None] = [None] * (len(values) - 1)
     for i in range(len(values) - 1):
         try:
-            diffs[i] = _relative_diff(
-                np.asarray(values[i]), np.asarray(values[i + 1])
-            )
+            diffs[i] = _relative_diff(np.asarray(values[i]), np.asarray(values[i + 1]))
         except ValueError as exc:  # mismatched shapes -> not comparable
             raise ValueError(
-                f"{name}: refinement {i} and {i+1} are not comparable "
+                f"{name}: refinement {i} and {i + 1} are not comparable "
                 f"({exc}). An order ladder must hold the temporal grid fixed and "
                 f"vary only the propagation step."
             ) from exc

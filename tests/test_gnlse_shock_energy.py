@@ -156,7 +156,9 @@ def test_energy_monitor_records_and_warns():
     # `test_shock_regime_warns_only_outside_derivation_window`.
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        warnings.filterwarnings("ignore", message="self-steepening is being run outside")
+        warnings.filterwarnings(
+            "ignore", message="self-steepening is being run outside"
+        )
         eng3 = SplitStepEngine(
             pulse=wave,
             fiber=fiber,

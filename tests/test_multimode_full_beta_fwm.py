@@ -191,8 +191,7 @@ def test_shock_applied_once_with_full_tensor_fwm():
 
     def shock(arms):
         return [
-            arm + tau * mm.grid.ifft(1j * mm.grid.w * mm.grid.fft(arm))
-            for arm in arms
+            arm + tau * mm.grid.ifft(1j * mm.grid.w * mm.grid.fft(arm)) for arm in arms
         ]
 
     diag = mm._diagonal_phase(A)
@@ -215,12 +214,8 @@ def test_shock_applied_once_with_full_tensor_fwm():
     rhs = mm._nonlinear_rhs_tensor(A)
     once = shock(tot)
     twice = shock(shock(tot))
-    e_once = max(
-        float(np.max(np.abs(o - r))) for o, r in zip(once, rhs)
-    )
-    e_twice = max(
-        float(np.max(np.abs(t - r))) for t, r in zip(twice, rhs)
-    )
+    e_once = max(float(np.max(np.abs(o - r))) for o, r in zip(once, rhs))
+    e_twice = max(float(np.max(np.abs(t - r))) for t, r in zip(twice, rhs))
     assert e_once == 0.0
     assert e_twice > 100.0 * e_once
 
