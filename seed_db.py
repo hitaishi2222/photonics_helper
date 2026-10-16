@@ -146,23 +146,55 @@ SELLMEIER_MATERIALS = {
         "valid_to_um": 3.0,
         "source": "Adachi",
     },
+    # --- chalcogenides (GeAsSe / GeAsS / As2S3 / As2Se3) -------------------
+    # Coefficients are B_j = lambda_res^2 in um^2 (standard form,
+    # n^2 = A0 + sum A_j lam^2/(lam^2 - B_j)).  n(2 um) = 2.628 / 2.299 /
+    # 2.426 / 2.808 respectively, matching the quoted indices.
+    "GeAsSe": {
+        "form": "standard",
+        "a0": 1.0,
+        "coefficients": [5.78525, 0.39705],
+        "wavelengths": [0.0829152025, 923.7575478244],
+        "valid_from_um": 1.0,
+        "valid_to_um": 12.0,
+        "source": (
+            "Ge11.5As24Se64.5; Ma et al., Opt. Express 21(24), 29927 (2013), "
+            "doi:10.1364/OE.21.029927 [ellipsometric fit]; coefficients as "
+            "reproduced in Karim PhD thesis (City Research Online, 2015) Table 5.1"
+        ),
+    },
+    "GeAsS": {
+        "form": "standard",
+        "a0": 1.0,
+        "coefficients": [4.18011, 0.35895],
+        "wavelengths": [0.1003559041, 518.4810972324],
+        "valid_from_um": 1.0,
+        "valid_to_um": 12.0,
+        "source": (
+            "Ge11.5As24S64.5; Ma et al., Opt. Express 21(24), 29927 (2013), "
+            "doi:10.1364/OE.21.029927; Karim PhD thesis (2015) Table 6.1"
+        ),
+    },
     "As2S3": {
         "form": "standard",
-        "a0": 2.864573,
-        "coefficients": [0.1595813, 0.024914, 0.0],
-        "wavelengths": [0.041673, 0.022615, 0.0],
+        "a0": 1.0,
+        "coefficients": [1.8983678, 1.9222979, 0.8765134, 0.1188704, 0.9569903],
+        "wavelengths": [0.0225, 0.0625, 0.1225, 0.2025, 750.0],
         "valid_from_um": 0.6,
-        "valid_to_um": 12.0,
-        "source": "Smit et al.",
+        "valid_to_um": 11.0,
+        "source": "Rodney, Malitson & King, J. Opt. Soc. Am. 48, 633 (1958)",
     },
     "As2Se3": {
         "form": "standard",
-        "a0": 2.564573,
-        "coefficients": [0.1895813, 0.034914, 0.0],
-        "wavelengths": [0.031673, 0.032615, 0.0],
-        "valid_from_um": 0.8,
-        "valid_to_um": 15.0,
-        "source": "Smit et al.",
+        "a0": 1.0,
+        "coefficients": [4.994871876241, 0.120715248481, 1.712368530625],
+        "wavelengths": [0.0583898896, 361.0, 0.2335595584],
+        "valid_from_um": 1.0,
+        "valid_to_um": 13.0,
+        "source": (
+            "Thompson (Amorphous Materials Inc., 2008); A0=2.234921, A1=0.24164, "
+            "A2=0.347441, A3=1.308575, as used in Yuan, arXiv:1308.5910 Eq.(1)"
+        ),
     },
     "KTP": {
         "form": "standard",
@@ -314,7 +346,13 @@ THORLABS_SELLMEIER_MATERIALS = {
         "form": "standard",
         "a0": 1.0,
         "coefficients": [0.48755108, 0.39875031, 2.3120353],
-        "wavelengths": [0.04338408, 0.09461442, 23.793604],
+        # B_j = lambda_res^2: 0.04338408^2, 0.09461442^2, 23.793604^2.
+        # (The un-squared lambda values give n(2 um)=1.198 and blow up >4.5 um.)
+        "wavelengths": [
+            0.0018821783974463998,
+            0.008951888471936401,
+            566.135591308816,
+        ],
         "valid_from_um": 0.2,
         "valid_to_um": 7.0,
         "source": "Thorlabs; Dodge, Appl. Opt. 23, 1980 (1984), o-ray",

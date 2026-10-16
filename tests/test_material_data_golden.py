@@ -33,7 +33,7 @@ def test_row_counts_are_stable() -> None:
     finally:
         con.close()
     assert counts["nk_data"] == 24767
-    assert counts["sellmeier"] == 39
+    assert counts["sellmeier"] == 40
     assert counts["raman_specs"] == 44
     assert counts["phonon_modes"] == 52
 
@@ -50,6 +50,12 @@ def test_row_counts_are_stable() -> None:
         ("Si3N4-Ligentec", 1.55, 1.996280, 1e-3),
         ("LiNbO3", 0.775, 2.186595, 5e-4),  # extraordinary (default axis)
         ("LiNbO3", 1.55, 2.139469, 5e-4),
+        # chalcogenides + fluoride cladding (G1 rows; see seed_db SELLMEIER_MATERIALS)
+        ("GeAsSe", 2.0, 2.627924, 5e-4),  # Ma 2013 Ge11.5As24Se64.5
+        ("GeAsS", 2.0, 2.298889, 5e-4),  # Ma 2013 Ge11.5As24S64.5
+        ("As2S3", 2.0, 2.426149, 5e-4),  # Rodney 1958
+        ("As2Se3", 2.0, 2.808214, 5e-4),  # Thompson 2008
+        ("MgF2", 2.0, 1.367835, 5e-4),  # Dodge 1984 o-ray (B=λ_res^2!)
     ],
 )
 def test_refractive_index_golden(
