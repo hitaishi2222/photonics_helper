@@ -22,5 +22,12 @@ spatial modes as coupled modal envelopes — the nonlinear complement of
   <5%, forbidden FWM triplets unmixed to machine precision.
 
 Scope (v1): fixed-step propagation; Raman is the scalar per-channel
-response; mode-specific overlap tensors (Poletti–Horak `f` integrals),
-pump depletion and higher-order multi-pump interactions are future work.
+response (`include_raman=True` + `raman_response`, N=1 == scalar engine)
+with an opt-in intermodal delayed-coupling tensor (`raman_tensors`,
+Wright JSTQE Eq. 1 kernel, step7 `S⁽²⁾` admissible as `T_R`); pump
+depletion is implemented (`fwm_pump_depletion=True`, Manley–Rowe
+consistent); self-steepening + time-resolved TPA/FCA are implemented
+per-channel (`include_shock`, `include_tpa`/`include_free_carriers`);
+full-β(ω) dispersion (`full_beta`) and the full-`S⁽²⁾` FWM contraction
+(`fwm_full_tensor=True`) are implemented. All four GAP steps have landed —
+no switched-off-physics disclaimer.

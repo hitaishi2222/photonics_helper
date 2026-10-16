@@ -1450,7 +1450,15 @@ class SplitStepEngine:
         # Use input peak power for the nonlinear-length limit (same as
         # estimate_num_steps).  Instantaneous max(|A|²) can spike during
         # spectral broadening and shrink dz without bound, stalling propagation.
-        I_ref = max(self.pulse.peak_power(), 1e-30)
+        # NOTE: peak_power() warns without A_eff, but this internal heuristic
+        # works in the envelope convention (consistent with gamma-direct
+        # fibers), so the warning would be unactionable noise here — direct
+        # user calls to Wave.peak_power() still warn as before.
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore", message=".*normalized envelope units.*"
+            )
+            I_ref = max(self.pulse.peak_power(), 1e-30)
         if gamma > 0.0:
             # Cap nonlinear phase per step: γ P₀ Δz < π/4 (stricter with steepening).
             omega_factor = 1.0
@@ -2633,7 +2641,12 @@ class GNLSESolver:
           the output ≤ ``edge_tol`` — a direct wrap-around detector.
 
         A drift failure doubles the steps; an edge failure doubles the
-        window at fixed ``dt`` (``N`` doubles too). Returns a report dict
+        window at fixed ``dt`` (``N`` doubles too). Before the first round,
+        a grid violating the self-steepening positivity requirement
+        (``Ω_max >= ω₀``) is widened at fixed ``N`` (``Tmax`` grows, ``dt``
+        grows) so the shock operator stays defined; Raman ``h_R(t)`` is
+        analytic and re-evaluated on the new grid, so this is exact.
+        Returns a report dict
         with ``converged``, ``steps``, ``rounds``, ``drift``, ``edge_frac``
         and ``widened``. Warns instead of raising when ``max_rounds`` is
         exhausted, so a long run's data is never thrown away.
@@ -2641,10 +2654,35 @@ class GNLSESolver:
         from photonics_helper.core.grids import TemporalGrid
         from photonics_helper.pulse import Wave
 
+        widened = False
+        if self.include_self_steepening:
+            for _ in range(5):
+                omega_max = float(self.pulse.grid.omega_max)
+                omega0 = float(self.pulse.central_frequency)
+                if omega_max < omega0:
+                    break
+                ratio = omega_max / omega0
+                old = self.pulse.grid
+                new_grid = TemporalGrid(
+                    N=int(old.N), Tmax=Time(old.Tmax.as_s * ratio * 1.15, "s")
+                )
+                self.pulse = Wave.from_envelope(
+                    self.pulse.envelope,
+                    self.pulse.central_wavelength,
+                    grid=new_grid,
+                    refractive_index=self.pulse.refractive_index,
+                    repetition_rate=self.pulse.repetition_rate,
+                )
+                widened = True
+                warnings.warn(
+                    f"propagate_auto: shock grid Ω_max/ω₀={ratio:.3f}; "
+                    f"widened Tmax ×{ratio * 1.15:.3f} at fixed N={old.N}.",
+                    UserWarning,
+                    stacklevel=2,
+                )
         steps = int(start_steps) if start_steps is not None else max(
             10, type(self).estimate_num_steps(self.pulse, self.fiber, np.asarray(self.betas))
         )
-        widened = False
         report: dict[str, Any] = {}
         for _round in range(max(1, max_rounds)):
             steps = min(steps, max_steps)
@@ -2729,7 +2767,14 @@ class GNLSESolver:
         T0 = pulse.envelope.pulse_width.as_s
         omega0 = pulse.central_frequency
         gamma = _fiber_gamma(fiber, omega0)
-        I_max = max(pulse.peak_power(), 1e-30)
+        # NOTE: internal step heuristic — see _adaptive_step_size: the
+        # normalized-units warning is suppressed here (envelope convention),
+        # direct user calls to Wave.peak_power() still warn as before.
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore", message=".*normalized envelope units.*"
+            )
+            I_max = max(pulse.peak_power(), 1e-30)
 
         betas_arr = np.asarray(betas, dtype=float)
         if len(betas_arr) > 0:

@@ -17,6 +17,13 @@ Model (all channels coupled through one shared scalar γ):
   frequency-domain substep, Strang-split around the diagonal phase),
   restricted by angular momentum conservation
   ``ℓ_m = ℓ_n + ℓ_p − ℓ_q`` when OAM indices are supplied;
+- per-channel (intramodal) Raman ``iγ·A_m·[(1−f_R)|A_m|² +
+  f_R·(h_R ⊗ |A_m|²)]`` with the scalar-engine convolution (step8), plus an
+  opt-in intermodal delayed-coupling tensor ``raman_tensors``
+  (``T_R^(m,n,p,q)``, Raman-weighted) evaluated as an FFT memory kernel on
+  the RK4 path — Wright JSTQE Eq. (1) Raman term with ``S^R = S^K``
+  (``ph_pdfs/pages_wright/page-03.png``, image-read); step7 ``S⁽²⁾`` tensors
+  are admissible as ``T_R`` (hand-supplied fallback documented);
 - optional **pump depletion**: the full Manley–Rowe-consistent exchange
   (creation arms ``+iγ f A_n²A_q*`` / ``+iγ f A_n²A_m*`` and the
   back-conversion pump arm ``+2iγ f* A_m A_q A_n*``), which conserves
@@ -25,6 +32,11 @@ Model (all channels coupled through one shared scalar γ):
   Poletti & Horak Eq. 7): ``xpm_weights`` (N×N, SPM/XPM slot) and
   ``fwm_weights`` (N×N×N×N, FWM slot) override the uniform
   ``coef_model`` factors mode-pair-wise.
+- per-mode full-β(ω) spectral dispersion (``full_beta`` — scalar
+  ``TaperedGNLSESolver`` precedent; decision 1.1: full operator, not a
+  Taylor-order bump) and full-``S⁽²⁾`` FWM contraction
+  (``fwm_full_tensor=True``; Wright Eq. 1 tensor term, Poletti Eq. 18/19 +
+  ``oam_l`` selection preserved; diagonal arms excluded — no double count).
 
 The degenerate two-channel strip-down of this engine is the variety
 implemented in :mod:`photonics_helper.vector_gnlse` (the two polarization
@@ -184,7 +196,9 @@ class MultimodeSplitStepEngine:
         channel ``i`` (including ``i == j``, i.e. the SPM slot). When
         given, this overrides the uniform ``coef_model`` factors.
     fwm_weights : array_like, optional
-        Mode-specific FWM overlap weights, an ``N×N×N×N`` real array;
+        Mode-specific FWM overlap weights, an ``N×N×N×N`` array (real, or
+        complex when the full-vectorial ``S⁽²⁾`` overlap carries an
+        imaginary part — never silently clipped);
         ``w[m, n, p, q]`` weights the ``→ m`` transition pumped by
         ``(n, p)`` consuming ``q``. When given, it multiplies every
         allowed triple (OAM gating, if any, still applies first).
@@ -275,6 +289,19 @@ class MultimodeSplitStepEngine:
         fwm_coupling_tensor=None,
         channel_alpha=None,
         fwm_pump_depletion: bool = False,
+        include_raman: bool = False,
+        raman_response=None,
+        raman_tensors=None,
+        include_shock: bool = False,
+        tau_shock: float | None = None,
+        conserving_shock: bool = False,
+        include_tpa: bool = False,
+        include_free_carriers: bool = False,
+        beta_tpa=None,
+        sigma_fca=None,
+        sigma_tpa=None,
+        full_beta=None,
+        fwm_full_tensor: bool = False,
         step_size: Length | None = None,
         cavity_reflectivity_input: list[float] | None = None,
         cavity_reflectivity_output: list[float] | None = None,
@@ -332,7 +359,12 @@ class MultimodeSplitStepEngine:
             if not np.all(np.isfinite(w)):
                 raise ValueError("xpm_weights must be finite.")
         if fwm_weights is not None:
-            fw = np.asarray(fwm_weights, dtype=float)
+            # Complex-capable: full-vectorial S⁽²⁾ overlaps (step7) can carry
+            # an imaginary part; it is physically meaningful and must not be
+            # silently discarded.
+            fw = np.asarray(fwm_weights)
+            if not np.iscomplexobj(fw):
+                fw = fw.astype(float)
             if fw.shape != (self._n,) * 4:
                 raise ValueError(
                     f"fwm_weights must be ({self._n},)*4 = "
@@ -393,7 +425,11 @@ class MultimodeSplitStepEngine:
             None if xpm_weights is None else np.asarray(xpm_weights, dtype=float).copy()
         )
         self.fwm_weights = (
-            None if fwm_weights is None else np.asarray(fwm_weights, dtype=float).copy()
+            None
+            if fwm_weights is None
+            else np.asarray(fwm_weights).astype(float, copy=True)
+            if not np.iscomplexobj(fwm_weights)
+            else np.asarray(fwm_weights, dtype=complex).copy()
         )
         self.coupling_tensor = (
             None
@@ -406,6 +442,39 @@ class MultimodeSplitStepEngine:
             else np.asarray(fwm_coupling_tensor, dtype=complex).copy()
         )
         self.fwm_pump_depletion = fwm_pump_depletion
+        self.include_raman = bool(include_raman)
+        self.raman_response = raman_response
+        if raman_tensors is not None:
+            rt = np.asarray(raman_tensors, dtype=complex)
+            if rt.shape != (self._n,) * 4:
+                raise ValueError(
+                    f"raman_tensors must be ({self._n},)*4 = "
+                    f"{(self._n,) * 4}, got {rt.shape}."
+                )
+            if not np.all(np.isfinite(rt)):
+                raise ValueError("raman_tensors must be finite.")
+            if not self.include_raman:
+                raise ValueError(
+                    "raman_tensors rides on include_raman=True (they share the "
+                    "same h_R memory kernel and f_R weight); pass "
+                    "include_raman=True with it, or use coupling_tensor for "
+                    "instantaneous-only coupling."
+                )
+            self.raman_tensors: NDArray | None = rt.copy()
+            # Poletti-type sparsity pruning: mask of significant entries.
+            scale = float(np.abs(rt).max())
+            self._raman_mask = np.abs(rt) > 1e-12 * max(scale, 1e-300)
+        else:
+            self.raman_tensors = None
+            self._raman_mask = None
+        if self.include_raman and raman_response is None:
+            raise ValueError(
+                "include_raman=True but raman_response is None. "
+                "Provide a RamanResponse (e.g. RamanSpec.response()) "
+                "or set include_raman=False."
+            )
+        self._h_R_fft: NDArray | None = None
+        self._raman_fR: float = 0.0
         if channel_alpha is not None:
             ca = np.asarray(channel_alpha, dtype=float)
             if ca.shape != (self._n,):
@@ -467,6 +536,112 @@ class MultimodeSplitStepEngine:
 
         self.grid: TemporalGrid = waves[0].grid
         self.omega0 = waves[0].central_frequency
+        self.fwm_full_tensor = bool(fwm_full_tensor)
+        if self.fwm_full_tensor and fwm_pump_depletion:
+            raise ValueError(
+                "fwm_full_tensor=True already contains every exchange arm; "
+                "fwm_pump_depletion=True would double-count the back-conversion."
+            )
+        self.full_beta: list[NDArray] | None = None
+        if full_beta is not None:
+            if len(full_beta) != self._n:
+                raise ValueError(
+                    f"full_beta must carry one β(ω) per mode ({self._n}), got {len(full_beta)}."
+                )
+            if group_delays is not None or phase_offsets is not None:
+                raise ValueError(
+                    "full_beta carries group delay and β₀ phase itself; pass "
+                    "group_delays=None and phase_offsets=None with it."
+                )
+            w = np.asarray(self.grid.w, dtype=float)
+            w0 = float(self.omega0)
+            curves = []
+            for b in full_beta:
+                curves.append(
+                    np.asarray(b(w + w0), dtype=float)
+                    if callable(b)
+                    else np.asarray(b, dtype=float)
+                )
+            for m, B in enumerate(curves):
+                if B.shape != w.shape:
+                    raise ValueError(
+                        f"full_beta[{m}] must match the grid ({w.shape}), got {B.shape}."
+                    )
+                if not np.all(np.isfinite(B)):
+                    raise ValueError(f"full_beta[{m}] must be finite.")
+            # Reference-frame subtraction (retarded frame of channel 0):
+            # φ_m(Ω) = [B_m(Ω) − B_0(0)] − B1_0·Ω. Narrowband this is exactly
+            # (β1,m − β1,0)·Ω + Σ_{k≥2} βk,m·Ω^k/k! (decision 1.1: full-β
+            # operator, not Taylor-order bump — octave MIR is where truncated
+            # Taylor fails; scalar TaperedGNLSESolver precedent).
+            B0 = curves[0]
+            i0 = int(np.argmin(np.abs(w)))
+            dw = float(w[1] - w[0])
+            # 4th-order centre slope + cubic centre value: nearest-sample
+            # errors (O(dw²)) would leave O(0.1) rad/m phases at the band
+            # edge — fatal for the narrowband-agreement contract (task 1.2).
+            lo = max(i0 - 2, 0)
+            seg_w = w[lo : lo + 5]
+            seg_b = B0[lo : lo + 5]
+            # Cubic Lagrange value at Ω = 0.
+            b_at_0 = 0.0
+            for j in range(5):
+                lj = 1.0
+                for k in range(5):
+                    if k != j:
+                        lj *= (0.0 - seg_w[k]) / (seg_w[j] - seg_w[k])
+                b_at_0 += seg_b[j] * lj
+            # 4th-order central slope at the centre sample.
+            ci = i0 - lo
+            dB0 = float(
+                (
+                    -seg_b[ci + 2]
+                    + 8.0 * seg_b[ci + 1]
+                    - 8.0 * seg_b[ci - 1]
+                    + seg_b[ci - 2]
+                )
+                / (12.0 * dw)
+            )
+            self.full_beta = curves
+            self._full_phi = [(B - float(b_at_0) - dB0 * w) for B in curves]
+        self.include_shock = bool(include_shock)
+        if tau_shock is not None and not tau_shock > 0.0:
+            raise ValueError(
+                f"tau_shock must be positive (seconds, SI), got {tau_shock!r}"
+            )
+        self._tau_shock_override = float(tau_shock) if tau_shock is not None else None
+        self.conserving_shock = bool(conserving_shock)
+        if self.conserving_shock and not self.include_shock:
+            raise ValueError(
+                "conserving_shock=True requires include_shock=True "
+                "(the pcGNLSE modification is on the shock arms)."
+            )
+        if self.conserving_shock and (
+            self.coupling_tensor is not None
+            or self.raman_tensors is not None
+            or self.include_fwm
+        ):
+            raise ValueError(
+                "conserving_shock=True (pcGNLSE) is only defined on the "
+                "per-channel default path: it requires coupling_tensor=None, "
+                "raman_tensors=None and include_fwm=False."
+            )
+        self.include_tpa = bool(include_tpa)
+        self.include_free_carriers = bool(include_free_carriers)
+        self.beta_tpa = self._broadcast_per_mode(beta_tpa, "beta_tpa")
+        self.sigma_fca = self._broadcast_per_mode(sigma_fca, "sigma_fca")
+        self.sigma_tpa = self._broadcast_per_mode(sigma_tpa, "sigma_tpa")
+        self._U_list: list[float] | None = None
+        self._N_list: list[NDArray | None] | None = None
+        self._photon_vs_z: list[float] | None = None
+        if self.include_shock:
+            self._validate_shock_grid()
+        if self.include_raman:
+            from photonics_helper.gnlse import _delayed_h_R, _response_fR
+
+            self._raman_fR = _response_fR(self.raman_response)
+            h_R = _delayed_h_R(self.raman_response, self.grid.t)
+            self._h_R_fft = np.asarray(self.grid.fft(h_R), dtype=complex)
         self.A: list[NDArray] = []
         for w in waves:
             f = np.asarray(w.envelope_field, dtype=complex)
@@ -503,7 +678,11 @@ class MultimodeSplitStepEngine:
         arrays are small (1 float array) and the multiply kernels let numpy
         pick the pairing.
         """
-        phi_base = self._phi_base(m)  # Σ β_k ω^k / k! (+ group delay), 1/ length units
+        if getattr(self, "full_beta", None) is not None:
+            assert self._full_phi is not None
+            phi_base = self._full_phi[m]
+        else:
+            phi_base = self._phi_base(m)  # Σ β_k ω^k / k! (+ group delay)
         f_w = self.grid.fft(field)
         phi = phi_base * dz
         if self.phase_offsets is not None:
@@ -567,15 +746,17 @@ class MultimodeSplitStepEngine:
             return True
         return self.oam_l[m] == self.oam_l[n] + self.oam_l[p] - self.oam_l[q]
 
-    def _fwm_factor(self, m: int, n: int, p: int, q: int) -> float:
+    def _fwm_factor(self, m: int, n: int, p: int, q: int) -> complex:
         """Numeric FWM coefficient of the (m n p q) transition.
 
         ``fwm_weights`` (Mumtaz Eq. 8, when supplied) multiplies every
         allowed triple mode-pair-wise; OAM gating (if any) is applied
-        first in :meth:`_fwm_allowed`.
+        first in :meth:`_fwm_allowed`. Complex-capable: a full-vectorial
+        ``S⁽²⁾`` overlap (step7 ``overlap_tensors_from_fields``) may carry
+        an imaginary part, which the engine keeps (never silently drops).
         """
         if self.fwm_weights is not None:
-            return float(self.fwm_weights[m, n, p, q])
+            return complex(self.fwm_weights[m, n, p, q])
         if self.coef_model == "isotropic":
             return 1.0
         return _LP_FWM
@@ -597,12 +778,81 @@ class MultimodeSplitStepEngine:
         gamma = self._gamma_v()
         out: list[NDArray] = []
         for i in range(self._n):
-            tot = self._xpm_factor(i, i) * (np.abs(A[i]) ** 2)
+            tot = self._xpm_factor(i, i) * self._raman_polarization(A[i])
             for j in range(self._n):
                 if j != i:
                     tot = tot + self._xpm_factor(i, j) * np.abs(A[j]) ** 2
             out.append(gamma * tot)
         return out
+
+    def _broadcast_per_mode(self, value, name: str) -> NDArray | None:
+        """Scalar-or-sequence TPA/FCA coefficient → per-mode float array."""
+        if value is None:
+            return None
+        arr = np.asarray(value, dtype=float)
+        if arr.ndim == 0:
+            arr = np.full(self._n, float(arr))
+        if arr.shape != (self._n,):
+            raise ValueError(f"{name} must be scalar or ({self._n},), got {arr.shape}.")
+        if not np.all(np.isfinite(arr)) or np.any(arr < 0):
+            raise ValueError(f"{name} must be finite and non-negative.")
+        return arr
+
+    @property
+    def tau_shock(self) -> float:
+        """Shock time: override or ``1/ω₀`` (Blow & Wood default)."""
+        if self._tau_shock_override is not None:
+            return self._tau_shock_override
+        return 1.0 / float(self.omega0)
+
+    def _validate_shock_grid(self) -> None:
+        """Port of the scalar shock-grid guard (task 1.3).
+
+        Hard: ``Ω_max < ω₀`` (positive absolute frequencies only) — raises.
+        Soft: ``τ_shock·Ω_max ≤ 0.2`` (Blow & Wood GNLS bandwidth) — warns.
+        """
+        omega_max = float(self.grid.omega_max)
+        omega0 = float(self.omega0)
+        if omega_max >= omega0:
+            raise ValueError(
+                "self-steepening requires Ω_max < ω₀, but got "
+                f"Ω_max = {omega_max:.4e} >= ω₀ = {omega0:.4e}. Increase "
+                "Tmax (or reduce N), or disable self-steepening."
+            )
+        if float(self.tau_shock) * omega_max > 0.2:
+            warnings.warn(
+                "self-steepening outside the GNLS derivation regime "
+                f"(τ_shock·Ω_max = {float(self.tau_shock) * omega_max:.3f} > 0.2); "
+                "the ω/ω₀ symbol stays exact, only the equation's bandwidth "
+                "assumption degrades.",
+                UserWarning,
+                stacklevel=3,
+            )
+
+    def _photon_number(self, A: list[NDArray]) -> float:
+        """Blow & Wood App. Eq. (A5) photon number summed over channels."""
+        omega0 = float(self.omega0)
+        tot = 0.0
+        for Ai in A:
+            Aw = self.grid.fft(Ai)
+            denom = omega0 + self.grid.w
+            tot += float(np.sum(np.abs(Aw) ** 2 / denom))
+        return tot
+
+    def _raman_polarization(self, Ai: NDArray) -> NDArray:
+        """Per-channel Raman polarization (step8 layer 1, intramodal).
+
+        ``(1−f_R)|A_i|² + f_R·(h_R ⊗ |A_i|²)`` with the scalar-engine FFT
+        convolution (``grid.fft`` / ``grid.ifft`` pair, plain ``h_R_fft`` —
+        post-#0 Stokes-correct, no ``conj``). With Raman off this is plain
+        ``|A_i|²`` and the default path is bit-identical.
+        """
+        intensity = np.asarray(np.abs(Ai) ** 2)
+        if not self.include_raman or self._h_R_fft is None:
+            return intensity
+        I_fft = self.grid.fft(intensity)
+        delayed = self._raman_fR * np.real(self.grid.ifft(self._h_R_fft * I_fft))
+        return np.asarray((1.0 - self._raman_fR) * intensity + delayed)
 
     def _coupling_rate(self, A: list[NDArray]) -> list[NDArray]:
         """Instantaneous SPM/XPM rate per channel from ``coupling_tensor``.
@@ -664,6 +914,32 @@ class MultimodeSplitStepEngine:
         rhs: list[NDArray] = [np.zeros_like(A[0], dtype=complex) for _ in range(N)]
         if not self.include_fwm:
             return rhs
+        if self.fwm_full_tensor:
+            # Full S⁽²⁾_mnpq contraction (Wright JSTQE Eq. 1 tensor term,
+            # Poletti Eq. 6 arms): dA_m = i·Σ_{npq} C(mnpq)·A_n·A_p·A_q*.
+            # Index sets already carried by the diagonal SPM/XPM arm
+            # ((n==m,q==p) or (p==m,q==n)) are excluded — no double count.
+            # Selection rules via _fwm_allowed (oam_l gate + weights).
+            # NOTE: the shock operator (include_shock) is NOT applied here —
+            # _fwm_rhs feeds the arm into _nonlinear_rhs_tensor, which applies
+            # it once to the assembled sum. Applying it in both places would
+            # give (1 + iτΩ)² on the FWM arm (regression guard in
+            # tests/test_multimode_full_beta_fwm.py).
+            for m in range(N):
+                acc = rhs[m]
+                for n in range(N):
+                    for p in range(N):
+                        for q in range(N):
+                            if (n == m and q == p) or (p == m and q == n):
+                                continue
+                            if not self._fwm_allowed(m, n, p, q):
+                                continue
+                            c = self._fwm_coupling(m, n, p, q)
+                            if c == 0:
+                                continue
+                            acc = acc + 1j * c * A[n] * A[p] * np.conj(A[q])
+                rhs[m] = acc
+            return rhs
         for n in range(N):
             pump_sq = A[n] * A[n]
             for m in range(N):
@@ -682,7 +958,178 @@ class MultimodeSplitStepEngine:
                         rhs[n] = rhs[n] + 2j * np.conj(c_m) * A[m] * A[q] * np.conj(
                             A[n]
                         )
+        # NOTE: as in the full-tensor arm above, shock is applied once by the
+        # caller on the assembled nonlinear sum — never here.
         return rhs
+
+    def _raman_tensor_rhs(self, A: list[NDArray]) -> list[NDArray]:
+        """Intermodal delayed-coupling Raman RHS (step8 layer 2).
+
+        Wright JSTQE Eq. (1) Raman term (``ph_pdfs/pages_wright/page-03.png``
+        image-read): ``∂A_m/∂z ⊃ iγf_R·Σ T_R^(m,n,p,q)·A_n·∫h_R·A_p·A_q*``
+        with ``S^R = S^K`` per Eq. (2) — one FFT convolution per (p, q) pair
+        per RK4 stage, Poletti-type sparsity pruning via ``_raman_mask``.
+        """
+        assert self.raman_tensors is not None and self._h_R_fft is not None
+        N = self._n
+        gamma = self._gamma_v()
+        fR = self._raman_fR
+        T = self.raman_tensors
+        mask = self._raman_mask
+        # Pairwise memory kernels C_pq = h_R ⊗ (A_p · A_q*).
+        C: dict[tuple[int, int], NDArray] = {}
+        rhs: list[NDArray] = [np.zeros_like(A[0], dtype=complex) for _ in range(N)]
+        for m in range(N):
+            acc = np.zeros_like(A[0], dtype=complex)
+            for n in range(N):
+                for p in range(N):
+                    for q in range(N):
+                        if not mask[m, n, p, q]:
+                            continue
+                        key = (p, q)
+                        c = C.get(key)
+                        if c is None:
+                            prod = A[p] * np.conj(A[q])
+                            c = np.asarray(
+                                self.grid.ifft(self._h_R_fft * self.grid.fft(prod))
+                            )
+                            C[key] = c
+                        acc = acc + T[m, n, p, q] * A[n] * c
+            rhs[m] = 1j * gamma * fR * acc
+        return rhs
+
+    def _apply_shock_rhs(self, R: list[NDArray]) -> list[NDArray]:
+        """Wright §III spectral shock: ``R → R + τ·∂_t R`` via ``iΩ``.
+
+        The ``∂/∂t`` acts on the nonlinear polarization with the mode
+        fields/couplings evaluated at the local frequency — here realized
+        spectrally on the assembled RHS (exact ``ω/ω₀`` symbol per bin, no
+        Taylor truncation). Only used on the coupled (tensor/FWM) path; the
+        per-channel default path mirrors the scalar Strang scheme instead.
+        """
+        tau = float(self.tau_shock)
+        return [
+            np.asarray(Rm + tau * self.grid.ifft(1j * self.grid.w * self.grid.fft(Rm)))
+            for Rm in R
+        ]
+
+    def _shock_step_default(
+        self, Ai: NDArray, P_NL: NDArray, gamma: float, dz: float
+    ) -> NDArray:
+        """Scalar-identical Strang shock step for one channel (task 1.2).
+
+        Mirrors ``SplitStepEngine._nonlinear_step`` op-for-op (half exact
+        Kerr/Raman phase, frequency-domain RK4 on ``iγτ·∂_t(A·P)``, trailing
+        half phase, same substep policy) so N=1 matches the scalar shock
+        deck (``examples/39``) at machine precision.
+        """
+        tau = float(self.tau_shock)
+        shock_kernel = 1j * gamma * tau * self.grid.w
+        use_pc = bool(self.conserving_shock)
+        if use_pc and not (self.include_raman and self._h_R_fft is not None):
+            raise ValueError(
+                "conserving_shock=True requires include_raman=True and a "
+                "Raman response (the pcGNLSE modification is on the Raman arms)."
+            )
+        fR0 = float(self._raman_fR)
+        g_abs = abs(gamma)
+        shock_kernel_pc = 1j * g_abs * tau * self.grid.w
+
+        def _delayed(i_state: NDArray) -> NDArray:
+            assert self._h_R_fft is not None
+            return np.asarray(
+                fR0 * np.real(self.grid.ifft(self._h_R_fft * self.grid.fft(i_state))),
+                dtype=float,
+            )
+
+        def shock_rhs(A_state: NDArray) -> NDArray:
+            i2 = np.abs(A_state) ** 2
+            if use_pc:
+                i_state = (1.0 - fR0) * i2
+                d_state = _delayed(i2)
+                rhs = shock_kernel * self.grid.fft(
+                    i_state * A_state
+                ) + shock_kernel_pc * self.grid.fft(d_state * A_state)
+                return np.asarray(self.grid.ifft(rhs), dtype=complex)
+            p_nl = (1.0 - fR0) * i2
+            if self._h_R_fft is not None and self.include_raman:
+                p_nl = p_nl + _delayed(i2)
+            src_w = self.grid.fft(p_nl * A_state)
+            return np.asarray(self.grid.ifft(shock_kernel * src_w), dtype=complex)
+
+        def _rk4_shock(A_state: NDArray, h: float) -> NDArray:
+            k1 = shock_rhs(A_state)
+            k2 = shock_rhs(A_state + 0.5 * h * k1)
+            k3 = shock_rhs(A_state + 0.5 * h * k2)
+            k4 = shock_rhs(A_state + h * k3)
+            return np.asarray(A_state + (h / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4))
+
+        half_phase = 0.5j * gamma * P_NL * dz
+        if use_pc:
+            P_inst = (1.0 - fR0) * np.abs(Ai) ** 2
+            P_del = _delayed(np.abs(Ai) ** 2)
+            half_phase = (0.5j * gamma * P_inst + 0.5j * g_abs * P_del) * dz
+        A_state: NDArray = np.asarray(Ai * np.exp(half_phase), dtype=complex)
+        shock_rate = float(np.max(np.abs(shock_kernel))) * float(np.max(P_NL))
+        n_sub = int(min(200, max(1, np.ceil(shock_rate * dz / 0.05))))
+        h_sub = dz / n_sub
+        for _ in range(n_sub):
+            A_state = _rk4_shock(A_state, h_sub)
+        P_final_int = np.abs(A_state) ** 2
+        if use_pc:
+            P_inst_f = (1.0 - fR0) * P_final_int
+            P_del_f = _delayed(P_final_int)
+            return np.asarray(
+                A_state
+                * np.exp(0.5j * gamma * P_inst_f * dz + 0.5j * g_abs * P_del_f * dz)
+            )
+        P_final = (1.0 - fR0) * P_final_int
+        if self._h_R_fft is not None and self.include_raman:
+            P_final = P_final + _delayed(P_final_int)
+        return np.asarray(A_state * np.exp(0.5j * gamma * P_final * dz))
+
+    def _tpa_fca_step(self, A: list[NDArray], dz: float) -> list[NDArray]:
+        """Opt-in time-resolved TPA/FCA per channel (task 2.1).
+
+        Mirrors the scalar ``tpa_step`` / ``free_carrier_step`` operator
+        split via per-mode fiber copies. Per-mode ``Im(χ⁽³⁾)`` scaling is
+        the caller's job (the step7 deck's ``Γ_m`` is unity — the export
+        contract carries no core mask): pass pre-scaled
+        ``beta_tpa[m]`` / ``sigma_fca[m]`` arrays built from each mode's
+        confinement/A_eff.
+        """
+        import dataclasses
+
+        if self._U_list is None:
+            self._U_list = [0.0] * self._n
+        if self._N_list is None:
+            self._N_list = [None] * self._n
+        assert self._U_list is not None and self._N_list is not None
+        from photonics_helper.gnlse import free_carrier_step, tpa_step
+
+        out: list[NDArray] = []
+        for m, Ai in enumerate(A):
+            fb = dataclasses.replace(
+                self.fiber,
+                beta_tpa=float(self.beta_tpa[m]) if self.beta_tpa is not None else 0.0,
+                sigma_fca=float(self.sigma_fca[m])
+                if self.sigma_fca is not None
+                else 0.0,
+                sigma_tpa=float(self.sigma_tpa[m])
+                if self.sigma_tpa is not None
+                else 0.0,
+            )
+            Bi, U_new = tpa_step(
+                Ai, fb, self.grid, dz, self.include_tpa, self._U_list[m], self.omega0
+            )
+            self._U_list[m] = float(U_new)
+            if self.include_free_carriers:
+                Bi, N_new = free_carrier_step(
+                    Bi, fb, self.grid, dz, self._N_list[m], self.omega0
+                )
+                self._N_list[m] = N_new
+            out.append(np.asarray(Bi))
+        return out
 
     def _nonlinear_rhs_tensor(self, A: list[NDArray]) -> list[NDArray]:
         """Full coupled nonlinear RHS under the supplied tensors.
@@ -695,12 +1142,35 @@ class MultimodeSplitStepEngine:
         increment to the envelope, which looks like amplitude growth rather than phase
         and drives the pump up instead of depleting it.
         """
-        rates = self._coupling_rate(A)
-        rhs = [1j * r * Ai for r, Ai in zip(rates, A)]
+        if self.coupling_tensor is not None:
+            rates = self._coupling_rate(A)
+            rhs = [1j * r * Ai for r, Ai in zip(rates, A)]
+        else:
+            # Default instantaneous arm (diagonal phase rates, Raman-aware).
+            rhs = [1j * d * Ai for d, Ai in zip(self._diagonal_phase(A), A)]
+        if (
+            self.include_raman
+            and self._h_R_fft is not None
+            and self.coupling_tensor is not None
+        ):
+            # Per-channel delayed correction on the tensor path: replace
+            # |A_i|² with P_i in the self term (C_ii is absolute, W⁻¹m⁻¹).
+            C = self.coupling_tensor
+            for i in range(self._n):
+                Pi = self._raman_polarization(A[i])
+                rhs[i] = rhs[i] + 1j * C[i, i] * (Pi - np.abs(A[i]) ** 2) * A[i]
+        if self.raman_tensors is not None:
+            ram = self._raman_tensor_rhs(A)
+            rhs = [r + g for r, g in zip(rhs, ram)]
         if not self.include_fwm:
+            if self.include_shock:
+                return self._apply_shock_rhs(rhs)
             return rhs
         fwm = self._fwm_rhs(A)
-        return [r + f for r, f in zip(rhs, fwm)]
+        out = [r + f for r, f in zip(rhs, fwm)]
+        if self.include_shock:
+            return self._apply_shock_rhs(out)
+        return out
 
     _FWM_SUBSTEP_CAP = 200
     #: Max-FWM rate·η within one explicit RK4 substep for stability margin.
@@ -723,6 +1193,23 @@ class MultimodeSplitStepEngine:
         gamma = self._gamma_v()
         N = self._n
         rate_max, arg_ch = 0.0, 0
+        if self.fwm_full_tensor:
+            # Conservative full-contraction bound: per-output sum of |C|·Pmax.
+            pmax = max(float(np.max(np.abs(Ai) ** 2)) for Ai in A)
+            for m in range(N):
+                tot = 0.0
+                for n in range(N):
+                    for p in range(N):
+                        for q in range(N):
+                            if (n == m and q == p) or (p == m and q == n):
+                                continue
+                            if not self._fwm_allowed(m, n, p, q):
+                                continue
+                            tot += abs(complex(self._fwm_coupling(m, n, p, q)))
+                rate = tot * pmax
+                if rate > rate_max:
+                    rate_max, arg_ch = rate, m
+            return rate_max, arg_ch
         for n in range(N):
             pump = float(np.max(np.abs(A[n]) ** 2))
             for m in range(N):
@@ -733,7 +1220,7 @@ class MultimodeSplitStepEngine:
                         continue
                     c = gamma * self._fwm_factor(m, n, n, q) * pump
                     if abs(c) > rate_max:
-                        rate_max, arg_ch = abs(float(c)), n
+                        rate_max, arg_ch = abs(c), n
         return rate_max, arg_ch
 
     def _coupling_rate_max(self, A: list[NDArray]) -> tuple[float, int]:
@@ -793,6 +1280,12 @@ class MultimodeSplitStepEngine:
             np.abs(self.coupling_tensor.imag) > 0.0
         ):
             return False
+        if self.include_shock:
+            # Shock correction is not a rotation (spectral prefactor).
+            return False
+        if self.raman_tensors is not None:
+            # Delayed memory kernel: not a rotation even when real-valued.
+            return False
         if self.fwm_coupling_tensor is not None and np.any(
             np.abs(self.fwm_coupling_tensor.imag) > 0.0
         ):
@@ -817,7 +1310,6 @@ class MultimodeSplitStepEngine:
             if not self.include_fwm:
                 diag = self._diagonal_phase(A)
                 return [Ai * np.exp(1j * d * dz) for Ai, d in zip(A, diag)]
-
             # --- FWM mode ------------------------------------------------
             # Strang split: half of the diagonal phase, FWM RK4, trailing half.
             diag_in = self._diagonal_phase(A)
@@ -832,6 +1324,24 @@ class MultimodeSplitStepEngine:
         # --- tensor mode --------------------------------------------------
         # No pure-phase diagonal exists to split against, so the whole
         # coupled term (instantaneous + FWM arms) advances by RK4 substeps.
+        # --- per-channel shock (no tensors/FWM) --------------------------
+        # Scalar-identical Strang shock scheme per channel (task 1.2): the
+        # stiff Kerr/Raman phase stays analytic, only the shock correction
+        # sees RK4 — N=1 matches SplitStepEngine at machine precision.
+        if (
+            self.include_shock
+            and self.coupling_tensor is None
+            and self.raman_tensors is None
+            and not self.include_fwm
+        ):
+            gamma = self._gamma_v()
+            if gamma == 0.0:
+                return list(A)
+            diag = self._diagonal_phase(A)
+            return [
+                self._shock_step_default(Ai, np.asarray(d) / gamma, gamma, dz)
+                for Ai, d in zip(A, diag)
+            ]
         n_sub = self._tensor_substep_count(A, dz)
         h_sub = dz / n_sub
         states = list(A)
@@ -961,6 +1471,7 @@ class MultimodeSplitStepEngine:
         self.evolution = []
         self._z_positions = [0.0]
         self._energy_vs_z = []
+        self._photon_vs_z = [] if self.include_shock else None
 
         def _snapshot() -> None:
             snaps = []
@@ -976,6 +1487,8 @@ class MultimodeSplitStepEngine:
             total = sum(float(np.sum(np.abs(Ai) ** 2)) * self.grid.dt for Ai in self.A)
             assert self._energy_vs_z is not None
             self._energy_vs_z.append(total)
+            if self._photon_vs_z is not None:
+                self._photon_vs_z.append(self._photon_number(self.A))
 
         _snapshot()  # z = 0
 
@@ -984,6 +1497,8 @@ class MultimodeSplitStepEngine:
             # Strang split: half linear → coupled nonlinear → half linear
             self.A = [self._linear_step(self.A[m], dz / 2, m) for m in range(self._n)]
             self.A = self._coupled_nonlinear_step(self.A, dz)
+            if self.include_tpa or self.include_free_carriers:
+                self.A = self._tpa_fca_step(self.A, dz)
             # Apply Rayleigh backscatter if enabled
             if self.rayleigh_backscatter is not None:
                 self.A = self._apply_rayleigh_backscatter(self.A, dz)
