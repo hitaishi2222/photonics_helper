@@ -36,7 +36,16 @@ from pathlib import Path
 import numpy as np
 from numpy.typing import NDArray
 
-from photonics_helper.base import AngularFrequency, AngularFrequencyArray, C_MS, Length, Time, Wavelength
+# C_MS is re-exported on purpose: the fig* modules of this reproduction read
+# it as ``common.C_MS`` (Ruff F401 is suppressed only here).
+from photonics_helper.base import (  # noqa: F401
+    AngularFrequency,
+    AngularFrequencyArray,
+    C_MS,
+    Length,
+    Time,
+    Wavelength,
+)
 from photonics_helper.gnlse import Fiber, GNLSESolver
 from photonics_helper.pulse import Envelope, TemporalGrid, Wave
 from photonics_helper.raman import RamanResponse, RamanSpec

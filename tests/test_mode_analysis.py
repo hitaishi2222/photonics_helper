@@ -87,7 +87,6 @@ def test_single_mode_reduction():
 
 def test_complex_s2_kept_for_complex_fields():
     """A propagating-mode (complex-field) export keeps its imaginary S⁽²⁾."""
-    import shutil
     import tempfile
     from pathlib import Path
 
