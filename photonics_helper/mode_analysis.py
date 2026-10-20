@@ -24,14 +24,19 @@ Equation grounding (read as page images, never ``pdftotext``)
   solver stays in ``reproductions/poletti_2008_multimode/overlap.py``; only
   the shape-agnostic quadrature idea is reused here.
 
-Per-mode gamma routing decision (task 3.3)
-------------------------------------------
-High-index-contrast rib modes differ in ``γ_m`` by ≳2×, but the engine takes
-one shared ``_fiber_gamma``. We route mode-resolved couplings in absolute
-units through the existing ``coupling_tensor`` / ``fwm_coupling_tensor``
-slots — **no engine signature change**. Rationale: the slots already multiply
-``|A_j|²`` / FWM arms in absolute units, so stuffing ``γ_mn`` there works
-today and keeps steps 8–10 diffs additive-only.
+Per-mode gamma routing decision (task 3.3, corrected 2026-10)
+----------------------------------------------------------
+High-index-contrast rib modes differ in ``γ_m`` by ≳2×, but the engine's
+uniform models take one shared γ. The bridge routes mode-resolved couplings
+through the absolute ``coupling_tensor`` slot as
+``C_ij = (n₂ω₀/c)·Q⁽¹⁾_iijj = γ₀·xpm_ij``. Its diagonal is exactly ``γ_i``;
+the off-diagonal is the literature XPM coefficient, **not** a
+``½(γ_i+γ_j)`` average (the old form underestimated SPM on a larger mode
+by ``A_eff,0/A_eff,i`` and had no source). ``gamma_reference = γ₀`` is
+also returned so the S₀₀₀₀-normalised FWM/Raman tensors keep their absolute
+scale independent of the caller's ``Fiber.A_eff``. The engine grows a
+``gamma_reference`` override for that purpose; no per-mode γ array enters
+the public signature.
 """
 
 from __future__ import annotations
@@ -107,12 +112,14 @@ class ModePairParameters:
 
     ``gamma`` is per-mode ``γ_m`` (1/W/m); ``A_eff`` per-mode effective area
     (m²); ``xpm_weights`` (N×N) and ``fwm_weights`` (N×N×N×N) are the
-    ``S⁽¹⁾``/``S⁽²⁾`` tensors normalised to ``S_0000 = 1`` (``fwm_weights``
-    real when the fields are real, complex when not — never clipped);
-    ``oam_l`` the azimuthal labels from the export; ``coupling_tensor`` the
-    absolute-unit ``γ_mn`` matrix routed through the engine slot.
-    ``confinement`` is currently ``Γ_m = 1``: the loader contract carries
-    no core mask (see :func:`overlap_tensors_from_fields`).
+    ``S⁽¹⁾``/``S⁽²⁾`` tensors normalised to the fundamental SPM coefficient
+    ``S⁽¹⁾_0000 = 1`` (``fwm_weights`` real when the fields are real, complex
+    when not — never clipped); ``oam_l`` the azimuthal labels from the
+    export; ``coupling_tensor`` the **absolute** ``C_ij`` matrix in W⁻¹m⁻¹,
+    ``C_ij = γ_0·xpm_weights[i, j] = (n₂ω₀/c)·S⁽¹⁾_iijj`` — its diagonal is
+    exactly the per-mode ``γ_i``. ``confinement`` is currently ``Γ_m = 1``:
+    the loader contract carries no core mask (see
+    :func:`overlap_tensors_from_fields`).
     """
 
     gamma: NDArray
@@ -230,26 +237,50 @@ def overlap_tensors_from_fields(
     modes: list[LoadedMode],
     n2: float,
     lambda0: float,
+    *,
+    xpm_model: str = "co_polarized",
 ) -> ModePairParameters:
     """Grid quadrature overlaps with no circular-symmetry assumption.
 
     Fields are the transverse vector ``F = (Ex, Ey)`` evaluated at the **pump**
     wavelength; normalised profiles ``∬|F_m|² = 1`` on the Cartesian grid; then
-    ``A_eff,m = (∬|F_m|²)²/∬|F_m|⁴``, ``γ_m = n₂ω₀/(c·A_eff,m)`` (Afshar
-    Part I Kerr), ``S⁽¹⁾_mn = ∬|F_m|²|F_n|² → xpm_weights``,
-    ``S⁽²⁾_mnpq = ∬(F_m*·F_n)(F_p·F_q*) → fwm_weights`` (Poletti–Horak Eq. 7;
-    in the real basis ``Q⁽¹⁾ = Q⁽²⁾``; the vector form reduces to
-    ``∬F_m*F_nF_pF_q*`` for single-component / LP fields), ``oam_l`` the
-    azimuthal labels from the export (real LP-like fields carry no winding
-    phase to recover numerically), ``coupling_tensor`` the absolute ``γ_mn``
-    matrix for the engine slot.
+    ``A_eff,m = (∬|F_m|²)²/∬|F_m|⁴``, ``γ_m = n₂ω₀/(Γ_m c·A_eff,m)`` (Afshar
+    Part I Kerr), ``Q⁽¹⁾_mn = ∬|F_m|²|F_n|²`` (xpm), ``Q⁽²⁾_mnpq =
+    ∬(F_m*·F_n)(F_p·F_q*)`` (fwm) — Poletti–Horak Eq. 7.
 
-    Confinement ``Γ_m`` is unity: the loader contract carries fields and
-    ``n_eff(λ)`` only, no core mask, so a power-in-core fraction cannot be
-    derived here. A deck that wants confinement-scaled ``n₂`` per mode
-    (multi-cladding guides) must pre-scale ``n2·Γ_m`` per mode and route
-    the result through the engine's per-mode coupling slots.
+    The engine's ``xpm_weights[i, j]`` multiplies ``|A_j|²`` **once** in
+    channel ``i``, whereas the MM-GNLSE (Mumtaz Eq. 6) carries two XPM
+    index permutations. For a **co-polarized scalar LP basis** those
+    permutations are equal, so the physical XPM coefficient is
+    ``2·Q⁽¹⁾_iijj`` while SPM stays ``Q⁽¹⁾_iiii`` (SPM 1, XPM 2 —
+    Agrawal's co-polarized Kerr limit). ``xpm_model="co_polarized"``
+    (default) applies that factor to the off-diagonal entries only.
+    ``xpm_model="vector"`` keeps the bare ``Q⁽¹⁾`` ratio for a
+    polarization-resolved / two-copy basis; a genuine vector basis needs
+    separate polarization channels because the orthogonal-polarization
+    XPM factor (2/3 linear, 2 circular) cannot be represented by one
+    scalar weight (see the ``coef_model`` discussion in
+    :mod:`photonics_helper.multimode_gnlse`).
+
+    ``coupling_tensor`` is the **absolute** matrix for the engine slot,
+    ``C_ij = γ₀·xpm_weights[i, j] = (n₂ω₀/c)·Q⁽¹⁾_iijj``. Its diagonal is
+    exactly the per-mode ``γ_i``: ``γ₀·Q⁽¹⁾_iiii/Q⁽¹⁾_0000 =
+    n₂ω₀/(cA_eff,i)``. This is the step7 scaling correction — averaging
+    ``½(γ_i+γ_j)`` underestimates SPM on a larger mode by the factor
+    ``A_eff,0/A_eff,i`` (0.75× in the committed rib deck) and has no
+    literature basis.
+
+    ``oam_l`` are the azimuthal labels from the export (real LP-like fields
+    carry no winding phase to recover numerically). Confinement ``Γ_m`` is
+    unity: the loader contract carries fields and ``n_eff(λ)`` only, no core
+    mask, so a power-in-core fraction cannot be derived here. A deck that
+    wants confinement-scaled ``n₂`` per mode (multi-cladding guides) must
+    pre-scale ``n2·Γ_m`` per mode.
     """
+    if xpm_model not in ("co_polarized", "vector"):
+        raise ValueError(
+            f"xpm_model must be 'co_polarized' or 'vector', got {xpm_model!r}"
+        )
     n = len(modes)
     dx = float(np.mean(np.diff(modes[0].x_um))) * 1e-6
     dy = float(np.mean(np.diff(modes[0].y_um))) * 1e-6
@@ -296,17 +327,25 @@ def overlap_tensors_from_fields(
     S2 = np.einsum("mnij,pqij->mnpq", D, np.conj(D)) * dA
     # Keep the dtype honest: S2 is real for real (LP-like) mode sets but
     # genuinely complex for propagating-mode field exports — never clip
-    # the imaginary part silently (the engine now accepts complex
+    # the imaginary part silently (the engine accepts complex
     # fwm_weights), and never emit fake complex128 when values are real.
     S2 = np.real_if_close(S2)
+    # S⁽¹⁾ and S⁽²⁾ share the same self-normalisation for unit-power modes:
+    # S⁽²⁾_0000 = ∬|F_0|⁴ = S⁽¹⁾_0000 = 1/A_eff,0.
     scale = float(abs(S2[0, 0, 0, 0]))
-    xpm = (S1 / scale).astype(float)
+    xpm = S1 / scale
+    if xpm_model == "co_polarized":
+        # Two equal XPM index permutations (Mumtaz Eq. 6); diagonal SPM
+        # stays at one. See the docstring derivation.
+        off = ~np.eye(n, dtype=bool)
+        xpm = np.where(off, 2.0 * xpm, xpm)
+    xpm = np.real_if_close(xpm).astype(float)
     fwm = S2 / scale
-    # Absolute-unit coupling matrix for the engine slot
-    cpl = np.empty((n, n), dtype=complex)
-    for a in range(n):
-        for b in range(n):
-            cpl[a, b] = 0.5 * (gamma[a] + gamma[b]) * xpm[a, b]
+    # Absolute-unit coupling matrix for the engine slot. C_ii = γ_i exactly;
+    # C_ij = (n₂ω₀/c)·S⁽¹⁾_iijj. Never average ½(γ_i+γ_j) — that destroys
+    # the per-mode SPM scale (step7 audit, 2026-10).
+    gamma0 = float(gamma[0])
+    cpl = (gamma0 * xpm).astype(complex)
     return ModePairParameters(
         gamma=gamma,
         A_eff=Aeff,
@@ -325,12 +364,24 @@ def build_multimode_deck(
     n2: float,
     *,
     pump: dict | None = None,
+    xpm_model: str = "co_polarized",
 ) -> dict:
     """One call from geometry + pump to engine kwargs (task 4.1).
 
     Returns the ``MultimodeSplitStepEngine`` kwargs: per-mode ``betas`` list,
     ``group_delays``, ``phase_offsets``, ``xpm_weights`` / ``fwm_weights``
-    from ``S⁽¹⁾``/``S⁽²⁾``, ``oam_l``, and absolute-unit ``coupling_tensor``.
+    from ``S⁽¹⁾``/``S⁽²⁾``, ``oam_l``, absolute-unit ``coupling_tensor``, and
+    ``gamma_reference = γ₀`` (the fundamental-mode ``γ``).
+
+    ``gamma_reference`` is the load-bearing scale for every tensor-normalised
+    term: ``fwm_weights`` and ``raman_tensors`` are divided by ``S_0000``,
+    so their absolute coefficient is ``γ₀·weight``. Passing it makes the
+    deck independent of whichever ``A_eff`` the caller puts on the
+    :class:`~photonics_helper.gnlse.Fiber`; without it, a fiber ``A_eff``
+    other than ``A_eff,0`` silently mis-scales FWM/Raman. ``A_eff`` and
+    ``gamma`` are returned for inspection and for per-mode loss/pre-scaling
+    calculations.
+
     ``pump`` is accepted for forward-compat (peak power / duration shape the
     grid elsewhere) and recorded, not consumed.
 
@@ -341,7 +392,9 @@ def build_multimode_deck(
     """
     modes = load_modes(export_dir)
     disp = mode_dispersion(modes, dispersion_order, float(lambda0))
-    pars = overlap_tensors_from_fields(modes, float(n2), float(lambda0))
+    pars = overlap_tensors_from_fields(
+        modes, float(n2), float(lambda0), xpm_model=xpm_model
+    )
     deck = {
         "betas": [np.asarray(b) for b in disp.betas],
         "group_delays": np.asarray(disp.group_delays, dtype=float),
@@ -350,6 +403,9 @@ def build_multimode_deck(
         "fwm_weights": np.asarray(pars.fwm_weights),
         "oam_l": list(pars.oam_l),
         "coupling_tensor": np.asarray(pars.coupling_tensor),
+        "gamma_reference": float(pars.gamma[0]),
+        "gamma": np.asarray(pars.gamma, dtype=float),
+        "A_eff": np.asarray(pars.A_eff, dtype=float),
         "n_modes": len(modes),
         "lambda0_um": float(lambda0),
         "pump": dict(pump or {}),

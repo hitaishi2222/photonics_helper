@@ -9,6 +9,86 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.11] — 2026-10-21
+
+### Added
+
+- **Static full-β(ω) for the scalar engines (Gap E).** `SplitStepEngine` and
+  `GNLSESolver` now accept `full_beta=` (callable `β(ω_abs)` or an array on
+  `grid.w`); `betas` may be `None`. The retarded-frame phase uses the same
+  4th-order centre value/slope as the multimode engine, is supported by
+  `scheme="etdrk4"`, and the adaptive step heuristic estimates β₂ from the
+  curve. `full_beta` and `dispersion_profile` are mutually exclusive. N=1
+  multimode ≡ scalar to machine precision. Tests:
+  `tests/test_gnlse_full_beta.py`.
+- **`Envelope.from_energy` (Gap F1).** Builds an envelope directly in the
+  engines' power convention (`E = A0²·T0·F_shape`, `|A|²` in W) for gaussian,
+  sech, lorentzian, rectangular, super-gaussian, triangular, parabolic,
+  cosine and exponential. Per-shape energy factors are derived from
+  `Envelope.field` (the external GAP draft's lorentzian/triangular/
+  exponential/super-gaussian values were wrong). Airy is rejected: the
+  oscillating tail is not in L². Tests: `tests/test_pulse_energy.py`.
+- **`raman_response=` kwarg on the scalar engines (Gap F3).** `SplitStepEngine`
+  and `GNLSESolver` accept a response override, with `fiber.raman_response` as
+  the fallback — parity with `MultimodeSplitStepEngine`.
+
+### Fixed
+
+- **Amplitude-convention guard (Gap F2).** `from_peak_power` /
+  `from_fwhm_peak_power` mark their envelopes `amplitude_convention="field"`
+  (V/m). Both engines now raise a clear error instead of silently treating a
+  field-unit amplitude as √W (a 13–14 order-of-magnitude error for a
+  high-index rib). `Wave.to_engine_units(A_eff)` /
+  `Envelope.to_engine_units` convert to the engine convention.
+- **Airy metadata vs measurement + parabolic FWHM (Gap G).** `Envelope` grows
+  `measured_width()` (shape-aware; Airy is documented as the main-lobe FWHM)
+  and `Envelope.calc_width` / `Wave.calc_width` defer to it for canonical
+  shapes, so `env.fwhm` and the measured width can no longer disagree. The
+  parabolic FWHM had been falling through to `T0`; it now uses
+  `2√(1−1/√2)·T0`. Tests: `tests/test_pulse_energy.py` and the updated
+  `tests/test_pulse.py`.
+- **Multimode GNLSE literature audit (2026-10) — coefficient scale, XPM
+  basis, tensor scaling, stability estimate.** Four conformance defects
+  found against Poletti & Horak (2008) Eq. 6/7, Mumtaz, Essiambre &
+  Agrawal (2013) Eq. 6/8, and Wright et al. (2018) Eq. 1:
+  1. `mode_analysis.overlap_tensors_from_fields` built the absolute
+     `coupling_tensor` as `½(γ_i+γ_j)·xpm`. That underestimates SPM on a
+     larger mode by `A_eff,0/A_eff,i` (0.75× on the committed rib deck) and
+     averages a quantity the overlap tensor already symmetrises. The
+     literature form is `C_ij = γ₀·xpm_ij = (n₂ω₀/c)·Q⁽¹⁾_iijj`, whose
+     diagonal is exactly the per-mode `γ_i`. Fixed, with a new regression
+     asserting `diag(C) == gamma`.
+  2. The default `coef_model="lp_degenerate"` (SPM 1, XPM 2/3) is the
+     **two-polarization** vector-GNLSE strip-down, not the XPM of two
+     co-polarized spatial modes. Added `coef_model="co_polarized"`
+     (SPM 1, XPM 2, FWM 1; Mumtaz Eq. 6 scalar limit) and made the
+     `mode_analysis` bridge default to `xpm_model="co_polarized"`, which
+     doubles only the off-diagonal `S⁽¹⁾` ratio. `xpm_model="vector"`
+     keeps the bare tensor ratio for polarization-resolved users.
+  3. `S⁽²⁾/S_0000`-normalised `fwm_weights`/`raman_tensors` inherited the
+     caller's `Fiber.A_eff`. Added an engine `gamma_reference` override and
+     returned `gamma_reference = γ₀`, `gamma`, `A_eff` from
+     `build_multimode_deck`, so the tensor arms keep their absolute scale
+     independent of the fiber choice.
+  4. `_fwm_rate_max` estimated RK4 stability with `γ·f` and ignored an
+     absolute `fwm_coupling_tensor`; the substep count could be
+     underestimated. It now uses `_fwm_coupling` on both exchange arms.
+  5. `MultimodeSplitStepEngine._photon_number` omitted the spectral measure
+     `dω` that the scalar engine carries (relative drift was unaffected,
+     absolute photon number was low by `dω`). Fixed and cross-checked
+     against the scalar `_photon_number` at N=1.
+  Tests: `tests/test_multimode_audit.py` (14). Docs updated in
+  `docs/multimode-gnlse.md` and `docs/api/mode-analysis.md`.
+- **`GNLSESolver.propagate_auto` converges on the conserved quantity**: with
+  `include_self_steepening=True` the drift check now runs on the Blow & Wood
+  App. Eq. (A5) photon number (`report["photon_drift"]`,
+  `report["drift_metric"] == "photon"`) instead of the unweighted energy,
+  which Raman scattering legitimately changes. Previously a shock+Raman run
+  with 15 % physical energy drift and 1e-6 photon drift burned every round
+  doubling steps and reported non-convergence; it now converges in round 1.
+  `report["drift"]` keeps the raw energy drift for inspection; behaviour
+  without self-steepening is unchanged.
+
 ### Changed (smooth-UX pass)
 
 - **`Envelope.from_peak_power` / `from_fwhm_peak_power`**: build envelopes from

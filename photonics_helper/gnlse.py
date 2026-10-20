@@ -171,6 +171,70 @@ def _validate_betas_unit(betas_unit: str) -> str:
     return betas_unit
 
 
+def _full_beta_phase(full_beta, grid, omega0: float) -> tuple[NDArray, NDArray, float]:
+    """Validate a static ``β(ω)`` curve and build the retarded-frame phase.
+
+    Mirrors the multimode engine's coercion (``_mm_coerce_full_beta``):
+    ``full_beta`` is a callable ``β(ω_abs)`` or an array sampled on the
+    grid's ``Ω`` axis.  The phase returned is
+
+        φ(Ω) = [β(ω₀+Ω) − β(ω₀)] − β₁(ω₀)·Ω
+
+    with a 4th-order centre slope and a cubic centre value.  Nearest-sample
+    estimates leave O(0.1) rad/m at a broad band edge, which would break the
+    narrowband agreement contract with an order-10 Taylor expansion.
+
+    Returns ``(curve, phase, beta2_si)`` where ``beta2_si`` is
+    ``d²β/dω²`` at the carrier in s²/m, used only by the adaptive step
+    heuristic.
+    """
+    w = np.asarray(grid.w, dtype=float)
+    w0 = float(omega0)
+    if callable(full_beta):
+        curve = np.asarray(full_beta(w + w0), dtype=float)
+    else:
+        curve = np.asarray(full_beta, dtype=float)
+    if curve.shape != w.shape:
+        raise ValueError(
+            "full_beta must match the grid "
+            f"({w.shape}), got {curve.shape}; pass a callable β(ω_abs) or "
+            "an array sampled on grid.w."
+        )
+    if not np.all(np.isfinite(curve)):
+        raise ValueError("full_beta contains non-finite values.")
+
+    i0 = int(np.argmin(np.abs(w)))
+    if w.shape[0] < 5:
+        raise ValueError(
+            "full_beta needs at least 5 grid samples for the centre "
+            f"β₀/β₁ estimates, got {w.shape[0]}."
+        )
+    lo = max(i0 - 2, 0)
+    if lo + 5 > w.shape[0]:  # near the top edge
+        lo = w.shape[0] - 5
+    seg_w = w[lo : lo + 5]
+    seg_b = curve[lo : lo + 5]
+    # Cubic Lagrange value at Ω = 0.
+    b_at_0 = 0.0
+    for j in range(5):
+        lj = 1.0
+        for k in range(5):
+            if k != j:
+                lj *= (0.0 - seg_w[k]) / (seg_w[j] - seg_w[k])
+        b_at_0 += seg_b[j] * lj
+    dw = float(w[1] - w[0])
+    ci = i0 - lo
+    # 4th-order central slope at the centre sample.
+    dB0 = float(
+        (-seg_b[ci + 2] + 8.0 * seg_b[ci + 1] - 8.0 * seg_b[ci - 1] + seg_b[ci - 2])
+        / (12.0 * dw)
+    )
+    # β₂ at the carrier for the adaptive dispersion-length estimate.
+    beta2_si = float((seg_b[ci + 1] - 2.0 * seg_b[ci] + seg_b[ci - 1]) / dw**2)
+    phase = curve - float(b_at_0) - dB0 * w
+    return curve, phase, beta2_si
+
+
 def _normalize_betas(betas, betas_unit: BetasUnit = "ps^k/m") -> NDArray:
     """Validate and normalise Taylor dispersion coefficients to ``ps^k/m``.
 
@@ -825,6 +889,22 @@ class SplitStepEngine:
         instead; they are converted to ``ps^k/m`` internally.
     betas_unit : {"ps^k/m", "s^k/m", "SI"}
         Unit of *betas*. Default ``"ps^k/m"`` (native internal form).
+    full_beta : array_like or callable, optional
+        Static full ``β(ω)`` curve (rad/m) — a callable ``β(ω_abs)`` or an
+        array sampled on the grid's ``Ω=ω−ω₀`` axis. When supplied, *betas*
+        is ignored (it may be ``None``) and the linear step applies the
+        retarded-frame phase
+        ``φ(Ω) = [β(ω₀+Ω)−β(ω₀)] − β₁Ω`` with 4th-order centre
+        value/slope. This is the scalar analogue of the multimode
+        ``full_beta`` path and avoids the truncated-Taylor error on
+        octave-spanning spectra. Mutually exclusive with
+        ``dispersion_profile`` (that is the z-dependent path). Supported by
+        ``scheme="etdrk4"`` as well.
+    raman_response : object, optional
+        Raman response override (any object exposing ``h_R(t)`` and ``fR``;
+        :class:`~photonics_helper.raman.RamanResponse` or
+        :class:`~photonics_helper.phonon.PhononResponse`). Falls back to
+        ``fiber.raman_response`` when omitted.
     include_raman : bool
         Include Raman. Default False.
     include_self_steepening : bool
@@ -904,7 +984,7 @@ class SplitStepEngine:
         self,
         pulse: Wave,
         fiber: FiberProfile,
-        betas: NDArray,
+        betas: NDArray | None = None,
         include_raman: bool = False,
         include_self_steepening: bool = False,
         include_tpa: bool = False,
@@ -921,13 +1001,43 @@ class SplitStepEngine:
         gamma_fn: Callable[[float], float] | None = None,
         min_shrink_factor: float = 0.1,
         betas_unit: BetasUnit = "ps^k/m",
+        full_beta=None,
+        raman_response=None,
     ):
         self.pulse = pulse
         self.fiber = fiber
+        convention = getattr(
+            getattr(pulse, "envelope", None), "amplitude_convention", "power"
+        )
+        if convention == "field":
+            raise ValueError(
+                "pulse envelope is in field units (V/m), but the GNLSE engine "
+                "uses |A|² in watts. Convert it first with "
+                "Wave.to_engine_units(A_eff) (or build it with "
+                "Envelope.from_energy)."
+            )
+        if full_beta is not None and dispersion_profile is not None:
+            raise ValueError(
+                "full_beta and dispersion_profile are mutually exclusive: "
+                "full_beta is the static scalar β(ω) operator, while "
+                "dispersion_profile is the z-dependent β(ω,z) path."
+            )
+        if betas is None and full_beta is None:
+            raise ValueError("pass either betas or full_beta")
+        self.full_beta = full_beta
         # get_betas() returns betas in ps^(k)/m with omega in rad/ps.
         # We keep them in native units and convert omega to rad/ps in _linear_step.
-        self.betas = _normalize_betas(betas, betas_unit)
+        self.betas = (
+            _normalize_betas(betas, betas_unit)
+            if full_beta is None
+            else np.array([], dtype=float)
+        )
         self.include_raman = include_raman
+        # Raman-response override (parity with MultimodeSplitStepEngine); the
+        # fiber attribute remains the fallback.
+        self.raman_response = (
+            raman_response if raman_response is not None else fiber.raman_response
+        )
         self.include_self_steepening = include_self_steepening
         self.include_tpa = include_tpa
         self.include_free_carriers = include_free_carriers
@@ -966,6 +1076,15 @@ class SplitStepEngine:
         # Set up temporal grid from pulse
         self.grid: TemporalGrid = pulse.grid
         self.omega0 = pulse.central_frequency
+        self._full_beta_curve: NDArray | None = None
+        self._full_phi: NDArray | None = None
+        self._full_beta2_si: float | None = None
+        if full_beta is not None:
+            (
+                self._full_beta_curve,
+                self._full_phi,
+                self._full_beta2_si,
+            ) = _full_beta_phase(full_beta, self.grid, self.omega0)
         self.A = np.array(pulse.envelope_field, dtype=complex)
         self.evolution: list[Wave] = []
         self._z_positions: list[float] = [0.0]
@@ -1096,7 +1215,14 @@ class SplitStepEngine:
         A_w = self.grid.fft(A)
         omega_ps = self.grid.w * 1e-12  # rad/s → rad/ps
 
-        if self._is_z_dependent:
+        if self._full_phi is not None:
+            # Static full-β(ω): the retarded-frame phase is precomputed in
+            # rad/m on grid.w; only the dz scaling and loss remain.
+            phi = self._full_phi * dz
+            alpha = self.fiber.alpha
+            if alpha > 0:
+                A_w = A_w * np.exp(-alpha * dz / 2)
+        elif self._is_z_dependent:
             # z-dependent path: compute phase from β(ω₀+Ω, z) - β(ω₀, z)
             # at the current propagation position.
             # grid.w is the offset Ω (centered at 0), so absolute frequency is ω₀ + grid.w.
@@ -1203,7 +1329,7 @@ class SplitStepEngine:
         h_R_fft : FFT of h_R(t) on ``self.grid.t``, or None when Raman is off.
         """
         if h_R_fft is not None:
-            fR = _response_fR(self.fiber.raman_response)
+            fR = _response_fR(self.raman_response)
             return _raman_polarization(intensity, fR, self.grid, h_R_fft)
         return intensity
 
@@ -1219,7 +1345,7 @@ class SplitStepEngine:
         """
         if h_R_fft is None:
             return np.zeros_like(intensity, dtype=float)
-        fR = _response_fR(self.fiber.raman_response)
+        fR = _response_fR(self.raman_response)
         result: NDArray = fR * np.real(
             self.grid.ifft(h_R_fft * self.grid.fft(intensity))
         )
@@ -1233,7 +1359,7 @@ class SplitStepEngine:
         nonlinear step wasted an FFT per step.
         """
         if self._h_R_fft_cache is None:
-            h_R = _delayed_h_R(self.fiber.raman_response, self.grid.t)
+            h_R = _delayed_h_R(self.raman_response, self.grid.t)
             self._h_R_fft_cache = self.grid.fft(h_R)
         return self._h_R_fft_cache
 
@@ -1296,10 +1422,10 @@ class SplitStepEngine:
         intensity = np.abs(A) ** 2
 
         h_R_fft: NDArray | None = None
-        if self.include_raman and self.fiber.raman_response is not None:
+        if self.include_raman and self.raman_response is not None:
             # Cached FFT of h_R on the same centered grid (see _get_h_R_fft).
             h_R_fft = self._get_h_R_fft()
-        elif self.include_raman and self.fiber.raman_response is None:
+        elif self.include_raman and self.raman_response is None:
             raise ValueError(
                 "include_raman=True but fiber.raman_response is None. "
                 "Provide a RamanResponse or set include_raman=False."
@@ -1314,13 +1440,13 @@ class SplitStepEngine:
             # instantaneous (SPM, signed γ) and delayed-Raman (|γ|) pieces;
             # the shock stage applies signed γτ to the pure-SS (P_inst) arm
             # and |γ|τ to the SS–Raman cross (P_del) arm.
-            if h_R_fft is None or self.fiber.raman_response is None:
+            if h_R_fft is None or self.raman_response is None:
                 raise ValueError(
                     "conserving_shock=True requires include_raman=True and a "
                     "Raman response (the pcGNLSE modification is on the "
                     "Raman/SS–Raman arms)."
                 )
-            fR0 = float(_response_fR(self.fiber.raman_response))
+            fR0 = float(_response_fR(self.raman_response))
             P_inst = (1.0 - fR0) * intensity
             P_del = fR0 * np.real(self.grid.ifft(h_R_fft * self.grid.fft(intensity)))
             g_r = abs(gamma)
@@ -1461,7 +1587,10 @@ class SplitStepEngine:
 
         T0 = self.pulse.envelope.pulse_width.as_s
         if not self._is_z_dependent:
-            if len(self.betas) == 0:
+            if self._full_beta2_si is not None:
+                # Static full-β(ω): use the curve's β₂ at the carrier.
+                dz_disp = T0**2 / max(abs(self._full_beta2_si), 1e-30) * 0.01
+            elif len(self.betas) == 0:
                 # No dispersion coefficients — skip dispersion length limit.
                 dz_disp = float("inf")
             else:
@@ -1572,10 +1701,13 @@ class SplitStepEngine:
                 "loss-limited fibers — are exactly those; the TPA/free-carrier "
                 "opt-ins still ride on the Strang compositions."
             )
-        omega_ps = self.grid.w * 1e-12  # rad/s → rad/ps
-        phi = np.zeros_like(omega_ps, dtype=float)
-        for k, beta_k in enumerate(self.betas, start=2):
-            phi += beta_k * omega_ps**k / factorial(k)
+        if self._full_phi is not None:
+            phi = np.asarray(self._full_phi, dtype=float)
+        else:
+            omega_ps = self.grid.w * 1e-12  # rad/s → rad/ps
+            phi = np.zeros_like(omega_ps, dtype=float)
+            for k, beta_k in enumerate(self.betas, start=2):
+                phi += beta_k * omega_ps**k / factorial(k)
         return np.asarray(1j * phi - 0.5 * float(self.fiber.alpha), dtype=complex)
 
     def _nonlinear_rhs(self, A: NDArray, gamma: float) -> NDArray:
@@ -1595,7 +1727,7 @@ class SplitStepEngine:
         intensity = np.abs(A) ** 2
         h_R_fft: NDArray | None = None
         if self.include_raman:
-            if self.fiber.raman_response is None:
+            if self.raman_response is None:
                 raise ValueError(
                     "include_raman=True but fiber.raman_response is None. "
                     "Provide a RamanResponse or set include_raman=False."
@@ -1610,7 +1742,7 @@ class SplitStepEngine:
         if self.conserving_shock:
             # pcGNLSE arms, mirroring _nonlinear_step: signed γ on the pure-SS
             # (instantaneous) arm, |γ| on the SS–Raman (delayed) arm.
-            fR0 = float(_response_fR(self.fiber.raman_response))
+            fR0 = float(_response_fR(self.raman_response))
             P_inst = (1.0 - fR0) * intensity
             P_del = self._delayed_intensity(intensity, h_R_fft)
             g_r = abs(gamma)
@@ -1897,7 +2029,7 @@ class SplitStepEngine:
         noise_rng: np.random.Generator | None = None
         h_R_fft_noise = None
         if raman_noise:
-            if not self.include_raman or self.fiber.raman_response is None:
+            if not self.include_raman or self.raman_response is None:
                 raise ValueError(
                     "raman_noise=True requires include_raman=True and a "
                     "Raman response on the fiber."
@@ -2350,6 +2482,11 @@ class GNLSESolver:
         instead; they are converted to ``ps^k/m`` internally.
     betas_unit : {"ps^k/m", "s^k/m", "SI"}
         Unit of *betas*. Default ``"ps^k/m"``.
+    full_beta : array_like or callable, optional
+        Static full ``β(ω)`` curve (rad/m) as in
+        :class:`SplitStepEngine`; when supplied *betas* may be ``None``.
+    raman_response : object, optional
+        Raman response override; falls back to ``fiber.raman_response``.
     include_raman : bool
         Include Raman scattering. Default True.
     include_self_steepening : bool
@@ -2385,7 +2522,7 @@ class GNLSESolver:
         self,
         pulse: Wave,
         fiber: FiberProfile,
-        betas: NDArray,
+        betas: NDArray | None = None,
         include_raman: bool = True,
         include_self_steepening: bool = False,
         include_tpa: bool = False,
@@ -2396,12 +2533,24 @@ class GNLSESolver:
         tau_shock: float | None = None,
         conserving_shock: bool = False,
         scheme: Scheme = "strang",
+        full_beta=None,
+        raman_response=None,
     ):
         self.pulse = pulse
         self.fiber = fiber
+        if betas is None and full_beta is None:
+            raise ValueError("pass either betas or full_beta")
+        self.full_beta = full_beta
         # Normalised to ps^k/m (Ω in rad/ps) at the boundary — see _normalize_betas.
-        self.betas = _normalize_betas(betas, betas_unit)
+        self.betas = (
+            _normalize_betas(betas, betas_unit)
+            if full_beta is None
+            else np.array([], dtype=float)
+        )
         self.betas_unit = _validate_betas_unit(betas_unit)
+        self.raman_response = (
+            raman_response if raman_response is not None else fiber.raman_response
+        )
         self.include_raman = include_raman
         self.include_self_steepening = include_self_steepening
         self.include_tpa = include_tpa
@@ -2445,6 +2594,8 @@ class GNLSESolver:
             tau_shock=self.tau_shock,
             step_size=step_size,
             scheme=self.scheme,
+            full_beta=self.full_beta,
+            raman_response=self.raman_response,
         )
 
     def propagate(
@@ -2658,7 +2809,13 @@ class GNLSESolver:
         Each round propagates, then checks:
 
         - **drift**: ``|E_end − E_start| / E_start`` ≤ ``energy_tol``
-          (skipped for loss/gain/TPA runs, where drift is physical);
+          (skipped for loss/gain/TPA runs, where drift is physical).
+          With ``include_self_steepening=True`` the unweighted energy is
+          *not* the invariant — the spectrum legitimately moves between
+          frequencies — so the check runs on the Blow & Wood App. Eq. (A5)
+          photon number instead (``report["drift_metric"] == "photon"``
+          and ``report["photon_drift"]`` carries the checked value, while
+          ``report["drift"]`` keeps the raw energy drift for inspection);
         - **edges**: energy fraction in the outer 5% of the time window at
           the output ≤ ``edge_tol`` — a direct wrap-around detector.
 
@@ -2729,6 +2886,20 @@ class GNLSESolver:
                 if lossless
                 else 0.0
             )
+            # With self-steepening the conserved quantity is the B&W (A5)
+            # photon number, not the unweighted energy (which Raman
+            # scattering legitimately changes): converge on the invariant.
+            photon_drift: float | None = None
+            if self.include_self_steepening:
+                try:
+                    phot = np.asarray(self.photon_number_vs_z, dtype=float)
+                except RuntimeError:
+                    phot = np.asarray([], dtype=float)
+                if phot.size >= 2 and np.all(np.isfinite(phot)):
+                    photon_drift = float(
+                        abs(phot[-1] - phot[0]) / max(phot[0], 1e-300)
+                    )
+            metric = photon_drift if photon_drift is not None else drift
             final_A = np.asarray(self._evolution[-1].envelope_field)
             edge_n = max(1, int(0.05 * final_A.shape[0]))
             edge_frac = float(
@@ -2739,10 +2910,14 @@ class GNLSESolver:
                 / max(np.sum(np.abs(final_A) ** 2), 1e-300)
             )
             report = {
-                "converged": (drift <= energy_tol) and (edge_frac <= edge_tol),
+                "converged": (metric <= energy_tol) and (edge_frac <= edge_tol),
                 "steps": steps,
                 "rounds": _round + 1,
                 "drift": drift,
+                "photon_drift": photon_drift,
+                "drift_metric": "photon"
+                if photon_drift is not None
+                else "energy",
                 "edge_frac": edge_frac,
                 "widened": widened,
                 "N": int(self.pulse.grid.N),
@@ -2774,11 +2949,13 @@ class GNLSESolver:
                         repetition_rate=self.pulse.repetition_rate,
                     )
                     widened = True
-            if drift > energy_tol and lossless:
+            if metric > energy_tol and lossless:
                 steps = min(steps * 2, max_steps)
         warnings.warn(
             f"propagate_auto: not converged after {report.get('rounds', max_rounds)} round(s) "
-            f"(drift={report.get('drift', float('nan')):.3g}, edge_frac={report.get('edge_frac', float('nan')):.2g}); "
+            f"({report.get('drift_metric', 'energy')}_drift="
+            f"{(report.get('photon_drift') if report.get('photon_drift') is not None else report.get('drift', float('nan'))):.3g}, "
+            f"edge_frac={report.get('edge_frac', float('nan')):.2g}); "
             "results kept — refine manually.",
             UserWarning,
             stacklevel=2,
@@ -3012,9 +3189,13 @@ class TaperedGNLSESolver:
         step_size: Length | None = None,
         betas_unit: BetasUnit = "ps^k/m",
         tau_shock: float | None = None,
+        raman_response=None,
     ):
         self.pulse = pulse
         self.fiber = fiber
+        self.raman_response = (
+            raman_response if raman_response is not None else fiber.raman_response
+        )
         self.betas_unit = _validate_betas_unit(betas_unit)
         if betas_unit != "ps^k/m":
             warnings.warn(
@@ -3114,6 +3295,7 @@ class TaperedGNLSESolver:
             min_shrink_factor=self.min_shrink_factor,
             tau_shock=self.tau_shock,
             step_size=self.step_size,
+            raman_response=self.raman_response,
         )
         self._engine.propagate(
             num_steps,

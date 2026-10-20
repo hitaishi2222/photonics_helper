@@ -299,9 +299,60 @@ Until PR-B/C/D land, every MM-SCG run must **state** which of these are switched
 >
 > Post-fix suite: `tests/` green (1243 → 1247 tests, +4 new guards), all four step test files pass.
 
+> **2026-10-20: POST-CLOSURE LITERATURE AUDIT (found and fixed).** Re-reading
+> Poletti–Horak Eq. 6/7, Mumtaz Eq. 6/8 and Wright Eq. 1 against the shipped
+> code found four coefficient-scale defects that the step7–10 tests did not
+> exercise (they were shape/reduction tests, not absolute-scale tests):
+> 1. `coupling_tensor` was `½(γ_i+γ_j)·xpm`; the literature value is
+>    `γ₀·xpm = (n₂ω₀/c)·Q⁽¹⁾_iijj`. The diagonal must be `γ_i` — the old form
+>    was low by `(A_eff,0/A_eff,i)²` (0.75² on the rib deck).
+> 2. `lp_degenerate` (XPM 2/3) is the two-polarization vector strip-down, not
+>    the co-polarized spatial-mode XPM. Added `coef_model="co_polarized"`
+>    (SPM 1, XPM 2, FWM 1, Mumtaz Eq. 6 scalar limit) and made the mode bridge
+>    default to co-polarized XPM (`xpm_model="co_polarized"`).
+> 3. `S_0000`-normalised FWM/Raman tensors inherited `Fiber.A_eff`; added
+>    `gamma_reference = γ₀` (engine + deck) so their absolute scale is fixed.
+> 4. `_fwm_rate_max` ignored absolute `fwm_coupling_tensor`; stability could
+>    be under-estimated. Now uses `_fwm_coupling` on both arms.
+> 5. `_photon_number` omitted the `dω` spectral measure the scalar engine
+>    carries; absolute (A5) photon number was low by `dω`. Fixed.
+>
+> Regression suite: `tests/test_multimode_audit.py`. Physics: Agrawal's
+> co-polarized Kerr limit (SPM 1, XPM 2) and Mumtaz Eq. 6; see
+> `CHANGELOG.md`.
+
 ## 7. Doc/impl mismatches to fix regardless (both FIXED 2026-10-16, step8)
 
 - `docs/multimode-gnlse.md` claims Raman is implemented per channel → either implement (PR-B)
   or correct the doc immediately.
 - `docs/multimode-gnlse.md` "Scope (v1)" still lists *pump depletion* as future work; it is
   implemented (`fwm_pump_depletion`) — stale.
+
+---
+
+## 8. External project GAP audit (2026-10-20) — `~/Research/sim/multimode_scg/GAP.md`
+
+The project-side GAP listed gaps E–H. Each was checked against the library
+code and re-derived; only the genuine library-side items were implemented.
+
+| External gap | Verdict | Landing |
+|---|---|---|
+| **E** scalar static full-β(ω) | **genuine, blocking** | `SplitStepEngine`/`GNLSESolver(full_beta=...)`, ETDRK4 support, adaptive β₂, N=1 ≡ multimode. `tests/test_gnlse_full_beta.py` |
+| **F1** energy-based launch helper | **genuine** (the draft's per-shape energy factors were partly wrong) | `Envelope.from_energy` + `SHAPE_ENERGY_FACTORS`; corrected lorentzian `π/2`, triangular `2/3`, exponential `1`, super-gaussian `2^(−1/(2N))Γ(1/(2N))/N`. Airy rejected (not in L²). `tests/test_pulse_energy.py` |
+| **F2** amplitude-convention marker + guard | **genuine** | `Envelope.amplitude_convention`, `Envelope.from_peak_power`/`from_fwhm_peak_power` marked `"field"`, `Wave/Envelope.to_engine_units`, engine-side `ValueError`. |
+| **F3** scalar `raman_response=` kwarg | **genuine** | `SplitStepEngine`/`GNLSESolver` accept the override with `fiber.raman_response` fallback; parity test in `tests/test_pulse_energy.py`. |
+| **G** Airy FWHM metadata ≠ measurement | **genuine, narrower than stated** | `Envelope.measured_width()` is shape-aware; Airy is documented as the **main-lobe** FWHM (the tail is not in L²). `Envelope/Wave.calc_width` now agree with metadata for canonical shapes. Also fixed the parabolic FWHM (`2√(1−1/√2)·T0`), which was falling through to `T0`. |
+| **H** project launch √2 narrower | **project-side, not a library gap** | Not implemented here. The library's `from_fwhm` already takes the intensity FWHM for every shape; the project must route its launch through it (or `from_energy`). |
+| TaperedGNLSESolver full-β | **not implemented deliberately** | `TaperedGNLSESolver` is the z-dependent `β(ω,z)` API. A static full-β curve belongs on `SplitStepEngine`/`GNLSESolver`; adding a second, contradictory dispersion argument to a taper solver would be an API trap. |
+
+False / overstated claims in the external draft:
+
+- **Airy energy factor** (`PR-F1`): `Ai(−x)` oscillates as `|x|^(−1/4)` for
+  `x→+∞`, so `∫|Ai|²dx` **diverges**. There is no finite whole-line Airy
+  energy; `from_energy("airy", ...)` correctly raises.
+- **Per-shape energy factors**: lorentzian is `π/2` (not `π`), triangular
+  `2/3` (not `1`), exponential `1` (not `ln2`), super-gaussian
+  `2^(−1/(2N))Γ(1/(2N))/N` (not `√(π/N)`). All are now derived and
+  numerically round-tripped.
+- **`TaperedGNLSESolver` full-β**: not a blocker for the scalar path; the
+  scalar `SplitStepEngine` is the engine the project needs.

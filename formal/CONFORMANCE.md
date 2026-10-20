@@ -748,6 +748,34 @@ default.)
 state in its docstring that the MEEP base length is fixed at 1 µm and that
 `from_meep` with any other base length is not its inverse.
 
+### Stage K — the multimode GNLSE coefficient algebra
+
+`multimode_gnlse.py` and `mode_analysis.py`, read during the 2026-10
+literature audit. The modal-overlap **integrals** stay measure-theoretic
+(same boundary as G10); what is formalised here is the coefficient algebra
+the engine composes from them.
+
+| # | Theorem (Lean) | Governs (Python) | Source | State | Notes |
+|---|---|---|---|---|---|
+| K1 | `Nonlinear.xpmFactor_lpDegenerate` | `_LP_XPM = 2/3` (`multimode_gnlse.py:83`) | Agrawal §6.3 | `matches` | Two orthogonal **linear polarizations**; this is the vector-GNLSE strip-down, not the co-polarized spatial-mode XPM. |
+| K2 | `Nonlinear.xpmFactor_isotropic` | `"isotropic"` branch (`_xpm_factor`) | — | `matches` | All-ones model. |
+| K3 | **`Nonlinear.xpmFactor_coPolarized`** | `_CO_POL_XPM = 2`; `coef_model="co_polarized"` | Mumtaz Eq. 6 scalar limit | `matches` | **The audit fix.** SPM 1, XPM 2 for two co-polarized spatial modes: two equal XPM index permutations. The old default (2/3) under-counted this by 3×. |
+| K4 | `Nonlinear.fwmFactor_coPolarized` | `_CO_POL_FWM = 1` | Mumtaz Eq. 6 | `matches` | Pump-driven FWM weight in the scalar limit. |
+| K5 | `Nonlinear.coPolarizedRate_eq` | `_diagonal_phase` with `coef_model="co_polarized"` | Agrawal §6.3 | `matches` | `γ(P_i + 2P_j)`, the two-mode instantaneous phase rate. |
+| K6 | **`Nonlinear.fwmAllowed_partner`** | `_fwm_allowed`; both exchange arms in `_fwm_rhs` | Poletti Eq. 18 | `matches` | One gate check serves the pair: `ℓ_m = 2ℓ_n − ℓ_q` implies `ℓ_q = 2ℓ_n − ℓ_m`. |
+| K7 | `Nonlinear.fwmAllowed_pump_swap` | FWM sum over `(n, p)` | Poletti Eq. 18 | `matches` | The gate is symmetric in the two pump indices. |
+| K8 | **`Nonlinear.depletedFwm_energy_conserved`** | `fwm_pump_depletion` pump arm (`+2iγf* A_mA_qA_n*`) | Mumtaz Eq. 6 / Manley–Rowe | `matches` | Sum of `Re(conj(A)·dA)` over the three modes is exactly zero for real coupling. |
+| K9 | `Nonlinear.depletedFwm_normSq_rate` | `Σ|A|²` monitor / RK4 conservation test | — | `matches` | The same identity with the `2` of `d|A|²/dz`. |
+| K10 | `Nonlinear.fwm_pair_only_not_conserved` | pump-driven (non-depleted) approximation | — | `matches` | Concrete witness that the two pair arms alone do not conserve `Σ|A|²`; the pump arm is required. |
+| K11 | `Nonlinear.shockSymbol_sq` | `_apply_shock_rhs`; step10 regression | Wright Eq. 1; Shock.lean S17 | `matches` | Applying `(1+Ωτ)` twice gives `(1+Ωτ)²`. |
+| K12 | `Nonlinear.shockSymbol_double_sub` | as K11 | — | `matches` | `shock² − shock = Ωτ(1+Ωτ)`. |
+| K13 | **`Nonlinear.shockSymbol_double_ne_single`** | step10 exactly-once regression | — | `matches` | For a physical bin the squared symbol is different — the `(1+iτΩ)²` bug the test pins. |
+
+K3, K4 and K8 are the load-bearing rows: they turn the audit's coefficient
+choices into theorems. The overlap **scale** (`C_ij = γ₀·xpm_ij =
+(n₂ω₀/c)Q⁽¹⁾_iijj`) remains a statement about integrals and is recorded as
+`uncovered` under G10's boundary.
+
 ---
 
 ## Domains assumed by the proved theorems
@@ -765,8 +793,8 @@ this. Consumers of the specification should treat the following as preconditions
 
 ## Coverage so far
 
-- Rows in the register: **145**
-- Matching Python symbols: **~69**
+- Rows in the register: **158**
+- Matching Python symbols: **~80**
 - Findings raised: **11** (F1–F11), plus 6 corrected statements in `CHANGELOG.md`
 - Findings resolved: **3** (F2 fixed in Lean; F5 and F6 were false statements
   of mine, corrected before they were relied on)
@@ -782,6 +810,10 @@ this. Consumers of the specification should treat the following as preconditions
   interaction-picture algebra for `scheme="rk4ip"`: transform involution,
   exact linear flow, collapse to classical RK4 when `L = 0`, and the
   continuous interaction-picture removal of the linear term
+- New: `Nonlinear/Multimode.lean` (13 theorems, K1–K13) — the multimode
+  coefficient models (including the co-polarized spatial-mode XPM = 2),
+  the FWM selection-rule partner symmetry, exact `Σ|A|²` conservation of
+  the depleted pump set, and the shock-applied-twice symbol identity
 
 F2 and F6 are the worked examples of why this correlation runs concurrently.
 Neither `k = ω/c` nor `ω_{-1,mirror} = -ω_1` was a hard theorem; both were easy

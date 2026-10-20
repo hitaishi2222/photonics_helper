@@ -20,17 +20,32 @@ untouched.
 - `mode_dispersion(modes, order, lambda0) -> DispersionSet` — per-mode Taylor
   `betas`, `group_delays[m] = β₁⁽ᵐ⁾ − β₁⁽⁰⁾` (`group_delays[0] == 0`),
   `phase_offsets` from `β₀` differences.
-- `overlap_tensors_from_fields(modes, n2, lambda0) -> ModePairParameters` —
-  grid quadrature (no circular symmetry): `A_eff,m`, `γ_m`,
+- `overlap_tensors_from_fields(modes, n2, lambda0, *, xpm_model="co_polarized")`
+  — grid quadrature (no circular symmetry): `A_eff,m`, `γ_m`,
   `S⁽¹⁾ → xpm_weights`, `S⁽²⁾ → fwm_weights` (real when the fields are,
   complex when not — the engine accepts complex `fwm_weights`),
   `oam_l` (the export's azimuthal labels), absolute-unit
-  `coupling_tensor`. Confinement `Γ_m` is unity: the export contract
-  carries no core mask, so confinement-scaled `n₂` must be pre-scaled by
-  the deck author.
-- `build_multimode_deck(export_dir, lambda0, order, n2, pump=None)` — one call
-  to engine kwargs (`phase_offsets` are emitted but should be dropped —
-  pass `None` — for step-index / high-contrast rib decks).
+  `coupling_tensor`.
+  - **Absolute scale:** `C_ij = γ₀·xpm_ij = (n₂ω₀/c)·Q⁽¹⁾_iijj`. Its diagonal
+    is exactly the per-mode `γ_i` (`C_ii = γ_i`); it is not a
+    `½(γ_i+γ_j)` average. Per-mode SPM on a larger mode is therefore
+    `γ₀·A_eff,0/A_eff,i`, matching `γ_i`.
+  - **`xpm_model`:** `"co_polarized"` (default) doubles the **off-diagonal**
+    `S⁽¹⁾` ratio (two equal XPM permutations in Mumtaz Eq. 6; SPM 1, XPM 2
+    for co-polarized spatial modes). `"vector"` keeps the bare `S⁽¹⁾`
+    ratio for a polarization-resolved basis; a genuine vector basis needs
+    separate polarization channels because the orthogonal-polarization XPM
+    factor depends on the polarization basis (2/3 linear, 2 circular).
+  - Confinement `Γ_m` is unity: the export contract carries no core mask,
+    so confinement-scaled `n₂` must be pre-scaled by the deck author.
+- `build_multimode_deck(export_dir, lambda0, order, n2, *, pump=None,
+  xpm_model="co_polarized")` — one call to engine kwargs
+  (`phase_offsets` are emitted but should be dropped — pass `None` — for
+  step-index / high-contrast rib decks). It also returns
+  `gamma_reference = γ₀`, `gamma` (per mode) and `A_eff` (per mode). Pass
+  `gamma_reference` to the engine: it is the absolute scale of the
+  `S_0000`-normalised `fwm_weights`/`raman_tensors`, so the run does not
+  silently inherit the `Fiber.A_eff` scale.
 
 ## Notes
 

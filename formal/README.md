@@ -32,8 +32,9 @@ Findings and corrections: [`CHANGELOG.md`](CHANGELOG.md).
 | H | RK4 integrators | **done** — interaction picture, operator ordering, and the analytic `O(h⁵)` bound (`exp_taylor_abs_error_le`) proved |
 | I | Strang splitting, Kerr sub-step | **done** |
 | J | Dispersion operator, split-step conservation | **done** |
+| K | Multimode GNLSE coefficient algebra | **done** — co-polarized SPM/XPM/FWM limits, FWM gate partner symmetry, depleted-FWM energy conservation, shock-once symbol (K1–K13) |
 
-240 theorems proved. **No `sorry` remains anywhere in `formal/`.**
+260 theorems proved. **No `sorry` remains anywhere in `formal/`.**
 Build: `LAKE_JOBS=2 LEAN_NUM_THREADS=2 lake build`.
 
 **2026-10-27, side-quest §17.5 closure:** six theorems added to
@@ -55,6 +56,13 @@ same session also repaired `Nonlinear/Shock.lean`, which did not compile in
 the working tree (duplicated block comment; `accuracy_implies_existence`
 was false as stated — non-negativity now a hypothesis, conclusion `x < 1`),
 and added the missing `GNLSESolver.photon_number_vs_z` passthrough.
+
+**2026-10, multimode audit:** `Nonlinear/Multimode.lean` (13 theorems,
+K1–K13) — the engine's three coefficient models (including the co-polarized
+spatial-mode SPM 1 / XPM 2 / FWM 1 limit), the FWM angular-momentum gate's
+arm/pump symmetries, exact `Σ|A|²` conservation of the depleted three-mode
+pump set, and the `(1+Ωτ)²` identity behind the shock-applied-twice
+regression. 260 theorems total.
 
 ### Open statements
 

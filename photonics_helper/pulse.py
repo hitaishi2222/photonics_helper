@@ -1,16 +1,34 @@
 """Pulse envelopes, temporal grids, and pulse trains.
 
-Envelope-field convention
--------------------------
-An :class:`Envelope` describes a *normalized* complex envelope ``A(t)``. The
-absolute scale of ``A`` is whatever ``peak_amplitude`` the user chose, so
-``Wave.envelope_intensity`` (``|A|²``) and the metrics derived from it
-(``pulse_energy``, ``peak_power``) are in normalized envelope units, **not**
-W/m², joules, or watts, unless a physical effective mode area is attached with
-:meth:`Wave.with_effective_area`. Without one, ``peak_power``/``pulse_energy``
-emit a one-time :class:`UserWarning` and the visualization summary labels the
-value as normalized. With an effective area ``A_eff`` the library uses
-``P = ½·n·c·ε₀·A_eff·|A|²`` (see :class:`~photonics_helper.base.PeakPower`).
+Amplitude conventions
+---------------------
+The propagation engines (:class:`~photonics_helper.gnlse.SplitStepEngine`,
+:class:`~photonics_helper.multimode_gnlse.MultimodeSplitStepEngine`) use the
+**power-normalised** envelope convention ``|A|²`` in watts (``γ`` in
+W⁻¹m⁻¹). Build such an envelope with :meth:`Envelope.from_energy`; it sets
+:attr:`Envelope.amplitude_convention` to ``"power"``.
+
+:meth:`Envelope.from_peak_power` / :meth:`Envelope.from_fwhm_peak_power` are
+the **field-unit** factories: they invert
+``P = ½·n·c·ε₀·A_eff·|E0|²`` and mark the envelope ``"field"`` (V/m). They
+must be converted with :meth:`Wave.to_engine_units` /
+:meth:`Envelope.to_engine_units` before an engine sees them; both engines now
+raise a clear ``ValueError`` instead of silently propagating a 13-order-of-
+magnitude-wrong amplitude.
+
+For a plain :class:`Envelope`/``Wave`` (raw ``peak_amplitude``), the metrics
+``Wave.envelope_intensity``/``peak_power``/``pulse_energy`` stay in normalized
+envelope units unless :meth:`Wave.with_effective_area` attaches an area; in
+that case they use ``P = ½·n·c·ε₀·A_eff·|A|²`` and emit no warning.
+
+FWHM semantics
+--------------
+:meth:`Envelope.from_fwhm` always takes the **intensity** FWHM. The library's
+Gaussian field is family B, ``A0·exp(−t²/(2T0²))``, so
+``T0 = FWHM/1.6654`` and ``E = P0·T0·√π``; sech is ``A0·sech(t/T0)``,
+``T0 = FWHM/1.7627``, ``E = 2P0·T0``. For the Airy shape the API width is the
+**main-lobe** FWHM; the oscillating tail is not in L², so ``from_energy``
+rejects Airy and a whole-field energy has no finite value.
 """
 
 from __future__ import annotations
@@ -20,7 +38,7 @@ import logging
 import warnings
 from collections.abc import Callable
 from functools import cached_property, lru_cache
-from math import acosh, log, pi, sqrt
+from math import acosh, gamma as gamma_fn, log, pi, sqrt
 from typing import Any, Literal, Self
 
 import numpy as np
@@ -100,7 +118,46 @@ SHAPE_FACTORS: dict[str, float] = {
     "sech": 2 * acosh(sqrt(2)),
     "lorentzian": 2 * sqrt(sqrt(2) - 1),
     "rectangular": 2.0,
+    # Field 1−x² for |x|≤1; intensity half-max at 1−x² = 2^(−1/2).
+    "parabolic": 2 * sqrt(1 - 2 ** (-0.5)),
 }
+
+#: Energy factor ``F`` in ``E = A0²·T0·F`` for a shape with field
+#: ``A(t) = A0·f(t/T0)``.  These are integrals over the **whole** real line
+#: (``F = ∫ f(x)² dx``), not FWHM factors.  The previous external GAP draft
+#: listed several of these incorrectly (lorentzian π instead of π/2,
+#: triangular 1 instead of 2/3, exponential ln2 instead of 1); the values
+#: here are derived from :meth:`Envelope.field` and round-tripped against a
+#: dense numerical integral in ``tests/test_pulse_energy.py``.
+SHAPE_ENERGY_FACTORS: dict[str, float] = {
+    "gaussian": sqrt(pi),
+    "sech": 2.0,
+    "lorentzian": pi / 2.0,
+    "rectangular": 2.0,
+    "triangular": 2.0 / 3.0,
+    "parabolic": 16.0 / 15.0,
+    "cosine": 1.0,
+    "exponential": 1.0,
+}
+
+
+def _super_gaussian_energy_factor(order: int) -> float:
+    """``E = A0² T0 F`` for ``A = A0 exp(−|t/T0|^{2N})``.
+
+    ``F = ∫ exp(−2|x|^{2N}) dx = 2^{−1/(2N)} Γ(1/(2N))/N``.  For ``N=1``
+    this is ``√(π/2)`` (the field is ``exp(−x²)``, *not* the Gaussian
+    family's ``exp(−x²/2)``); the external draft's ``√(π/n)`` is wrong.
+    """
+    if order < 1:
+        raise ValueError(f"super_gaussian_order must be >= 1, got {order}")
+    n = int(order)
+    return float(2.0 ** (-1.0 / (2.0 * n)) * gamma_fn(1.0 / (2.0 * n)) / n)
+
+
+#: The Airy "pulse" is not in L²(R): ``Ai(−x) ~ x^(−1/4)`` oscillates as
+#: ``x → +∞``, so ``∫|Ai(−x)|² dx`` diverges logarithmically in the tail.
+#: ``from_energy("airy", …)`` therefore has no finite whole-line answer; use a
+#: truncated/custom shape (or a finite-window energy) instead.
 
 
 @lru_cache(maxsize=1)
@@ -171,6 +228,13 @@ class Envelope:
     peak_amplitude: float
     pulse_width: Time  # T0
     chirp: float = 0.0
+    #: Amplitude scale of ``peak_amplitude``.
+    #: ``"power"`` (default) means the propagation-engine convention
+    #: ``|A|²`` in watts (the scalar/multimode GNLSEs assume this).
+    #: ``"field"`` means a physical field amplitude in V/m, produced by
+    #: :meth:`from_peak_power` / :meth:`from_fwhm_peak_power`; those must be
+    #: converted with :meth:`to_engine_units` before an engine sees them.
+    amplitude_convention: Literal["power", "field"] = "power"
 
     # Shape-specific extra parameters
     super_gaussian_order: int = 2  # for "super-gaussian"
@@ -193,6 +257,10 @@ class Envelope:
             # I(t) = A0²·exp(−2|t|/T0) → FWHM_intensity = T0·ln2
             val = T0 * log(2)
         elif self.shape == "airy":
+            # Main-lobe half-max crossings. The Airy tail re-crosses the
+            # half-max level far out (~2.93× this width); use
+            # :meth:`measured_width` for the shape-aware whole-field
+            # measurement, and see the class-level Airy note.
             x_left, x_right = _airy_fwhm_roots()
             val = (x_right - x_left) * T0
         elif self.shape in SHAPE_FACTORS:
@@ -211,6 +279,7 @@ class Envelope:
             "rectangular",
             "super-gaussian",
             "triangular",
+            "parabolic",
             "cosine",
             "exponential",
             "airy",
@@ -282,6 +351,135 @@ class Envelope:
         scale = 0.5 * refractive_index * C_MS * EPS_0 * A_eff.as_m2
         return float(sqrt(peak_power.as_W / scale))
 
+    def measured_width(self, level: float = 0.5) -> Time:
+        """Shape-aware width measured on the envelope's own field.
+
+        For canonical built-in shapes at half maximum this returns
+        :attr:`fwhm` (so metadata and measurement cannot disagree). For the
+        Airy shape that is the **main-lobe** FWHM; the accelerating tail
+        re-crosses the half-max level far out (585 fs vs 200 fs for
+        ``from_fwhm("airy", …, 200 fs)``), and treating the outermost
+        crossings as “the” width is exactly the metadata-vs-measurement bug
+        this method exists to remove. For non-half-max levels, custom or
+        gauss-hermite fields, it falls back to the numerical crossing width
+        of the actual field.
+        """
+        if level == 0.5 and self.shape not in ("custom", "gauss-hermite"):
+            return self.fwhm
+        grid = self._make_grid()
+        return Time(_crossing_width(grid.t, self.intensity(grid.t), level), "s")
+
+    def energy_factor(self) -> float:
+        """``E = A0²·T0·F`` shape factor for the whole-field energy."""
+        if self.shape == "super-gaussian":
+            return _super_gaussian_energy_factor(self.super_gaussian_order)
+        if self.shape == "airy":
+            raise ValueError(
+                "the Airy shape is not in L²(R): its oscillating tail makes "
+                "∫|Ai(−t/T0)|²dt diverge. Use a truncated/custom envelope "
+                "for an energy-based launch."
+            )
+        try:
+            return SHAPE_ENERGY_FACTORS[self.shape]
+        except KeyError as exc:  # pragma: no cover - clear API error
+            raise ValueError(
+                f"shape {self.shape!r} has no closed-form energy factor; "
+                "use the numerical integral or a canonical shape."
+            ) from exc
+
+    def to_engine_units(
+        self, A_eff: Area, refractive_index: float = 1.0
+    ) -> Envelope:
+        """Convert a field-unit (V/m) envelope to the engine's √W units.
+
+        The GNLSE engines use ``|A|²`` in watts, while
+        :meth:`from_peak_power` / :meth:`from_fwhm_peak_power` build a
+        physical field amplitude ``A0`` with ``P = ½·n·c·ε₀·A_eff·|A0|²``.
+        The conversion is ``A_engine = A_field·√(½·n·c·ε₀·A_eff)``.
+        Envelopes already in ``"power"`` convention are returned unchanged
+        (a copy).
+        """
+        if self.amplitude_convention == "power":
+            return copy.deepcopy(self)
+        if A_eff.as_m2 <= 0:
+            raise ValueError("A_eff must be positive")
+        if refractive_index <= 0:
+            raise ValueError(
+                f"refractive index must be positive, got {refractive_index}"
+            )
+        scale = sqrt(0.5 * refractive_index * C_MS * EPS_0 * A_eff.as_m2)
+        out = copy.deepcopy(self)
+        out.peak_amplitude = float(self.peak_amplitude * scale)
+        out.amplitude_convention = "power"
+        return out
+
+    @classmethod
+    def from_energy(
+        cls,
+        shape: Literal[
+            "gaussian",
+            "sech",
+            "lorentzian",
+            "rectangular",
+            "super-gaussian",
+            "triangular",
+            "parabolic",
+            "cosine",
+            "exponential",
+        ],
+        energy: float,
+        fwhm: Time,
+        **kwargs: Any,
+    ) -> Self:
+        """Construct an envelope from pulse energy in the **engine** units.
+
+        Uses ``E = ∫|A|²dt = A0²·T0·F_shape`` with ``|A|²`` in watts — the
+        convention of :class:`~photonics_helper.gnlse.SplitStepEngine` and
+        :class:`~photonics_helper.multimode_gnlse.MultimodeSplitStepEngine`
+        (``γ`` in W⁻¹m⁻¹). This is **not** the field-unit convention of
+        :meth:`from_fwhm_peak_power`; an envelope built here can be handed
+        straight to an engine.
+
+        ``fwhm`` is the intensity FWHM (same semantics as
+        :meth:`from_fwhm`). ``super_gaussian_order`` may be passed in
+        ``kwargs``.
+        """
+        if energy <= 0:
+            raise ValueError(f"energy must be positive, got {energy!r}")
+        if shape == "airy":
+            raise ValueError(
+                "the Airy shape is not in L²(R): its oscillating tail makes "
+                "∫|Ai(−t/T0)|²dt diverge. Use a truncated/custom envelope "
+                "for an energy-based launch."
+            )
+        if shape == "super-gaussian":
+            n = int(kwargs.pop("super_gaussian_order", 2))
+            T0 = Time(fwhm.as_s / (2.0 * (log(2) / 2) ** (1.0 / (2 * n))), "s")
+        else:
+            n = 2
+            T0 = cls.from_fwhm(shape, 1.0, fwhm).pulse_width  # type: ignore[arg-type]
+        factor = (
+            _super_gaussian_energy_factor(n)
+            if shape == "super-gaussian"
+            else SHAPE_ENERGY_FACTORS[shape]
+        )
+        A0 = float(sqrt(energy / (T0.as_s * factor)))
+        if shape == "super-gaussian":
+            return cls(
+                shape="super-gaussian",
+                peak_amplitude=A0,
+                pulse_width=T0,
+                super_gaussian_order=n,
+                **kwargs,
+            )
+        return cls(
+            shape=shape,  # type: ignore[arg-type]
+            peak_amplitude=A0,
+            pulse_width=T0,
+            amplitude_convention="power",
+            **kwargs,
+        )
+
     @classmethod
     def from_peak_power(
         cls,
@@ -316,6 +514,7 @@ class Envelope:
             peak_amplitude=A0,
             pulse_width=pulse_width,
             chirp=chirp,
+            amplitude_convention="field",
             **kwargs,
         )
 
@@ -344,6 +543,7 @@ class Envelope:
         A0 = cls.amplitude_from_peak_power(peak_power, A_eff, refractive_index)
         base = cls.from_fwhm(shape, A0, fwhm, **kwargs)  # type: ignore[arg-type]
         base.chirp = chirp
+        base.amplitude_convention = "field"
         return base
 
     def field(self, t: NDArray | None = None) -> NDArray:
@@ -440,8 +640,7 @@ class Envelope:
         -------
         width : Time — pulse width in seconds (use ``.as_ps`` etc. for display units).
         """
-        grid = self._make_grid()
-        return Time(_crossing_width(grid.t, self.intensity(grid.t), level), "s")
+        return self.measured_width(level)
 
     def apply_dispersion(
         self,
@@ -1251,6 +1450,11 @@ class Wave:
         return self.central_wavelength.to_omega().as_rad_s
 
     @property
+    def amplitude_convention(self) -> Literal["power", "field"]:
+        """Amplitude scale of :attr:`envelope` (see :class:`Envelope`)."""
+        return self.envelope.amplitude_convention
+
+    @property
     def wavelength_nm(self) -> WavelengthArray:
         """Absolute wavelength grid (nm) for each frequency sample on ``grid.w``.
 
@@ -1335,8 +1539,55 @@ class Wave:
         Returns
         -------
         width : Time — pulse width in seconds (use ``.as_ps`` etc. for display units).
+
+        For a canonical built-in shape at half maximum this defers to
+        :attr:`Envelope.fwhm` (and therefore to the shape-aware
+        :meth:`Envelope.measured_width`), so metadata and measurement agree —
+        including the Airy main-lobe definition. An overridden
+        ``_pulse_train_field`` or a custom/gauss-hermite shape still uses the
+        numerical crossings of the actual field.
         """
+        if (
+            level == 0.5
+            and self._pulse_train_field is None
+            and self.envelope.shape not in ("custom", "gauss-hermite")
+        ):
+            return self.envelope.fwhm
         return Time(_crossing_width(self.grid.t, self.envelope_intensity, level), "s")
+
+    def to_engine_units(self, A_eff: Area | None = None) -> Wave:
+        """Convert a field-unit wave (V/m) to the engine's √W convention.
+
+        ``from_peak_power`` / ``from_fwhm_peak_power`` produce field-unit
+        envelopes; the GNLSE engines use ``|A|²`` in watts. This converts
+        with ``A_eff`` (the attached area or the argument) and
+        ``refractive_index``. A wave already in ``"power"`` convention is
+        returned unchanged. The returned wave has no attached effective area
+        (the conversion replaces it).
+        """
+        area = A_eff if A_eff is not None else self._effective_area
+        if area is None:
+            raise ValueError(
+                "to_engine_units() needs an effective area: pass A_eff or "
+                "attach one with with_effective_area()."
+            )
+        is_field = self.envelope.amplitude_convention == "field"
+        scale = (
+            sqrt(0.5 * self.refractive_index * C_MS * EPS_0 * area.as_m2)
+            if is_field
+            else 1.0
+        )
+        converted = self.envelope.to_engine_units(area, self.refractive_index)
+        out = Wave(
+            grid=self.grid,
+            envelope=converted,
+            central_wavelength=self.central_wavelength,
+            refractive_index=self.refractive_index,
+            repetition_rate=self.repetition_rate,
+        )
+        if self._pulse_train_field is not None:
+            out.with_field(np.asarray(self._pulse_train_field) * scale)
+        return out
 
     def peak_power(self) -> float:
         """Peak power (or normalized peak intensity ``max|A|²``).

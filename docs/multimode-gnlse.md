@@ -7,9 +7,19 @@ spatial modes as coupled modal envelopes — the nonlinear complement of
 - per-mode Taylor dispersion (`betas[fiber_mode]`), modal group delay
   (`group_delays`, s/m — walk-off in the retarded frame of channel 0), and
   shared scalar loss;
-- SPM/XPM coefficient sets: degenerate linearly-polarized LP basis
-  (`coef_model="lp_degenerate"` — SPM 1, XPM 2/3) or the isotropic all-ones
-  model (`"isotropic"`), as appropriate to the mode basis;
+- SPM/XPM coefficient sets: co-polarized scalar spatial modes
+  (`coef_model="co_polarized"` — SPM 1, XPM 2, FWM 1; Mumtaz Eq. 6 scalar
+  limit), the two-polarization degenerate LP pair (`"lp_degenerate"` — the
+  vector-GNLSE strip-down: SPM 1, XPM 2/3, FWM 2/3), or the isotropic
+  all-ones model (`"isotropic"`). `lp_degenerate` is **not** the XPM of two
+  co-polarized spatial modes; pass `coef_model="co_polarized"` or the
+  mode-analysis overlap weights for a few-mode LP deck;
+- `gamma_reference` (W⁻¹m⁻¹) overrides the fiber-derived scalar γ for every
+  tensor-normalised term. The mode-analysis deck returns
+  `gamma_reference = γ₀`; use it whenever `fwm_weights`/`raman_tensors` came
+  from `S⁽²⁾/S_0000`, otherwise a `Fiber.A_eff` different from `A_eff,0`
+  mis-scales the tensor arms; the absolute `coupling_tensor` diagonal is
+  exactly the per-mode `γ_m` (`C_ii = γ_i`), not a `½(γ_i+γ_j)` average;
 - opt-in **pump-driven inter-modal FWM** (`include_fwm=True`): each pump
   channel `n` exchanges the pair `(m, q)` through two pump photons —
   conjugate (Hamiltonian) partners, energy conserving per pair — gated by

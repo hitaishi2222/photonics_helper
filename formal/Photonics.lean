@@ -20,6 +20,7 @@ import Photonics.Grid.Spectrum
 import Photonics.Dispersion.Beta
 import Photonics.Nonlinear.Shock
 import Photonics.Nonlinear.Raman
+import Photonics.Nonlinear.Multimode
 import Photonics.Optics.DBR
 import Photonics.Optics.DBREnergy
 import Photonics.Optics.Chi2

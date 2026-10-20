@@ -9,10 +9,15 @@ Model (all channels coupled through one shared scalar γ):
 - linear: per-mode Taylor dispersion ``β_k^(m)``, shared scalar loss
   ``e^{−α dz/2}``, and modal group delay (walk-off in the retarded frame
   of channel 0);
-- nonlinear SPM/XPM with a selectable coefficient set — degenerate
-  linearly-polarized (LP) spatial modes: SPM ``1``, XPM ``2/3``
-  (Agrawal §6.4 LP limit) — or the isotropic all-ones model
-  (Manakov-like, for randomly-coupled bases);
+- nonlinear SPM/XPM with a selectable coefficient set:
+  ``"co_polarized"`` — co-polarized scalar spatial modes: SPM ``1``,
+  XPM ``2`` (Mumtaz Eq. 6 scalar limit; Agrawal co-polarized Kerr limit);
+  ``"lp_degenerate"`` — the two-polarization degenerate LP pair (the
+  vector-GNLSE strip-down): SPM ``1``, XPM ``2/3``; or
+  ``"isotropic"`` — all-ones (Manakov-like, for randomly-coupled bases).
+  The two-polarization model is *not* the XPM of two co-polarized
+  spatial modes; ``coef_model="co_polarized"`` is the spatial-mode
+  default when no overlap tensor is supplied;
 - opt-in inter-modal four-wave mixing ``iγ·f·A_n A_p A_q*`` (RK4IP
   frequency-domain substep, Strang-split around the diagonal phase),
   restricted by angular momentum conservation
@@ -79,15 +84,24 @@ __all__ = [
     "MultimodeSplitStepEngine",
 ]
 
-CoeffModel = Literal["lp_degenerate", "isotropic"]
+CoeffModel = Literal["lp_degenerate", "isotropic", "co_polarized"]
 
-#: XPM anisotropy of the degenerate linearly-polarized LP basis.
+#: XPM anisotropy of the degenerate linearly-polarized (two-polarization) basis.
 _LP_XPM = 2.0 / 3.0
-#: Inter-modal FWM factor of the same degenerate LP model.
+#: Inter-modal FWM factor of the same degenerate two-polarization model.
+#: Mumtaz Eq. 6 gives 1 for a co-polarized pump/signal pair and 1/3 for an
+#: orthogonal one; 2/3 is their equal mix (the polarization-averaged value
+#: the engine documents). A single co-polarized basis has 1 — use
+#: ``coef_model="co_polarized"`` for that case.
 _LP_FWM = 2.0 / 3.0
+#: Co-polarized scalar-spatial-mode XPM factor: two equal index permutations
+#: in the MM-GNLSE contraction (Mumtaz Eq. 6, Agrawal co-polarized limit).
+_CO_POL_XPM = 2.0
+#: Pump-driven FWM factor of the co-polarized scalar-spatial-mode model.
+_CO_POL_FWM = 1.0
 
 #: Accepted ``coef_model`` values (also aliased as ``MultimodeSplitStepEngine._COEF_MODELS``).
-_MM_COEF_MODELS = ("lp_degenerate", "isotropic")
+_MM_COEF_MODELS = ("lp_degenerate", "isotropic", "co_polarized")
 
 
 def _mm_check_channels(waves: list) -> int:
@@ -431,13 +445,33 @@ class MultimodeSplitStepEngine:
         expansion omits, and it is what provides discrete intermodal
         quasi-phase matching (e.g. the GRIN geometric-parametric-
         instability ladder, where ``Δβ₀⁽ᵖ⁾ = −2πp/ξ`` from self-imaging).
-    coef_model : {"lp_degenerate", "isotropic"}
+    gamma_reference : float, optional
+        Absolute nonlinear scale ``γ₀`` (W⁻¹m⁻¹) used by every
+        tensor-normalised term, overriding ``_fiber_gamma(fiber, ω₀)``.
+        Needed when ``fwm_weights`` / ``raman_tensors`` were divided by
+        ``S_0000`` (as :func:`photonics_helper.mode_analysis
+        .overlap_tensors_from_fields` does): their absolute coefficient is
+        ``γ₀·weight``, independent of the ``A_eff`` placed on ``fiber``.
+        With ``coupling_tensor``/``xpm_weights`` from the same deck it also
+        makes the default SPM/XPM path per-mode correct
+        (``γ₀·xpm_ii = γ_i``). Omitted (default) keeps the fiber-derived
+        scalar γ, byte-identically.
+    coef_model : {"lp_degenerate", "isotropic", "co_polarized"}
         Nonlinear coefficients:
 
-        * ``"lp_degenerate"`` (default) — degenerate-LP spatial-mode
-          model: SPM 1, XPM 2/3, inter-modal FWM 2/3.
+        * ``"lp_degenerate"`` (default) — the two-polarization degenerate
+          LP pair (the vector-GNLSE strip-down): SPM 1, XPM 2/3 (the
+          orthogonal-linear-polarization value), inter-modal FWM 2/3 (the
+          equal mix of the co-polarized 1 and orthogonal 1/3 values).
+          **Not** the co-polarized spatial-mode model — for two
+          co-polarized spatial modes the Kerr XPM limit is 2, not 2/3.
         * ``"isotropic"`` — all-ones coefficients (Manakov-like spatially
           averaged modes; use for a non-degenerate basis).
+        * ``"co_polarized"`` — co-polarized scalar spatial modes (Mumtaz
+          Eq. 6 scalar limit / Agrawal co-polarized Kerr limit): SPM 1,
+          XPM 2, inter-modal FWM 1. Use this for a few-mode LP basis that
+          shares one linear polarization, or for a mode-analysis deck
+          with ``xpm_model="co_polarized"``.
     include_fwm : bool
         Opt-in inter-modal four-wave mixing. Default False — the standard
         *averaged* few-mode model keeps only SPM/XPM (the heterodyne FWM
@@ -558,6 +592,7 @@ class MultimodeSplitStepEngine:
         betas,
         *,
         betas_unit: BetasUnit = "ps^k/m",
+        gamma_reference: float | None = None,
         group_delays: list[float] | None = None,
         phase_offsets: list[float] | None = None,
         coef_model: CoeffModel = "lp_degenerate",
@@ -590,6 +625,17 @@ class MultimodeSplitStepEngine:
         rayleigh_backscatter: float | None = None,
     ):
         waves = list(waves)
+        for _w in waves:
+            _conv = getattr(
+                getattr(_w, "envelope", None), "amplitude_convention", "power"
+            )
+            if _conv == "field":
+                raise ValueError(
+                    "a channel envelope is in field units (V/m), but the "
+                    "multimode engine uses |A|² in watts. Convert each wave "
+                    "with Wave.to_engine_units(A_eff) (or build it with "
+                    "Envelope.from_energy)."
+                )
         self._n = _mm_check_channels(waves)
         _mm_check_topology(
             self._n, coef_model, include_fwm, oam_l, group_delays, phase_offsets
@@ -603,6 +649,13 @@ class MultimodeSplitStepEngine:
 
         self.waves = waves
         self.fiber = fiber
+        if gamma_reference is not None:
+            gamma_reference = float(gamma_reference)
+            if not np.isfinite(gamma_reference):
+                raise ValueError(
+                    f"gamma_reference must be finite, got {gamma_reference!r}"
+                )
+        self.gamma_reference = gamma_reference
         self.group_delays = None if group_delays is None else list(group_delays)
         self.phase_offsets = None if phase_offsets is None else list(phase_offsets)
         self.coef_model: CoeffModel = coef_model
@@ -733,7 +786,15 @@ class MultimodeSplitStepEngine:
     # ------------------------------------------------------------------
 
     def _gamma_v(self) -> float:
-        """Scalar γ of the shared profile, at the carrier frequency."""
+        """Nonlinear scale γ used by the model, at the carrier frequency.
+
+        ``gamma_reference`` (a mode-analysis deck's fundamental γ₀) wins
+        when supplied; otherwise the shared fiber's scalar γ. Every
+        tensor-normalised term multiplies this scale, so the two routes
+        cannot drift apart.
+        """
+        if self.gamma_reference is not None:
+            return self.gamma_reference
         from photonics_helper.gnlse import _fiber_gamma
 
         return _fiber_gamma(self.fiber, self.omega0)
@@ -804,7 +865,11 @@ class MultimodeSplitStepEngine:
             return float(self.xpm_weights[i, j])
         if i == j:
             return 1.0
-        return 1.0 if self.coef_model == "isotropic" else _LP_XPM
+        if self.coef_model == "isotropic":
+            return 1.0
+        if self.coef_model == "co_polarized":
+            return _CO_POL_XPM
+        return _LP_XPM
 
     def _fwm_allowed(self, m: int, n: int, p: int, q: int) -> bool:
         """Selection mask for the → m FWM term ``A_n A_p A_q*``.
@@ -830,6 +895,8 @@ class MultimodeSplitStepEngine:
             return complex(self.fwm_weights[m, n, p, q])
         if self.coef_model == "isotropic":
             return 1.0
+        if self.coef_model == "co_polarized":
+            return _CO_POL_FWM
         return _LP_FWM
 
     def _diagonal_phase(self, A: list[NDArray]) -> list[NDArray]:
@@ -901,13 +968,20 @@ class MultimodeSplitStepEngine:
             )
 
     def _photon_number(self, A: list[NDArray]) -> float:
-        """Blow & Wood App. Eq. (A5) photon number summed over channels."""
+        """Blow & Wood App. Eq. (A5) photon number summed over channels.
+
+        The spectral sum carries the grid measure ``dω`` exactly as the
+        scalar engine's ``_photon_number`` does; omitting it left the
+        recorded number off by a constant ``dω`` factor (relative drift
+        was unaffected, absolute values were not).
+        """
         omega0 = float(self.omega0)
+        dw = float(self.grid.dw)
         tot = 0.0
         for Ai in A:
             Aw = self.grid.fft(Ai)
             denom = omega0 + self.grid.w
-            tot += float(np.sum(np.abs(Aw) ** 2 / denom))
+            tot += float(np.sum(np.abs(Aw) ** 2 / denom) * dw)
         return tot
 
     def _raman_polarization(self, Ai: NDArray) -> NDArray:
@@ -1261,11 +1335,12 @@ class MultimodeSplitStepEngine:
     def _fwm_rate_max(self, A: list[NDArray], dz: float) -> tuple[float, int]:
         """Max exchange-pair exponential rate η and its offending channel.
 
-        The FWM driver amplitude for channel m is |γ f A²_n·A_q*|, i.e. the
+        The FWM driver amplitude for channel m is |C·A²_n·A_q*|, i.e. the
         creation rate per unit length; feasibility of the explicit RK4 update
         is governed by η·h ≤ 2.5 on the strongest pair (ISSUES.md #11).
+        ``_fwm_coupling`` is used rather than ``γ·factor`` so an absolute
+        ``fwm_coupling_tensor`` is not ignored by the stability estimate.
         """
-        gamma = self._gamma_v()
         N = self._n
         rate_max, arg_ch = 0.0, 0
         if self.fwm_full_tensor:
@@ -1293,9 +1368,16 @@ class MultimodeSplitStepEngine:
                 for q in range(m + 1, N):
                     if q == n or not self._fwm_allowed(m, n, n, q):
                         continue
-                    c = gamma * self._fwm_factor(m, n, n, q) * pump
-                    if abs(c) > rate_max:
-                        rate_max, arg_ch = abs(c), n
+                    # Both exchange arms are integrated; an absolute
+                    # fwm_coupling_tensor may be asymmetric, so the
+                    # stability estimate must see the larger one. Using
+                    # gamma*factor here ignored fwm_coupling_tensor
+                    # entirely (step10 audit, 2026-10).
+                    c_m = self._fwm_coupling(m, n, n, q) * pump
+                    c_q = self._fwm_coupling(q, n, n, m) * pump
+                    c = max(abs(c_m), abs(c_q))
+                    if c > rate_max:
+                        rate_max, arg_ch = c, n
         return rate_max, arg_ch
 
     def _coupling_rate_max(self, A: list[NDArray]) -> tuple[float, int]:

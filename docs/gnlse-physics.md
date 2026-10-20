@@ -142,3 +142,36 @@ Regression coverage: `tests/test_gnlse_convergence.py`,
 constant-drive conservation limit), `tests/test_gnlse_phonon_raman.py`
 (multi-mode response), `tests/test_gnlse_free_carrier.py` (analytic TPA
 attenuation `I₀/(1+βI₀z)` and the legacy-path contract).
+
+## 5. Static full-β(ω) for the scalar engines
+
+`SplitStepEngine` and `GNLSESolver` accept `full_beta=` alongside the Taylor
+`betas`. Pass either a callable `β(ω_abs)` (rad/m) or an array sampled on
+`grid.w`; `betas` may then be `None`.
+
+```python
+engine = SplitStepEngine(
+    wave, fiber, None, full_beta=beta_curve, step_size=Length(1e-3, "m")
+)
+```
+
+The linear step applies the retarded-frame phase
+
+```
+φ(Ω) = [β(ω₀+Ω) − β(ω₀)] − β₁(ω₀)·Ω
+```
+
+with a 4th-order centre slope and a cubic centre value. This is the same
+operator as `MultimodeSplitStepEngine(full_beta=[...])`; on a single mode the
+two engines agree to machine precision, and in the narrowband limit the
+operator agrees with an order-10 Taylor expansion.
+
+- `full_beta` and `dispersion_profile` are mutually exclusive: the former is
+  static, the latter is the z-dependent `β(ω,z)` path.
+- `scheme="etdrk4"` uses the same precomputed phase.
+- The adaptive step heuristic estimates β₂ from the curve at the carrier.
+- `TaperedGNLSESolver` remains the z-dependent API; use `SplitStepEngine` /
+  `GNLSESolver` for a static full-β deck.
+
+Regression coverage: `tests/test_gnlse_full_beta.py` (Taylor agreement,
+callable/array parity, N=1 multimode equivalence, ETDRK4, validation).

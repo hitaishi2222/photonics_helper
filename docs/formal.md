@@ -35,6 +35,10 @@ theorems, and a theorem that failed to compile would fail the build.
 | Conjugate symmetry | `Grid.conj_dft` | The conjugated-transform fast path `conj(DFT(conj(·)))` is an identity, not an approximation |
 | Hermitian symmetry | `Grid.hermitian` | A real input has a conjugate-paired spectrum — this is why the Raman `H(Ω)` is real |
 | Raman gain bound | `Nonlinear.ramanDrive_le_max` | A normalised, non-negative response cannot amplify past unity, whatever delay table is set |
+| Multimode coefficients | `Nonlinear.xpmFactor_coPolarized`, `fwmFactor_coPolarized` | Co-polarized spatial-mode SPM/XPM/FWM limits (SPM 1, XPM 2, FWM 1) — not the two-polarization 2/3 strip-down |
+| Multimode FWM gate | `Nonlinear.fwmAllowed_partner` | One angular-momentum check serves both arms of an exchange pair |
+| Multimode energy | `Nonlinear.depletedFwm_energy_conserved` | The depleted pump set conserves `Σ|A|²`; the pair-only approximation does not |
+| Shock once | `Nonlinear.shockSymbol_double_ne_single` | Applying `(1+Ωτ)` twice is `(1+Ωτ)²`, the regression the step10 fix pins |
 | Raman causality | `Nonlinear.ramanCausal`, `ramanDrive_early` | The retarded drive draws only on intensities at `t ≤ t′` |
 | Energy conservation | `Optics.DBR.energyConservation` | `R + T = 1` for a lossless stack |
 
@@ -47,7 +51,7 @@ Theorem names are cited in the docstrings of the Python symbols they govern.
 The specification is therefore traceable from the code without a build-time
 dependency on Lean — you can read the kernel and see which law it is asserting.
 
-Current status: **240 theorems, no outstanding proofs**, `lake build` green.
+Current status: **260 theorems, no outstanding proofs**, `lake build` green.
 
 ## What this does *not* verify
 

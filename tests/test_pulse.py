@@ -279,10 +279,12 @@ def test_parabolic_from_asymptotic_with_extra_chirp():
     assert pytest.approx(env.chirp, rel=1e-6) == expected_chirp
 
 
-def test_parabolic_fwhm_returns_T0():
-    """Parabolic shape fwhm property returns pulse_width (lower-bound)."""
+def test_parabolic_fwhm_is_analytic():
+    """Parabolic shape: intensity (1−x²)² half-max at x = √(1−1/√2)."""
     env = Envelope(shape="parabolic", peak_amplitude=1.0, pulse_width=Time(1.5, "ps"))
-    assert env.fwhm.as_s == env.pulse_width.as_s
+    expected = 2.0 * np.sqrt(1.0 - 1.0 / np.sqrt(2.0)) * env.pulse_width.as_s
+    assert pytest.approx(env.fwhm.as_s, rel=1e-12) == expected
+    assert pytest.approx(env.measured_width().as_s, rel=1e-12) == expected
 
 
 # ─── Cosine (raised) shape tests ───────────────────────────────────────
