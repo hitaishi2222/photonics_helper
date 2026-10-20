@@ -2,6 +2,14 @@
 
 # Photonics Helper
 
+<p>
+  <img src="https://github.com/hitaishi2222/photonics_helper/actions/workflows/ci.yml/badge.svg" alt="CI"/>
+  <img src="https://github.com/hitaishi2222/photonics_helper/actions/workflows/docs.yml/badge.svg" alt="Docs"/>
+  <img src="https://img.shields.io/pypi/v/photonics-helper.svg" alt="PyPI"/>
+  <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square"/>
+  <img src="https://img.shields.io/badge/python-3.12+-3776AB?style=flat-square&logo=python&logoColor=3776AB"/>
+</p>
+
 A comprehensive helper library for photonics and optics calculations.
 
 **Documentation:** <https://hitaishi2222.github.io/photonics_helper/>
