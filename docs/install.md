@@ -28,6 +28,43 @@ the system FFTW3 library with cached plans; otherwise the solver transparently
 falls back to `numpy.fft`. See [`fft backends`](api/fftw.md) and the env vars
 `PHOTONICS_FFTW_PLANNER`, `PHOTONICS_FFTW_THREADS`, `PHOTONICS_FFT_BACKEND`.
 
+## Lazy imports (Python 3.15+)
+
+The package is lazy by construction (PEP 562): `import photonics_helper` binds
+almost nothing, and each public name is imported from its defining submodule the
+first time it is accessed, so the plotting/web stack is never pulled in by a
+bare import.
+
+That laziness covers attribute access (`photonics_helper.Wavelength`). A
+`from photonics_helper import …` statement with a name you may never use still
+imports that name's submodule eagerly. On **Python 3.15+** you can defer it too
+with [PEP 810](https://docs.python.org/3.15/reference/simple_stmts.html#lazy-imports):
+
+```python
+lazy from photonics_helper import Wavelength  # numpy/scipy only on first use
+
+w = Wavelength(1550.0, "nm")  # reifies here
+```
+
+or enable it for the whole program without changing source:
+
+```bash
+python -X lazy_imports=all your_script.py
+```
+
+```python
+import sys
+
+sys.set_lazy_imports("all")  # equivalent, at runtime
+```
+
+Before 3.15 the `lazy` keyword is a `SyntaxError`. Use the attribute form
+(`import photonics_helper as ph` then `ph.Wavelength`), or a `from … import …`
+under `if TYPE_CHECKING:` for annotation-only imports.
+
+The guard `tests/test_lazy_import.py::test_pep810_lazy_from_import_defers_submodule`
+is skipped below 3.15 and activates automatically on a 3.15 interpreter.
+
 ## Development install
 
 ```bash

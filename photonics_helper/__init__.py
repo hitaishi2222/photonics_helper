@@ -586,6 +586,9 @@ def __getattr__(name: str) -> Any:
 
     module = importlib.import_module(module_name, __name__)
     value = getattr(module, _LAZY_ATTR.get(name, name))
+    # `name` is whitelisted by the `_LAZY_MODULES[name]` lookup above, so this is
+    # a static cache write, never attacker-controlled code generation.
+    # bearer:disable python_lang_code_injection
     globals()[name] = value  # cache so __getattr__ runs once
     return value
 

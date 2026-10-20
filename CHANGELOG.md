@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Documented PEP 810 (Python 3.15) lazy-import path.** `docs/install.md` now
+  covers `lazy from photonics_helper import …` and the process-wide
+  `-X lazy_imports=all` / `sys.set_lazy_imports("all")` opt-ins, which defer the
+  `from`-imported submodule (and its numpy/scipy/pydantic chain) until first use
+  — the one eager path the PEP 562 lazy surface does not cover. The `lazy`
+  keyword is a `SyntaxError` below 3.15.
+- **3.15-gated regression tests** in `tests/test_lazy_import.py`
+  (`test_pep810_lazy_from_import_defers_submodule`,
+  `test_pep810_lazy_import_reifies_to_same_object`). They skip below 3.15 and
+  activate automatically once CI has a 3.15 interpreter; they assert the
+  deferred statement loads no heavy dependency and reifies to the same object
+  as the PEP 562 attribute path.
+
 ## [0.1.11] — 2026-10-21
 
 ### Added

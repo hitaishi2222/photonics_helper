@@ -7,7 +7,10 @@ access. These tests pin that contract:
 - ``from photonics_helper import *`` works and binds every name;
 - the public surface matches a committed snapshot, so an accidental removal (or
   a silent addition) fails CI and must be a deliberate change;
-- importing the package does not import the heavy satellite modules.
+- importing the package does not import the heavy satellite modules;
+- on Python 3.15+ (PEP 810) a `lazy from photonics_helper import …` statement
+  defers the submodule import, and reifies to the same object as the PEP 562
+  attribute path. That test is skipped on older interpreters.
 """
 
 from __future__ import annotations
@@ -17,6 +20,8 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 import photonics_helper
 
@@ -85,3 +90,46 @@ def test_package_import_does_not_load_satellite_modules() -> None:
         [sys.executable, "-c", snippet], capture_output=True, text=True, check=True
     )
     assert proc.stdout.strip() == "[]", f"import pulled in {proc.stdout.strip()}"
+
+
+# ─── PEP 810 explicit lazy imports (Python 3.15+) ──────────────────────────
+
+# Heavy top-level modules a deferred ``from photonics_helper import Wavelength``
+# must not load until the name is actually used.
+_EAGER_DEPS = ("numpy", "scipy", "pydantic", "matplotlib")
+
+
+def _run_315(snippet: str) -> str:
+    proc = subprocess.run(
+        [sys.executable, "-c", snippet], capture_output=True, text=True, check=True
+    )
+    return proc.stdout.strip()
+
+
+@pytest.mark.skipif(
+    sys.version_info < (3, 15),
+    reason="PEP 810 lazy imports require Python 3.15+",
+)
+def test_pep810_lazy_from_import_defers_submodule() -> None:
+    """`lazy from photonics_helper import X` must not import X's submodule."""
+    loader = _run_315(
+        "import json, sys, photonics_helper; "
+        "lazy from photonics_helper import Wavelength; "
+        "print(json.dumps(sorted(m for m in %r if m in sys.modules)))" % (_EAGER_DEPS,)
+    )
+    assert json.loads(loader) == [], f"deferred import pulled in {loader}"
+
+
+@pytest.mark.skipif(
+    sys.version_info < (3, 15),
+    reason="PEP 810 lazy imports require Python 3.15+",
+)
+def test_pep810_lazy_import_reifies_to_same_object() -> None:
+    """First use reifies the lazy binding to the PEP 562 attribute object."""
+    result = _run_315(
+        "import sys, photonics_helper as ph; "
+        "lazy from photonics_helper import Wavelength; "
+        "w = Wavelength(1550.0, 'nm'); "
+        "print(w, Wavelength is ph.Wavelength, 'numpy' in sys.modules)"
+    )
+    assert result == "1550.00 nm True True", result
