@@ -19,6 +19,10 @@ date-released: "2026-10-22"
 license: MIT
 repository-code: "https://github.com/hitaishi2222/photonics_helper"
 url: "https://hitaishi2222.github.io/photonics_helper/"
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.23553314
+    description: Zenodo archive of release v0.1.11 (concept DOI 10.5281/zenodo.23553313)
 keywords:
   - photonics
   - nonlinear optics

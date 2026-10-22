@@ -29,5 +29,7 @@
       "resource_type": "software"
     }
   ],
-  "publication_date": "2026-10-22"
+  "publication_date": "2026-10-22",
+  "doi": "10.5281/zenodo.23553314",
+  "conceptdoi": "10.5281/zenodo.23553313"
 }
