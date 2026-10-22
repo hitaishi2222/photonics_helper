@@ -45,8 +45,10 @@ nk_datasets/yaml/
 # Generated mkdocs site (built/deployed by .github/workflows/docs.yml)
 site/
 
-# Paper draft render (local sanity check; JOSS/Whedon builds its own PDF)
+# Paper draft renders (local sanity check; JOSS/Whedon builds its own PDF)
 paper/paper_draft.pdf
+paper/paper.pdf
+paper/jats/
 
 # Reproduction reprints & rendered page images (local only, do not commit)
 reproductions/**/*.pdf
