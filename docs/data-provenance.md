@@ -18,9 +18,9 @@ in the repository.
 | Table | Rows | Contents | Provenance |
 |---|---|---|---|
 | `nk_data` | 24 767 | tabulated `n`, `k` vs λ (µm) for 12 materials | `source`, `citation` (24 760 / 24 767 populated), `license` |
-| `sellmeier` | 39 | Sellmeier coefficients + validity window | `source` (39 / 39), `license` |
-| `raman_specs` | 44 | Raman shift, linewidth, `f_R`, `n₂`, gain | `references` (44 / 44), `license` |
-| `phonon_modes` | 52 | multi-mode phonon data for 10 crystals | `note`, `license` |
+| `sellmeier` | 41 | Sellmeier coefficients + validity window | `source` (41 / 41), `license` |
+| `raman_specs` | 45 | Raman shift, linewidth, `f_R`, `n₂`, gain | `references` (45 / 45), `license` |
+| `phonon_modes` | 59 | multi-mode phonon data for 11 crystals | `note`, `license` |
 | `provenance` | 30 | central registry joinable via `nk_data.source` | `source_key`, `citation`, `doi`, `url`, `license` |
 
 Every data row also carries a `license`. Concrete identifiers are used only

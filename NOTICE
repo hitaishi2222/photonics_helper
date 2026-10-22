@@ -14,9 +14,9 @@ so that users, institutions and downstream packagers can audit those terms.
 | Table | Rows | What it holds | Provenance |
 |---|---|---|---|
 | `nk_data` | 24 767 | tabulated `n`, `k` vs wavelength (µm) for 12 materials | `source` + `citation` columns (24 760 / 24 767 populated), `license` |
-| `sellmeier` | 39 | Sellmeier coefficients per material + validity window | `source` column (39 / 39 populated), `license` |
-| `raman_specs` | 44 | Raman shift, linewidth, f_R, n₂, gain, references | `references` column (44 / 44 populated), `license` |
-| `phonon_modes` | 52 | multi-mode phonon data for 10 crystals | `note` column, `license` |
+| `sellmeier` | 41 | Sellmeier coefficients per material + validity window | `source` column (41 / 41 populated), `license` |
+| `raman_specs` | 45 | Raman shift, linewidth, f_R, n₂, gain, references | `references` column (45 / 45 populated), `license` |
+| `phonon_modes` | 59 | multi-mode phonon data for 11 crystals | `note` column, `license` |
 | `provenance` | 30 | central registry joinable via `nk_data.source` | `source_key`, `citation`, `doi`, `url`, `license` |
 
 Every data row carries a `license`. Concrete identifiers are used only where a

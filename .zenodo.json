@@ -1,0 +1,32 @@
+{
+  "title": "photonics-helper: photonics, fiber-optics and nonlinear-optics helpers for Python",
+  "version": "0.1.11",
+  "upload_type": "software",
+  "description": "<p>A Python library providing a stable foundation for photonics computation: type-safe units and constants, temporal/spectral grids, an auditable optical material database, and a suite of nonlinear-optics tools (GNLSE propagation, soliton and breather analysis, Raman response and noise, phase-matching diagnostics, chi-squared mixing, DBR/TMM stacks, FROG retrieval, structured light), validated against results from the literature.</p>",
+  "creators": [
+    {
+      "affiliation": "Independent Researcher",
+      "family_names": "V",
+      "given_names": "Hitaishi"
+    }
+  ],
+  "keywords": [
+    "photonics",
+    "nonlinear optics",
+    "supercontinuum generation",
+    "generalized nonlinear Schroedinger equation",
+    "optical fibers",
+    "integrated photonics",
+    "materials data"
+  ],
+  "license": "MIT",
+  "access_right": "open",
+  "related_identifiers": [
+    {
+      "scheme": "url",
+      "identifier": "https://github.com/hitaishi2222/photonics_helper",
+      "relation": "isSupplementTo",
+      "resource_type": "software"
+    }
+  ]
+}

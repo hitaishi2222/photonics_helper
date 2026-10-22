@@ -3137,11 +3137,16 @@ all = [
     { name = "tqdm" },
 ]
 dev = [
+    { name = "coverage" },
     { name = "hypothesis" },
+    { name = "mpmath" },
     { name = "mypy" },
+    { name = "pre-commit" },
     { name = "pytest" },
+    { name = "pytest-xdist" },
     { name = "pyyaml" },
     { name = "ruff" },
+    { name = "tqdm" },
 ]
 docs = [
     { name = "mkdocstrings", extra = ["python"] },
@@ -3186,6 +3191,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "coverage", marker = "extra == 'dev'", specifier = ">=7.0" },
     { name = "dash", marker = "extra == 'all'", specifier = ">=2.18.0" },
     { name = "dash", marker = "extra == 'webapp'", specifier = ">=2.18.0" },
     { name = "femwell", marker = "extra == 'mode-export'", specifier = ">=0.1.12" },
@@ -3194,21 +3200,25 @@ requires-dist = [
     { name = "imageio", marker = "extra == 'extras'", specifier = ">=2.33" },
     { name = "matplotlib", specifier = ">=3.10.3" },
     { name = "mkdocstrings", extras = ["python"], marker = "extra == 'docs'", specifier = ">=0.26" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.13,<2.4" },
+    { name = "mpmath", marker = "extra == 'dev'", specifier = ">=1.3.0" },
+    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.15.0" },
     { name = "numpy", specifier = ">=2.2.6" },
     { name = "plotly", marker = "extra == 'all'", specifier = ">=5.0" },
     { name = "plotly", marker = "extra == 'plotting'", specifier = ">=5.0" },
+    { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=3.8.0" },
     { name = "pydantic", specifier = ">=2.12.5" },
     { name = "pyfftw", marker = "extra == 'all'", specifier = ">=0.15.1" },
     { name = "pyfftw", marker = "extra == 'fftw'", specifier = ">=0.15.1" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.0.2" },
+    { name = "pytest-xdist", marker = "extra == 'dev'", specifier = ">=3.8.0" },
     { name = "pyyaml", marker = "extra == 'dev'", specifier = ">=6.0" },
     { name = "rich", specifier = ">=14.3.3" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.11.0" },
     { name = "scipy", specifier = ">=1.15.3" },
     { name = "tidy3d", marker = "extra == 'mode-export'", specifier = ">=2.12" },
     { name = "torch", marker = "extra == 'pinns'", specifier = ">=2.0" },
     { name = "tqdm", marker = "extra == 'all'", specifier = ">=4.66" },
+    { name = "tqdm", marker = "extra == 'dev'", specifier = ">=4.66" },
     { name = "tqdm", marker = "extra == 'examples'", specifier = ">=4.66" },
     { name = "zensical", marker = "extra == 'docs'", specifier = ">=0.0.60" },
 ]

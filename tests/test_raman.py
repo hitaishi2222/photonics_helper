@@ -479,7 +479,7 @@ class TestRAMAN_MATERIALS:
 
     def test_material_count(self):
         """Test that RAMAN_MATERIALS has the expected number of entries (31 + Si3N4-Ligentec)."""
-        assert len(RAMAN_MATERIALS) == 32
+        assert len(RAMAN_MATERIALS) == 33
 
     def test_all_original_materials_present(self):
         """Test original 8 materials are still present."""

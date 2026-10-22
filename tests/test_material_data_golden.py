@@ -33,9 +33,9 @@ def test_row_counts_are_stable() -> None:
     finally:
         con.close()
     assert counts["nk_data"] == 24767
-    assert counts["sellmeier"] == 40
-    assert counts["raman_specs"] == 44
-    assert counts["phonon_modes"] == 52
+    assert counts["sellmeier"] == 41
+    assert counts["raman_specs"] == 45
+    assert counts["phonon_modes"] == 59
 
 
 # ─── Refractive index ─────────────────────────────────────────────────────
@@ -56,6 +56,8 @@ def test_row_counts_are_stable() -> None:
         ("As2S3", 2.0, 2.426149, 5e-4),  # Rodney 1958
         ("As2Se3", 2.0, 2.808214, 5e-4),  # Thompson 2008
         ("MgF2", 2.0, 1.367835, 5e-4),  # Dodge 1984 o-ray (B=λ_res^2!)
+        # Phase M Ge-Sb-Se pair (Wu/Ding/Peng, Appl. Sci. 13, 12923 (2023))
+        ("GeSbSe", 2.0, 2.677601, 5e-4),  # Ge12.5Sb15Se72.5 core
     ],
 )
 def test_refractive_index_golden(
@@ -93,6 +95,7 @@ def test_silicon_tabulated_golden() -> None:
     [
         ("Silica", 440.0, 45.0, 0.18),
         ("GeAsSe", 250.0, 50.0, 0.5),
+        ("GeSbSe", 198.1, 9.33, 0.4615),
     ],
 )
 def test_raman_spec_golden(
@@ -105,6 +108,17 @@ def test_raman_spec_golden(
 
 
 # ─── Phonon modes ─────────────────────────────────────────────────────────
+
+
+def test_gesbse_phonon_golden() -> None:
+    """The 7-mode Ge-Sb-Se fit must stay complete and correctly ordered."""
+    modes = PHONON_MATERIALS["GeSbSe"]
+    assert len(modes) == 7
+    strongest = max(modes, key=lambda m: m.relative_strength)
+    assert strongest.shift_cm.as_1_cm == pytest.approx(198.10, abs=1e-9)
+    assert strongest.relative_strength == pytest.approx(26.79, abs=1e-9)
+    shifts = [m.shift_cm.as_1_cm for m in modes]
+    assert shifts == sorted(shifts)
 
 
 def test_linbo3_phonon_golden() -> None:

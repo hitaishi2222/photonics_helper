@@ -11,12 +11,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **GeSbSe (Ge₁₂.₅Sb₁₅Se₇₂.₅) material.** Sellmeier (Wu, Ding & Peng,
+  *Appl. Sci.* 13, 12923 (2023), Table 2), a seven-mode Hollenbeck–Cantrell
+  phonon model, and a Raman spec with published `f_R = 0.4615` (bracket
+  0.17–0.46 recorded); `n₂` from Wang et al., *Opt. Mater. Express* 4, 1011
+  (2014). Golden/drift tests updated. Tests:
+  `tests/test_material_data_golden.py`, `tests/test_raman.py`.
 - **Documented PEP 810 (Python 3.15) lazy-import path.** `docs/install.md` now
   covers `lazy from photonics_helper import …` and the process-wide
   `-X lazy_imports=all` / `sys.set_lazy_imports("all")` opt-ins, which defer the
   `from`-imported submodule (and its numpy/scipy/pydantic chain) until first use
   — the one eager path the PEP 562 lazy surface does not cover. The `lazy`
   keyword is a `SyntaxError` below 3.15.
+- **`photonics_helper.__version__`.** Resolved lazily from installed-package
+  metadata on first access so the eager import surface stays unchanged.
+
+### Fixed
+
+- **Correction register restored (`ISSUES.md`).** The register had been
+  retired in 0.1.11, but module docstrings, tests and reproduction READMEs cite
+  its issue numbers (`ISSUES.md #N`), so it is restored verbatim as a stable
+  historical register (all items resolved; new issues go to GitHub).
+- **Docs nav** no longer lists the removed `api/raman-multipump.md` and
+  `api/raman-cascade-ss.md` pages, and the defunct `polyfill.io` CDN script was
+  dropped from `mkdocs.yml`.
+- **Count/provenance sync**: material counts (45 materials, 41 Sellmeier,
+  45 Raman specs, 59 phonon modes / 11 crystals) aligned across `README.md`,
+  `NOTICE`, `docs/data-provenance.md` and the paper; example count (45) and
+  reproduction count (27) in `README.md`; examples 44–45 added to
+  `examples/README.md`.
+- **Citation of the `shg_lnoi_shg` reproduction verified** via Crossref:
+  Wang, Xiong, Andrade, Venkataraman, Ren, Guo & Lončar, *Opt. Express* **25**(6),
+  6963–6974 (2017), doi:10.1364/OE.25.006963; `paper.bib` author list corrected
+  accordingly.
 - **3.15-gated regression tests** in `tests/test_lazy_import.py`
   (`test_pep810_lazy_from_import_defers_submodule`,
   `test_pep810_lazy_import_reifies_to_same_object`). They skip below 3.15 and

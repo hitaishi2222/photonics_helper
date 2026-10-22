@@ -943,4 +943,25 @@ PHONON_MATERIALS: dict[str, list[PhononMode]] = {
             note="Salaun et al. (1997)",
         ),
     ],
+    # Ge-Sb-Se (Ge12.5Sb15Se72.5): measured spontaneous Raman, fitted with the
+    # seven-mode Hollenbeck-Cantrell model. Relative strengths are the published
+    # peak intensities (10^-12 m/W/THz); Lorentzian FWHM is used as the mode
+    # width (the source also lists a Gaussian FWHM, L/G = 3.0).
+    # Source: Wu, Ding & Peng, Appl. Sci. 13, 12923 (2023), Table 1.
+    "GeSbSe": [
+        PhononMode(Wavenumber(49.63, "1/cm"), Wavenumber(3.36, "1/cm"), None, 4.14,
+                   note="Appl. Sci. 13, 12923 (2023) Table 1"),
+        PhononMode(Wavenumber(59.55, "1/cm"), Wavenumber(5.54, "1/cm"), None, 7.20,
+                   note="Appl. Sci. 13, 12923 (2023) Table 1"),
+        PhononMode(Wavenumber(75.90, "1/cm"), Wavenumber(9.10, "1/cm"), None, 10.86,
+                   note="Appl. Sci. 13, 12923 (2023) Table 1"),
+        PhononMode(Wavenumber(103.96, "1/cm"), Wavenumber(14.49, "1/cm"), None, 17.61,
+                   note="Appl. Sci. 13, 12923 (2023) Table 1"),
+        PhononMode(Wavenumber(198.10, "1/cm"), Wavenumber(9.33, "1/cm"), None, 26.79,
+                   note="SbSe3/2 pyramids - dominant band"),
+        PhononMode(Wavenumber(212.44, "1/cm"), Wavenumber(28.26, "1/cm"), None, 22.58,
+                   note="Appl. Sci. 13, 12923 (2023) Table 1"),
+        PhononMode(Wavenumber(257.42, "1/cm"), Wavenumber(5.58, "1/cm"), None, 4.87,
+                   note="Se-Se / Sb-Sb homopolar"),
+    ],
 }

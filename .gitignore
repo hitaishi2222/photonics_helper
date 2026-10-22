@@ -19,12 +19,10 @@ REPORT.md
 AGENTS.md
 DATABASE.md
 
-graphify-out
+graphify-out/
 .pi
 .cursor
 openspec
-
-graphify-out/
 
 # Generated interactive/plotly HTML (regenerate with the example scripts)
 examples/*.html
@@ -50,12 +48,18 @@ site/
 # Reproduction reprints & rendered page images (local only, do not commit)
 reproductions/**/*.pdf
 reproductions/planned/**/pages/
+# Reproduction run logs are not committed — except the two that reproduction
+# READMEs cite as recorded provenance.
+reproductions/**/*.log
+!reproductions/heidt_2009_adaptive_step/full_validate.log
+!reproductions/krupa_2019_multimode/krupa_test.log
 tests/test_reproductions.py
 oe2001_checkpoint_A.pt
 
 # --- Repowise (local code-intelligence index; regenerate with `repowise init`) ---
 .repowise/
 .mcp.json
+.github/copilot-instructions.md
 .vscode/
 .claude/
 

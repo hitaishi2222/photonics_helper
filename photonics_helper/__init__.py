@@ -579,6 +579,18 @@ _LAZY_ATTR: dict[str, str] = {"dashboard_app": "app"}
 
 def __getattr__(name: str) -> Any:
     """Import and cache a public name on first access (PEP 562)."""
+    if name == "__version__":
+        # Resolved lazily from installed-package metadata so the eager import
+        # surface stays free of `importlib.metadata` (and its transitive stdlib
+        # imports). Falls back for source checkouts without an installed dist.
+        import importlib.metadata as _md
+
+        try:
+            version = _md.version("photonics-helper")
+        except _md.PackageNotFoundError:
+            version = "unknown"
+        globals()["__version__"] = version
+        return version
     try:
         module_name = _LAZY_MODULES[name]
     except KeyError:

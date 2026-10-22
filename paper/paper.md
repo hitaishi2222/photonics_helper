@@ -13,7 +13,7 @@ authors:
 affiliations:
   - name: Independent Researcher
     index: 1
-date: 19 September 2026
+date: 22 October 2026
 bibliography: paper.bib
 ---
 
@@ -35,12 +35,13 @@ On top of the core, the library provides a solver suite:
 
 - **GNLSE propagation** (split-step, adaptive stepping, z-dependent dispersion,
   tapered waveguides) with Kerr, delayed Raman, self-steepening, two-photon
-  absorption and a stochastic Raman noise source;
+  absorption and a stochastic Raman noise source [@blow1989theoretical],
+  integrated with the fourth-order RK4IP scheme [@hult2007fourthorder];
 - **soliton and breather analysis** (soliton order, fission length, dispersive
-  waves, Raman self-frequency shift, Kuznetsov–Ma / Peregrine / Akhmediev
-  solutions);
+  waves, Raman self-frequency shift [@gordon1986theory], Kuznetsov–Ma /
+  Peregrine / Akhmediev solutions);
 - **Raman response and material data** (time- and frequency-domain responses,
-  pumped Stoke/anti-Stokes explorers, 44 materials with provenance);
+  pumped Stoke/anti-Stokes explorers, 45 materials with provenance);
 - **phase-matching diagnostics** for four-wave mixing, modulation instability
   and Cherenkov dispersive waves; **χ⁽²⁾ mixing** (SHG/SFG/DFG with
   quasi-phase-matching and modal-overlap coupling); **DBR/TMM** stacks;
@@ -54,9 +55,10 @@ factor-of-1000 class of error that dominates photonics code. Second, the
 library's trust model is **agreement with the literature** rather than agreement
 with another code: `reproductions/` contains self-contained studies that
 reproduce published results and assert them against closed-form references,
-including supercontinuum generation, Raman soliton self-frequency shift,
-Cherenkov dispersive waves, modulation instability, breathers and dispersive
-broadening.
+including supercontinuum generation [@dudley2006supercontinuum], Raman soliton
+self-frequency shift [@gordon1986theory], self-phase modulation
+[@stolen1978self], Cherenkov dispersive waves, modulation instability,
+breathers and dispersive broadening.
 
 # Statement of need
 
@@ -71,7 +73,8 @@ direction) that survive unit tests and only appear when a result is compared
 with an experiment or a published figure.
 
 `photonics-helper` addresses this by making the plumbing a stable, documented,
-tested foundation and by treating published results as the acceptance criterion.
+tested foundation and by treating published results as
+the acceptance criterion.
 Specifically it provides:
 
 - **A frozen, dependency-light core** (`photonics_helper.core`) with a published
@@ -102,9 +105,10 @@ Specifically it provides:
   the register is public and the correction history is kept.
 
 The intended users are photonics researchers and educators who need trustworthy
-building blocks: students learning pulse propagation with correct conventions,
-and researchers who want to prototype a supercontinuum, sensing or
-structured-light study without rebuilding units, grids and material data. While
+building blocks: students learning pulse propagation with correct conventions
+[@agrawal2013nonlinear], and researchers who want to prototype a
+supercontinuum, sensing or structured-light study without rebuilding units,
+grids and material data. While
 general-purpose scientific packages provide the numerical substrate
 [@harris2020numpy; @virtanen2020scipy; @hunter2007matplotlib], and
 photonic-specific projects exist for layout or mode solving, this library

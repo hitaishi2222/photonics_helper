@@ -419,6 +419,30 @@ RAMAN_MATERIALS: dict[str, dict] = {
         "to_phonon_cm": None,
         "references": "Richardson, Chalcogenide glass fibers for nonlinear optics; ~2× As2Se3 (Slusher et al., JOSA B 21, 1146)",
     },
+    "GeSbSe": {
+        "name": "GeSbSe",
+        "crystal": "Amorphous (Ge12.5Sb15Se72.5)",
+        "bandgap_eV": 1.62,
+        # n2 at 1550 nm: Ge15Sb15Se70 / Ge15Sb10Se75 z-scan series (Wang 2014).
+        # 2 um value is a bracket: 7.4-10.0e-18 (flat-tail extrapolation).
+        "n2": 8.7e-18,
+        "raman_shift_cm": 198.1,
+        "raman_linewidth_cm": 9.33,
+        # Published KK value. The same inversion run with Peng 2017's gain and
+        # Wang 2014's n2 gives 0.170, so the working bracket is 0.17-0.46; use
+        # phonon_response(fR=...) to select a bracket case.
+        "fR": 0.4615,
+        "gain_coeff": 2.9e-11,
+        "lo_phonon_cm": None,
+        "to_phonon_cm": None,
+        "references": (
+            "Sellmeier + 7-mode Raman + fR: Wu, Ding & Peng, Appl. Sci. 13, 12923 "
+            "(2023) doi:10.3390/app132312923. n2/Eg/beta_TPA: Wang et al., Opt. "
+            "Mater. Express 4, 1011 (2014) doi:10.1364/OME.4.001011. Raman gain "
+            "cross-check: Peng et al., Appl. Phys. B 123, 261 (2017). "
+            "fR bracket 0.17-0.46 (published 0.4615; gain+n2 inversion 0.170)."
+        ),
+    },
 }
 
 # Thorlabs optical substrates (refractive index / Sellmeier; no Raman response)

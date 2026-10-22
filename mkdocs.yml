@@ -59,7 +59,6 @@ markdown_extensions:
       generic: true
 
 extra_javascript:
-  - https://polyfill.io/v3/polyfill.min.js?features=es6
   - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
 
 nav:
@@ -89,8 +88,6 @@ nav:
       - χ⁽²⁾ nonlinear optics (SHG / SFG / DFG): api/chi2.md
       - Raman scattering: api/raman.md
       - Raman cascade (CW) & RIN transfer: api/raman-transfer.md
-      - Raman cascade (multi-pump) & reproductions: api/raman-multipump.md
-      - Raman cascade (split-step) & noise: api/raman-cascade-ss.md
       - Soliton analysis: api/soliton.md
       - Breathers and exact solutions: api/breathers.md
       - Noise sources: api/noise.md

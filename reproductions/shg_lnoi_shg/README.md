@@ -1,16 +1,19 @@
 # SHG coupling in x-cut LNOI — Wang et al. (2017)
 
-**Reference (as cited throughout this repo):** Wang et al., *Opt. Express*
-**25**(6), 6963 (2017) — the χ⁽²⁾ mode-overlap coupling paper behind the
-`chi2` overlap API. See `openspec/specs/chi2-mode-overlap/spec.md`,
-`chi2.py:753` and `tests/test_materials.py:173`, which all cite it the same way.
+**Reference:** Wang, C., Xiong, X., Andrade, N., Venkataraman, V., Ren, X.-F.,
+Guo, G.-C. & Lončar, M., "Second harmonic generation in nano-structured
+thin-film lithium niobate waveguides", *Opt. Express* **25**(6), 6963–6974
+(2017), doi:[10.1364/OE.25.006963](https://doi.org/10.1364/OE.25.006963) —
+the χ⁽²⁾ mode-overlap coupling paper behind the `chi2` overlap API. See
+`openspec/specs/chi2-mode-overlap/spec.md`, `chi2.py:753` and
+`tests/test_materials.py:173`, which all cite it the same way.
 
-> ⚠️ **Citation not verified.** The repo records no DOI for this paper, and
-> *Opt. Express* **25**, 6963–6973 (2017) is also the page range of Allison et
-> al. on PPLN waveguides for supercontinuum generation. The author should
-> confirm which paper the `chi2` overlap API was implemented against before
-> this deck is cited externally; until then the parameter anchors below are
-> "as-implemented", not "as-published".
+> ✅ **Citation verified (2026-10-22, Crossref DOI lookup).** The DOI resolves
+> to the paper above — the title matches this deck's content (uniform and
+> periodically-grooved LNOI SHG coupling), and the earlier page-range collision
+> with Allison et al. was a citation typo, now corrected. The parameter anchors
+> below remain "as-implemented" (scalar toy modes), as stated in the status
+> section.
 
 **What this deck reproduces.** The *overlap-based* coupling constants the
 article builds its PGLN design on, computed with the `photonics_helper.chi2`
@@ -57,6 +60,7 @@ database without the LiNbO₃ row. Switching sources moved every result by
    reproduction of the article's `g`/`g'` needs the actual mode profiles.
 2. **`Δk` is article-anchored**, not computed from the groove period and poling
    period of this specific geometry.
-3. **The citation itself is unverified** (see the warning at the top).
+3. **Toy-mode caveat carries the quantitative gap** — see the status section (the
+   citation itself is now verified).
 4. Not registered in `tests/test_reproductions.py` (fast, but the quantitative
    anchors live outside the repo).

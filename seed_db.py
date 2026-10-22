@@ -175,6 +175,20 @@ SELLMEIER_MATERIALS = {
             "doi:10.1364/OE.21.029927; Karim PhD thesis (2015) Table 6.1"
         ),
     },
+    "GeSbSe": {
+        "form": "standard",
+        "a0": 1.0,
+        # Ge12.5Sb15Se72.5 (Phase M design core), n^2 = 1 + sum B l^2/(l^2 - C)
+        "coefficients": [45.2485, 6.1319],
+        "wavelengths": [36530.3824, 0.0276],
+        "valid_from_um": 1.0,
+        "valid_to_um": 14.0,
+        "source": (
+            "Ge12.5Sb15Se72.5; Wu, Ding & Peng, Appl. Sci. 13, 12923 (2023), "
+            "doi:10.3390/app132312923, Table 2 (IR ellipsometry Sellmeier fit). "
+            "n(2 um)=2.6776, material ZDW 4.49 um (recomputed from the coefficients)."
+        ),
+    },
     "As2S3": {
         "form": "standard",
         "a0": 1.0,

@@ -174,7 +174,7 @@ Output:
 
 ## Examples
 
-See `examples/` for 43 runnable examples covering:
+See `examples/` for 45 runnable examples covering:
 
 - Pulse visualization and FROG
 - Raman response and material comparison
@@ -189,14 +189,14 @@ See `examples/` for 43 runnable examples covering:
 
 ## Reproductions
 
-See `reproductions/` for literature reproductions (12 papers reproduced).
+See `reproductions/` for literature reproductions (27 papers reproduced).
 
 ---
 
 ## Material Database
 
-The SQLite material database (`materials.db`) ships with 44 materials,
-39 Sellmeier equations, and 30 tabulated n/k datasets.
+The SQLite material database (`materials.db`) ships with 45 materials,
+41 Sellmeier equations, and 30 tabulated n/k datasets.
 All 30 source keys are loadable through `RefractiveIndex.from_material_database`.
 
 ---
