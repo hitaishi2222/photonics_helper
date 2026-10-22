@@ -44,6 +44,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Wang, Xiong, Andrade, Venkataraman, Ren, Guo & Lončar, *Opt. Express* **25**(6),
   6963–6974 (2017), doi:10.1364/OE.25.006963; `paper.bib` author list corrected
   accordingly.
+- **Release-date metadata**: `CITATION.cff` `date-released` and the `.zenodo.json`
+  `publication_date` corrected to the actual release date (2026-10-22).
 - **3.15-gated regression tests** in `tests/test_lazy_import.py`
   (`test_pep810_lazy_from_import_defers_submodule`,
   `test_pep810_lazy_import_reifies_to_same_object`). They skip below 3.15 and
