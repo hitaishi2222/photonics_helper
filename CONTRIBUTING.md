@@ -97,3 +97,10 @@ the point is agreement with physics, not with another code.
 - Prefer analytic checks and limiting cases in tests over snapshot-only tests.
 - Keep new dependencies optional unless the core genuinely needs them; `core`
   must stay numpy/scipy/pydantic only.
+
+## AI usage
+
+AI coding assistants are used in this project's development; the disclosure
+required by JOSS (and good practice generally) is in [`AI-USAGE.md`](AI-USAGE.md).
+Contributors using AI tools must review and validate their AI-assisted outputs
+and disclose substantive use in their pull request description.
