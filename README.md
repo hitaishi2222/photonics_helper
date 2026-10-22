@@ -6,6 +6,7 @@
   <img src="https://github.com/hitaishi2222/photonics_helper/actions/workflows/ci.yml/badge.svg" alt="CI"/>
   <img src="https://github.com/hitaishi2222/photonics_helper/actions/workflows/docs.yml/badge.svg" alt="Docs"/>
   <img src="https://img.shields.io/pypi/v/photonics-helper.svg" alt="PyPI"/>
+  <a href="https://doi.org/10.5281/zenodo.23553313"><img src="https://zenodo.org/badge/DOI/10.5281/zenodo.23553313.svg" alt="DOI"/></a>
   <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square"/>
   <img src="https://img.shields.io/badge/python-3.12+-3776AB?style=flat-square&logo=python&logoColor=3776AB"/>
 </p>
@@ -208,6 +209,13 @@ python -m pytest tests/
 ```
 
 ---
+
+## Citing
+
+If you use photonics-helper in your research, please cite it. Metadata is in
+[`CITATION.cff`](CITATION.cff); the archive DOI is
+[10.5281/zenodo.23553313](https://doi.org/10.5281/zenodo.23553313)
+(concept DOI; each release has its own version DOI).
 
 ## License
 
