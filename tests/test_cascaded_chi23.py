@@ -80,7 +80,7 @@ class TestCascadedLimit:
         sigma = 0.02
         delta_k = 40.0
         L = 0.5
-        # required: |Δk| ≫ σ√P₀; here σ√P0 = 0.0245 ≪ 40 ✓
+        # required: |Δk| ≫ σ√P₀; here σ√P0 = 0.0245 ≪ 40
         bridge_gamma = 0.05  # small explicit Kerr on top
         r = solve_cascaded_shg(
             length=L,

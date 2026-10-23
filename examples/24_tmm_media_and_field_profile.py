@@ -131,4 +131,4 @@ fig.savefig("examples/images/tmm_media_field_profile.png", dpi=150, bbox_inches=
 print("  Saved examples/images/tmm_media_field_profile.png")
 plt.close(fig)
 
-print("\n✓ TMM media/field-profile example complete")
+print("\nTMM media/field-profile example complete")

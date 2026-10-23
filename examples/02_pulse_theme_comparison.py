@@ -54,4 +54,4 @@ fig_3d_dark = pulse.visualize_3d(theme="dark")
 fig_3d_dark.write_html("examples/images/pulse_3d_dark_plotly.html")
 print("Saved pulse_3d_dark_plotly.html")
 
-print("\n✓ Theme comparison examples saved to examples/")
+print("\nTheme comparison examples saved to examples/")

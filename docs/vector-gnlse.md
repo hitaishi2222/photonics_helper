@@ -1,5 +1,7 @@
 # Vector / polarization-coupled GNLSE
 
+> Not sure whether this is the right engine? See **[Choosing a solver](choose-a-solver.md)**.
+
 The scalar `SplitStepEngine` (see [GNLSE physics](gnlse-physics.md)) solves a
 single slowly-varying envelope. This page documents the **vector** engine
 (`photonics_helper.vector_gnlse`), which propagates the field as a

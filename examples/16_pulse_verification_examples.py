@@ -110,7 +110,7 @@ def example_gaussian_chirp_sweep():
 
     max_error = max(ratios)
     print(f"\nMax relative error: {max_error * 100:.1f}%")
-    print(f"Code agrees with theory: {'✓' if max_error < 0.1 else '✗'}")
+    print(f"Code agrees with theory: {'yes' if max_error < 0.1 else 'FAIL'}")
 
     # Plot
     fig, ax = plt.subplots(figsize=(6, 4))
@@ -193,7 +193,7 @@ def example_tbp_comparison():
         tbp = wave.time_bandwidth_product()
         theo = theoretical_tbp.get(shape)
         if theo is not None:
-            match = "✓" if abs(tbp - theo) / theo < 0.05 else "?"
+            match = "yes" if abs(tbp - theo) / theo < 0.05 else "?"
             print(f"{shape:<16s}  {tbp:10.4f}  {theo:12.4f}  {match:>6s}")
         else:
             print(f"{shape:<16s}  {tbp:10.4f}  {'(numerical)':>12s}  {'-':>6s}")
@@ -276,7 +276,7 @@ def example_frog_retrieval():
         "Fidelity > 0.99 is the correct quality metric (Reid et al., Opt. Commun. 181, 73 (2000))."
     )
     all_pass = all(f > 0.99 for f in results)
-    print(f"All retrievals passed (>0.99 fidelity): {'✓' if all_pass else '✗'}")
+    print(f"All retrievals passed (>0.99 fidelity): {'yes' if all_pass else 'FAIL'}")
 
 
 # ─── Example 4: Parabolic Pulse ────────────────────────────────────
@@ -318,7 +318,7 @@ def example_parabolic_pulse():
 
         print(f"{g0z:8.3f}  {alpha_theory:10.4f}  {alpha_theory:10.4f}")
 
-    print("\n✓ Code uses α = 0.2726 · g₀ · z (Gordon 2004)")
+    print("\nCode uses α = 0.2726 · g₀ · z (Gordon 2004)")
 
 
 # ─── Example 5: Airy Pulse Acceleration ────────────────────────────
@@ -357,7 +357,7 @@ def example_airy_acceleration():
         f"Direction: {'toward +t (positive)' if peak_t > 0 else 'toward -t (negative)'}"
     )
     print(
-        f"Convention matches Siviloglou & Christodoulides: {'✓' if peak_t > 0 else '✗'}"
+        f"Convention matches Siviloglou & Christodoulides: {'yes' if peak_t > 0 else 'FAIL'}"
     )
 
 

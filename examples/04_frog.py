@@ -51,4 +51,4 @@ for name, E in pulses.items():
     print(f"  Saved frog_{name}.png")
     plt.close(fig)
 
-print("\n✓ All FROG examples saved to examples/images/")
+print("\nAll FROG examples saved to examples/images/")

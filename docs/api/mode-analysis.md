@@ -47,6 +47,33 @@ untouched.
   `S_0000`-normalised `fwm_weights`/`raman_tensors`, so the run does not
   silently inherit the `Fiber.A_eff` scale.
 
+## OAM measurement (GAP A3)
+
+- `azimuthal_spectrum(field, y, z, *, rmax=None, lmax=6)` computes the
+  azimuthal DFT `A_ℓ = ∬ f e^{−iℓφ} r dr dφ` of one component.
+- `spin_azimuthal_spectrum(ey, ez, y, z, ...)` does the same in the circular
+  basis, normalised to unit power. Control values: a circularly polarised
+  `LG(0, ℓ)` gives purity 1.000; the same field linearly polarised gives
+  exactly 0.500.
+- `azimuthal_purity(amps, ls)` returns `(P, σ, ℓ)` for the dominant channel.
+- `azimuthal_charge(field, x, y, *, center=None)` returns the winding number
+  using the same azimuth convention. Swapping the transverse axes flips the sign, so an
+  export that renames axes (`multimode_scg` GAP B1) is auditable.
+
+## Launch projection (GAP A7)
+
+```python
+from photonics_helper.mode_analysis import load_modes, project_field_onto_modes
+
+modes = load_modes("exports/rib")           # solved modes
+res = project_field_onto_modes(E_launch, x_um, y_um, modes, lambda0=2.0)
+res.amplitudes, res.coupling_efficiency, res.residual_power
+```
+
+`a_m = ∬ conj(F_m) E dA` with `∬|F_m|² dA = 1` on the export grid, so
+`E = Σ a_m F_m` and `|a_m|²` is captured power. The launch grid must be the
+export grid. A shape or grid mismatch raises rather than silently resampling.
+
 ## Notes
 
 - **Per-mode γ routing (task 3.3):** absolute-unit `γ_mn` travels in the

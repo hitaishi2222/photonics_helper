@@ -63,6 +63,7 @@ __all__ = [
     "complexity_sweep",
     "engine_weights",
     "expected_survivors",
+    "lp_neff",
     "lp_roots",
     "magnitude_distribution",
     "measure_selection_rules",
@@ -134,6 +135,62 @@ def lp_roots(V: float, l_max: int = 4, m_max: int = 3) -> dict[tuple[int, int], 
             except ValueError:  # pragma: no cover - bracketing guard
                 continue
     return roots
+
+
+def lp_neff(
+    V: float,
+    n_core: float,
+    n_clad: float,
+    *,
+    ell: int = 0,
+    m: int = 1,
+    wavelength_um: float | None = None,
+) -> tuple[float, float]:
+    """Effective index (and optionally β) of the scalar ``LP_{ell,m}`` mode.
+
+    Weakly guiding only. This module solves the **scalar** LP equation, which
+    returns one root per ``(ell, m)``; ``HE_{ell+1,m}`` and ``EH_{ell-1,m}``
+    therefore share this ``n_eff`` by construction, so it cannot represent the
+    vector splitting. Use :func:`photonics_helper.vector_modes.vector_modes`
+    for anything symmetry-sensitive.
+
+    ``n_eff`` follows from the normalised root alone::
+
+        n_eff² = n_core² − (n_core² − n_clad²)(u/V)²
+
+    ``β`` needs the vacuum wavelength. Returns ``(n_eff, beta)`` with ``beta``
+    in rad/m, or NaN when ``wavelength_um`` is omitted or the mode is cut off.
+    """
+    if ell < 0:
+        raise ValueError(f"ell must be non-negative, got {ell!r}")
+    if m < 1:
+        raise ValueError(f"m must be >= 1, got {m!r}")
+    if not V > 0:
+        raise ValueError(f"V must be positive, got {V!r}")
+    if ell == 0:
+        lo = 0.0 if m == 1 else float(jn_zeros(0, m)[m - 2])
+        hi = float(jn_zeros(0, m)[m - 1])
+    else:
+        lo = float(jn_zeros(ell - 1, m)[m - 1])
+        hi = float(jn_zeros(ell, m)[m - 1])
+    hi = min(hi, V * (1.0 - 1e-12))
+    if hi <= lo:
+        return (float("nan"), float("nan"))
+    try:
+        u = brentq(
+            lambda x: _eigen_eq(ell, x, V),
+            lo + 1e-12,
+            hi - 1e-12,
+            xtol=1e-15,
+            rtol=1e-15,
+        )
+    except ValueError:
+        return (float("nan"), float("nan"))
+    n_eff = float(np.sqrt(n_core**2 - (n_core**2 - n_clad**2) * (u / V) ** 2))
+    if wavelength_um is None or not np.isfinite(wavelength_um):
+        return (n_eff, float("nan"))
+    beta = float(2.0 * np.pi / (wavelength_um * 1e-6) * n_eff)
+    return (n_eff, beta)
 
 
 # --------------------------------------------------------------------------

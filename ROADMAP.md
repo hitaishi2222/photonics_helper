@@ -107,6 +107,11 @@ the stable contract.
     depleted runs conserve Σ|A|² to <1e-6 and match the dense
     Manley–Rowe reference to <5%. Distribution-mode-specific overlap
     tensors and pump depletion: done.
+  - *Mode analysis & exact vector reference* (this release):
+    `mode_analysis` solver-export → engine bridge with spin-resolved
+    `(σ, ℓ)` OAM purity and launch-field projection; `vector_modes` exact
+    analytic `HE`/`EH`/`TE`/`TM` eigenmodes for a circular step-index guide;
+    `power_by_l` per-class OAM budget; `phase_matching.beat_length`.
   - *Cascaded χ⁽²⁾–χ⁽³⁾* ✅ (this release): `chi2.solve_cascaded_shg`
     (three-wave + Kerr SPM/XPM integrator; limit contracts: pure quadratic
     = `solve_shg` exactly, pure Kerr = analytic SPM exactly, large-Δk

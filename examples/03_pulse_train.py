@@ -110,4 +110,4 @@ single_fig.savefig(
 print("Saved single_pulse_comparison.png")
 plt.close(single_fig)
 
-print("\n✓ Pulse train examples saved to examples/")
+print("\nPulse train examples saved to examples/")

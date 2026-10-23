@@ -11,6 +11,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **OAM measurement in `mode_analysis`.** `azimuthal_spectrum`,
+  `spin_azimuthal_spectrum`, `azimuthal_purity` and `azimuthal_charge`
+  (the spin-resolved `(σ, ℓ)` spectrum and the phase-winding number). The
+  deck builder's `oam_l` was only ever copied from export metadata and never
+  measured; these make it checkable and give the purity metric `P_ℓ` that
+  OAM / vortex work has to quote. Controls are regression-tested in
+  `tests/test_mode_azimuthal.py` (circularly polarised `LG(0, ℓ)` → 1.000;
+  linearly polarised → exactly 0.500; C₄ leakage < 1e-3). The promoted
+  `azimuthal_charge` also fixes a sign convention: its predecessor in
+  `multimode_scg/prototypes/mode_analysis.py` sampled `φ = arctan2(x, y)`
+  while indexing the grid `[y, x]`, so it reported the opposite charge to an
+  azimuthal spectrum of the same field.
+- **Exact circular-fibre vector modes (OAM gap A1).**
+  `photonics_helper.vector_modes.vector_modes(n_core, n_clad, radius, wavelength,
+  kinds=...)` solves the Okamoto hybrid/TE/TM equations for any `HE`/`EH` order
+  with a pole-aware full root scan, and returns
+  `(kind, ℓ, ν, m, u, n_eff, β)`. It replaces the ±0.5-around-the-LP-guess
+  bracket that returned NaN for `HE21`/`TM01` on strongly guiding guides, and
+  removes the reference solver's dependency on a reproduction. Tests:
+  `tests/test_vector_modes.py`.
+- **Launch-field projection onto solved modes (OAM gap A7).**
+  `mode_analysis.project_field_onto_modes` returns `a_m = ∬ conj(F_m)E dA`,
+  the coupling efficiency, and the residual power. This is the field-level
+  `E = Σ a_m F_m` launch model. Tests: `tests/test_mode_projection.py`.
+- **Per-OAM-class power budget (OAM gap A4).**
+  `MultimodeSplitStepEngine.power_by_l()` and `power_by_l_vs_z` report
+  `∫|A_m|²dt` per `oam_l` class, so a changing budget is a measurable exchange
+  or symmetry break. Tests: `tests/test_oam_power.py`.
+- **`phase_matching.beat_length` (OAM gap A5).** `L = λ/|Δn_eff|` as a `Length`
+  (SI in, `Wavelength` or metres), replacing three hand-written expressions.
+  One of them shipped a 1000× error. `lp_neff` was added to the Poletti
+  reproduction's `overlap.py` with an explicit weakly-guiding warning.
+- **Solver-selection guide.** `docs/choose-a-solver.md` compares the scalar,
+  vector, multimode and tapered engines (fields, dispersion input, physics
+  flags, stepping), gives a fast-path table, minimal examples, and the
+  model limits; linked from the docs home, quick start, README and the
+  three engine pages.
 - **GeSbSe (Ge₁₂.₅Sb₁₅Se₇₂.₅) material.** Sellmeier (Wu, Ding & Peng,
   *Appl. Sci.* 13, 12923 (2023), Table 2), a seven-mode Hollenbeck–Cantrell
   phonon model, and a Raman spec with published `f_R = 0.4615` (bracket

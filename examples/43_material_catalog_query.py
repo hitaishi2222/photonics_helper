@@ -398,7 +398,7 @@ def run_consistency(catalog: list[MaterialDataset]) -> dict:
     assert not problems, (
         "the shipped database is internally inconsistent:\n  " + "\n  ".join(problems)
     )
-    print("  no structural violations ✓  (source resolvability asserted)")
+    print("  no structural violations   (source resolvability asserted)")
     return {
         "problems": problems,
         "resolvable": resolvable,
@@ -432,7 +432,7 @@ def negative_control(catalog: list[MaterialDataset]) -> None:
         "the corrupted copy should differ from the shipped catalog, but the "
         "shipped catalog also failed — the negative control is meaningless"
     )
-    print("  all four fired, and the shipped catalog still passes ✓")
+    print("  all four fired, and the shipped catalog still passes")
 
 
 # ── 5. Hand-off to physics ───────────────────────────────────────────────────
@@ -655,7 +655,7 @@ def main() -> None:
         f"n({QUERY_UM} um) = {handoff['values'][-1][1]:.5f}"
     )
     print(
-        "  catalog queries, filters, provenance report and consistency checks all ran ✓"
+        "  catalog queries, filters, provenance report and consistency checks all ran"
     )
 
     provenance_figure(prov, filters)
@@ -670,4 +670,4 @@ if __name__ == "__main__":
     main()
     missing = [p for p in FIGS.values() if not p.exists()]
     assert not missing, f"figures not written: {missing}"
-    print("figures verified on disk ✓")
+    print("figures verified on disk")

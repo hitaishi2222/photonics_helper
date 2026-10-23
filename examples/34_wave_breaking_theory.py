@@ -772,7 +772,7 @@ def main() -> None:
         f"{r30['peak_steepness']:.4f}  (flat top, not convergence)"
     )
     print(f"  resolution spread             : {spread:.2f} m")
-    print("  all checks passed ✓")
+    print("  all checks passed")
 
     print("\nGenerated files:")
     for key in ("theory", "onset"):
@@ -784,4 +784,4 @@ if __name__ == "__main__":
     main()
     missing = [p for p in FIGS.values() if not p.exists()]
     assert not missing, f"figures not written: {missing}"
-    print("figures verified on disk ✓")
+    print("figures verified on disk")

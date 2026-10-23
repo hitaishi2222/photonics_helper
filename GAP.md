@@ -356,3 +356,51 @@ False / overstated claims in the external draft:
   numerically round-tripped.
 - **`TaperedGNLSESolver` full-β**: not a blocker for the scalar path; the
   scalar `SplitStepEngine` is the engine the project needs.
+
+---
+
+## 9. External gap audit, 2026-10-23 (`~/Research/sim/oam_scg/GAPS.md`)
+
+The OAM project's gap ledger (`GAPS.md`, IDs A to D) was audited against the
+library. This section records what was closed in this repo, what was already
+closed, and what is not a library task. Openspec change:
+`openspec/changes/close-oam-library-gaps/`.
+
+### Library gaps (A)
+
+| Gap | Verdict | Landing |
+|---|---|---|
+| A1, exact vector solver unreachable | Genuine, P1 | `photonics_helper/vector_modes.py` solves the Okamoto hybrid, TE, and TM equations for any order. It uses a pole-aware full scan and LP-root seeding, with no materials or radius defaults, and returns `(kind, ℓ, ν, m, u, n_eff, β)`. `tests/test_vector_modes.py` checks the weakly-guiding reduction below 1e-4, agreement with the published solver to 1e-9, and finite `HE21`/`TM01` where the ±0.5 bracket returns NaN. |
+| A2, only "Bessel" entry point is scalar LP, no `n_eff` | Genuine, P2 | `reproductions/poletti_2008_multimode/overlap.py::lp_neff` returns `n_eff` from `u/V` and optionally `β`. The docstring states weakly-guiding only and points at `vector_modes`. |
+| A3, no spin/azimuthal decomposition | Genuine, P1, closed | `mode_analysis.azimuthal_spectrum`, `spin_azimuthal_spectrum`, `azimuthal_purity`, and `azimuthal_charge`. `tests/test_mode_azimuthal.py` pins purity 1.000 and 0.500, C₄ leakage below 1e-3, and the axis-swap sign flip. This landed during the OAM audit and is now covered by the openspec delta. |
+| A4, ℓ-gate never measured | Genuine, P2 | `MultimodeSplitStepEngine.power_by_l()` and `power_by_l_vs_z`. `tests/test_oam_power.py` checks a flat budget with FWM off, a class-changing exchange with it on, and a loud failure without labels. |
+| A5, no beat-length helper (1000× error) | Genuine, P3 | `phase_matching.beat_length` returns a `Length`. Tests cover the 1.55 mm regression, zero Δn, and sign invariance. |
+| A6, no photoelastic or CTE data or stress model | Genuine but data-blocked | Not implemented. `materials.db` has no `p₁₁`, `p₁₂`, or CTE values, so a `stress_birefringence` model would be an unpopulated API. Add the data first, then the column and model. |
+| A7, structured light cannot be projected onto solved modes | Genuine, P2 | `mode_analysis.project_field_onto_modes` and `ModalProjection` compute `a_m = ∬ conj(F_m) E dA`, the coupling efficiency, and the residual power. `tests/test_mode_projection.py`. |
+
+### Sibling project, toolchain, and project gaps (B, C, D)
+
+- B1, `export_rib_modes.py` axis renaming: external. It lives in
+  `multimode_scg`. The sign risk is now measurable with `azimuthal_charge`,
+  and the axis-swap test pins `ℓ → -ℓ`.
+- B2, prototype drift: external. Promote or delete in `multimode_scg`; the
+  promoted function now exists upstream.
+- B3, `f_R` caveat on reused numbers: a rule, not code.
+- C1, femwell fork API delta: external (installed package). The project's
+  `env.md` records the delta.
+- C2, femwell `complex64` splitting floor: external. Patch the fork.
+- C3, tidy3d local subpixel is licensed: external. Use the analytic solver
+  (`vector_modes`) or femwell for symmetry-sensitive numbers.
+- C4, no polar/radial mesh recipe: external. Project docs and script.
+- D1: closed by A1. `vector_modes` is standalone; nothing imports the
+  reproduction's equations.
+- D2: closed by A5. There is one unit layer for `λ/Δn`.
+- D3: project-side. Audit the C₆ᵥ ring geometry in `oam_scg`.
+- D4: project-side. `p ≈ 2` remains a hypothesis to falsify, not a library
+  claim.
+
+### Regression suite
+
+`tests/test_vector_modes.py`, `tests/test_mode_projection.py`,
+`tests/test_oam_power.py`, `tests/test_mode_azimuthal.py`, and the new
+beat-length cases in `tests/test_phase_matching.py`.

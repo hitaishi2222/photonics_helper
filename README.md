@@ -14,6 +14,7 @@
 A comprehensive helper library for photonics and optics calculations.
 
 **Documentation:** <https://hitaishi2222.github.io/photonics_helper/>
+**Choosing a solver:** [docs/choose-a-solver.md](docs/choose-a-solver.md) covers scalar, vector, multimode, taper, and χ⁽²⁾ engines.
 
 ---
 
@@ -38,6 +39,8 @@ Optional extras: `fftw`, `plotting`, `webapp`, `extras`, `mode-export`, `pinns`.
 - **GNLSE Engine**: Split-step Fourier solver for nonlinear propagation
 - **Vector GNLSE**: Coupled two-polarization solver
 - **Multimode GNLSE**: N coupled modal envelopes with inter-modal FWM
+- **Mode Analysis**: solver-export → engine bridge, OAM purity, launch-field projection
+- **Exact Vector Modes**: analytic circular-fibre HE/EH/TE/TM eigenmodes, any order
 - **Inverse Design**: `fit_two_wave`, `design_efficiency`, `fit_shg_autodiff`
 - **Breathers**: Exact analytic breather solutions
 - **Solitons**: Soliton solutions and analysis
@@ -180,6 +183,7 @@ See `examples/` for 45 runnable examples covering:
 - Pulse visualization and FROG
 - Raman response and material comparison
 - GNLSE propagation (basic, soliton, Raman, steepening, TPA)
+- Few-mode OAM power budgets and exact circular-fibre vector modes
 - Breather families and wave breaking
 - Vector polarization and multimode GNLSE
 - Noise, ASE, and Raman thermal floor

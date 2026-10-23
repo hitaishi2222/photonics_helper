@@ -107,4 +107,4 @@ fig.savefig("examples/images/frog_chirped_retrieval.png", dpi=150, bbox_inches="
 print("  Saved examples/images/frog_chirped_retrieval.png")
 plt.close(fig)
 
-print("\n✓ FROG retrieval example complete")
+print("\nFROG retrieval example complete")

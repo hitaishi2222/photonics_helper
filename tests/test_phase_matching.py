@@ -1305,3 +1305,30 @@ class TestPropagationConstantBeta:
         pc = PC.beta_from_neff(neff, AngularFrequencyArray(omegas, "rad/s"))
         db = fwm_delta_beta_degenerate(pc, omega0, omega0 + 1e12)
         assert np.isfinite(float(db))
+
+
+# ============================================================================
+# Beat length (GAP A5/D2)
+# ============================================================================
+
+
+def test_beat_length_mm_example_is_not_off_by_1000():
+    from photonics_helper.phase_matching import beat_length
+
+    length = beat_length(1e-3, Wavelength(1.55, "um"))
+    assert length.as_mm == pytest.approx(1.55, rel=1e-12)
+
+
+def test_beat_length_sign_is_irrelevant():
+    from photonics_helper.phase_matching import beat_length
+
+    assert beat_length(-1e-4, 1.55e-6).as_m == pytest.approx(
+        beat_length(1e-4, Wavelength(1.55, "um")).as_m
+    )
+
+
+def test_beat_length_zero_delta_raises():
+    from photonics_helper.phase_matching import beat_length
+
+    with pytest.raises(ValueError, match="infinite"):
+        beat_length(0.0, Wavelength(1.55, "um"))

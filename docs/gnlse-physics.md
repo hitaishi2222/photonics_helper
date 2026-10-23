@@ -1,5 +1,7 @@
 # GNLSE physics: shock invariant, multi-mode Raman, free carriers, validation
 
+> Not sure whether this is the right engine? See **[Choosing a solver](choose-a-solver.md)**.
+
 This page documents four pieces of solver physics added in 0.1.9, each stated
 against the literature and validated by an independent analytic or invariant
 check. Docstrings remain the source of truth; this page gives the derivations

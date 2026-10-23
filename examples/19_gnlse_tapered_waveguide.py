@@ -383,7 +383,7 @@ def main():
     # Filter to only positive absolute frequencies (avoid negative wavelengths)
     valid = omega_abs > 0
     if np.sum(valid) < 3:
-        print("  ⚠ Few positive frequencies — checking omega0 value")
+        print("  WARNING: Few positive frequencies — checking omega0 value")
         print(f"    solver.omega0 = {solver.omega0}")
     omega_abs = omega_abs[valid]
     spectra = spectra[:, valid]
@@ -461,7 +461,9 @@ def main():
     # Use wavelength_nm computed from absolute frequency for the final spectrum axis
     ax.plot(wavelength_nm, spec_final_norm, "r-", linewidth=1.5, label="Output")
     if spec_final.max() <= 0:
-        print("  ⚠ Output spectrum is all zeros — using input spectrum as fallback")
+        print(
+            "  WARNING: Output spectrum is all zeros — using input spectrum as fallback"
+        )
     ax.set_xlabel("Wavelength (nm)")
     ax.set_ylabel("Normalized spectrum")
     ax.set_title("Input vs. output spectrum")
@@ -510,9 +512,9 @@ def main():
         problems.append(f"energy drift {drift:.2f}% exceeds 5%")
     if problems:
         for p in problems:
-            print(f"  ✗ {p}")
+            print(f"  FAIL {p}")
         raise SystemExit("checks FAILED")
-    print("  All checks passed ✓")
+    print("  All checks passed")
 
 
 if __name__ == "__main__":

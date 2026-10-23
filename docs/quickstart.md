@@ -1,5 +1,7 @@
 # Quick start
 
+> Not sure which engine to use? See **[Choosing a solver](choose-a-solver.md)**.
+
 ## Units
 
 ```python

@@ -701,7 +701,7 @@ def main() -> None:
         f"  engine vs analytic, final z      : complex {eng['rel_field']:.3e}, "
         f"intensity {eng['rel_int']:.3e}"
     )
-    print("  all checks passed ✓")
+    print("  all checks passed")
 
     print("\nGenerated files:")
     for key in ("families", "peregrine"):
@@ -720,4 +720,4 @@ if __name__ == "__main__":
         if not p.exists()
     ]
     assert not missing, f"figures not written: {missing}"
-    print("figures verified on disk ✓")
+    print("figures verified on disk")

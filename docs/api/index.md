@@ -10,6 +10,10 @@ the source of truth and are rendered with
 | [Pulse envelopes & grids](pulse.md) | `pulse` |
 | [Fiber & propagation constants](fiber.md) | `fiber` |
 | [GNLSE](gnlse.md) | `gnlse` |
+| [Vector (polarization) GNLSE](vector-gnlse.md) | `vector_gnlse` |
+| [Multimode (few-mode) GNLSE](multimode-gnlse.md) | `multimode_gnlse` |
+| [Mode-solver bridge & OAM metrics](mode-analysis.md) | `mode_analysis` |
+| [Exact circular-fibre vector modes](vector-modes.md) | `vector_modes` |
 | [Phase-matching diagnostics (χ³)](phase-matching.md) | `phase_matching` |
 | [χ⁽²⁾ nonlinear optics (SHG / SFG / DFG)](chi2.md) | `chi2` |
 | [Raman scattering](raman.md) | `raman` |

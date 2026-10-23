@@ -411,3 +411,315 @@ def build_multimode_deck(
         "pump": dict(pump or {}),
     }
     return deck
+
+
+# ---------------------------------------------------------------------------
+# Azimuthal / spin decomposition: the OAM measurement (GAP A3, PLAN §5 A2)
+# ---------------------------------------------------------------------------
+# ``oam_l`` in every deck above is a *label*: it is copied out of the export
+# metadata (``LoadedMode.label``) and nothing verifies it. The functions below
+# are the measurement that turns it into a checked number, and the purity
+# metric ``P_l`` that any OAM / vortex claim has to quote.
+#
+# Sign convention, stated because it is not obvious and a mirror flips it:
+# the azimuth is ``phi = arctan2(z, y)`` on the transverse pair ``(y, z)`` in
+# the order the arrays arrive. Swapping that pair (or any axis reflection)
+# maps ``l -> -l``. Export paths that rename transverse axes must therefore be
+# audited before their ``l`` is trusted (oam_scg GAP B1).
+
+
+def azimuthal_spectrum(
+    field: NDArray,
+    y: NDArray,
+    z: NDArray,
+    *,
+    rmax: float | None = None,
+    nr: int = 160,
+    nphi: int = 256,
+    lmax: int = 6,
+) -> tuple[NDArray, NDArray]:
+    """Azimuthal decomposition ``A_l = ∬ f(r,φ) e^{-ilφ} r dr dφ`` of one component.
+
+    Parameters
+    ----------
+    field
+        Complex transverse field on the regular grid ``(y, z)`` (e.g. ``E_x``).
+    y, z
+        Monotonic transverse coordinate axes in µm.
+    rmax
+        Integration radius in µm. The default is ``0.3·min(ptp(y), ptp(z))``,
+        inside the simulation window but wide enough to hold the guided core.
+        Power outside ``rmax`` is **not** counted, so report the metric at two
+        radii when the tail is large (see oam_scg/STATUS.md).
+    nr, nphi
+        Polar quadrature sizes; ``nphi`` must exceed ``2·lmax`` (Nyquist in φ).
+    lmax
+        Maximum ``|l|`` returned.
+
+    Returns
+    -------
+    ``(amps, ls)`` with ``amps[i]`` the complex amplitude of ``ls[i]``.
+    Unnormalised. Use :func:`spin_azimuthal_spectrum` for a normalised basis.
+
+    Notes
+    -----
+    The quadrature is a plain midpoint rule on a polar grid with weights
+    ``r dr dφ``; it is exact for fields well resolved on both grids. The
+    interpolation is bilinear (:class:`scipy.interpolate.RegularGridInterpolator`),
+    zero outside the grid.
+    """
+    from scipy.interpolate import RegularGridInterpolator
+
+    y = np.asarray(y, dtype=float)
+    z = np.asarray(z, dtype=float)
+    field = np.asarray(field)
+    if field.shape != (y.size, z.size):
+        raise ValueError(
+            f"field shape {field.shape} does not match (y, z) = ({y.size}, {z.size})"
+        )
+    if nphi <= 2 * lmax:
+        raise ValueError(f"nphi={nphi} cannot resolve lmax={lmax} (need nphi > 2·lmax)")
+    if rmax is None:
+        rmax = 0.3 * min(np.ptp(y), np.ptp(z))
+
+    rr = np.linspace(0.0, rmax, nr)
+    pp = np.linspace(0.0, 2.0 * np.pi, nphi, endpoint=False)
+    weights = (
+        np.broadcast_to(rr[:, None], (nr, nphi))
+        * (rr[1] - rr[0])
+        * (2.0 * np.pi / nphi)
+    )
+
+    fi = RegularGridInterpolator((y, z), field, bounds_error=False, fill_value=0.0)
+    yp = rr[:, None] * np.cos(pp)[None, :]
+    zp = rr[:, None] * np.sin(pp)[None, :]
+    fp = fi(np.stack([yp.ravel(), zp.ravel()], axis=-1)).reshape(nr, nphi)
+
+    ls = np.arange(-lmax, lmax + 1)
+    amps = np.array(
+        [np.sum(fp * np.exp(-1j * order * pp)[None, :] * weights) for order in ls]
+    )
+    return amps, ls
+
+
+def spin_azimuthal_spectrum(
+    ey: NDArray, ez: NDArray, y: NDArray, z: NDArray, **kwargs
+) -> tuple[NDArray, NDArray]:
+    """Spin-resolved azimuthal spectrum in the circular-polarisation basis.
+
+    ``E_σ = (E_y ∓ i·E_z)/√2`` with ``σ = ±1``: row 0 of the result carries
+    ``σ = +1``, row 1 ``σ = −1``. This is the basis in which a pure vortex has
+    a single nonzero entry, and the basis arXiv:2402.16492 writes its Kerr
+    coupling blocks in (``J = l ± σ`` conserved for circular symmetry).
+
+    Returns
+    -------
+    ``(amps, ls)`` with ``amps.shape == (2, 2·lmax+1)``, normalised so
+    ``sum(|amps|²) == 1``. Take ``purity = |amps|².max()``, or use
+    :func:`azimuthal_purity`.
+
+    Reference values (both are asserted in ``tests/test_mode_azimuthal.py``):
+    a circularly polarised analytic ``LG(0, ℓ)`` gives purity ``1.000`` at
+    ``(σ, ℓ)``; the same field **linearly** polarised (``E_z = 0``) gives
+    exactly ``0.500`` for any ``ℓ``, because a real field populates both spins
+    equally. A measured purity below 0.5 is therefore not"mostly one vortex",
+    it is noise.
+    """
+    ep, ls = azimuthal_spectrum((ey + 1j * ez) / np.sqrt(2.0), y, z, **kwargs)
+    em, _ = azimuthal_spectrum((ey - 1j * ez) / np.sqrt(2.0), y, z, **kwargs)
+    amps = np.stack([ep, em])
+    tot = float(np.sum(np.abs(amps) ** 2))
+    if not np.isfinite(tot) or tot == 0.0:
+        raise ValueError("field is zero or non-finite on the polar grid")
+    return amps / np.sqrt(tot), ls
+
+
+def azimuthal_purity(amps: NDArray, ls: NDArray) -> tuple[float, int, int]:
+    """``(P, sigma, l)`` of the dominant channel in a ``(2, nl)`` amplitude array.
+
+    ``P = |A_{σ,l}|² / Σ|A|²``. For a launched ``OAM±ℓ`` this is the number a
+    purity spectrum plots against ``λ``.
+    """
+    p = np.abs(np.asarray(amps)) ** 2
+    idx = np.unravel_index(int(np.argmax(p)), p.shape)
+    return float(p[idx]), int(idx[0]), int(ls[idx[1]])
+
+
+def azimuthal_charge(
+    field_xy: NDArray,
+    x: NDArray,
+    y: NDArray,
+    *,
+    center: tuple[float, float] | None = None,
+) -> int:
+    """Integer azimuthal charge ``l`` of a single complex field component.
+
+    Wraps the phase around a closed square-ish loop of radius
+    ``R = 0.25·min(ptp(x), ptp(y))`` and divides the total unwrapped phase by
+    ``2π``. Cheaper and more robust than :func:`azimuthal_spectrum` when the
+    field is clean; it gives no purity, only the winding number.
+
+    This is the value the engine's ``oam_l`` gate consumes (Poletti and Horak
+    Eq. 18/19), so it is the natural cross-check on an exported label:
+    ``azimuthal_charge(m.ey[:, :, k], m.y, m.z) == m.label``.
+
+    Sign convention: ``φ = arctan2(y, x)`` with ``field_xy[i, j]`` at ``(x[i], y[j])``.
+    This is the same rule as :func:`azimuthal_spectrum`, so the two measurements agree
+    on one field (they must; a sign flip between them would make the ``oam_l``
+    gate disagree with the exported label). Any axis swap or reflection flips
+    the sign, so an export path that renames transverse axes has to be audited
+    before its ``l`` is trusted.
+    """
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    field_xy = np.asarray(field_xy)
+    if field_xy.shape != (x.size, y.size):
+        raise ValueError(
+            f"field shape {field_xy.shape} does not match (x, y) = ({x.size}, {y.size})"
+        )
+    R = 0.25 * min(np.ptp(x), np.ptp(y))
+    cx = 0.0 if center is None else center[0]
+    cy = 0.0 if center is None else center[1]
+    m = max(16, 4 * int(max(abs(R) / (x[1] - x[0]), 1)))
+    th = np.linspace(0.0, 2.0 * np.pi, m, endpoint=False)
+    xs = cx + R * np.cos(th)  # first transverse axis
+    ys = cy + R * np.sin(th)  # second transverse axis
+
+    def _sample(xx, yy):
+        ix = np.clip(np.searchsorted(x, xx) - 1, 0, x.size - 2)
+        iy = np.clip(np.searchsorted(y, yy) - 1, 0, y.size - 2)
+        tx = (xx - x[ix]) / (x[ix + 1] - x[ix])
+        ty = (yy - y[iy]) / (y[iy + 1] - y[iy])
+        f00 = field_xy[ix, iy]
+        f10 = field_xy[ix + 1, iy]
+        f01 = field_xy[ix, iy + 1]
+        f11 = field_xy[ix + 1, iy + 1]
+        return (
+            f00 * (1 - tx) * (1 - ty)
+            + f10 * tx * (1 - ty)
+            + f01 * (1 - tx) * ty
+            + f11 * tx * ty
+        )
+
+    vals = _sample(xs, ys)
+    phase = np.unwrap(np.angle(vals))
+    return int(np.round((phase[-1] - phase[0]) / (2.0 * np.pi)))
+
+
+# ---------------------------------------------------------------------------
+# Launch-field projection (GAP A7)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class ModalProjection:
+    """Modal amplitudes of a launched transverse field.
+
+    ``amplitudes[i]`` is the complex overlap with mode ``labels[i]`` (in the
+    square root of the launched field's power units); ``coupling_efficiency``
+    is ``Σ|a_m|² / ∬|E|²``, the fraction of launched power captured by the
+    mode set. ``residual_power`` is the part of the launch that the set does
+    not describe.
+    """
+
+    amplitudes: NDArray
+    labels: list[int]
+    coupling_efficiency: float
+    launched_power: float
+    residual_power: float
+
+
+def project_field_onto_modes(
+    field_xy: NDArray,
+    x_um: NDArray,
+    y_um: NDArray,
+    modes: list[LoadedMode],
+    lambda0: float,
+    *,
+    component: str = "y",
+) -> ModalProjection:
+    """Project a transverse launch field onto a solved mode set.
+
+    ``a_m = ∬ conj(F_m) E dA`` with each ``F_m`` normalised so
+    ``∬|F_m|² dA = 1`` on the same grid, which is the field-level launch model
+    ``E = Σ_m a_m F_m`` (PLAN §2.4). ``component`` selects the transverse
+    component to project (``"x"`` or ``"y"``); modes are evaluated at the
+    export wavelength nearest ``lambda0``.
+
+    The launch grid must be the export grid: shape mismatch raises instead of
+    silently broadcasting, because a silently resampled launch is a silently
+    wrong coupling efficiency.
+
+    Parameters
+    ----------
+    field_xy
+        Complex launch field, shape ``(len(y_um), len(x_um))``.
+    x_um, y_um
+        Transverse axes in µm, matching the modes' export grid.
+    modes
+        Solved modes from :func:`load_modes`.
+    lambda0
+        Launch wavelength in µm (nearest export sample is used).
+    component
+        ``"y"`` (default, the usual transverse component) or ``"x"``.
+
+    Returns
+    -------
+    :class:`ModalProjection`
+    """
+    if component not in ("x", "y"):
+        raise ValueError(f"component must be 'x' or 'y', got {component!r}")
+    if not modes:
+        raise ValueError("project_field_onto_modes needs at least one mode")
+    x_um = np.asarray(x_um, dtype=float)
+    y_um = np.asarray(y_um, dtype=float)
+    field_xy = np.asarray(field_xy, dtype=complex)
+    if field_xy.shape != (y_um.size, x_um.size):
+        raise ValueError(
+            f"field shape {field_xy.shape} does not match (y, x) = "
+            f"({y_um.size}, {x_um.size})"
+        )
+    grid_x = np.asarray(modes[0].x_um, dtype=float)
+    grid_y = np.asarray(modes[0].y_um, dtype=float)
+    if (
+        grid_x.shape != x_um.shape
+        or grid_y.shape != y_um.shape
+        or not (np.allclose(grid_x, x_um) and np.allclose(grid_y, y_um))
+    ):
+        raise ValueError(
+            "launch grid does not match the mode export grid; interpolate the"
+            "launch field before projecting"
+        )
+    dx = abs(float(np.mean(np.diff(x_um)))) * 1e-6
+    dy = abs(float(np.mean(np.diff(y_um)))) * 1e-6
+    dA = dx * dy
+
+    launched = float(np.sum(np.abs(field_xy) ** 2) * dA)
+    if not np.isfinite(launched) or launched <= 0.0:
+        raise ValueError("launch field has zero or non-finite power")
+
+    amps = np.empty(len(modes), dtype=complex)
+    labels: list[int] = []
+    for i, mode in enumerate(modes):
+        wl = np.asarray(mode.wavelengths_um, dtype=float)
+        iw = int(np.argmin(np.abs(wl - float(lambda0))))
+        raw = mode.Ex[iw] if component == "x" else mode.Ey[iw]
+        raw = np.asarray(raw, dtype=complex)
+        if raw.shape != field_xy.shape:
+            raise ValueError(
+                f"mode {mode.label} field shape {raw.shape} does not match"
+                f"the launch grid {field_xy.shape}"
+            )
+        norm = float(np.sum(np.abs(raw) ** 2) * dA)
+        if not np.isfinite(norm) or norm <= 0.0:
+            raise ValueError(f"mode {mode.label} has zero {component}-component power")
+        amps[i] = np.sum(np.conj(raw) * field_xy) * dA / np.sqrt(norm)
+        labels.append(int(mode.label))
+    captured = float(np.sum(np.abs(amps) ** 2))
+    return ModalProjection(
+        amplitudes=amps,
+        labels=labels,
+        coupling_efficiency=captured / launched,
+        launched_power=launched,
+        residual_power=launched - captured,
+    )

@@ -28,10 +28,13 @@ See the [full quick start](quickstart.md) for a GNLSE run and the
 
 ## Where to go next
 
+- [Choosing a solver](choose-a-solver.md): which propagation model fits your problem.
 - **[Install](install.md)** — extras (`fftw`, `webapp`, …) and FFT backends.
 - **[Foundation core](core.md)** — the stable primitives other projects build on.
 - **[Quick start](quickstart.md)** — first pulses through the solvers.
 - **[API Reference](api/index.md)** — every public module, one page per module.
+- [Mode analysis](api/mode-analysis.md): solver exports, OAM purity, launch projection.
+- [Exact vector modes](api/vector-modes.md): analytic circular-fibre HE/EH/TE/TM reference.
 - **[Reproductions](reproductions.md)** — validated literature results.
 - The [README](https://github.com/hitaishi2222/photonics_helper#readme) has the
   full feature tour and runnable `examples/`.

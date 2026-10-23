@@ -161,9 +161,7 @@ def _grid() -> TemporalGrid:
 
 
 def _fiber(length: float = LENGTH, gamma: float = GAMMA) -> Fiber:
-    return Fiber.from_gamma(
-        gamma=gamma, length=Length(length, "m")
-    )
+    return Fiber.from_gamma(gamma=gamma, length=Length(length, "m"))
 
 
 def _wave(grid: TemporalGrid, power: float, wavelength: float = WL0) -> Wave:
@@ -375,7 +373,7 @@ def rung1_control() -> dict:
             f"rung 1 control failed on channel {m}: relative difference {e:.3e} "
             f"> {CONTROL_TOLERANCE:g}"
         )
-    print("  control holds ✓")
+    print("  control holds")
 
     print(_rule("Rung 1b — negative control: break the control on purpose"))
     broken_betas = [[BETA2, 0.02], [BETA2 * 20.0, 0.02]]
@@ -391,7 +389,7 @@ def rung1_control() -> dict:
     )
     print(
         "  -> the assertion above is not vacuous: perturbing one channel's "
-        "betas breaks it ✓"
+        "betas breaks it"
     )
     return {"engine": eng, "fields": fields, "grid": grid, "errs": errs, "w": w}
 
@@ -464,9 +462,7 @@ def rung2_xpm(grid: TemporalGrid) -> dict:
         "the tensor and the lp_degenerate scalars agree; the tensor is not "
         "showing anything the scalar model does not"
     )
-    print(
-        "  the tensor produces a differential phase neither scalar model reproduces ✓"
-    )
+    print("  the tensor produces a differential phase neither scalar model reproduces")
     return {
         "engine": eng,
         "fields": fields,
@@ -522,7 +518,7 @@ def rung3_group_delays(grid: TemporalGrid) -> dict:
         f"walk-off did not dephase the channels ({coh_01[-1]:.3f} -> "
         f"{coh_01_gd[-1]:.3f})"
     )
-    print("  dephasing is visible and the energies are untouched ✓")
+    print("  dephasing is visible and the energies are untouched")
     return {
         "z": z,
         "coh": coh_01,
@@ -635,7 +631,7 @@ def rung4_phase_offsets(grid: TemporalGrid) -> dict:
     assert max(energy(A[-1], grid) for A in f_lad) < 1.05 * max(P_RUNG34), (
         "a phase offset moved power; it must not"
     )
-    print("  the offset is a pure phase, the energies are untouched ✓")
+    print("  the offset is a pure phase, the energies are untouched")
     return {"fields": f_lad, "offsets": offsets, "sweep": gain}
 
 
@@ -716,7 +712,7 @@ def rung5_fwm(grid: TemporalGrid) -> dict:
     )
     print(
         f"  -> helical < none ({n_hel} < {n_none}) and uniform == none "
-        f"({n_uni} == {n_none}) ✓"
+        f"({n_uni} == {n_none})"
     )
     print("     A/B, in one place: the gate buys selection, not speed.")
     return {
@@ -792,7 +788,7 @@ def rung6_pump_depletion(grid: TemporalGrid) -> dict:
         "exercise the stability policy (ISSUES.md #11)"
     )
     assert abs(totals[-1] / totals[0] - 1) < 5e-2, "photon number drifted > 5%"
-    print(f"  all outputs finite, n_sub = {n_sub} > 1 ✓")
+    print(f"  all outputs finite, n_sub = {n_sub} > 1")
     return {
         "engine": eng,
         "fields": fields,
@@ -1104,7 +1100,7 @@ def main() -> None:
         f"{r6['dz']:.3f} m, photon drift "
         f"{abs(r6['totals'][-1] / r6['totals'][0] - 1):.2e}"
     )
-    print("  every rung behaved as its parameter says it should ✓")
+    print("  every rung behaved as its parameter says it should")
     print(
         f"\n  runtime {time.perf_counter() - t0:.1f} s (rungs 5 and 6 pay four "
         f"RK4 stages per substep per channel; every other rung is phase-only)"
@@ -1122,4 +1118,4 @@ if __name__ == "__main__":
     main()
     missing = [p for p in FIGS.values() if not p.exists()]
     assert not missing, f"figures not written: {missing}"
-    print("figures verified on disk ✓")
+    print("figures verified on disk")

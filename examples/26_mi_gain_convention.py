@@ -70,9 +70,11 @@ assert np.isclose(info["g_max"], g_max)
 # 3. Sideband frequencies and their wavelengths relative to a 1550 nm pump
 omega_sb = mi_sideband_frequencies(beta2, gamma, P0)
 lam0 = 1550e-9
-lam_side = AngularFrequency(
-    Wavelength(lam0, "m").to_omega().as_rad_s + omega_sb[1], "rad/s"
-).to_wl().as_nm
+lam_side = (
+    AngularFrequency(Wavelength(lam0, "m").to_omega().as_rad_s + omega_sb[1], "rad/s")
+    .to_wl()
+    .as_nm
+)
 print(f"  sideband detuning       : ±{omega_sb[1]:.4e} rad/s")
 print(f"  sideband wavelength     : {lam_side:.2f} nm (pump 1550 nm)")
 
@@ -127,4 +129,4 @@ fig.savefig("examples/images/mi_gain_convention.png", dpi=150, bbox_inches="tigh
 print("  Saved examples/images/mi_gain_convention.png")
 plt.close(fig)
 
-print("\n✓ MI-gain example complete")
+print("\nMI-gain example complete")

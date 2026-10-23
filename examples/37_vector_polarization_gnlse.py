@@ -158,9 +158,7 @@ def _grid() -> TemporalGrid:
 
 
 def _fiber(length: float = LENGTH) -> Fiber:
-    return Fiber.from_gamma(
-        gamma=GAMMA, length=Length(length, "m")
-    )
+    return Fiber.from_gamma(gamma=GAMMA, length=Length(length, "m"))
 
 
 def _wave(
@@ -211,9 +209,7 @@ def _build(
     ``walkoff = 0`` and identical per-axis betas, which the engine enforces —
     this example passes the walk-off only to the couplings that accept it.
     """
-    fiber = Fiber.from_gamma(
-        gamma=gamma, length=Length(length, "m")
-    )
+    fiber = Fiber.from_gamma(gamma=gamma, length=Length(length, "m"))
     pulse_x, pulse_y = _input_pair(grid, px, py)
     common = dict(
         include_raman=False,
@@ -339,7 +335,7 @@ def run_couplings() -> dict:
         e = eng.energy_vs_z
         drift = float(np.max(np.abs(e / e[0] - 1.0)))
         assert drift < 1e-3, f"{name}: total energy drifted {drift:.2e}"
-    print("\n  total energy conserved to < 1e-3 (integrator error) in all three ✓")
+    print("\ntotal energy conserved to < 1e-3 (integrator error) in all three")
     return runs, grid
 
 
@@ -352,9 +348,7 @@ def run_manakov_check() -> tuple[float, float]:
     length = 200.0
 
     def single_channel(coupling: str, gamma: float, steps: int = 400):
-        fiber = Fiber.from_gamma(
-            gamma=gamma, length=Length(length, "m")
-        )
+        fiber = Fiber.from_gamma(gamma=gamma, length=Length(length, "m"))
         pulse_x = _wave(grid, PX)
         pulse_y = _wave(grid, 0.0)  # A_y == 0: the single-channel limit
         eng = VectorSplitStepEngine(
@@ -422,9 +416,7 @@ def manakov_scaling() -> tuple[np.ndarray, np.ndarray, np.ndarray]:
             ("manakov", "manakov", GAMMA),
             ("incoherent@8/9", "incoherent", GAMMA * MANAKOV_FACTOR),
         ):
-            fiber = Fiber.from_gamma(
-                gamma=gamma, length=Length(length, "m")
-            )
+            fiber = Fiber.from_gamma(gamma=gamma, length=Length(length, "m"))
             eng = VectorSplitStepEngine(
                 _wave(grid, p, cw_width),
                 _wave(grid, 0.0, cw_width),
@@ -658,7 +650,7 @@ def run_random_birefringence() -> dict:
     assert np.array_equal(track(None), fx), (
         "the fixed-axes run is not reproducible run to run"
     )
-    print("  the fixed-axes run reproduces bit-for-bit; the random ones scatter ✓")
+    print("  the fixed-axes run reproduces bit-for-bit; the random ones scatter")
     return traj
 
 
@@ -973,7 +965,7 @@ def main() -> None:
     )
     print(
         f"  negative control        : wrong factor {WRONG_FACTOR:g} gives "
-        f"{rel_wrong:.3e} — the check bites ✓"
+        f"{rel_wrong:.3e} — the check bites"
     )
     print(
         f"  delta_beta mixing       : {db['mixing'][0]:.3%} at resonance, "
@@ -985,7 +977,7 @@ def main() -> None:
         f"  walk-off centroid shift : matches walk-off x L to "
         f"{float(np.max(np.abs(wo['delay'] - wo['predicted']))):.2e} ps"
     )
-    print("  all checks passed ✓")
+    print("  all checks passed")
     print(
         f"\n  runtime {time.perf_counter() - t0:.1f} s (the coherent runs, "
         f"which RK4-substep the FWM term inside every split step, dominate)"
@@ -1003,4 +995,4 @@ if __name__ == "__main__":
     main()
     missing = [p for p in FIGS.values() if not p.exists()]
     assert not missing, f"figures not written: {missing}"
-    print("figures verified on disk ✓")
+    print("figures verified on disk")

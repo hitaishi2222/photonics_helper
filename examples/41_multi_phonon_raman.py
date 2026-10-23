@@ -587,7 +587,7 @@ def run_sensitivity(pair: dict, grid: TemporalGrid) -> dict:
         f"the linewidth sweep moved h_R by only {dev_width.max():.3e}"
     )
     assert arm[-1] > arm[0], "f_R did not scale the delayed arm"
-    print("  f_R weights the arm; the strengths and linewidths are the model ✓")
+    print("  f_R weights the arm; the strengths and linewidths are the model")
     return {
         "fr": np.array(fr_rows),
         "strength": np.array(strength_rows),
@@ -865,7 +865,7 @@ def main() -> None:
         f"contribution only"
     )
     print("  the single-mode limit reproduces the two-exponential model, so the")
-    print("  multi-mode deviations above are physics, not re-parameterisation ✓")
+    print("  multi-mode deviations above are physics, not re-parameterisation")
 
     compare_figure(pair, freq, sweep)
     modes_figure(pair, sens)
@@ -879,4 +879,4 @@ if __name__ == "__main__":
     main()
     missing = [p for p in FIGS.values() if not p.exists()]
     assert not missing, f"figures not written: {missing}"
-    print("figures verified on disk ✓")
+    print("figures verified on disk")

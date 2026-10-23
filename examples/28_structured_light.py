@@ -108,4 +108,4 @@ print("  Saved examples/images/28_structured_light_modes.png")
 plt.close(fig)
 
 print("\n" + "=" * 62)
-print("✓ Structured-light example complete")
+print("Structured-light example complete")

@@ -31,6 +31,7 @@ DispersionModel       — protocol for β(ω) accessors
 DispersionAdaptor     — wraps Dispersion → DispersionModel
 PropagationConstantAdaptor — wraps PropagationConstant → DispersionModel
 ZDependentDispersionAdaptor  — wraps ZDependentDispersion → DispersionModel
+beat_length                λ/|Δn_eff| in SI, as a Length
 fwm_delta_beta_degenerate  — Δβ for degenerate FWM
 fwm_delta_beta_general     — Δβ for general 4-frequency FWM
 fwm_efficiency             — conversion efficiency η(Δβ, L, α)
@@ -391,6 +392,46 @@ def _as_scalar(x: object) -> float:
     if arr.size != 1:
         raise ValueError(f"expected a scalar-like value, got array of size {arr.size}")
     return float(arr.reshape(-1)[0])
+
+
+def beat_length(delta_n_eff: float, wavelength: float | Wavelength) -> Length:
+    """Beat length ``L = λ/|Δn_eff|`` of an effective-index difference.
+
+    The one unit layer for a quantity that three scripts hand-wrote and one
+    shipped 1000× wrong (oam_scg GAP A5/D2). ``wavelength`` may be a
+    :class:`Wavelength`; a bare float is interpreted as **metres** (this
+    module's public API is SI). The result is a :class:`Length`, so adding it
+    to a µm length or printing it cannot silently mix units.
+
+    Parameters
+    ----------
+    delta_n_eff
+        Effective-index difference (dimensionless). Sign is ignored.
+    wavelength
+        Vacuum wavelength, in metres when a float.
+
+    Returns
+    -------
+    Length
+        ``λ/|Δn_eff|`` in the internal metre storage.
+
+    Examples
+    --------
+    >>> beat_length(1e-3, Wavelength(1.55,"um")).as_mm
+    1.55
+    """
+    dn = float(delta_n_eff)
+    if not np.isfinite(dn):
+        raise ValueError(f"delta_n_eff must be finite, got {delta_n_eff!r}")
+    if dn == 0.0:
+        raise ValueError("beat length is infinite when delta_n_eff == 0")
+    lam = wavelength.as_m if isinstance(wavelength, Wavelength) else float(wavelength)
+    if not np.isfinite(lam) or lam <= 0.0:
+        raise ValueError(
+            "wavelength must be a positive length (metres when a float),"
+            f"got {wavelength!r}"
+        )
+    return Length(lam / abs(dn), "m")
 
 
 def fwm_delta_beta_degenerate(
@@ -1859,7 +1900,7 @@ def plot_readiness_report(report: SimulationReadinessReport, ax=None) -> plt.Fig
     ax.set_ylabel("")
     ax.set_xlabel("Wavelength (nm)")
     ax.set_title(
-        f"Dispersion Coverage {'✓' if report.dispersion_covers_grid else '✗'}\n"
+        f"Dispersion Coverage {'yes' if report.dispersion_covers_grid else 'FAIL'}\n"
         f"N={report.soliton_order:.1f}, L_D={report.dispersion_length:.2e} m, "
         f"L_NL={report.nonlinear_length:.2e} m"
     )

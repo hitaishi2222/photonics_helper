@@ -66,6 +66,6 @@ fig.savefig(
 print("  Saved chirped_gaussian_2d_matplotlib.png")
 plt.close(fig)
 
-print("\n✓ All examples saved to examples/")
+print("\nAll examples saved to examples/")
 print("\nNote: For PNG export of Plotly figures, install Chrome:")
 print("  $ plotly_get_chrome")

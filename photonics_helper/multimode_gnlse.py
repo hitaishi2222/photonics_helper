@@ -758,6 +758,10 @@ class MultimodeSplitStepEngine:
         self._U_list: list[float] | None = None
         self._N_list: list[NDArray | None] | None = None
         self._photon_vs_z: list[float] | None = None
+        self._power_l_vs_z: list[NDArray] | None = None
+        self.power_l_labels: list[int] | None = (
+            sorted(set(self.oam_l)) if self.oam_l is not None else None
+        )
         if self.include_shock:
             self._validate_shock_grid()
         if self.include_raman:
@@ -983,6 +987,41 @@ class MultimodeSplitStepEngine:
             denom = omega0 + self.grid.w
             tot += float(np.sum(np.abs(Aw) ** 2 / denom) * dw)
         return tot
+
+    def power_by_l(
+        self, fields: list[NDArray] | tuple[NDArray, ...] | None = None
+    ) -> dict[int, float]:
+        """Power per OAM class, ``Σ_m ∫|A_m|²dt`` grouped by ``oam_l`` label (W).
+
+        The OAM-survival invariant (GAP A4): with the FWM gate off this must
+        be flat versus z, so any change is either an allowed exchange or a
+        symmetry break. Raises when the engine was built without ``oam_l``
+        labels. There is no azimuthal class to group by.
+        """
+        if self.oam_l is None or self.power_l_labels is None:
+            raise ValueError(
+                "power_by_l() needs oam_l labels; construct the engine with"
+                "oam_l=[...] to group channels by azimuthal order"
+            )
+        A = self.A if fields is None else list(fields)
+        if len(A) != self._n:
+            raise ValueError(f"expected {self._n} channel fields, got {len(A)}")
+        out = {int(label): 0.0 for label in self.power_l_labels}
+        for label, Ai in zip(self.oam_l, A):
+            out[int(label)] += float(np.sum(np.abs(Ai) ** 2)) * self.grid.dt
+        return out
+
+    @property
+    def power_by_l_vs_z(self) -> tuple[NDArray, list[int], NDArray] | None:
+        """``(z, labels, powers)`` per saved step of the last ``propagate``.
+
+        ``powers`` has shape ``(n_saves, len(labels))``; ``None`` until a
+        propagation with ``oam_l`` has run.
+        """
+        if self._power_l_vs_z is None or self.power_l_labels is None:
+            return None
+        z = np.asarray(self._z_positions[: len(self._power_l_vs_z)], dtype=float)
+        return z, list(self.power_l_labels), np.asarray(self._power_l_vs_z)
 
     def _raman_polarization(self, Ai: NDArray) -> NDArray:
         """Per-channel Raman polarization (step8 layer 1, intramodal).
@@ -1629,6 +1668,7 @@ class MultimodeSplitStepEngine:
         self._z_positions = [0.0]
         self._energy_vs_z = []
         self._photon_vs_z = [] if self.include_shock else None
+        self._power_l_vs_z = [] if self.oam_l is not None else None
 
         def _snapshot() -> None:
             snaps = []
@@ -1646,6 +1686,11 @@ class MultimodeSplitStepEngine:
             self._energy_vs_z.append(total)
             if self._photon_vs_z is not None:
                 self._photon_vs_z.append(self._photon_number(self.A))
+            if self._power_l_vs_z is not None and self.power_l_labels is not None:
+                p = self.power_by_l()
+                self._power_l_vs_z.append(
+                    np.array([p[label] for label in self.power_l_labels], dtype=float)
+                )
 
         _snapshot()  # z = 0
 

@@ -123,4 +123,4 @@ fig.savefig("examples/images/gnlse_beta_units.png", dpi=150, bbox_inches="tight"
 print("  Saved examples/images/gnlse_beta_units.png")
 plt.close(fig)
 
-print("\n✓ Beta-unit example complete")
+print("\nBeta-unit example complete")

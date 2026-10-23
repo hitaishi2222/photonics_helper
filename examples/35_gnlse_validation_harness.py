@@ -210,9 +210,7 @@ def run_spm() -> dict:
     pulse = Wave(
         grid=grid, envelope=env, central_wavelength=Wavelength(SPM["wavelength_m"], "m")
     )
-    fiber = Fiber.from_gamma(
-        gamma=SPM["gamma"], length=Length(L, "m")
-    )
+    fiber = Fiber.from_gamma(gamma=SPM["gamma"], length=Length(L, "m"))
     from photonics_helper.gnlse import GNLSESolver
 
     solver = GNLSESolver(
@@ -327,9 +325,7 @@ def run_soliton() -> dict:
         envelope=env,
         central_wavelength=Wavelength(SOLITON["wavelength_m"], "m"),
     )
-    fiber = Fiber.from_gamma(
-        gamma=gamma, length=Length(L, "m")
-    )
+    fiber = Fiber.from_gamma(gamma=gamma, length=Length(L, "m"))
     solver = GNLSESolver(
         pulse=pulse,
         fiber=fiber,
@@ -420,9 +416,7 @@ def build_solver(**overrides):
     pulse = Wave(
         grid=grid, envelope=env, central_wavelength=Wavelength(cfg["wavelength_m"], "m")
     )
-    fiber = Fiber.from_gamma(
-        gamma=gamma, length=Length(length, "m")
-    )
+    fiber = Fiber.from_gamma(gamma=gamma, length=Length(length, "m"))
     engine = SplitStepEngine(
         pulse=pulse,
         fiber=fiber,
@@ -545,7 +539,7 @@ def run_failing_check() -> None:
         print(f"  caught {type(exc).__name__} [case={exc.case}]:")
         for line in str(exc).splitlines():
             print(f"    {line}")
-        print("  the harness fails loudly ✓")
+        print("  the harness fails loudly")
     else:
         raise AssertionError(
             f"check_mi passed at rel_tolerance={tight:g} with a deliberately "
@@ -573,7 +567,7 @@ def negative_control() -> None:
             f"check_soliton passed at tolerance={IMPOSSIBLE_TOLERANCE:g}; the "
             "tolerance is not being exercised"
         )
-    print("  a passing check therefore means something ✓")
+    print("  a passing check therefore means something")
 
 
 # ── Figures ──────────────────────────────────────────────────────────────────
@@ -771,7 +765,7 @@ def main() -> None:
     print(f"  refined ladder converged    : {good.converged}")
     print(f"  coarse ladder converged     : {bad.converged} (expected False)")
     print("  ValidationFailure caught    : yes")
-    print("  every check passed ✓")
+    print("  every check passed")
     print(
         f"\n  runtime {time.perf_counter() - t0_run:.1f} s "
         f"(check_gordon_ssfs at 4000 split steps, N = {SSFS_GRID_N}, and "
@@ -791,4 +785,4 @@ if __name__ == "__main__":
     main()
     missing = [p for p in FIGS.values() if not p.exists()]
     assert not missing, f"figures not written: {missing}"
-    print("figures verified on disk ✓")
+    print("figures verified on disk")

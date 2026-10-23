@@ -1271,7 +1271,7 @@ def main() -> None:
         f"{coh['g12_wings']:.4f}       [asserted < 1]"
     )
     print(f"  runtime                      : {_time.perf_counter() - t0:.1f} s")
-    print("  all checks passed ✓")
+    print("  all checks passed")
 
     print("\nGenerated files:")
     for key in ("ase", "raman"):
@@ -1283,4 +1283,4 @@ if __name__ == "__main__":
     main()
     missing = [p for p in FIGS.values() if not p.exists()]
     assert not missing, f"figures not written: {missing}"
-    print("figures verified on disk ✓")
+    print("figures verified on disk")

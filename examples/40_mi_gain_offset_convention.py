@@ -240,7 +240,7 @@ def run_ab() -> dict:
     )
     assert np.isclose(det_res["Omega_peak"], exact_res["Omega_peak"], rtol=1e-12)
     assert np.isclose(det_res["Omega_cutoff"], exact_res["Omega_cutoff"], rtol=1e-9)
-    print("  -> the two conventions are the same physics ✓")
+    print("  -> the two conventions are the same physics")
     return {
         "grid": grid,
         "abs": abs_res,
@@ -372,7 +372,7 @@ def run_cancellation() -> dict:
         "exact": delta_exact(zoom),
     }
     print(
-        f"  the naive form sits {err_naive / ULP_BETA0:.1f} ULP above the exact curve ✓"
+        f"  the naive form sits {err_naive / ULP_BETA0:.1f} ULP above the exact curve"
     )
     return {
         "omega": omega,
@@ -437,7 +437,7 @@ def run_closed_forms(ab: dict) -> dict:
     assert cutoff_err < CLOSED_FORM_RTOL, f"Omega_cutoff off by {cutoff_err:.3e}"
     assert gain_err < 1e-5, f"peak gain off by {gain_err:.3e}"
     print("  examples/26 established these formulas; here they are recovered by")
-    print("  the corrected implementation ✓")
+    print("  the corrected implementation")
     return {
         "omega_c": omega_c,
         "omega_peak": omega_peak,
@@ -479,9 +479,13 @@ def run_single_and_sidebands(closed: dict) -> dict:
         f"    [{omega_peak / omega_c:.4f}, 1] of Omega_c wide — the outermost quarter"
     )
     print("    of the band, where MI is weak, is the one usually quoted.")
-    lam_sb = AngularFrequency(
-        Wavelength(WL0, "m").to_omega().as_rad_s + sidebands[1], "rad/s"
-    ).to_wl().as_nm
+    lam_sb = (
+        AngularFrequency(
+            Wavelength(WL0, "m").to_omega().as_rad_s + sidebands[1], "rad/s"
+        )
+        .to_wl()
+        .as_nm
+    )
     print(f"  the +sideband sits at {lam_sb:.3f} nm against a {WL0 * 1e9:.0f} nm pump")
     print(
         f"    (a {abs(lam_sb - WL0 * 1e9):.1f} nm shift — MI sidebands sit "
@@ -541,7 +545,7 @@ def negative_control(ab: dict) -> None:
     assert float(np.max(swapped_det["gain"])) == 0.0 or rel_det > 0.5, (
         "the swapped detuning run did not visibly change the answer"
     )
-    print("  the agreement assertion is not vacuous ✓")
+    print("  the agreement assertion is not vacuous")
 
 
 # ── Figures ──────────────────────────────────────────────────────────────────
@@ -827,9 +831,11 @@ def sideband_figure(closed: dict, single: dict) -> None:
         label="pump (CW, no detuning)",
     )
     for s in single["sidebands"]:
-        lam = AngularFrequency(
-            Wavelength(WL0, "m").to_omega().as_rad_s + s, "rad/s"
-        ).to_wl().as_nm
+        lam = (
+            AngularFrequency(Wavelength(WL0, "m").to_omega().as_rad_s + s, "rad/s")
+            .to_wl()
+            .as_nm
+        )
         ax.plot([WL0 * 1e9, lam], [0.55, 0.15], color="tab:green", lw=0.9, zorder=4)
         ax.plot(lam, 0, "v", ms=10, color="tab:green", zorder=5)
         ax.annotate(
@@ -919,7 +925,7 @@ def main() -> None:
         f"{closed['g_max']:.8f} 1/m ({closed['gain_err']:.2e})"
     )
     print(f"  sidebands              : +-{single['sidebands'][1]:.6e} rad/s = Omega_c")
-    print("  every convention and closed-form check behaved as documented ✓")
+    print("  every convention and closed-form check behaved as documented")
 
     ab_figure(ab, canc)
     sideband_figure(closed, single)
@@ -933,4 +939,4 @@ if __name__ == "__main__":
     main()
     missing = [p for p in FIGS.values() if not p.exists()]
     assert not missing, f"figures not written: {missing}"
-    print("figures verified on disk ✓")
+    print("figures verified on disk")

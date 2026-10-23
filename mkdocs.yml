@@ -65,6 +65,7 @@ nav:
   - Home: index.md
   - Installation: install.md
   - Quick start: quickstart.md
+  - Choosing a solver: choose-a-solver.md
   - Foundation core: core.md
   - Stability contract: stability.md
   - Building on the core: building-on-core.md
@@ -84,6 +85,8 @@ nav:
       - GNLSE validation & convergence: api/gnlse-validation.md
       - Vector (polarization) GNLSE: api/vector-gnlse.md
       - Multimode (few-mode) GNLSE: api/multimode-gnlse.md
+      - Mode-solver bridge & OAM metrics: api/mode-analysis.md
+      - Exact circular-fibre vector modes: api/vector-modes.md
       - Phase-matching diagnostics (χ³): api/phase-matching.md
       - χ⁽²⁾ nonlinear optics (SHG / SFG / DFG): api/chi2.md
       - Raman scattering: api/raman.md

@@ -284,7 +284,7 @@ def main():
         print(f"Preflight N: {preflight.soliton_order:.2f}")
         print(f"Preflight warnings: {len(preflight.warnings)}")
         for w in preflight.warnings:
-            print(f"  ⚠ {w}")
+            print(f"  WARNING: {w}")
 
     # Propagate
     num_steps = 200
@@ -314,9 +314,9 @@ def main():
     print(f"Final energy:   {final_energy:.3e} J")
     print(f"Energy drift:   {energy_drift:.2f}%")
     if energy_drift < 5:
-        print("✓ Energy conservation OK (< 5% drift)")
+        print("Energy conservation OK (< 5% drift)")
     else:
-        print("⚠ Large energy drift — consider increasing num_steps")
+        print("WARNING: Large energy drift — consider increasing num_steps")
 
     # ========================================================================
     # 8. Summary
