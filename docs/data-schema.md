@@ -1,3 +1,7 @@
+---
+quadrant: reference
+---
+
 # Database schema
 
 `photonics_helper/materials.db` is a SQLite database bundled with the package
@@ -90,8 +94,8 @@ db.list_provenance()  # first use: schema ensured, then the query
 
 ## Discovering the data
 
-The catalogue lists every dataset the database ships — tabulated n/k spectra and
-Sellmeier equations together — with the columns you need to choose one:
+The catalogue lists every dataset the database ships, tabulated n/k spectra and
+Sellmeier equations together, with the columns you need to choose one:
 
 ```python
 from photonics_helper import material_catalog, print_material_catalog
@@ -129,7 +133,7 @@ Step 1 is the safe, routine path: it re-writes `raman_specs` from
 `reference.py`, seeds `phonon_modes` from `PHONON_MATERIALS`, and runs the
 additive schema migration (licence columns + `provenance` registry). Step 2
 requires the `nk_datasets/manifest.json` collection, which is intentionally not
-in the repository — the shipped `nk_data` table is authoritative.
+in the repository; the shipped `nk_data` table is authoritative.
 
 After any regeneration, run:
 

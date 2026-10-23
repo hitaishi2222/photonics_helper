@@ -1,3 +1,7 @@
+---
+quadrant: explanation
+---
+
 # Vector / polarization-coupled GNLSE
 
 > Not sure whether this is the right engine? See **[Choosing a solver](choose-a-solver.md)**.
@@ -39,16 +43,16 @@ linearly-polarized mode pair, and the coherent polarization FWM pair
 
 `coupling` selects the nonlinear model:
 
-- `"incoherent"` — FWM term dropped (averaged out over the beat length in
+- `"incoherent"`: FWM term dropped (averaged out over the beat length in
   real PM fiber). Reduces **exactly** to the scalar `SplitStepEngine` when
   `A_y ≡ 0`; all scalar reproductions remain the tool of record there.
-- `"coherent"` — full Agrawal coupled GNLSE with the FWM mixing term.
+- `"coherent"`: full Agrawal coupled GNLSE with the FWM mixing term.
   The FWM pair is energy-conserving (Hamiltonian substructure) and the
   diagonal SPM/XPM phase is advanced exactly while the mixing term is
   integrated with frequency-domain RK4 substeps (same RK4IP structure the
   scalar shock integrator uses). Validated against a dense-RK4 reference
   (`tests/test_vector_gnlse.py::TestCoherentFWM`).
-- `"manakov"` — polarization-averaged model with the `8/9` coefficient
+- `"manakov"`: polarization-averaged model with the `8/9` coefficient
   (Wai & Menyuk 1996): the correct *effective* description of a fiber whose
   beat length is far shorter than the nonlinear length. Requires identical
   per-axis dispersion and zero walkoff. Validated: a Manakov CW acquires

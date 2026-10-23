@@ -1,7 +1,11 @@
+---
+quadrant: tutorial
+---
+
 # Building on the core
 
 `photonics_helper.core` is meant to be built on. This page walks through a
-complete, runnable external tool — a dispersive-broadening calculator — written
+complete, runnable external tool, a dispersive-broadening calculator, written
 using **only** the core primitives, and validates it against a closed-form
 result. The full script is
 [`examples/33_build_on_core.py`](https://github.com/hitaishi2222/photonics_helper/blob/main/examples/33_build_on_core.py).
@@ -24,10 +28,10 @@ pulse broadening against the textbook result
 T(z) / T₀ = sqrt(1 + (z / L_D)²),    L_D = T₀² / |β₂|.
 ```
 
-## Step 1 — define a material
+## Step 1: define a material
 
 The core does not force you to use the bundled database. `OpticalMaterial` is a
-runtime-checkable protocol, so any object with the right shape works — that is
+runtime-checkable protocol, so any object with the right shape works. That is
 the intended extension point:
 
 ```python
@@ -68,12 +72,12 @@ assert isinstance(CauchyGlass(), OpticalMaterial)
 ```
 
 Alternatively, load a bundled material with
-`photonics_helper.core.materials.material("Silica")` — note that the _bundled
+`photonics_helper.core.materials.material("Silica")`. Note that the _bundled
 database_ is read through the Raman SQLite backend today (a naming holdover),
 so the protocol path above is what keeps an external tool free of that
 dependency.
 
-## Step 2 — dispersion from units and constants
+## Step 2: dispersion from units and constants
 
 `units` handles the conversions (wavelength ↔ angular frequency) and
 `constants` supplies `c`:
@@ -98,7 +102,7 @@ beta2 = group_velocity_dispersion(CauchyGlass(), units.Wavelength(1550, "nm"))
 print(f"beta2 = {beta2 * 1e27:.2f} ps^2/km")  # -> 24.27 ps^2/km
 ```
 
-## Step 3 — propagate on a core grid
+## Step 3: propagate on a core grid
 
 `TemporalGrid` provides the time/frequency sampling and a documented FFT
 convention (`FFT(A)·dt` forward, `/dt` inverse, both fftshifted), and
@@ -122,19 +126,32 @@ def propagate(field, beta2, length_m):
 
 
 final = propagate(field, beta2, dispersion_length)
+
+
+def rms_width(f):
+    intensity = np.abs(f) ** 2
+    return np.sqrt(np.sum(grid.t**2 * intensity) / np.sum(intensity))
+
+
+print(f"{'z/L_D':>6} {'numeric':>10} {'analytic':>10} {'|error|':>9}")
+for z_over_ld in (0.5, 1.0, 2.0, 4.0):
+    out = propagate(field, beta2, z_over_ld * dispersion_length)
+    numeric = rms_width(out) / rms_width(field)
+    analytic = np.sqrt(1 + z_over_ld**2)
+    print(f"{z_over_ld:>6.1f} {numeric:>10.6f} {analytic:>10.6f} {abs(numeric - analytic):>9.2e}")
 ```
 
-## Step 4 — validate
+## Step 4: validate
 
 Measure the RMS width before and after; the ratio must reproduce the closed
-form. The script prints:
+form. This prints:
 
 ```
-  z/L_D    numeric    analytic   |error|
-   0.5    1.118034   1.118034   2.22e-16
-   1.0    1.414214   1.414214   8.88e-16
-   2.0    2.236068   2.236068   1.78e-15
-   4.0    4.123106   4.123106   2.66e-15
+z/L_D    numeric   analytic   |error|
+   0.5   1.118034   1.118034  2.22e-16
+   1.0   1.414214   1.414214  6.66e-16
+   2.0   2.236068   2.236068  1.78e-15
+   4.0   4.123106   4.123106  2.66e-15
 ```
 
 ## What you get, and what you don't
@@ -143,15 +160,15 @@ form. The script prints:
 | ------------------------------------------------------- | ------------------------------------------------------------- |
 | Typed units and constants                               | The GNLSE / solver stack                                      |
 | `TemporalGrid` + FFT conventions                        | Plotting, dashboards                                          |
-| The `OpticalMaterial` protocol and the bundled database | The specific physics of your problem — that is yours to write |
+| The `OpticalMaterial` protocol and the bundled database | The specific physics of your problem, which is yours to write |
 
 That is the point: the core removes the unit/numerics/data plumbing so your code
 is about your physics.
 
 ## Next
 
-- [Stability contract](stability.md) — what you can rely on and for how long.
-- [Foundation core](./core.md) — the full surface.
+- [Stability contract](stability.md): what you can rely on and for how long.
+- [Foundation core](./core.md): the full surface.
 - [API reference](api/core.md).
 
 ---
@@ -159,83 +176,25 @@ is about your physics.
 ## Building a Raman cascade on the multimode engine
 
 `MultimodeSplitStepEngine` propagates N coupled channels and already provides the
-painful parts — retarded-frame group-velocity management, adaptive stepping, and the
+painful parts: retarded-frame group-velocity management, adaptive stepping, and the
 energy-drift diagnostic. A Raman cascade is that engine with different coefficients, so
 build the coefficients rather than a second engine: writing a parallel solver would
 duplicate all of it and give two places for conservation to break.
 
-### 1. Build the configuration
+The working cascade model in this library is
+[`raman_transfer`](raman-cascade.md): `RamanChannel` and `build_cascade` assemble the
+CW multichannel problem, `CWWCascade` solves it, and `photon_flux_drift` is the
+conservation check for any solver you write yourself. Start from
+[the Raman cascade page](raman-cascade.md) rather than from this one.
 
-```python
-from photonics_helper.base import Area, Wavelength
-from photonics_helper.raman_cascade import (
-    RamanCascadeConfig,
-    RamanGainTable,
-    build_raman_coupling_tensor,
-)
-
-cfg = RamanCascadeConfig(
-    wavelengths=(
-        Wavelength(1375, "nm"),
-        Wavelength(1465, "nm"),
-        Wavelength(1560, "nm"),
-    ),
-    gains=RamanGainTable(
-        [0.527, 0.419], "Mermelstein 2003 Table I", "10.1109/JLT.2003.812461"
-    ),
-    a_eff=(Area(55, "um^2"),) * 3,  # per order, not shared
-    n2=3.2e-20,
-    alpha_per_m=[...],  # per order, in 1/m
-)
-tensor = build_raman_coupling_tensor(cfg)
-```
-
-`RamanGainTable` **refuses** an empty DOI. Channel 0 is the highest-frequency order and
-wavelengths must ascend.
-
-### 2. Feed it to the engine
-
-```python
-engine = MultimodeSplitStepEngine(
-    waves,
-    fiber,
-    betas,
-    coupling_tensor=tensor,
-    channel_alpha=cfg.alpha_per_m,  # loss is NOT part of the tensor
-)
-engine.propagate(n_steps)
-```
-
-Two things that will bite otherwise:
+The interface advice that matters when you wire your own coefficients into the
+multimode engine:
 
 - **Loss does not go in `coupling_tensor`.** The tensor multiplies `|A_j|²`, so loss
-  folded into it becomes amplitude-dependent. Use `channel_alpha`.
-- **Build waves as `A = sqrt(P_W)` and do not attach an effective area.**
-  `with_effective_area()` leaves the field alone but switches `peak_power()` to the
-  `n c ε₀ A_eff |A|²/2` relation, so a 0.78 W pump then reports 8e-14 W. Read powers
-  back with `channel_powers_w`.
-
-### 3. Check conservation
-
-`engine.energy_vs_z` gives `Σ ∫|A_i|²dt` per snapshot. For a photon-conserving
-cascade the conserved quantity is `Σ P_k λ_k`, not `Σ P_k` — see
-`raman_transfer.photon_flux_drift`. Measured drift on a deep-depletion 60 km cascade is
-2e-9 relative.
-
-### 4. Add noise and extract
-
-```python
-from photonics_helper.raman_noise import (
-    NoiseBand,
-    pump_noise_field,
-    relative_intensity_rin,
-    rin_g2_consistency_db,
-)
-
-A = pump_noise_field(grid, A_pump, 1e-12, NoiseBand(1e8, 2e10), seed=s)
-f_hz, psd = relative_intensity_rin(ensemble, grid, band)
-```
-
-`g2` must come from the intensity statistics, not from `noise.coherence_g12` — the
-latter measures _mutual_ coherence between realizations and vanishes for independent
-seeds while `g2` stays finite. `rin_g2_consistency_db` is the check.
+  folded into it becomes amplitude-dependent. Use the engine's per-channel loss.
+- **Do not attach an effective area to a wave you will read powers from.**
+  `with_effective_area()` switches `peak_power()` to the
+  `n c ε₀ A_eff |A|²/2` relation, so a power you set in watts reads back many orders
+  of magnitude smaller. Read powers back in the units you set them.
+- **Check `Σ P_k λ_k`, not `Σ P_k`.** Photon conservation holds on the former, and
+  `raman_transfer.photon_flux_drift` measures it.

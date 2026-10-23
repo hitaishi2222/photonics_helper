@@ -1,3 +1,7 @@
+---
+quadrant: reference
+---
+
 # Multimode (few-mode) coupled GNLSE
 
 Split-step Fourier solver for N coupled modal channels: per-mode dispersion

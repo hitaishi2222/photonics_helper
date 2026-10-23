@@ -1,6 +1,10 @@
+---
+quadrant: reference
+---
+
 # API Reference
 
-The public surface, grouped by module — one page per module. Docstrings are
+The public surface, grouped by module: one page per module. Docstrings are
 the source of truth and are rendered with
 [mkdocstrings](https://mkdocstrings.github.io/) (numpydoc style).
 

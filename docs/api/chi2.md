@@ -1,3 +1,7 @@
+---
+quadrant: reference
+---
+
 # χ⁽²⁾ nonlinear optics (SHG / SFG / DFG)
 
 Coupled-wave solvers, quasi-phase-matching and the χ⁽²⁾ coupling constants
@@ -20,7 +24,7 @@ wl = Wavelength(1550, "nm")
 g = shg_coupling_overlap(
     E_pump, E_sh, dx, dz, wavelength=wl, d=27e-12, n_pump=2.14, n_sh=2.19
 )
-# g in 1/(√W·m) — for a uniform mode this equals shg_coupling(A_eff)
+# g in 1/(√W·m); for a uniform mode this equals shg_coupling(A_eff)
 
 res = pgln_overlap(
     E_pump,

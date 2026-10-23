@@ -12,10 +12,10 @@ development, principally:
 
 - **Code generation and refactoring** of solver modules, examples, and the
   test suite;
-- **Debugging and code review** — auditing numerical kernels, hunting
+- **Debugging and code review**: auditing numerical kernels, hunting
   convention/sign bugs, and drafting reproduction scripts;
-- **Documentation** — drafting docstrings, markdown pages, and README text;
-- **Paper drafting** — assistance with drafting and copy-editing
+- **Documentation**: drafting docstrings, markdown pages, and README text;
+- **Paper drafting**: assistance with drafting and copy-editing
   `paper/paper.md` and repository markdown files.
 
 ## Nature and scope of assistance
@@ -29,9 +29,9 @@ make architectural decisions autonomously.
 The human author, **Dr. Hitaishi V**, reviewed, edited, and validated all
 AI-assisted outputs. Specifically:
 
-- The core design decisions — the typed-units foundation, the documented FFT
+- The core design decisions: the typed-units foundation, the documented FFT
   and dispersion-sign conventions, the stability contract, the material-data
-  provenance/licence model, and the scope of the formal Lean 4 specification —
+  provenance/licence model, and the scope of the formal Lean 4 specification
   are the author's.
 - Every physics-facing claim is validated against the published literature or
   closed-form ground truth by the code in `reproductions/` and the test suite;

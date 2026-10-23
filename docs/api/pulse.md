@@ -1,3 +1,7 @@
+---
+quadrant: reference
+---
+
 # Pulse envelopes, grids and trains
 
 ``Wave``/``Envelope`` construction, temporal grids, pulse trains and hygiene helpers. Docstrings are the source of truth, rendered with

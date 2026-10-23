@@ -1,3 +1,7 @@
+---
+quadrant: reference
+---
+
 # Raman cascade (CW) and RIN transfer
 
 Continuous-wave multi-order Raman cascade, its conservation diagnostics, and the linearized

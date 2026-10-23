@@ -1,3 +1,7 @@
+---
+quadrant: how-to
+---
+
 # Install
 
 ```bash
@@ -40,11 +44,13 @@ That laziness covers attribute access (`photonics_helper.Wavelength`). A
 imports that name's submodule eagerly. On **Python 3.15+** you can defer it too
 with [PEP 810](https://docs.python.org/3.15/reference/simple_stmts.html#lazy-imports):
 
-```python
+```text
 lazy from photonics_helper import Wavelength  # numpy/scipy only on first use
 
 w = Wavelength(1550.0, "nm")  # reifies here
 ```
+
+This is Python 3.15 syntax, so it is shown as text rather than run.
 
 or enable it for the whole program without changing source:
 
@@ -52,11 +58,14 @@ or enable it for the whole program without changing source:
 python -X lazy_imports=all your_script.py
 ```
 
-```python
+```text
 import sys
 
 sys.set_lazy_imports("all")  # equivalent, at runtime
 ```
+
+Also 3.15 and later. The environment variable `PYTHON_LAZY_IMPORTS=all` does the
+same thing on 3.15 without editing source.
 
 Before 3.15 the `lazy` keyword is a `SyntaxError`. Use the attribute form
 (`import photonics_helper as ph` then `ph.Wavelength`), or a `from … import …`

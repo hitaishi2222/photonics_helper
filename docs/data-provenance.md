@@ -1,3 +1,7 @@
+---
+quadrant: explanation
+---
+
 # Data provenance
 
 `photonics-helper` bundles a numerical material database
@@ -11,7 +15,7 @@ in the repository.
 | Component | Licence |
 |---|---|
 | `photonics_helper` source code | MIT (see `LICENSE`) |
-| `photonics_helper/materials.db` | compilation of literature data — see below |
+| `photonics_helper/materials.db` | compilation of literature data; see below |
 
 ## Tables and provenance columns
 
@@ -44,26 +48,26 @@ with importlib.resources.as_file(
 
 ## Where the data comes from
 
-- **`nk_data`** — collected from [refractiveindex.info](https://refractiveindex.info/)
+- **`nk_data`**: collected from [refractiveindex.info](https://refractiveindex.info/)
   via its public sitemap (`nk_datasets/collect.py`, `nk_datasets/manifest.json`).
   The site publishes its compilation under **CC0 1.0 Universal**. Individual
   datasets originate in specific publications, so each row keeps a `citation`
   naming the original source; keep that column if you repackage the database.
   Seven rows are currently provenance-incomplete.
-- **`sellmeier`** — dispersion equations taken from the cited papers
+- **`sellmeier`**: dispersion equations taken from the cited papers
   (Malitson 1965, Edwards & Lawrence 1984, Luke et al. 2015, …); `source`
   carries the attribution.
-- **`raman_specs`** — a literature compilation original to this project, with
+- **`raman_specs`**: a literature compilation original to this project, with
   per-row `references` to the underlying paper or textbook.
-- **`phonon_modes`** — multi-mode phonon data whose canonical source is
+- **`phonon_modes`**: multi-mode phonon data whose canonical source is
   `photonics_helper.phonon.PHONON_MATERIALS` (per-mode literature notes).
-- **`provenance`** — a registry table joining on `nk_data.source`, backfilled
+- **`provenance`**: a registry table joining on `nk_data.source`, backfilled
   from the tabulated data so the database is auditable without external files.
   Its `doi` column is populated by extracting the identifier from each
   citation, so consumers do not have to parse citation strings.
 
 To list everything that ships (with wavelength range, DOI and licence), use
-`material_catalog()` / `print_material_catalog()` — see the
+`material_catalog()` / `print_material_catalog()`; see the
 [database schema](data-schema.md#discovering-the-data) page.
 
 ## Licensing caveat
@@ -79,7 +83,7 @@ will be corrected or removed.
 The data-layer consolidation (Phase 2) is complete:
 
 - `phonon_modes` is populated and reachable through `RamanDatabase` and
-  `PhononResponse.from_material()` — the same interface as n/k data.
+  `PhononResponse.from_material()`, the same interface as n/k data.
 - Every row in every data table carries a `license`; the `provenance` registry
   is populated and queryable (`RamanDatabase.get_provenance()`).
 - The shipped database is verified against the canonical Python tables by

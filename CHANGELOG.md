@@ -57,8 +57,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Documented PEP 810 (Python 3.15) lazy-import path.** `docs/install.md` now
   covers `lazy from photonics_helper import …` and the process-wide
   `-X lazy_imports=all` / `sys.set_lazy_imports("all")` opt-ins, which defer the
-  `from`-imported submodule (and its numpy/scipy/pydantic chain) until first use
-  — the one eager path the PEP 562 lazy surface does not cover. The `lazy`
+  `from`-imported submodule (and its numpy/scipy/pydantic chain) until first use,
+  the one eager path the PEP 562 lazy surface does not cover. The `lazy`
   keyword is a `SyntaxError` below 3.15.
 - **`photonics_helper.__version__`.** Resolved lazily from installed-package
   metadata on first access so the eager import surface stays unchanged.
@@ -90,7 +90,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   deferred statement loads no heavy dependency and reifies to the same object
   as the PEP 562 attribute path.
 
-## [0.1.11] — 2026-10-21
+## [0.1.11] - 2026-10-21
 
 ### Added
 
@@ -111,7 +111,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   oscillating tail is not in L². Tests: `tests/test_pulse_energy.py`.
 - **`raman_response=` kwarg on the scalar engines (Gap F3).** `SplitStepEngine`
   and `GNLSESolver` accept a response override, with `fiber.raman_response` as
-  the fallback — parity with `MultimodeSplitStepEngine`.
+  the fallback, parity with `MultimodeSplitStepEngine`.
 
 ### Fixed
 
@@ -128,7 +128,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   parabolic FWHM had been falling through to `T0`; it now uses
   `2√(1−1/√2)·T0`. Tests: `tests/test_pulse_energy.py` and the updated
   `tests/test_pulse.py`.
-- **Multimode GNLSE literature audit (2026-10) — coefficient scale, XPM
+- **Multimode GNLSE literature audit (2026-10): coefficient scale, XPM
   basis, tensor scaling, stability estimate.** Four conformance defects
   found against Poletti & Horak (2008) Eq. 6/7, Mumtaz, Essiambre &
   Agrawal (2013) Eq. 6/8, and Wright et al. (2018) Eq. 1:
@@ -192,7 +192,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   delegates. The three classes stay separate internally.
 - Docs (`quickstart`, `gnlse-physics`, `README`) updated to the new forms.
 - **`TemporalGrid.for_gnlse` + `GNLSESolver.propagate_auto`**: fission-aware grid
-  sizing (dispersive spread × soliton order) plus a converge-and-retry loop —
+  sizing (dispersive spread × soliton order) plus a converge-and-retry loop 
   doubles steps on energy drift, doubles the window at fixed dt on edge-energy
   (wrap-around) detection. Returns a report dict; warns instead of raising
   when `max_rounds` is exhausted.
@@ -207,19 +207,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   used the truncated `3e8`/`2.99792458e8` and now use exact *c*. Composite
   physics formulas (D→β₂, detunings) are deliberately untouched.
 
-- **`photonics_helper.mode_analysis`** (step7): mode-solver → multimode-engine bridge — `load_modes` (N-mode export, permutation-invariant ordering, fundamental first by mid-grid `n_eff`; cross-λ continuation is the solver-export contract, one physical mode per file), `mode_dispersion` (per-mode Taylor betas, `group_delays[0] == 0`, GRIN-only `phase_offsets` note), `overlap_tensors_from_fields` (grid quadrature, no circular symmetry; `S⁽²⁾` kept complex when the fields are — never clipped — and the engine accepts complex `fwm_weights` accordingly; confinement `Γ_m` honestly unity — the export contract carries no core mask), `build_multimode_deck` (one call to engine kwargs). Per-mode γ routed through existing `coupling_tensor` slots (no engine change). Honesty note: MM-SCG runs state Raman/shock/full-β as off until steps 8–10. Tests: `tests/test_mode_analysis.py` (7 tests).
-- **`MultimodeSplitStepEngine` Raman** (step8): per-channel intramodal `include_raman` + `raman_response` (N=1 == scalar engine) plus intermodal delayed-coupling `raman_tensors` memory kernel on the RK4 path (Wright JSTQE Eq. 1, `S^R = S^K`; step7 `S⁽²⁾` admissible as `T_R`, hand-supplied fallback documented). `docs/multimode-gnlse.md` Raman claim now matches code; stale pump-depletion future-work line corrected. Honesty note: shock/TPA/full-β still off until steps 9–10. `raman_tensors` requires `include_raman=True` (they share the h_R kernel) — enforced at init. Multi-peak ChG phonon sets (Wu et al. 2023) deferred as follow-up. Tests: `tests/test_multimode_raman.py` (4 tests).
-- **`MultimodeSplitStepEngine` shock + TPA/carriers** (step9): per-channel `include_shock` self-steepening (`τ_shock ≈ 1/ω₀`, Wright JSTQE §III spectral form on coupled paths, scalar-identical Strang scheme on the default path — N=1 == scalar shock deck; `conserving_shock` pcGNLSE variant mirrored) with shock-grid guards and Blow & Wood photon tracking, plus opt-in time-resolved TPA/FCA (`include_tpa`/`include_free_carriers`; per-mode `beta_tpa`/`sigma_fca` are caller-scaled, since step7 `Γ_m` is unity). `conserving_shock` is pcGNLSE-only: rejected at init on the coupled (tensor/FWM) paths. Honesty note: full-β/FWM-widening still off until step10. Tests: `tests/test_multimode_shock_tpa.py` (5 tests).
-- **`MultimodeSplitStepEngine` full-β + full-tensor FWM** (step10): per-mode full-β(ω) spectral dispersion operator (`full_beta`, scalar `TaperedGNLSESolver` precedent; decision: full operator, not Taylor 8–10) agreeing with high-order Taylor in the narrowband limit, plus full-`S⁽²⁾_mnpq` FWM contraction (`fwm_full_tensor=True`, Wright Eq. 1 tensor term image-verified, Poletti Eq. 18/19 + `oam_l` selection preserved, diagonal arms excluded). Phase 3/4 check: degenerate-only weights reproduce the slice exactly; off-slice entries add arms the slice misses. With `include_shock` the shock operator is applied once to the assembled nonlinear RHS — never pre-applied inside the FWM arm (regression test enforces exactly-once). Octave deck stable at dt ≤ 1 fs. **Retires the switched-off-physics disclaimer — all four GAP steps landed.** Tests: `tests/test_multimode_full_beta_fwm.py` (5 tests).
-- **Reproductions 38/38 green**: `scripts/test_reproductions.py` all pass post-convention-fix; the 3 dudley-SCG failures were the pre-existing missing `C_MS` import in `reproductions/dudley_2006_scg/common.py` (re-added as an explicit `# noqa: F401` re-export — the fig* modules read `common.C_MS`; figure suite re-run green). Guasoni walk-off audit closed (linear layer vindicated, no new arm); Wright gain figure re-render as measured-vs-analytic (task 6.4) — renderer shipped, sweep run pending (render is slow; do not block the release on it); PINN closure-count correction landed (accepted-otherwise).
+- **`photonics_helper.mode_analysis`** (step7): mode-solver → multimode-engine bridge: `load_modes` (N-mode export, permutation-invariant ordering, fundamental first by mid-grid `n_eff`; cross-λ continuation is the solver-export contract, one physical mode per file), `mode_dispersion` (per-mode Taylor betas, `group_delays[0] == 0`, GRIN-only `phase_offsets` note), `overlap_tensors_from_fields` (grid quadrature, no circular symmetry; `S⁽²⁾` kept complex when the fields are, never clipped, and the engine accepts complex `fwm_weights` accordingly; confinement `Γ_m` honestly unity, the export contract carries no core mask), `build_multimode_deck` (one call to engine kwargs). Per-mode γ routed through existing `coupling_tensor` slots (no engine change). Honesty note: MM-SCG runs state Raman/shock/full-β as off until steps 8–10. Tests: `tests/test_mode_analysis.py` (7 tests).
+- **`MultimodeSplitStepEngine` Raman** (step8): per-channel intramodal `include_raman` + `raman_response` (N=1 == scalar engine) plus intermodal delayed-coupling `raman_tensors` memory kernel on the RK4 path (Wright JSTQE Eq. 1, `S^R = S^K`; step7 `S⁽²⁾` admissible as `T_R`, hand-supplied fallback documented). `docs/multimode-gnlse.md` Raman claim now matches code; stale pump-depletion future-work line corrected. Honesty note: shock/TPA/full-β still off until steps 9–10. `raman_tensors` requires `include_raman=True` (they share the h_R kernel): enforced at init. Multi-peak ChG phonon sets (Wu et al. 2023) deferred as follow-up. Tests: `tests/test_multimode_raman.py` (4 tests).
+- **`MultimodeSplitStepEngine` shock + TPA/carriers** (step9): per-channel `include_shock` self-steepening (`τ_shock ≈ 1/ω₀`, Wright JSTQE §III spectral form on coupled paths, scalar-identical Strang scheme on the default path: N=1 == scalar shock deck; `conserving_shock` pcGNLSE variant mirrored) with shock-grid guards and Blow & Wood photon tracking, plus opt-in time-resolved TPA/FCA (`include_tpa`/`include_free_carriers`; per-mode `beta_tpa`/`sigma_fca` are caller-scaled, since step7 `Γ_m` is unity). `conserving_shock` is pcGNLSE-only: rejected at init on the coupled (tensor/FWM) paths. Honesty note: full-β/FWM-widening still off until step10. Tests: `tests/test_multimode_shock_tpa.py` (5 tests).
+- **`MultimodeSplitStepEngine` full-β + full-tensor FWM** (step10): per-mode full-β(ω) spectral dispersion operator (`full_beta`, scalar `TaperedGNLSESolver` precedent; decision: full operator, not Taylor 8–10) agreeing with high-order Taylor in the narrowband limit, plus full-`S⁽²⁾_mnpq` FWM contraction (`fwm_full_tensor=True`, Wright Eq. 1 tensor term image-verified, Poletti Eq. 18/19 + `oam_l` selection preserved, diagonal arms excluded). Phase 3/4 check: degenerate-only weights reproduce the slice exactly; off-slice entries add arms the slice misses. With `include_shock` the shock operator is applied once to the assembled nonlinear RHS: never pre-applied inside the FWM arm (regression test enforces exactly-once). Octave deck stable at dt ≤ 1 fs. **Retires the switched-off-physics disclaimer, all four GAP steps landed.** Tests: `tests/test_multimode_full_beta_fwm.py` (5 tests).
+- **Reproductions 38/38 green**: `scripts/test_reproductions.py` all pass post-convention-fix; the 3 dudley-SCG failures were the pre-existing missing `C_MS` import in `reproductions/dudley_2006_scg/common.py` (re-added as an explicit `# noqa: F401` re-export: the fig* modules read `common.C_MS`; figure suite re-run green). Guasoni walk-off audit closed (linear layer vindicated, no new arm); Wright gain figure re-render as measured-vs-analytic (task 6.4), renderer shipped, sweep run pending (render is slow; do not block the release on it); PINN closure-count correction landed (accepted-otherwise).
 
 ### Added
 
-- **`photonics_helper.raman_cavity`**: N-channel Raman cavity solver — arbitrary orders, per-channel direction, per-end FBG mirrors, **six steady-state solvers** (bidirectional fixed point with under-relaxation; Newton on the shooting residual; continuation in launched power; **trapezoidal collocation with a sparse Newton**; **null-vector branch switching**; and **full continuation that also ladders the backward-pump fraction**), an implicit `method="BDF"` integrator, and a linearized noise transfer solved by superposition. All are validated against the single-order RFL (exact 0.12449 W). Key numerical finding: a bidirectional pump breaks a plain collocation Newton even at 0.01 W backward power, and the backward-fraction continuation fixes it — see PLAN.md.
-- **`benchmarks/raman_noise/alcon-camas2010/fixture.json`**: ref [14] of Rizzelli 2016 (Alcon-Camas & Ania-Castanon, doi:10.1364/OE.18.023569), Table 1 read directly — the Raman gain coefficients and losses the Rizzelli paper defers to it. Ref [15] (Nuno, Alcon-Camas & Ania-Castanon, doi:10.1364/OE.20.027376) is also in `literature/`.
+- **`photonics_helper.raman_cavity`**: N-channel Raman cavity solver: arbitrary orders, per-channel direction, per-end FBG mirrors, **six steady-state solvers** (bidirectional fixed point with under-relaxation; Newton on the shooting residual; continuation in launched power; **trapezoidal collocation with a sparse Newton**; **null-vector branch switching**; and **full continuation that also ladders the backward-pump fraction**), an implicit `method="BDF"` integrator, and a linearized noise transfer solved by superposition. All are validated against the single-order RFL (exact 0.12449 W). Key numerical finding: a bidirectional pump breaks a plain collocation Newton even at 0.01 W backward power, and the backward-fraction continuation fixes it, see PLAN.md.
+- **`benchmarks/raman_noise/alcon-camas2010/fixture.json`**: ref [14] of Rizzelli 2016 (Alcon-Camas & Ania-Castanon, doi:10.1364/OE.18.023569), Table 1 read directly: the Raman gain coefficients and losses the Rizzelli paper defers to it. Ref [15] (Nuno, Alcon-Camas & Ania-Castanon, doi:10.1364/OE.20.027376) is also in `literature/`.
 - **`tests/test_raman_cavity.py`** (13 tests).
 
-- **`photonics_helper.raman_rfl`**: Raman fiber laser cavity model — steady-state BVP with FBG boundaries, threshold, exact linear-superposition pump-to-Stokes RIN transfer, and the Krause 2006 Q-factor penalty. **Krause 2006 is now fully reproduced** (FSR comb spacing = `v_g/(2L)`, transfer falls with pump power, and the output-coupler, gain and length design rules), turning the stage 2 cavity target from *attempted* into *reproduced*.
+- **`photonics_helper.raman_rfl`**: Raman fiber laser cavity model: steady-state BVP with FBG boundaries, threshold, exact linear-superposition pump-to-Stokes RIN transfer, and the Krause 2006 Q-factor penalty. **Krause 2006 is now fully reproduced** (FSR comb spacing = `v_g/(2L)`, transfer falls with pump power, and the output-coupler, gain and length design rules), turning the stage 2 cavity target from *attempted* into *reproduced*.
 - **`benchmarks/raman_noise/generate_raman_dataset.py`** and **`tests/test_raman_dataset.py`**: the stage 3 coarse RFL sweep dataset (60 samples, resumable, atomic shards) and its gates. The Krause 2006 experimental configuration is recovered from the dataset alone to 1e-9.
 - **Three sweep-driver correctness fixes**: atomic shards were written zero-byte because `np.savez` appended `.npz` to a `.tmp` name; results were stored as pickled object arrays that `allow_pickle=False` could not load; and the resume trusted the manifest without verifying shard integrity, so a truncated shard was never repaired. The resume now verifies every shard and recomputes affected shards in full.
 - **`tests/test_raman_rfl.py`** (8 tests) and **`tests/test_raman_dataset.py`** (5 tests).
@@ -256,9 +256,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Keita 2006 dispersion cross-check (was a false failure).** The reported −17.6 dB offset and 2π-early roll-off were three benchmark convention errors, not a physics limit: the monochromatic-pump solver was compared against the large-bandwidth Eq. 4.9/4.10 instead of Eq. 4.5; the walk-off omitted the 2π that turns the offset frequency into the paper's angular `ν_s`; and the demodulation used `4|F|/(P₀·T)` instead of the `|F|/(P₀·T)` the field-based Eq. 2.16 needs. With all three corrected the solver matches Eq. 4.5 to ~1 dB and reproduces Eq. 4.6's low-frequency 13 dB. The `D·f` invariance still holds exactly.
 - **#22:** `conserving_shock=True` ComplexWarning flood eliminated (`.real` added to delayed intensity convolution); docstring documents γ < 0 requirement.
-- **#24:** `fit_shg_autodiff` docstring corrected — does not reliably recover (σ, P₀) even with power term.
+- **#24:** `fit_shg_autodiff` docstring corrected: does not reliably recover (σ, P₀) even with power term.
 - **#25:** `design_efficiency` docstring documents monotonicity assumption and `residual_norm` check.
-- **#16:** `VectorSplitStepEngine` docstring corrected — both axes must be specified explicitly.
+- **#16:** `VectorSplitStepEngine` docstring corrected: both axes must be specified explicitly.
 - **#19:** Three API papercuts fixed (n_func Wavelength, RamanSpec.model_fields, beta_fn default).
 - **#20:** DeprecationWarning duplication consolidated to one.
 - **#21:** Manakov docstring now states 8/9 equivalence holds only for single channel.
@@ -274,12 +274,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.1.9] — 2026-09-19
+## [0.1.9] - 2026-09-19
 
 ### Added
 
-- **Vector GNLSE:** `VectorSplitStepEngine` — coupled two-polarization split-step Fourier solver with per-axis Taylor dispersion, PMD walk-off, 2/3 XPM anisotropy, coherent polarization FWM, and Manakov mode.
-- **Multimode GNLSE:** `MultimodeSplitStepEngine` — N coupled modal envelopes with per-mode dispersion, LP/isotropic SPM-XPM models, and opt-in inter-modal FWM with angular-momentum gating.
+- **Vector GNLSE:** `VectorSplitStepEngine`: coupled two-polarization split-step Fourier solver with per-axis Taylor dispersion, PMD walk-off, 2/3 XPM anisotropy, coherent polarization FWM, and Manakov mode.
+- **Multimode GNLSE:** `MultimodeSplitStepEngine`: N coupled modal envelopes with per-mode dispersion, LP/isotropic SPM-XPM models, and opt-in inter-modal FWM with angular-momentum gating.
 - **Cascaded χ⁽²⁾–χ⁽³⁾:** `chi2.solve_cascaded_shg` couples Kerr SPM/XPM into the degenerate SHG three-wave integrator.
 - **Inverse design:** `fit_two_wave` and `design_efficiency` in `inverse_design.py`.
 - **PINN/autodiff training:** `fit_shg_autodiff` torch layer.
@@ -287,16 +287,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **#0:** GNLSE linear operator convention swap (conjugated transform pair + plain causal h_R convolution).
-- **#1:** Self-steepening photon-number drift — grid-validity artifact diagnosed and documented.
-- **#2:** `mi_gain_spectrum_extended` catastrophic cancellation — offset-aware contract.
-- **#3:** `TaperedGNLSESolver` inert `betas_unit` — UserWarning added.
-- **#4:** `plot_waterfall` non-standard rendering — re-drawn as true ridge.
-- **#6:** Raissi-2019 PINN rel-L2 — metric-definition mismatch resolved.
-- **#8:** Guasoni-2015 IM-MI flat readout — saturation artifact resolved.
+- **#1:** Self-steepening photon-number drift: grid-validity artifact diagnosed and documented.
+- **#2:** `mi_gain_spectrum_extended` catastrophic cancellation: offset-aware contract.
+- **#3:** `TaperedGNLSESolver` inert `betas_unit`: UserWarning added.
+- **#4:** `plot_waterfall` non-standard rendering: re-drawn as true ridge.
+- **#6:** Raissi-2019 PINN rel-L2: metric-definition mismatch resolved.
+- **#8:** Guasoni-2015 IM-MI flat readout: saturation artifact resolved.
 
 ---
 
-## [0.1.8] — 2026-09-12
+## [0.1.8] - 2026-09-12
 
 ### Added
 
@@ -305,7 +305,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.1.0] — 2026-08-30
+## [0.1.0] - 2026-08-30
 
 ### Added
 

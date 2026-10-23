@@ -1,3 +1,7 @@
+---
+quadrant: explanation
+---
+
 # Raman noise sources
 
 !!! warning "Scope"
@@ -34,7 +38,7 @@ exponential gain law for exactly this reason, and a stage-1 change that adds the
 term should extend that test to the seedless form rather than silently change it.
 
 The natural closed form is Zhu 2007 Eq. 7's DC behaviour plus the standard Raman gain spectrum,
-and the natural gate is Zhu 2007 Fig. 1 — whose DC level is currently recorded as
+and the natural gate is Zhu 2007 Fig. 1, whose DC level is currently recorded as
 **unverifiable**, because Zhu states its fiber loss and effective area in external references
 [11] and [12]. Obtaining those two references would turn an unverifiable target into a real
 one, and is worth doing before stage 1 inherits the gap.
@@ -142,7 +146,7 @@ A **distributed** Langevin term, accumulated per step, not a boundary
 condition.
 
 `noise.raman_noise_field` already carries the correct per-bin quantum
-weighting — one photon per mode, scaled by the positive Raman gain `Im h̃_R` and
+weighting: one photon per mode, scaled by the positive Raman gain `Im h̃_R` and
 by the spontaneous-plus-stimulated emission factor `n_th + 1`. What it lacks is
 per-order structure, so it is called **once per order** with that order's own
 `h̃_R` and ω₀ rather than being reimplemented. Two calls into one correct
@@ -156,7 +160,7 @@ correction and is not negligible.
 ## Normalization
 
 Two normalizations in this module are easy to get wrong by a factor of two or
-four, and neither error is visible in the output — they read as a few dB on a
+four, and neither error is visible in the output: they read as a few dB on a
 noise floor.
 
 **Injection.** The generated field is rescaled so that `mean(n²)` equals the
@@ -172,7 +176,7 @@ non-Hermitian array whose inverse transform is complex, and
 `exp(i(a+ib)) = e⁻ᵇeⁱᵃ` would then let a phase modulation silently change `|A|`.
 
 **Extraction.** The intensity PSD is `S_f = 2|F|²/(dt·N)` per positive bin.
-Select on the *sign* of ω and then order — folding the negative bins onto the
+Select on the *sign* of ω and then order. Folding the negative bins onto the
 positive ones with `abs()` duplicates every bin, halves the apparent spacing,
 and makes the median spacing zero.
 
@@ -186,14 +190,14 @@ reason.
 The grid's frequency spacing is `df = 1/T`. Because the Kerr term converts
 phase noise to intensity noise at **twice** the injected offset, a grid sized
 for the injected band puts the converted component beyond Nyquist, where it
-wraps instead of appearing — silently. `required_window()` returns
+wraps instead of appearing, silently. `required_window()` returns
 `1/(2 f_max)`, and the injector **refuses** a band containing no grid bins
 rather than returning silence.
 
 ## `g2` and what it is not
 
 `second_order_coherence` returns `⟨|E|⁴⟩/⟨|E|²⟩²` per bin, which is identically
-**2** for a circular complex Gaussian field — reached to within 0.05 dB here.
+**2** for a circular complex Gaussian field, reached to within 0.05 dB here.
 
 A strong *carrier* does **not** push it below 2: a carrier times independent
 per-bin noise is still circular Gaussian bin by bin. What drives it down is a

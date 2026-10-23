@@ -14,6 +14,7 @@
 A comprehensive helper library for photonics and optics calculations.
 
 **Documentation:** <https://hitaishi2222.github.io/photonics_helper/>
+**Start here:** [docs/tutorial.md](docs/tutorial.md) launches a soliton into 10 mm of fiber and checks the output against arithmetic you can do on paper.
 **Choosing a solver:** [docs/choose-a-solver.md](docs/choose-a-solver.md) covers scalar, vector, multimode, taper, and χ⁽²⁾ engines.
 
 ---

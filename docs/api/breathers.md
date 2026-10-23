@@ -1,3 +1,7 @@
+---
+quadrant: reference
+---
+
 # Breathers and exact solutions
 
 Higher-order soliton solutions and breathers for GNLSE configurations. Docstrings are the source of truth, rendered with

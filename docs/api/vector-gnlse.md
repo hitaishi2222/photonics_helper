@@ -1,3 +1,7 @@
+---
+quadrant: reference
+---
+
 # Vector (polarization-coupled) GNLSE
 
 Split-step Fourier solver for the coupled two-polarization GNLSE: per-axis

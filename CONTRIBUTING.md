@@ -44,7 +44,7 @@ tasks). For anything beyond a trivial fix:
 2. Keep implementation details in the design section.
 3. Land the change and tests together.
 
-Bug reports are welcome as issues — for **data or physics** bugs, include the
+Bug reports are welcome as issues. For **data or physics** bugs, include the
 citation or reference that establishes the correct value.
 
 ## Stability rules (important)
@@ -58,7 +58,7 @@ Read [`docs/stability.md`](docs/stability.md) before changing a public symbol.
   ```sh
   python scripts/update_api_snapshot.py
   ```
-  Review the diff — it should contain exactly the change you intended.
+  Review the diff. It should contain exactly the change you intended.
 - Satellites (solvers, plotting, dashboard) may evolve, but document behaviour
   changes in `CHANGELOG.md`.
 - Numerical corrections are allowed in a patch release, but must be marked
@@ -68,9 +68,9 @@ Read [`docs/stability.md`](docs/stability.md) before changing a public symbol.
 
 Canonical data lives in Python:
 
-- `photonics_helper/raman/reference.py` — Raman/substrate specs
-- `photonics_helper/phonon.py` — `PHONON_MATERIALS`
-- `seed_db.py` — Sellmeier coefficients
+- `photonics_helper/raman/reference.py`: Raman/substrate specs
+- `photonics_helper/phonon.py`: `PHONON_MATERIALS`
+- `seed_db.py`: Sellmeier coefficients
 
 After editing, regenerate and verify:
 
@@ -91,8 +91,16 @@ the point is agreement with physics, not with another code.
 
 ## Style
 
+- Prose follows [`docs/STYLE.md`](docs/STYLE.md). Run `python scripts/check_docs.py`
+  before pushing; it catches dead links, stale nav entries, pages missing their
+  quadrant, unreachable pages and truncated table cells.
+- Every snippet on a tutorial or how-to page is executed by
+  `python scripts/check_docs_code.py`. If your page records output, the output is
+  compared, so copy it from a real run.
+- If you touch `examples/`, run `python scripts/build_gallery.py` and commit the
+  regenerated `docs/gallery.md` and `docs/examples/`.
 - Type hints everywhere; the package ships `py.typed` and must keep `mypy` clean.
-- Units are classes — accept and return them at public boundaries (see the
+- Units are classes: accept and return them at public boundaries (see the
   README's "Units are classes" section).
 - Prefer analytic checks and limiting cases in tests over snapshot-only tests.
 - Keep new dependencies optional unless the core genuinely needs them; `core`

@@ -1,6 +1,10 @@
+---
+quadrant: reference
+---
+
 # Foundation core
 
-`photonics_helper.core` is the **foundation layer** of the library — the small,
+`photonics_helper.core` is the **foundation layer** of the library: the small,
 dependency-light set of primitives that everything else (and anything you build)
 can rely on. It is deliberately separate from the solvers and plotting helpers,
 which are _satellites_ layered on top.
@@ -13,7 +17,7 @@ from photonics_helper.core import units, constants, grids, materials
 
 The library aims to be something other photonics projects build on. That only
 works if the foundation can be used without paying for the rest: importing
-`photonics_helper.core` pulls in **numpy, scipy and pydantic only** — no
+`photonics_helper.core` pulls in **numpy, scipy and pydantic only**. No
 matplotlib, no plotly, no dash, and none of the solver modules.
 
 ```python
@@ -30,7 +34,7 @@ not just documented.
 | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `core.units`     | Typed unit classes: `Wavelength`, `Frequency`, `AngularFrequency`, `Energy`, `Time`, `Length`, `Area`, `Power`, `Wavenumber`, `PeakPower`, `Permittivity`, `Permeability`, and their array variants |
 | `core.constants` | `C_MS`, `EPS_0`, `MU_0`, `Z0`, `H_PLANCK`, `HBAR`, `PI`                                                                                                                                             |
-| `core.grids`     | `TemporalGrid` — time/frequency sampling and the documented FFT convention                                                                                                                          |
+| `core.grids`     | `TemporalGrid`: time/frequency sampling and the documented FFT convention                                                                                                                          |
 | `core.materials` | `OpticalMaterial` protocol, `Material`, and the `material()` database lookup                                                                                                                        |
 
 ### Units
@@ -84,7 +88,7 @@ def group_index(mat: OpticalMaterial, wavelength_um: float) -> float: ...
 | **Satellites**    | `gnlse`, `chi2`, `phase_matching`, `soliton`, `pulse`, `raman`, `dbr`, `frog`, `structured`, `breathers`, `noise`, `wave_breaking`, `phonon`, `dashboard` | First-class, but may evolve as physics and features develop       |
 
 Both layers keep their **existing import paths**. Nothing in this namespace
-replaces `photonics_helper.base` or `photonics_helper.materials` — for example,
+replaces `photonics_helper.base` or `photonics_helper.materials`. For example,
 `from photonics_helper.base import Wavelength` and
 `from photonics_helper.core.units import Wavelength` refer to the _same class
 object_.

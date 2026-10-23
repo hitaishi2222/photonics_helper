@@ -1,3 +1,7 @@
+---
+quadrant: explanation
+---
+
 # GNLSE physics: shock invariant, multi-mode Raman, free carriers, validation
 
 > Not sure whether this is the right engine? See **[Choosing a solver](choose-a-solver.md)**.
@@ -19,13 +23,13 @@ is
 
 The step integrates the exactly-integrable phase `exp(iγP_NL Δz)` in two
 symmetric half-steps (Strang splitting) and advances only the much smaller
-shock correction `iγτ_shock ∂_t(A·P_NL)` with frequency-domain RK4 — the
+shock correction `iγτ_shock ∂_t(A·P_NL)` with frequency-domain RK4, the
 interaction-picture (RK4IP) idea of Hult, *J. Lightwave Technol.* **25**, 3770
 (2007) and Hochbruck & Ostermann, *Acta Numerica* **19**, 209 (2010). No
 Runge–Kutta stage ever integrates the stiff nonlinear phase, and **no
 spectral bin is clamped**.
 
-**Photon-number balance — an honest caveat.** A draft of this change claimed
+**Photon-number balance: an honest caveat.** A draft of this change claimed
 the shock term is a total time derivative, making the photon number
 `∫|A|²dt` an exact invariant. That identity is **false in general**: with a
 real response,
@@ -35,7 +39,7 @@ d/dz ∫|A|² dt = −2γτ_shock ∫ P_NL · Im(A* ∂_t A) dt ,
 ```
 
 which vanishes only when the field evolves under a *time-independent* `P_NL`
-(pure SPM with a frozen drive — then the step is exactly conservative,
+(pure SPM with a frozen drive; then the step is exactly conservative,
 verified to machine precision). In general the residual is a **physical**
 error of the first-order `ω/ω₀` expansion itself, `O(τ_shock·Ω_max)` at the
 band edge: a fully-resolved (heavily substepped) reference of the *same flow*
@@ -54,7 +58,7 @@ When self-steepening is enabled the engine therefore requires
 or disable self-steepening). The grid must resolve only physical frequencies;
 nothing is silently discarded.
 
-References — Blow & Wood (1989); Agrawal, *Nonlinear Fiber Optics*, 5th ed.,
+References: Blow & Wood (1989); Agrawal, *Nonlinear Fiber Optics*, 5th ed.,
 §2.3; Hult (2007).
 
 ## 2. Multi-phonon Raman response
@@ -70,8 +74,8 @@ h_R(t) = Z⁻¹ Σ_i w_i e^{−t/τ_i} sin(ω_i t) θ(t),   τ_i = 2/γ_i,   ω_
 with `γ_i` the angular-frequency FWHM of mode *i* (Lorentzian ↔ damped
 oscillator relation `Δω = 2/τ`, Agrawal §2.3.2) and `Z` fixed by
 `∫₀^∞ h_R dt = 1`. The solver's Raman dispatch reads `fR` and `h_R(t)` from
-whatever response object the `Fiber` carries — the single-mode silica
-Blow–Wood `RamanResponse` or a multi-mode `PhononResponse` — so crystalline
+whatever response object the `Fiber` carries: the single-mode silica
+Blow–Wood `RamanResponse` or a multi-mode `PhononResponse`, so crystalline
 materials (LiNbO₃, YAG, KTP, …) can be propagated with their real multi-mode
 response. Single-mode behaviour is unchanged.
 
@@ -93,7 +97,7 @@ per step). SplitStepEngine additionally offers
 each integrated exactly per sample within a step. The legacy
 `include_tpa` path is untouched; both models are documented side by side.
 Out of scope by design: free-carrier **refraction** (the `μ` index term),
-carrier diffusion and drift — all listed as follow-ups.
+carrier diffusion and drift, all listed as follow-ups.
 
 ## 4. Convergence and validation harness
 
@@ -101,7 +105,7 @@ carrier diffusion and drift — all listed as follow-ups.
 "demonstrate grid independence on *your* configuration" tool the original
 code review called out as missing.
 
-**Grid/step convergence** — `convergence_study(build_solver, refinements,
+**Grid/step convergence**: `convergence_study(build_solver, refinements,
 observables, tolerance, shared)` runs a caller-supplied GNLSE factory at
 successively refined resolutions and returns, per caller-selected observable,
 the value at each resolution, the relative change between successive

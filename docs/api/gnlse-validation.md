@@ -1,3 +1,7 @@
+---
+quadrant: reference
+---
+
 # GNLSE validation & convergence harness
 
 Grid/step convergence studies and cited analytical validation checks for the

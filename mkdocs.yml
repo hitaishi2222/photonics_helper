@@ -62,46 +62,65 @@ extra_javascript:
   - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
 
 nav:
+nav:
   - Home: index.md
-  - Installation: install.md
-  - Quick start: quickstart.md
-  - Choosing a solver: choose-a-solver.md
-  - Foundation core: core.md
-  - Stability contract: stability.md
-  - Building on the core: building-on-core.md
-  - GNLSE physics: gnlse-physics.md
-  - Vector / polarization-coupled GNLSE: vector-gnlse.md
-  - Multimode (few-mode) GNLSE: multimode-gnlse.md
-  - Cascaded χ⁽²⁾–χ⁽³⁾ & inverse design: cascaded-chi23.md
-  - Raman cascade (CW) & RIN transfer: raman-cascade.md
-  - Raman noise sources: raman-noise.md
-  - API Reference:
-      - api/index.md
-      - Foundation core (units/grids/materials): api/core.md
-      - Units and constants: api/base.md
-      - Pulse envelopes & grids: api/pulse.md
-      - Fiber & propagation constants: api/fiber.md
-      - GNLSE: api/gnlse.md
-      - GNLSE validation & convergence: api/gnlse-validation.md
-      - Vector (polarization) GNLSE: api/vector-gnlse.md
-      - Multimode (few-mode) GNLSE: api/multimode-gnlse.md
-      - Mode-solver bridge & OAM metrics: api/mode-analysis.md
-      - Exact circular-fibre vector modes: api/vector-modes.md
-      - Phase-matching diagnostics (χ³): api/phase-matching.md
-      - χ⁽²⁾ nonlinear optics (SHG / SFG / DFG): api/chi2.md
-      - Raman scattering: api/raman.md
-      - Raman cascade (CW) & RIN transfer: api/raman-transfer.md
-      - Soliton analysis: api/soliton.md
-      - Breathers and exact solutions: api/breathers.md
-      - Noise sources: api/noise.md
-      - Optical wave breaking: api/wave-breaking.md
-      - Structured light (LG / OAM): api/structured.md
-      - DBR / TMM: api/dbr.md
-      - Materials & n/k database: api/materials.md
-      - Phonons: api/phonon.md
-      - FFT backends: api/fftw.md
-      - Unified dashboard: api/dashboard.md
-  - Formal specification (Lean 4): formal.md
-  - Reproductions: reproductions.md
-  - Data provenance: data-provenance.md
-  - Database schema: data-schema.md
+
+  - Tutorials:
+      - Your first soliton: tutorial.md
+      - Building on the core: building-on-core.md
+
+  - How-to guides:
+      - Install: install.md
+      - Pick a grid and time window: how-to/pick-a-grid.md
+      - Check that a run is converged: how-to/check-convergence.md
+      - Add a material: how-to/add-a-material.md
+      - Import a mode from a solver: how-to/import-a-mode.md
+      - Reproduce a paper: how-to/reproduce-a-paper.md
+      - Read a spectrum: how-to/read-a-spectrum.md
+      - Choose a solver: choose-a-solver.md
+      - Recipes: recipes.md
+
+  - Reference:
+      - Examples: gallery.md
+      - API Reference:
+          - api/index.md
+          - Foundation core (units/grids/materials): api/core.md
+          - Units and constants: api/base.md
+          - Pulse envelopes & grids: api/pulse.md
+          - Fiber & propagation constants: api/fiber.md
+          - GNLSE: api/gnlse.md
+          - GNLSE validation & convergence: api/gnlse-validation.md
+          - Vector (polarization) GNLSE: api/vector-gnlse.md
+          - Multimode (few-mode) GNLSE: api/multimode-gnlse.md
+          - Mode-solver bridge & OAM metrics: api/mode-analysis.md
+          - Exact circular-fibre vector modes: api/vector-modes.md
+          - Phase-matching diagnostics (χ³): api/phase-matching.md
+          - χ⁽²⁾ nonlinear optics (SHG / SFG / DFG): api/chi2.md
+          - Raman scattering: api/raman.md
+          - Raman cascade (CW) & RIN transfer: api/raman-transfer.md
+          - Soliton analysis: api/soliton.md
+          - Breathers and exact solutions: api/breathers.md
+          - Noise sources: api/noise.md
+          - Optical wave breaking: api/wave-breaking.md
+          - Structured light (LG / OAM): api/structured.md
+          - DBR / TMM: api/dbr.md
+          - Materials & n/k database: api/materials.md
+          - Phonons: api/phonon.md
+          - FFT backends: api/fftw.md
+          - Unified dashboard: api/dashboard.md
+      - Foundation core: core.md
+      - Stability contract: stability.md
+      - Reproductions: reproductions.md
+      - Database schema: data-schema.md
+      - Documentation style: STYLE.md
+
+  - Explanation:
+      - Scope and limits: scope.md
+      - GNLSE physics: gnlse-physics.md
+      - Vector / polarization GNLSE: vector-gnlse.md
+      - Multimode (few-mode) GNLSE: multimode-gnlse.md
+      - Cascaded chi2 and inverse design: cascaded-chi23.md
+      - Raman cascade and RIN transfer: raman-cascade.md
+      - Raman noise sources: raman-noise.md
+      - Data provenance: data-provenance.md
+      - Formal specification (Lean 4): formal.md

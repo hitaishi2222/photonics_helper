@@ -1,3 +1,7 @@
+---
+quadrant: reference
+---
+
 # Exact vector modes of a circular fibre
 
 Closed-form vector eigenmodes of a circular step-index guide: `HE`, `EH`,

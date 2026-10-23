@@ -1,3 +1,7 @@
+---
+quadrant: reference
+---
+
 # Foundation core
 
 The dependency-light foundation namespace: typed units, physical constants,

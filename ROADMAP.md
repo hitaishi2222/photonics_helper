@@ -7,7 +7,7 @@ originally planned and now delivered.
 - ~~Add functionality for dispersion calculations~~
 - ~~Modeling Envelopes~~
 - ~~Modeling Pulse~~
-- **Transfer Matrix Method (TMM)** — available (see `dbr.py`)
+- **Transfer Matrix Method (TMM)**: available (see `dbr.py`)
   - DBR multilayer stack simulation
   - Characteristic-matrix (Macleod) formalism with correct layer ordering
   - Spectral response (R, T) including absorbing and oblique stacks, plus `TMM.plot_spectrum`
@@ -30,7 +30,7 @@ originally planned and now delivered.
   - Dispersion (arbitrary-order β_k)
   - Kerr effect
   - Raman scattering (delayed response)
-  - Self-steepening (optional; default off — set `include_self_steepening=True` to match laserfun's `shock=True`)
+  - Self-steepening (optional; default off: set `include_self_steepening=True` to match laserfun's `shock=True`)
   - Two-photon absorption (TPA)
   - Adaptive step-size (SSFM)
   - Soliton propagation, fission, supercontinuum
@@ -43,15 +43,15 @@ originally planned and now delivered.
 - **Waveguide Support** ✅
   - Confinement factor Γ in γ formula: `γ = n₂·ω₀·Γ/(c·A_eff)`
   - Backward compatible (Γ=1.0 recovers fiber behavior)
-- **Waveguide mode import (FEM)** ✅ — `WaveguideMode.from_csv/from_npz` → `PropagationConstant`/`Dispersion`, `PropagationConstant.beta2`
-- **χ⁽²⁾ nonlinear optics** ✅ — `chi2` SHG/SFG/DFG RK4IP solver, QPM grating, `Lambda_qpm`, textbook `tanh²(κL)` reproduction
-- **GPU FFT backend** ✅ — opt-in cupy path (`PHOTONICS_FFT_BACKEND=cupy`) with transparent CPU fallback and a benchmark
-- **Unified dashboard** ✅ — `photonics_helper.dashboard.app()` combines the Raman Explorer and an interactive GNLSE result viewer
-- **Release engineering** ✅ — PyPI Trusted Publishing, Zensical API docs, and a Python 3.12/3.13 × ±pyfftw CI matrix (ruff + mypy gates)
+- **Waveguide mode import (FEM)** ✅: `WaveguideMode.from_csv/from_npz` → `PropagationConstant`/`Dispersion`, `PropagationConstant.beta2`
+- **χ⁽²⁾ nonlinear optics** ✅: `chi2` SHG/SFG/DFG RK4IP solver, QPM grating, `Lambda_qpm`, textbook `tanh²(κL)` reproduction
+- **GPU FFT backend** ✅: opt-in cupy path (`PHOTONICS_FFT_BACKEND=cupy`) with transparent CPU fallback and a benchmark
+- **Unified dashboard** ✅: `photonics_helper.dashboard.app()` combines the Raman Explorer and an interactive GNLSE result viewer
+- **Release engineering** ✅: PyPI Trusted Publishing, Zensical API docs, and a Python 3.12/3.13 × ±pyfftw CI matrix (ruff + mypy gates)
 - **Chalcogenide Materials** ✅
   - GeAsSe added (n₂=6e-18 m²/W, 44 materials total)
   - Suitable for soliton fission in chalcogenide waveguides
-- **Structured Light** ✅ — Laguerre–Gaussian / OAM modes, Gaussian-beam propagation helpers, modal overlap integrals and transverse-profile plotting (`structured.py`)
+- **Structured Light** ✅: Laguerre–Gaussian / OAM modes, Gaussian-beam propagation helpers, modal overlap integrals and transverse-profile plotting (`structured.py`)
 - ~~Add methods for bandwidth calculations~~
 - ~~Add methods for power/intensity conversions~~ (physical scaling via `Wave.with_effective_area` / `PeakPower.from_envelope`)
 
@@ -63,16 +63,16 @@ The strategy is to make the library a **foundation other photonics projects
 build on**, with `photonics_helper.core` (units, constants, grids, materials) as
 the stable contract.
 
-- **Phase 0 — hygiene** ✅ — `LICENSE` + data `NOTICE`, PEP 639 metadata, wheel
+- **Phase 0: hygiene** ✅, `LICENSE` + data `NOTICE`, PEP 639 metadata, wheel
   smoke tests, import-budget guards.
-- **Phase 1 — core namespace** ✅ — `photonics_helper.core`, lazy package import
+- **Phase 1: core namespace** ✅, `photonics_helper.core`, lazy package import
   (PEP 562), `TemporalGrid` extraction, `OpticalMaterial` protocol.
-- **Phase 2 — data layer** ✅ — populated phonon modes, provenance registry +
+- **Phase 2: data layer** ✅, populated phonon modes, provenance registry +
   per-row licences, lazy database access, drift + golden tests.
-- **Phase 3 — stability contract** ✅ — published policy, deprecation machinery,
+- **Phase 3: stability contract** ✅, published policy, deprecation machinery,
   core API-surface guard, build-on-core example, contribution/citation/paper
   artefacts.
-- **Phase 4 — capability growth** (satellites; in progress):
+- **Phase 4: capability growth** (satellites; in progress):
   - *Physics hardening* ✅ (0.1.9): interaction-picture self-steepening,
     multi-phonon Raman dispatch, time-resolved TPA/free carriers,
     `gnlse_validation` convergence + analytical checks harness.
@@ -80,7 +80,7 @@ the stable contract.
     (`_SHOCK_TAYLOR_LIMIT` on `τ_shock·Ω_max`, `ISSUES.md` #1), the offset-aware
     `mi_gain_spectrum_extended` contract (#2), a stability-driven multimode FWM
     substep count (#11) with classical RK4 stages restored (#12), and the
-    documented `oam_l` gate semantics — verified equal to Poletti & Horak
+    documented `oam_l` gate semantics, verified equal to Poletti & Horak
     Eq. (18), inert under uniform labels (#15).
   - *Vector / polarization-coupled GNLSE* ✅ (this release):
     `vector_gnlse.VectorSplitStepEngine` (per-axis dispersion, PMD walk-off,
@@ -89,7 +89,7 @@ the stable contract.
     scalar-limit reduction enforced by tests. Multimode/few-mode OAM
     coupling remains future work (Phase 4 item 2 partially delivered).
   - *Multimode/few-mode OAM coupling* ✅ (this release):
-    `multimode_gnlse.MultimodeSplitStepEngine` — per-mode dispersion +
+    `multimode_gnlse.MultimodeSplitStepEngine`, per-mode dispersion +
     group delay, LP (`1, 2/3`) / isotropic SPM-XPM models, opt-in pump-driven
     inter-modal FWM (Manley–Rowe exchange) gated by the
     angular-momentum rule `ℓ_m = 2ℓ_n − ℓ_q`; contracts: single-channel =
@@ -101,7 +101,7 @@ the stable contract.
     (2008), doi:10.1364/JOSAB.25.001645, Eq. 15):* `xpm_weights` and
     `fwm_weights` mode-specific overlap tensors override the uniform
     coefficient models pair-wise; `fwm_pump_depletion=True` adds the
-    Manley–Rowe pump back-conversion arm `+2iγf* A_mA_qA_n*` — the FWM
+    Manley–Rowe pump back-conversion arm `+2iγf* A_mA_qA_n*`, the FWM
     pair arm was also corrected to the Mumtaz creation form `+iγfA_n²A_m*`
     (the previous conjugate partner leaked photon number pointwise);
     depleted runs conserve Σ|A|² to <1e-6 and match the dense
@@ -122,37 +122,37 @@ the stable contract.
     `design_efficiency` (exact against the analytic tanh²(κL) design
     formula).
   - *Inverse-design layer (v2, autodiff)* ✅ (2026-09-20):
-    `fit_shg_autodiff` — differentiable batched multi-start RK4 SHG
+    `fit_shg_autodiff`, differentiable batched multi-start RK4 SHG
     model in torch (=[pinns] extra), trained with Adam over (σ, P₀, Δk);
     forward validated vs `solve_shg` (1.7e-8), full-triple recovery
     within ~10% when the absolute SH power breaks the κ = σ√P₀
     degeneracy (documented; not asserted for η-only data).
-  - *Pending*: none — Phase 4 scope is decoupled from unpublished
+  - *Pending*: none: Phase 4 scope is decoupled from unpublished
     own-work reproduction targets.
 
-## Phase 5 — depth & delivery (proposed scope, to be implemented later)
+## Phase 5: depth & delivery (proposed scope, to be implemented later)
 
 Candidate directions gathered on 2026-09-20 (not yet started; each item is
 independently scheduled; they do not have to land together):
 
-1. **FROG depth** — principal-component generalized-projections (PGPA)
+1. **FROG depth**: principal-component generalized-projections (PGPA)
    algorithm and a synthetic SHG-FROG / ptychographic-FROG validation
    suite (round-trip retrieval across pulse shapes, chirps and noise
    levels). Completes the P2 physics-depth list from the original review.
-2. **GPU GNLSE backend** — a full cupy/JAX backend option for the
+2. **GPU GNLSE backend**: a full cupy/JAX backend option for the
    split-step engines (today only the FFT layer can be GPU-dispatched);
    requires an accuracy contract against the CPU reference before
    release.
-3. **Waveguide-mode-solver interface** — first-class n_eff(λ) ingestion
+3. **Waveguide-mode-solver interface**: first-class n_eff(λ) ingestion
    from external FEM exports (`femwell`, `tidy3d`, CSV/npz) wired into
    the waveguide GNLSE and the phase-matching diagnostics; builds on the
    existing `mode-export` extra.
-4. **Reproducibility pipeline v2** — a parameters-JSON schema (versioned,
+4. **Reproducibility pipeline v2**: a parameters-JSON schema (versioned,
    validated) plus auto-generated per-study reports (HTML/PDF) for every
    entry in `reproductions/` and every user simulation.
-5. **Dashboard unification** — merge the Raman Dash app and the GNLSE
+5. **Dashboard unification**: merge the Raman Dash app and the GNLSE
    result viewer into one navigable web frontend.
-6. **Code layout rearrangement** — verify every `examples/` script runs
+6. **Code layout rearrangement**: verify every `examples/` script runs
    on the current surface; fix breakages; re-home any straggler modules
    uncovered while auditing (the import-path preference: flat
    `photonics_helper.<module>` paths stay canonical; `core.*` is the
@@ -162,7 +162,7 @@ Work starts with the examples audit (item 6's verification pass) and the
 items proceed fastest-to-value; nothing above is binding on the core
 stability contract (Phase 3 rules apply).
 
-## Pending — author action
+## Pending: author action
 
 - [ ] **JOSS software-paper submission.** The prerequisites are in place
   (`paper/paper.md` + `paper/paper.bib` in JOSS format, `CITATION.cff`,
@@ -177,7 +177,7 @@ stability contract (Phase 3 rules apply).
   studies** in the main table of `reproductions/README.md`, plus one
   deliberately unregistered partial deck (`shg_lnoi_shg`, registered as a ⚠️
   PARTIAL row with recorded caveats and left out of the test suite), all green
-  in the local test suite — a natural milestone for the Zenodo release if the
+  in the local test suite, a natural milestone for the Zenodo release if the
   author wants one now. Since the 2026-10-02 count of 24: the Poletti & Horak
   2008 Sec. 4.A overlap/symmetry deck became a full folder and row.
 - [x] Material database backend relocated to the foundation layer

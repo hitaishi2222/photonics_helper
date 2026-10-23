@@ -1,17 +1,21 @@
+---
+quadrant: explanation
+---
+
 # Multimode (few-mode) coupled GNLSE
 
 > Not sure whether this is the right engine? See **[Choosing a solver](choose-a-solver.md)**.
 
 `photonics_helper.multimode_gnlse` propagates *N* simultaneously guided
-spatial modes as coupled modal envelopes — the nonlinear complement of
+spatial modes as coupled modal envelopes, the nonlinear complement of
 [`structured.py`](api/structured.md) (details and references there):
 
 - per-mode Taylor dispersion (`betas[fiber_mode]`), modal group delay
-  (`group_delays`, s/m — walk-off in the retarded frame of channel 0), and
+  (`group_delays`, s/m; walk-off in the retarded frame of channel 0), and
   shared scalar loss;
 - SPM/XPM coefficient sets: co-polarized scalar spatial modes
-  (`coef_model="co_polarized"` — SPM 1, XPM 2, FWM 1; Mumtaz Eq. 6 scalar
-  limit), the two-polarization degenerate LP pair (`"lp_degenerate"` — the
+  (`coef_model="co_polarized"`: SPM 1, XPM 2, FWM 1; Mumtaz Eq. 6 scalar
+  limit), the two-polarization degenerate LP pair (`"lp_degenerate"`, the
   vector-GNLSE strip-down: SPM 1, XPM 2/3, FWM 2/3), or the isotropic
   all-ones model (`"isotropic"`). `lp_degenerate` is **not** the XPM of two
   co-polarized spatial modes; pass `coef_model="co_polarized"` or the
@@ -23,8 +27,8 @@ spatial modes as coupled modal envelopes — the nonlinear complement of
   mis-scales the tensor arms; the absolute `coupling_tensor` diagonal is
   exactly the per-mode `γ_m` (`C_ii = γ_i`), not a `½(γ_i+γ_j)` average;
 - opt-in **pump-driven inter-modal FWM** (`include_fwm=True`): each pump
-  channel `n` exchanges the pair `(m, q)` through two pump photons —
-  conjugate (Hamiltonian) partners, energy conserving per pair — gated by
+  channel `n` exchanges the pair `(m, q)` through two pump photons,
+  conjugate (Hamiltonian) partners, energy conserving per pair, gated by
   the angular-momentum rule `ℓ_m = 2ℓ_n − ℓ_q` when OAM indices are
   supplied (`oam_l`);
 - **measuring** the OAM label, rather than trusting it: `oam_l` is copied
@@ -61,5 +65,5 @@ depletion is implemented (`fwm_pump_depletion=True`, Manley–Rowe
 consistent); self-steepening + time-resolved TPA/FCA are implemented
 per-channel (`include_shock`, `include_tpa`/`include_free_carriers`);
 full-β(ω) dispersion (`full_beta`) and the full-`S⁽²⁾` FWM contraction
-(`fwm_full_tensor=True`) are implemented. All four GAP steps have landed —
+(`fwm_full_tensor=True`) are implemented. All four GAP steps have landed, so
 no switched-off-physics disclaimer.

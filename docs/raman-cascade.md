@@ -1,3 +1,7 @@
+---
+quadrant: explanation
+---
+
 # Raman cascade: power flow and RIN transfer
 
 This page documents `photonics_helper.raman_transfer`, which answers one question with as
@@ -16,7 +20,7 @@ Three published results constrain the answer, and all three are implemented:
 ## Scope: an amplifier by default, with opt-in cavity boundaries
 
 The default configuration describes a **distributed Raman amplifier**. That is unchanged, and
-every reproduction below was produced with the cavity options absent — passing them or not passing
+every reproduction below was produced with the cavity options absent; passing them or not passing
 them gives a byte-identical result, which the test suite asserts rather than assumes.
 
 What is now additionally modelled, and only when asked for:
@@ -40,7 +44,7 @@ What remains excluded, and is not deferred to a later stage of this module:
 If you are looking for threshold behaviour, use `RamanCascadeConfig` with reflectivity set; if
 you are looking for random-laser physics, this is still the wrong module.
 
-Amplifier noise *sources* — ASE, spontaneous Raman scattering, the amplifier noise floor — are
+Amplifier noise *sources* (ASE, spontaneous Raman scattering, the amplifier noise floor) are
 also out of scope. See [Raman noise sources](raman-noise.md), which documents that boundary
 before the code exists.
 
@@ -153,8 +157,8 @@ self-consistent `−γ₂₃ P₂ P₃`.
 **Eq. 6.** The printed modulation equations carry no `m_i` self term and no `α_i m_i` term,
 and re-deriving the linearization confirms they are exact, not an omission. Linearizing Eqs. 5
 for the *relative* modulation index M = δP/P̄, the steady-state net gain of channel i appears
-on both sides of the equation — multiplying P̄ on the mean side and δP = P̄ M on the
-fluctuation side — and cancels identically. Only cross terms and the walk-off retardation
+on both sides of the equation, multiplying P̄ on the mean side and δP = P̄ M on the
+fluctuation side, and cancels identically. Only cross terms and the walk-off retardation
 survive: exactly the printed Eqs. 6a to 6c. An early revision of this module "corrected" the
 printed equations by adding the diagonal `−(α_i + Σ_j γ_ij P̄_j) m_i`, which is the correct
 equation for the *absolute* perturbation but wrong for a relative one: it re-amplified each
@@ -166,8 +170,8 @@ is recorded in the `reproduction_status` block of the Mermelstein fixture.
 ### Group index
 
 Mermelstein 2003 prints `n_i = n_0 + (S_0/8)(λ_i − λ_0²/λ_i)²`. That form is dimensionally
-inconsistent — the bracket carries units of length squared while the dispersion slope carries
-time per length cubed — and substituting Table I directly gives a group index of 2293, which is
+inconsistent: the bracket carries units of length squared while the dispersion slope carries
+time per length cubed, and substituting Table I directly gives a group index of 2293, which is
 not a physical value. This module instead uses `dn_g/dλ = c D(λ)`, which gives 1.46681 at
 1560 nm, consistent with the standard single-mode value near 1.468 at 1550 nm. Both the broken
 printed form and the resolution are recorded in the fixture and guarded by tests.
@@ -189,7 +193,7 @@ transferred power in the default model, which is a property of those equations a
 error.
 
 Note the weighting. A photon count is `P λ/(hc)`, so the conserved sum is `Σ P_i λ_i`, weighted
-by `P·λ`, **not** `Σ P_i/λ_i` — the latter weights by photon *energy* and is conserved by
+by `P·λ`, **not** `Σ P_i/λ_i`, since the latter weights by photon *energy* and is conserved by
 nothing physical. `photon_flux()` returns the true photon rate.
 
 ```python
@@ -230,7 +234,7 @@ inverse velocities add.
 
 In the modulation equations that walk-off multiplies the pump's **own** modulation index,
 `i Ω d m_i`, as in Mermelstein's Eqs. 6a and 6b. Rotating `m_i` against the gain envelope turns
-the transfer into a Fourier-type integral whose magnitude falls as `1/|A_i − i Ω d_i|` — a
+the transfer into a Fourier-type integral whose magnitude falls as `1/|A_i − i Ω d_i|`, a
 clean single pole with a 6 dB corner at `A_i/(2π d)`. The corner therefore scales as the inverse
 of the walk-off, which is why the co-propagating corner sits about four orders of magnitude
 above the counter-propagating one.
@@ -281,7 +285,7 @@ Running `examples/44_cw_cascade_rin_transfer.py` gives:
 
 Corners are read as the 6 dB drop below the response's own DC level rather than through the
 double-pole fit, because the model response is not exactly double-pole and Mermelstein's own
-published corners come from a double-pole fit of measured data — comparing fit parameter to fit
+published corners come from a double-pole fit of measured data, so comparing fit parameter to fit
 parameter was over-reading both.
 
 The **DC levels reproduce once the printed Eqs. 6 are taken literally.** The one structural
@@ -339,7 +343,7 @@ loses its provenance is worse than no benchmark.
 
 Every fixture also carries a top-level `tuned_parameters` list. It must be empty for a target
 to pass; `assert_not_tuned` raises `ReproductionError` naming any offending parameter. This is
-the failure mode that produced the original rejected proposal — a reproduction that silently
+the failure mode that produced the original rejected proposal: a reproduction that silently
 tunes until the curve matches is indistinguishable from one that genuinely matches, until
 someone checks.
 
@@ -385,7 +389,7 @@ stochastic sources that make a RIN spectrum computable at all.
 `MultimodeSplitStepEngine` now accepts two optional tensors, `coupling_tensor`
 (N×N complex) and `fwm_coupling_tensor` (rank-4 complex), both in
 W⁻¹ m⁻¹. With neither supplied the engine is **bit-identical** to its previous
-behaviour — verified by stashing the change and comparing outputs with
+behaviour, verified by stashing the change and comparing outputs with
 `np.array_equal`, not by tolerance.
 
 The tensors carry **absolute** coefficients rather than dimensionless
@@ -409,7 +413,7 @@ conserves **photon number** exactly. Note the split: the pump loses the full
 arm is a 6.5% error, wide enough to hide behind a loose cross-check tolerance.
 
 The diagonal carries the Kerr arm, `C[k,k] = γ_k = n₂ω_k Γ/(c A_eff,k)`,
-evaluated at each order's own wavelength and area — pump and Stokes commonly
+evaluated at each order's own wavelength and area: pump and Stokes commonly
 differ by more than an order of magnitude in `A_eff`, and that ratio often sets
 the whole cascade.
 
@@ -421,8 +425,8 @@ Mermelstein 2003 Table I.
 
 This is a considered decision, not a shortcut. A two-parameter gain spectrum
 **cannot** reproduce a measured multi-order gain table. Against Mermelstein's
-three measured gains — 0.527, 0.419 and 0.038 (W km)⁻¹ for 1375→1465,
-1465→1560 and 1375→1560 — the implied normalization constant `g / shape(offset)`
+three measured gains, 0.527, 0.419 and 0.038 (W km)⁻¹ for 1375→1465,
+1465→1560 and 1375→1560, the implied normalization constant `g / shape(offset)`
 spreads by a factor of **23**, whether the shape is `Im H̃` from the library's
 causal `h_R`, its `Re H̃`, or a Lorentzian built from `RamanSpec`'s own 440 cm⁻¹
 shift and 45 cm⁻¹ linewidth. `Re H̃` additionally flips sign across the
@@ -438,7 +442,7 @@ that no measurement covers, as a **shape** rather than an absolute coefficient.
 
 The split-step cascade and the stage-0 continuous-wave ODE cascade are two
 independently implemented integrators. In the undepleted regime with matched
-fiber they agree to **0.2% on the pump and 1% on the Stokes** — the strongest
+fiber they agree to **0.2% on the pump and 1% on the Stokes**, the strongest
 check in the change, and the real replacement for the spectral gate that was
 originally written for task 2.3 and is not physically achievable.
 
@@ -476,11 +480,11 @@ monotone in D at every offset, with the roll-off corner moving one decade per
 decade of D. That is Fig. 1's structure.
 
 Precisely: it is the transfer **at a fixed offset** that falls by two orders,
-not the DC value — all three curves share the same −0.4 dB plateau at low
+not the DC value: all three curves share the same −0.4 dB plateau at low
 frequency, because dispersion enters through the walk-off term and vanishes as
 ν_s → 0.
 
-The walk-off is `Δk = D(λ_p − λ_s) ν_s`, where **ν_s is the angular offset** —
+The walk-off is `Δk = D(λ_p − λ_s) ν_s`, where **ν_s is the angular offset**;
 the paper defines `f_s = ν_s/(2π)`. The unit chain matters: D in ps/(nm·km)
 times Δλ in nm is ps/km = 10⁻¹⁵ s/m, converting to 1/km multiplies by 1000,
 and the 2π converts the offset frequency to the angular frequency. Omitting
@@ -508,8 +512,8 @@ a 1 km fibre pumped by a 0.1 nm bandwidth source.
 ### Solver vs. closed form (resolved)
 
 The numbers above come from the stage 0 analytic functions (`photonics_helper/raman_transfer.py`).
-Cross-checking the split-step solver against them — a local-only Keita-2006 solver-vs-closed
-benchmark, retired in the Oct 6 raman-pivot and never tracked in git — **passed at the time**:
+Cross-checking the split-step solver against them (a local-only Keita-2006 solver-vs-closed
+benchmark, retired in the Oct 6 raman-pivot and never tracked in git) **passed at the time**:
 the solver agreed with Keita 2006 Eq. 4.5 to about **1 dB**
 over `Δk·L = 0.2` to `66` rad. No dedicated regression test covers this cross-check now.
 
@@ -552,7 +556,7 @@ At the low-frequency end the solver also matches Eq. 4.6, the paper's stated
 "about 13 dB" noise addition.
 
 The solver reproduces the closed form's **exact invariance in the product
-`D·f`**, bin for bin — D = 2 at 10¹¹ Hz, D = 20 at 10¹⁰ Hz and D = 200 at 10⁹ Hz
+`D·f`**, bin for bin: D = 2 at 10¹¹ Hz, D = 20 at 10¹⁰ Hz and D = 200 at 10⁹ Hz
 all give identical solver values. That is the structural claim Eq. 4.8 rests on.
 
 **The strongly walk-off-limited region is ill-conditioned, not validated.**
@@ -572,7 +576,7 @@ solver; treat results there as unvalidated.
 Set `cavity_reflectivity_input` and `cavity_reflectivity_output` on
 `RamanCascadeConfig` (one power reflectivity per order per end) and
 `MultimodeSplitStepEngine.cavity_iterate` closes the propagation into a resonator.
-Leaving them `None` — the default — is the amplifier above, unchanged.
+Leaving them `None` (the default) is the amplifier above, unchanged.
 
 ### Formulation
 
@@ -592,7 +596,7 @@ A_k(0) <- sqrt(R_in[k]) * exp(i * beta_k * L_rt) * sqrt(R_out[k]) * A_k(L)
 with `beta_k = 2 pi n_g / lambda_k` and `L_rt = cavity_round_trip_length`. The
 reflectivities are **power** reflectivities, hence the square roots on amplitudes. The
 phase `beta_k * L_rt` is the one-way round trip at the group velocity; it is not
-arbitrary — it is the representation of the round-trip delay `T_rt = n_g L_rt / c`, and
+arbitrary: it is the representation of the round-trip delay `T_rt = n_g L_rt / c`, and
 it is what generates the longitudinal-mode beat structure at `f_beat = c / (2 n_g L_rt)`
 through the frequency dependence of the Stokes spectra. The group index `n_g` defaults
 to 1.466 (silica near 1.5 um, and the value Babin 2005 quote) and is settable per
@@ -610,7 +614,7 @@ This is deliberate and the reason is worth stating, because the obvious criterio
 wrong here. A complex-field residual `|| F(A) - A || / || A ||` cannot go to zero for
 *any* converged cavity: the round-trip map carries an absolute phase `exp(i beta_k L_rt)`
 whose argument is of order `1e8` rad, whose residue mod `2 pi` is arbitrary, and whose
-magnitude never settles. The residual therefore plateaus at `|1 - m e^{i phi}|` — a
+magnitude never settles. The residual therefore plateaus at `|1 - m e^{i phi}|`, a
 nonzero constant even for a perfectly converged, contracting cavity. A solver written on
 that residual raises on exactly the configurations it is meant to accept; this was
 observed directly during development, where the reported relative change sat at 1.552
@@ -664,7 +668,7 @@ pumps are mutually coherent:
 
 **Which is physically typical.** Real WDM pump sources are mutually incoherent, so the
 incoherent rule is the physically important one and the default. Zhu 2007's central finding is
-that the real six-pump case transfers *more* than the coherent equivalent — the paper's Fig. 1
+that the real six-pump case transfers *more* than the coherent equivalent; the paper's Fig. 1
 shows the real case about 8 dB above the virtual one-pump case. Note that the equivalent pump
 *modulation index* is larger for the coherent sum, but the mean *RIN transfer*
 `|m_signal|^2 / |m_eq|^2` is smaller, because the coherent denominator is larger. The stage 2
@@ -694,10 +698,10 @@ target names the missing parameter.
 
 | Reproduction | DOI | Verifiable targets | Attempted targets (missing parameter) |
 | --- | --- | --- | --- |
-| Zhu 2007 six-pump | [10.1109/JLT.2007.895532](https://doi.org/10.1109/JLT.2007.895532) | Eq. 7 corner within 1 kHz; roll-off within 3 dB/decade of −20; real-versus-virtual gap positive; pump-count trend | Absolute DC levels — the inter-pump gain matrix and fiber loss are deferred to refs [11],[12] |
-| Krause 2006 RFL | [10.1016/j.optcom.2005.10.077](https://doi.org/10.1016/j.optcom.2005.10.077) | FSR comb spacing = `v_g/(2L)`; mean transfer falls with pump power; output-coupler, gain and length design rules | — (reproduced) |
-| Rizzelli 2016 ultra-long | [10.1364/OE.24.029170](https://doi.org/10.1364/OE.24.029170) | — | Reflectivity and forward-pump trends — distributed-feedback FBG boundary (stage 3) |
-| Ma 2012 silicon | [10.1364/OE.20.017962](https://doi.org/10.1364/OE.20.017962) | Silicon/silica Raman-shift ratio | Low-frequency RIN transfer — silicon Raman laser cavity (stage 3) |
+| Zhu 2007 six-pump | [10.1109/JLT.2007.895532](https://doi.org/10.1109/JLT.2007.895532) | Eq. 7 corner within 1 kHz; roll-off within 3 dB/decade of −20; real-versus-virtual gap positive; pump-count trend | Absolute DC levels: the inter-pump gain matrix and fiber loss are deferred to refs [11],[12] |
+| Krause 2006 RFL | [10.1016/j.optcom.2005.10.077](https://doi.org/10.1016/j.optcom.2005.10.077) | FSR comb spacing = `v_g/(2L)`; mean transfer falls with pump power; output-coupler, gain and length design rules | n/a (reproduced) |
+| Rizzelli 2016 ultra-long | [10.1364/OE.24.029170](https://doi.org/10.1364/OE.24.029170) | n/a | Reflectivity and forward-pump trends; distributed-feedback FBG boundary (stage 3) |
+| Ma 2012 silicon | [10.1364/OE.20.017962](https://doi.org/10.1364/OE.20.017962) | Silicon/silica Raman-shift ratio | Low-frequency RIN transfer; silicon Raman laser cavity (stage 3) |
 
 **Krause 2006 is now reproduced** by the Raman fiber laser cavity model in
 `photonics_helper.raman_rfl` (see [Stage 2b](#stage-2b-the-raman-fiber-laser-cavity)):
@@ -720,7 +724,7 @@ by four-wave mixing. The four-wave-mixing tensor slot remains present in
 
 The four reproduction reports and their test suite (a retired local-only Raman suite,
 29 tests) ran in about **10 s** on one CPU core when last measured. Reproduction gating now lives
-in `scripts/test_reproductions.py` — deliberately outside `tests/` so the default suite stays fast —
+in `scripts/test_reproductions.py` (deliberately outside `tests/` so the default suite stays fast),
 which currently covers the non-Raman families; the Raman reports have no dedicated runner. The Zhu six-pump transfer evaluation is the
 dominant cost: each frequency requires one linearized integration per pump. A full frequency
 grid of 24 points over six pumps takes a few seconds. This is the number stage 3 should budget
@@ -778,7 +782,7 @@ case.
 
 **The advection sign is the whole resonance.** A forward wave `f(t - z/v)` contributes
 `-iΩ/v`; a backward wave `f(t + z/v)` contributes `+iΩ/v`. If both carry the same sign the
-round-trip phase cancels and the transfer is *exactly* frequency-independent — a flat
+round-trip phase cancels and the transfer is *exactly* frequency-independent, a flat
 line with no comb. The opposite sign accumulates `2ΩL/v` per round trip and puts the peaks
 at multiples of `v_g/(2L)`. This is not a detail that can be checked by inspection; it is
 checked by asserting the peak spacing equals the FSR.
