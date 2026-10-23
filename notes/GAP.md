@@ -1,7 +1,7 @@
-# GAP — What blocks chalcogenide multimode SCG in `photonics_helper`
+# GAP: What blocks chalcogenide multimode SCG in `photonics_helper`
 
-**Status:** CLOSED 2026-10-16 — all four gaps bridged (step7 `mode_analysis`, step8 multimode Raman, step9 shock/TPA/FCA, step10 full-β + full-tensor FWM; each N=1 == scalar engine, selection rules preserved). Was: open · **Created:** 2026-10-16 · **Owner:** Hitaishi V
-**Companion to:** `PLAN.md` (multimode SCG design) · **Repo:** `~/Hiti/projects/photonics_helper` (own project — upstream PRs are just normal work)
+**Status:** CLOSED 2026-10-16, all four gaps bridged (step7 `mode_analysis`, step8 multimode Raman, step9 shock/TPA/FCA, step10 full-β + full-tensor FWM; each N=1 == scalar engine, selection rules preserved). Was: open · **Created:** 2026-10-16 · **Owner:** Hitaishi V
+**Companion to:** `PLAN.md` (multimode SCG design) · **Repo:** `~/Hiti/projects/photonics_helper` (own project, upstream PRs are just normal work)
 
 This document covers the two engineering gaps from the design review (findings #2 and #3),
 plus two adjacent gaps that will bite the moment we try to produce an octave-spanning spectrum:
@@ -22,7 +22,7 @@ verified DOIs* we build from. A consolidated bibliography is in §5.
 
 ---
 
-## 1. Gap A — mode-solver → multimode-engine bridge
+## 1. Gap A: mode-solver → multimode-engine bridge
 
 ### A.1 What exists today
 
@@ -31,10 +31,10 @@ verified DOIs* we build from. A consolidated bibliography is in §5.
 | femwell/tidy3d solve → `n_eff(λ)`, `n_g`, fields | `examples/generate_waveguide_mode_data.py` | hard-wired `num_modes=1`, single λ-sweep, one geometry |
 | `WaveguideMode` (import a single mode) | `photonics_helper/fiber.py` | one mode: `neff`, `ng`, `wl`; `from_csv/from_npz`, `neff_at`, `to_propagation_constant()`, `to_dispersion()` |
 | `Dispersion.get_betas(polyOrder, λ)` | `photonics_helper/fiber.py` | Taylor coefficients for **one** β(ω) |
-| `ZDependentDispersion` | `photonics_helper/fiber.py` | one β(ω, z) — scalar taper |
-| LP overlap tensors `Q⁽¹⁾, Q⁽²⁾`, `engine_weights()` | `reproductions/poletti_2008_multimode/overlap.py` | **step-index fibre only**, analytic LP basis — not arbitrary (rib/ridge) fields |
-| `MultimodeSplitStepEngine` | `photonics_helper/multimode_gnlse.py` | needs `betas` (list), `group_delays`, `xpm_weights`, `fwm_weights`, one shared scalar γ — all supplied by hand |
-| Overlap / A_eff / per-mode γ from fields | — | **does not exist anywhere** |
+| `ZDependentDispersion` | `photonics_helper/fiber.py` | one β(ω, z), scalar taper |
+| LP overlap tensors `Q⁽¹⁾, Q⁽²⁾`, `engine_weights()` | `reproductions/poletti_2008_multimode/overlap.py` | **step-index fibre only**, analytic LP basis, not arbitrary (rib/ridge) fields |
+| `MultimodeSplitStepEngine` | `photonics_helper/multimode_gnlse.py` | needs `betas` (list), `group_delays`, `xpm_weights`, `fwm_weights`, one shared scalar γ, all supplied by hand |
+| Overlap / A_eff / per-mode γ from fields | n/a | **does not exist anywhere** |
 
 So `examples/38` and every reproduction *hard-code* the tensors and one γ. There is no path
 from "a mode solve of a 1.5 × 0.8 µm GeAsSe rib" to a runnable engine.
@@ -43,10 +43,10 @@ from "a mode solve of a 1.5 × 0.8 µm GeAsSe rib" to a runnable engine.
 
 1. **N-mode export + continuation.** Solve ≥3 modes over a wide λ grid (1.2–6 µm), export
    `n_eff(λ)`, `n_g(λ)` and the transverse vector fields per mode, and **label modes
-   consistently across λ by field overlap** (eigen-index ordering is not stable — modes swap).
+   consistently across λ by field overlap** (eigen-index ordering is not stable, modes swap).
 2. **Per-mode dispersion → engine arguments.** From `β_m(ω)` build
-   - Taylor `betas` per mode (or full β(ω) — Gap D), and
-   - `group_delays[m] = β₁⁽ᵐ⁾ − β₁⁽⁰⁾` (s/m) — the engine rejects `group_delays[0] ≠ 0`;
+   - Taylor `betas` per mode (or full β(ω): Gap D), and
+   - `group_delays[m] = β₁⁽ᵐ⁾ − β₁⁽⁰⁾` (s/m): the engine rejects `group_delays[0] ≠ 0`;
    - `phase_offsets[m]` from `β₀⁽ᵐ⁾` (only meaningful for GRIN-like index profiles).
 3. **Overlap tensors from arbitrary vector fields.** With normalized transverse profiles
    `F_m(x,y)` (so `∬|F_m|² = 1`, units W^-1/2):
@@ -59,7 +59,7 @@ from "a mode solve of a 1.5 × 0.8 µm GeAsSe rib" to a runnable engine.
    ```
    These are exactly Poletti–Horak Eq. (7) `Q⁽¹⁾/Q⁽²⁾`; in the LP basis `Q⁽¹⁾ = Q⁽²⁾`
    (real modes), which we already reproduce to 0 in the fibre case.
-   The integrator must **not** assume circular symmetry — grid quadrature over the tidy3d/femwell
+   The integrator must **not** assume circular symmetry, grid quadrature over the tidy3d/femwell
    field arrays, with the azimuthal index recovered numerically for the `oam_l` gate.
 4. **Per-mode γ routing.** The engine takes **one** γ (`_fiber_gamma`). For high-index-contrast
    rib modes `γ_m` differ by ≳2×, so we must either (i) push mode-resolved `γ_mn` in absolute
@@ -84,21 +84,21 @@ Poletti `overlap.py` integrals (keep the fibre-specific solver where it is, in `
 
 ### A.4 References to build from (DOI verified)
 
-- Poletti & Horak, *JOSA B* **25**, 1645 (2008) — **the multimode GNLSE + Eq. (7) overlaps
+- Poletti & Horak, *JOSA B* **25**, 1645 (2008): **the multimode GNLSE + Eq. (7) overlaps
   `Q⁽¹⁾/Q⁽²⁾`**; already the spec of our engine. `10.1364/JOSAB.25.001645`
 - Wright, Ziegler, Lushnikov, Zhu, Eftekhar, Christodoulides & Wise, *IEEE JSTQE* **24**,
-  5100516 (2018) — **GMMNLSE: the full nonlinear mode-coupling coefficient tensors `S⁽¹⁾/S⁽²⁾`
+  5100516 (2018), **GMMNLSE: the full nonlinear mode-coupling coefficient tensors `S⁽¹⁾/S⁽²⁾`
   from mode overlaps, plus the reference GPU solver**. This is the blueprint for A.2(3).
   `10.1109/JSTQE.2017.2779749` · open solver: `github.com/WiseLabAEP/GMMNLSE-Solver-FINAL`
-- Afshar V., Monro et al., *Opt. Express* **17**, 2298 (2009) — **full-vectorial waveguide
-  nonlinear coefficients for high-index-contrast (subwavelength) guides** — the correct
+- Afshar V., Monro et al., *Opt. Express* **17**, 2298 (2009): **full-vectorial waveguide
+  nonlinear coefficients for high-index-contrast (subwavelength) guides**, the correct
   SPM/XPM/FWM overlaps when the scalar LP treatment fails (our rib case). `10.1364/OE.17.002298`
-- Mumtaz, Essiambre & Agrawal, *JLT* **31**, 398 (2013) — our engine's Manakov/overlap
+- Mumtaz, Essiambre & Agrawal, *JLT* **31**, 398 (2013): our engine's Manakov/overlap
   weight spec (SPM 8/9, XPM 4/3). `10.1109/JLT.2012.2235414`
 
 ---
 
-## 2. Gap B — no multimode Raman
+## 2. Gap B: no multimode Raman
 
 ### B.1 What exists today
 
@@ -108,18 +108,18 @@ Poletti `overlap.py` integrals (keep the fibre-specific solver where it is, in `
 - `MultimodeSplitStepEngine` has **no Raman code path at all** (`__init__` has no
   `include_raman`/`raman_response`). The only hook is the documented
   `coupling_tensor` slot.
-- `docs/multimode-gnlse.md` nonetheless claims *"Raman is the scalar per-channel response"*
-  — **docs ≠ code**. (Fix whichever way we implement.) `examples/18` sets
+- `docs/multimode-gnlse.md` nonetheless claims *"Raman is the scalar per-channel response"*;
+  **docs ≠ code**. (Fix whichever way we implement.) `examples/18` sets
   `fiber.raman_response` and the *scalar* solver uses it; the multimode engine ignores it.
 - ChG data available (single-Lorentzian): `As2S3` (345 cm⁻¹, f_R 0.15), `As2Se3` (310, 0.55),
   `GeAsSe` (250, 0.50). No multi-peak ChG phonon sets yet.
 
 ### B.2 Why this is not optional for our device
 
-`f_R ≈ 0.5` for GeAsSe/As₂Se₃ — half the nonlinear response is delayed. Raman sets the
+`f_R ≈ 0.5` for GeAsSe/As₂Se₃, half the nonlinear response is delayed. Raman sets the
 soliton self-frequency shift (`raman_shift_rate`), the red edge, and the coherence. Also, in a
 few-mode guide **intermodal Raman** transfers power between modes with *different group
-velocities* — a documented mechanism for near-100 % mode power transfer and strong
+velocities*, a documented mechanism for near-100 % mode power transfer and strong
 fundamental-mode depletion. Ignoring it both over-predicts bandwidth and mis-predicts the modal
 energy budget.
 
@@ -127,47 +127,47 @@ energy budget.
 
 Two layers, cheap → correct:
 
-1. **Per-channel (intramodal) Raman** — minimal, matches the current doc claim:
+1. **Per-channel (intramodal) Raman**: minimal, matches the current doc claim:
    ```
    ∂A_m/∂z ⊃ i γ (1−f_R)|A_m|²A_m + i γ f_R A_m ∫ h_R(t−t') |A_m(t')|² dt'
    ```
    Reduces exactly to the scalar engine at N=1.
-2. **Intermodal Raman** (the real prize) — delayed nonlinear coupling with its own overlap
+2. **Intermodal Raman** (the real prize): delayed nonlinear coupling with its own overlap
    tensor:
    ```
    ∂A_m/∂z ⊃ i γ f_R Σ_{n,p,q} T_R^{(m,n,p,q)} A_n(z,t) ∫ h_R(t−t') A_p(z,t') A_q*(z,t') dt'
    T_R^{(m,n,p,q)} = ∬ F_m* F_n F_p F_q*  with the Raman (not electronic) weight
    ```
-   Implemented as a memory kernel along the RK4 path — i.e., generalise the existing
+   Implemented as a memory kernel along the RK4 path, i.e., generalise the existing
    `coupling_tensor` slot from instantaneous to *delayed*. Cost: one FFT-based convolution per
    step per tensor term; keep the tensor rank sparse (Poletti-type selection rules prune it
-   hard — we already reproduce those).
+   hard, we already reproduce those).
 
 ### B.4 References to build from (DOI verified)
 
-- Turner, Monro, Afshar V. et al., *Opt. Express* **17**, 11565 (2009) — **"part II:
+- Turner, Monro, Afshar V. et al., *Opt. Express* **17**, 11565 (2009): **"part II:
   Stimulated Raman Scattering" of the full-vectorial subwavelength model**; the correct Raman
   response and its mode-overlap weighting for high-contrast waveguides. **Primary reference
   for B.3.** `10.1364/OE.17.011565`
-- Wright et al., *IEEE JSTQE* **24**, 5100516 (2018) — GMMNLSE with Raman included in the
+- Wright et al., *IEEE JSTQE* **24**, 5100516 (2018): GMMNLSE with Raman included in the
   multimode expansion; the reference implementation. `10.1109/JSTQE.2017.2779749`
-- Christensen, Koefoed, Friis et al., *Sci. Rep.* **6**, 34693 (2016) — **measured intermodal
+- Christensen, Koefoed, Friis et al., *Sci. Rep.* **6**, 34693 (2016): **measured intermodal
   Raman intensity overlaps** between mode groups; gives realistic magnitudes for `T_R`.
   `10.1038/srep34693`
-- Antikainen, Tai, Rishøj, Ramachandran & Agrawal, CLEO 2018, FTh4E.3 — **intermodal Raman
+- Antikainen, Tai, Rishøj, Ramachandran & Agrawal, CLEO 2018, FTh4E.3: **intermodal Raman
   scattering of ultrashort pulses**: power transfer needs *group-velocity matching + non-zero
   overlap*; symmetry can forbid it. `10.1364/CLEO_QELS.2018.FTh4E.3`
-- Pourbeyram, Agrawal & Mafi, *Appl. Phys. Lett.* **102**, 201107 (2013) — Raman cascade in a
+- Pourbeyram, Agrawal & Mafi, *Appl. Phys. Lett.* **102**, 201107 (2013): Raman cascade in a
   GRIN MMF; peaks appear in specific modes (beam cleanup). `10.1063/1.4807620`
-- Wu, Ding, Peng et al., *Appl. Sci.* **13**, 12923 (2023) — **multi-peaked Raman response of
+- Wu, Ding, Peng et al., *Appl. Sci.* **13**, 12923 (2023): **multi-peaked Raman response of
   chalcogenide fibre**; the reference for upgrading our single-Lorentzian ChG model to
   multi-peak (matters for MIR broadening). `10.3390/app132312923`
-- Dudley, Genty & Coen, *Rev. Mod. Phys.* **78**, 1135 (2006) — `R(t) = (1−f_R)δ(t) + f_R h_R(t)`
+- Dudley, Genty & Coen, *Rev. Mod. Phys.* **78**, 1135 (2006): `R(t) = (1−f_R)δ(t) + f_R h_R(t)`
   and the shock term; our scalar engine's spec. `10.1103/RevModPhys.78.1135`
 
 ---
 
-## 3. Gap C — no multimode self-steepening / TPA / free carriers
+## 3. Gap C: no multimode self-steepening / TPA / free carriers
 
 ### C.1 What exists
 
@@ -184,28 +184,28 @@ time-resolved TPA and free-carrier steps. The multimode engine has **none** of t
   ∂A_m/∂z ⊃ i γ_m [ |A_m|²A_m + (i/ω₀) ∂/∂t(|A_m|²A_m) ]        # shock, τ_shock ≈ 1/ω₀
   ```
   In the rigorous GMMNLSE it is handled by working with the spectral field and the full
-  coupling tensor (Wright JSTQE §III) — that is the route we should mirror, not a per-term hack.
+  coupling tensor (Wright JSTQE §III), that is the route we should mirror, not a per-term hack.
 - **TPA / FCA** scale with `Im(χ⁽³⁾)`; needed if any part of the broadened spectrum crosses
   `E_g/2` (GeAsSe `E_g = 1.6 eV` → ≈1.55 µm). At a 2 µm pump the *pump* is safe, but the
   blue edge is not.
 
 ### C.3 References (DOI verified)
 
-- Kolesik & Moloney, *Phys. Rev. E* **70**, 036604 (2004) — unidirectional pulse propagation
+- Kolesik & Moloney, *Phys. Rev. E* **70**, 036604 (2004): unidirectional pulse propagation
   (UPPE), the rigorous basis for shock/self-steepening in a mode expansion.
   `10.1103/PhysRevE.70.036604`
-- Wright et al., *IEEE JSTQE* **24**, 5100516 (2018) — how the GMMNLSE retains self-steepening.
+- Wright et al., *IEEE JSTQE* **24**, 5100516 (2018): how the GMMNLSE retains self-steepening.
   `10.1109/JSTQE.2017.2779749`
-- Hesketh, Poletti & Horak, *Nonlinear Photonics* NP.2012.NTu2D.6 — spatio-temporal collapse
+- Hesketh, Poletti & Horak, *Nonlinear Photonics* NP.2012.NTu2D.6: spatio-temporal collapse
   of ultrashort pulses in multimode fibre (the regime where shock + self-focusing matter).
   `10.1364/NP.2012.NTu2D.6`
 
 ---
 
-## 4. Gap D — Taylor β only; FWM on the degenerate `n==p` slice
+## 4. Gap D: Taylor β only; FWM on the degenerate `n==p` slice
 
 - **D.1 Full β(ω).** The engine takes Taylor `betas` about ω₀. An octave (or two) of MIR
-  broadening is *exactly* where a truncated Taylor series fails — our own `dudley_2006_scg`
+  broadening is *exactly* where a truncated Taylor series fails, our own `dudley_2006_scg`
   reproduction already documents grid-order sensitivity. Two options: (i) raise the order and
   prove convergence (order 8–10, report the order), or (ii) add a **full-β multimode** path
   (spectral operator per mode, mirroring the scalar `TaperedGNLSESolver`/`ZDependentDispersion`).
@@ -227,10 +227,10 @@ Wright et al. JSTQE (full tensor contraction) `10.1109/JSTQE.2017.2779749`.
 |---|---|---|
 | Poletti & Horak, *JOSA B* **25**, 1645 (2008) | `10.1364/JOSAB.25.001645` | MM-GNLSE; Eq. 7 overlaps `Q⁽¹⁾/Q⁽²⁾`; selection rules |
 | Wright et al., *IEEE JSTQE* **24**, 5100516 (2018) | `10.1109/JSTQE.2017.2779749` | GMMNLSE; full coupling tensors; Raman; shock; reference solver |
-| Mumtaz, Essiambre & Agrawal, *JLT* **31**, 398 (2013) | `10.1109/JLT.2012.2235414` | Manakov weights (SPM 8/9, XPM 4/3) — our engine's spec |
-| Afshar V. & Monro, *Opt. Express* **17**, 2298 (2009) | `10.1364/OE.17.002298` | Full-vectorial Kerr mode overlaps (high-contrast) — Gap A |
-| Turner, Monro & Afshar V. et al., *Opt. Express* **17**, 11565 (2009) | `10.1364/OE.17.011565` | Full-vectorial **Raman** in subwavelength guides — Gap B |
-| Kolesik & Moloney, *Phys. Rev. E* **70**, 036604 (2004) | `10.1103/PhysRevE.70.036604` | UPPE basis for shock/self-steepening — Gap C |
+| Mumtaz, Essiambre & Agrawal, *JLT* **31**, 398 (2013) | `10.1109/JLT.2012.2235414` | Manakov weights (SPM 8/9, XPM 4/3), our engine's spec |
+| Afshar V. & Monro, *Opt. Express* **17**, 2298 (2009) | `10.1364/OE.17.002298` | Full-vectorial Kerr mode overlaps (high-contrast), Gap A |
+| Turner, Monro & Afshar V. et al., *Opt. Express* **17**, 11565 (2009) | `10.1364/OE.17.011565` | Full-vectorial **Raman** in subwavelength guides, Gap B |
+| Kolesik & Moloney, *Phys. Rev. E* **70**, 036604 (2004) | `10.1103/PhysRevE.70.036604` | UPPE basis for shock/self-steepening, Gap C |
 | Wright, Wu, Christodoulides & Wise, *Nat. Phys.* **18**, 1018 (2022) | `10.1038/s41567-022-01691-z` | Physics of highly multimode nonlinear systems (review/context) |
 
 ### Multimode Raman
@@ -273,10 +273,10 @@ Wright et al. JSTQE (full tensor contraction) `10.1109/JSTQE.2017.2779749`.
 
 Proposed order (each = one PR to `photonics_helper`, with tests + `docs/api/*.md` + `CHANGELOG.md`):
 
-1. **PR-A** `mode_analysis.py` — N-mode export loader, `mode_dispersion`, `overlap_tensors_from_fields`, `build_multimode_deck`.
+1. **PR-A** `mode_analysis.py`: N-mode export loader, `mode_dispersion`, `overlap_tensors_from_fields`, `build_multimode_deck`.
    *Tests:* femwell↔tidy3d `<2 %`; tensors vs `reproductions/poletti_2008_multimode` `≲1e-3`;
    reduction to scalar/vector engines at machine precision; mode-continuation invariance.
-2. **PR-B** multimode Raman — `include_raman`, `raman_response` (per-channel) then intermodal
+2. **PR-B** multimode Raman: `include_raman`, `raman_response` (per-channel) then intermodal
    `raman_tensors`. *Tests:* N=1 == scalar engine with Raman; SSFS vs `gordon_1986_ssfs`;
    energy/photon-number conservation; a documented intermodal-Raman transfer case.
 3. **PR-C** multimode self-steepening (+ optional TPA/FCA). *Tests:* N=1 == scalar shock deck
@@ -291,11 +291,11 @@ Until PR-B/C/D land, every MM-SCG run must **state** which of these are switched
 > **2026-10-16: LANDED.** PR-A (step7 `photonics_helper/mode_analysis` + `tests/test_mode_analysis.py`), PR-B (step8 `include_raman`/`raman_tensors` + `tests/test_multimode_raman.py`), PR-C (step9 `include_shock`/`include_tpa`/`include_free_carriers` + `tests/test_multimode_shock_tpa.py`), PR-D (step10 `full_beta`/`fwm_full_tensor` + `tests/test_multimode_full_beta_fwm.py`). The honesty disclaimer is retired (`docs/multimode-gnlse.md` scope line).
 >
 > **2026-10-16: VERIFIED (full pass, then corrected).** Every claim above was checked against the actual code and re-run. Five defects found and fixed in the same uncommitted batch:
-> 1. **step10 — shock applied twice on the FWM arm**: `_fwm_rhs` pre-applied `(1 + iτΩ)` AND `_nonlinear_rhs_tensor` applied it again to the assembled sum → `(1 + iτΩ)²` on the FWM polarization (verified numerically: the error was the size of the whole shock term). Shock is now applied exactly once by `_nonlinear_rhs_tensor`; a regression test asserts `_nonlinear_rhs_tensor` == shock(diag + raw FWM) to 0.0 and that the doubled operator differs.
-> 2. **step7 → engine contract — complex `S⁽²⁾` silently clipped**: `overlap_tensors_from_fields` always emitted complex128 `fwm_weights` and the engine coerced them `dtype=float` (ComplexWarning, imaginary part dropped — physically meaningful for propagating-mode fields). Now: real-if-close on the step7 side, complex-capable `fwm_weights`/`_fwm_factor`/`_fwm_rate_max` on the engine side; a test proves a complex-field export keeps its imaginary `S⁽²⁾`.
-> 3. **step7 — `cladding_index` was a silent no-op**: `Γ_m` was hardcoded to 1 while the docstring/API claimed a multi-cladding-aware confinement mask (which the fields-only export contract cannot provide). Parameter removed; `Γ_m = 1` is documented as honest scope (deck authors pre-scale `n2·Γ_m`), in code, `docs/api/mode-analysis.md`, and the CHANGELOG.
-> 4. **step7 — dead/mismatched code**: `ensure_continuation` claimed overlap-based relabelling but sorted by mid-grid `n_eff` (permutation-invariant, fundamental first — which is what the engine's `group_delays[0] == 0` contract actually needs); the unused `_overlap_matrix` and a never-consumed numerical OAM-winding computation (`oam_l` correctly returns the export labels) are removed and the docstrings/docs/CHANGELOG now state the real behaviour: cross-λ continuation is the solver-export contract (one physical mode per file).
-> 5. **step8/step9 — two foot-guns now fail loudly at init**: `raman_tensors` without `include_raman` used to crash later on an `assert` (they share the `h_R` kernel); `conserving_shock` was silently ignored on the coupled tensor/FWM paths. Both are rejected with `ValueError` at construction, with tests.
+> 1. **step10, shock applied twice on the FWM arm**: `_fwm_rhs` pre-applied `(1 + iτΩ)` AND `_nonlinear_rhs_tensor` applied it again to the assembled sum → `(1 + iτΩ)²` on the FWM polarization (verified numerically: the error was the size of the whole shock term). Shock is now applied exactly once by `_nonlinear_rhs_tensor`; a regression test asserts `_nonlinear_rhs_tensor` == shock(diag + raw FWM) to 0.0 and that the doubled operator differs.
+> 2. **step7 → engine contract, complex `S⁽²⁾` silently clipped**: `overlap_tensors_from_fields` always emitted complex128 `fwm_weights` and the engine coerced them `dtype=float` (ComplexWarning, imaginary part dropped, physically meaningful for propagating-mode fields). Now: real-if-close on the step7 side, complex-capable `fwm_weights`/`_fwm_factor`/`_fwm_rate_max` on the engine side; a test proves a complex-field export keeps its imaginary `S⁽²⁾`.
+> 3. **step7, `cladding_index` was a silent no-op**: `Γ_m` was hardcoded to 1 while the docstring/API claimed a multi-cladding-aware confinement mask (which the fields-only export contract cannot provide). Parameter removed; `Γ_m = 1` is documented as honest scope (deck authors pre-scale `n2·Γ_m`), in code, `docs/api/mode-analysis.md`, and the CHANGELOG.
+> 4. **step7, dead/mismatched code**: `ensure_continuation` claimed overlap-based relabelling but sorted by mid-grid `n_eff` (permutation-invariant, fundamental first, which is what the engine's `group_delays[0] == 0` contract actually needs); the unused `_overlap_matrix` and a never-consumed numerical OAM-winding computation (`oam_l` correctly returns the export labels) are removed and the docstrings/docs/CHANGELOG now state the real behaviour: cross-λ continuation is the solver-export contract (one physical mode per file).
+> 5. **step8/step9, two foot-guns now fail loudly at init**: `raman_tensors` without `include_raman` used to crash later on an `assert` (they share the `h_R` kernel); `conserving_shock` was silently ignored on the coupled tensor/FWM paths. Both are rejected with `ValueError` at construction, with tests.
 >
 > Post-fix suite: `tests/` green (1243 → 1247 tests, +4 new guards), all four step test files pass.
 
@@ -304,7 +304,7 @@ Until PR-B/C/D land, every MM-SCG run must **state** which of these are switched
 > code found four coefficient-scale defects that the step7–10 tests did not
 > exercise (they were shape/reduction tests, not absolute-scale tests):
 > 1. `coupling_tensor` was `½(γ_i+γ_j)·xpm`; the literature value is
->    `γ₀·xpm = (n₂ω₀/c)·Q⁽¹⁾_iijj`. The diagonal must be `γ_i` — the old form
+>    `γ₀·xpm = (n₂ω₀/c)·Q⁽¹⁾_iijj`. The diagonal must be `γ_i`, the old form
 >    was low by `(A_eff,0/A_eff,i)²` (0.75² on the rib deck).
 > 2. `lp_degenerate` (XPM 2/3) is the two-polarization vector strip-down, not
 >    the co-polarized spatial-mode XPM. Added `coef_model="co_polarized"`
@@ -326,11 +326,11 @@ Until PR-B/C/D land, every MM-SCG run must **state** which of these are switched
 - `docs/multimode-gnlse.md` claims Raman is implemented per channel → either implement (PR-B)
   or correct the doc immediately.
 - `docs/multimode-gnlse.md` "Scope (v1)" still lists *pump depletion* as future work; it is
-  implemented (`fwm_pump_depletion`) — stale.
+  implemented (`fwm_pump_depletion`), stale.
 
 ---
 
-## 8. External project GAP audit (2026-10-20) — `~/Research/sim/multimode_scg/GAP.md`
+## 8. External project GAP audit (2026-10-20): `~/Research/sim/multimode_scg/GAP.md`
 
 The project-side GAP listed gaps E–H. Each was checked against the library
 code and re-derived; only the genuine library-side items were implemented.
