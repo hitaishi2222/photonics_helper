@@ -197,6 +197,7 @@ class MaterialsDatabase:
                 material           TEXT REFERENCES raman_specs(name),
                 shift_cm           REAL,
                 linewidth_cm       REAL,
+                fwhm_gauss_cm      REAL,
                 symmetry           TEXT,
                 relative_strength  REAL DEFAULT 1.0,
                 lo_phonon_cm       REAL,
@@ -205,6 +206,14 @@ class MaterialsDatabase:
                 PRIMARY KEY (material, shift_cm, symmetry)
             )
         """)
+
+        # Older phonon tables predate Voigt widths; NULL is pure Lorentzian.
+        cursor.execute("PRAGMA table_info(phonon_modes)")
+        phonon_cols = [r[1] for r in cursor.fetchall()]
+        if "fwhm_gauss_cm" not in phonon_cols:
+            cursor.execute(
+                "ALTER TABLE phonon_modes ADD COLUMN fwhm_gauss_cm REAL"
+            )
 
         # Migration: add provenance columns to nk_data. Older/already-shipped
         # DBs lack these columns, so add them in place and backfill existing
@@ -445,14 +454,15 @@ class MaterialsDatabase:
         cursor.execute(
             """
             INSERT OR REPLACE INTO phonon_modes
-            (material, shift_cm, linewidth_cm, symmetry, relative_strength,
-             lo_phonon_cm, to_phonon_cm, note, license)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (material, shift_cm, linewidth_cm, fwhm_gauss_cm, symmetry,
+             relative_strength, lo_phonon_cm, to_phonon_cm, note, license)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
             (
                 material,
                 mode.shift_cm.as_1_cm,
                 mode.linewidth_cm.as_1_cm,
+                mode.fwhm_gauss_cm.as_1_cm if mode.fwhm_gauss_cm is not None else None,
                 mode.symmetry,
                 mode.relative_strength,
                 mode.lo_phonon_cm.as_1_cm if mode.lo_phonon_cm is not None else None,
@@ -498,6 +508,7 @@ class MaterialsDatabase:
                 PhononMode(
                     shift_cm=row["shift_cm"],
                     linewidth_cm=row["linewidth_cm"],
+                    fwhm_gauss_cm=row["fwhm_gauss_cm"],
                     symmetry=row["symmetry"],
                     relative_strength=row["relative_strength"],
                     lo_phonon_cm=row["lo_phonon_cm"],

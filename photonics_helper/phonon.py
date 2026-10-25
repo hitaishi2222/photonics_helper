@@ -42,7 +42,10 @@ class PhononMode:
     shift_cm : Wavenumber
         Raman shift (e.g. ``Wavenumber(254, "1/cm")``).
     linewidth_cm : Wavenumber
-        Full width at half maximum (e.g. ``Wavenumber(14, "1/cm")``).
+        Lorentzian full width at half maximum (e.g. ``Wavenumber(14, "1/cm")``).
+    fwhm_gauss_cm : Wavenumber or None
+        Gaussian FWHM for a Voigt line. ``None`` or zero is purely Lorentzian.
+        Stored last to preserve the historical positional constructor.
     symmetry : str or None
         Symmetry label (e.g. "A₁g", "E_g", "A₁(TO)").
     relative_strength : float
@@ -62,12 +65,16 @@ class PhononMode:
     lo_phonon_cm: Wavenumber | None = None
     to_phonon_cm: Wavenumber | None = None
     note: str | None = None
+    fwhm_gauss_cm: Wavenumber | None = None
 
     @model_validator(mode="before")
     @classmethod
     def _coerce_wavenumbers(cls, values):
         """Accept bare numbers in cm⁻¹ and wrap them in :class:`Wavenumber`."""
-        keys = ("shift_cm", "linewidth_cm", "lo_phonon_cm", "to_phonon_cm")
+        keys = (
+            "shift_cm", "linewidth_cm", "lo_phonon_cm", "to_phonon_cm",
+            "fwhm_gauss_cm",
+        )
 
         def coerce(v):
             if v is None or isinstance(v, Wavenumber):
@@ -77,8 +84,9 @@ class PhononMode:
         if isinstance(values, ArgsKwargs):
             args = list(values.args)
             kwargs = dict(values.kwargs) if values.kwargs else {}
-            # positional order: shift(0), linewidth(1), symmetry(2), strength(3), lo(4), to(5), note(6)
-            for i in (0, 1, 4, 5):
+            # shift(0), linewidth(1), symmetry(2), strength(3), lo(4), to(5),
+            # note(6), Gaussian FWHM(7); the new field is deliberately last.
+            for i in (0, 1, 4, 5, 7):
                 if len(args) > i:
                     args[i] = coerce(args[i])
             for k in keys:
@@ -100,11 +108,12 @@ class PhononResponse:
     Combines multiple PhononMode instances into a unified response by summing
     individual mode responses weighted by their relative strengths.
 
-    Each mode produces a Lorentzian lineshape in frequency domain:
-        L(ω) = (γ/2) / [(ω - ω₀)² + (γ/2)²]
-    where ω₀ is the mode shift and γ is the linewidth.
+    Each mode produces a Lorentzian lineshape, or a Voigt line when
+    ``fwhm_gauss_cm`` is set. Voigt profiles are evaluated analytically with
+    the real Faddeeva function; their causal time responses carry the
+    corresponding Gaussian factor and closed-form unit-area normalization.
 
-    The time-domain response is the inverse FFT of the frequency-domain response.
+    The time-domain response is available through :meth:`h_R`.
 
     Attributes
     ----------
@@ -173,9 +182,13 @@ class PhononResponse:
         ``gamma_i`` its angular-frequency FWHM from its linewidth
         (``tau_i = 2/gamma_i``, the damped-oscillator / Lorentzian relation
         ``delta_omega = 2/tau``), ``w_i`` its relative strength, and ``Z`` is
-        chosen so that ``integral_0^inf h_R(t) dt = 1``. This is the
-        multi-vibrational-mode form used with the standard GNLSE delayed
-        response ``R(t) = (1 - f_R) delta(t) + f_R h_R(t)``.
+        chosen so that ``integral_0^inf h_R(t) dt = 1``. A nonzero
+        ``fwhm_gauss_cm`` convolves the Lorentzian line with a Gaussian, which
+        multiplies each causal oscillator by ``exp(-sigma^2*t^2/2)`` and uses
+        the closed-form Faddeeva integral for normalization. At fixed unit
+        area, broadening therefore lowers ``Im[h̃]_max``; that is required,
+        not a response-strength correction. Pure Lorentzian modes retain the
+        legacy supplied-grid normalization for bit compatibility.
 
         References
         ----------
@@ -204,6 +217,7 @@ class PhononResponse:
         total = np.zeros_like(t_pos)
         normalizer = 0.0
 
+        has_voigt = False
         for mode in self.modes:
             shift_cm = float(mode.shift_cm.as_1_cm)
             gamma_cm = float(mode.linewidth_cm.as_1_cm)
@@ -213,23 +227,72 @@ class PhononResponse:
             gamma = TWO_PI_C_CM * gamma_cm  # rad/s (angular FWHM)
             tau = 2.0 / gamma
             weight = float(mode.relative_strength)
-            # analytic mode integral: int_0^inf e^{-t/tau} sin(omega t) dt
-            mode_integral = omega * tau**2 / (1.0 + (omega * tau) ** 2)
-            total += weight * np.sin(omega * t_pos) * np.exp(-t_pos / tau)
+            gauss_cm = (
+                0.0
+                if mode.fwhm_gauss_cm is None
+                else float(mode.fwhm_gauss_cm.as_1_cm)
+            )
+            mode_integral = self._mode_integral(omega, tau, gauss_cm)
+            damped = weight * np.sin(omega * t_pos) * np.exp(-t_pos / tau)
+            if gauss_cm > 0.0:
+                has_voigt = True
+                # Convolution with a Gaussian in frequency multiplies the
+                # causal time response by this Gaussian (no FFT truncation).
+                sigma = TWO_PI_C_CM * gauss_cm / (2.0 * np.sqrt(2.0 * np.log(2.0)))
+                damped = damped * np.exp(-0.5 * (sigma * t_pos) ** 2)
+            total += damped
             normalizer += weight * mode_integral
 
-        # Normalise so that integral_0^inf h_R dt = 1 on the supplied grid, i.e.
-        # H(0) = 1. That is the discrete form of the Agrawal normalization
-        # (Sec. 2.3.2) and is what makes the split
-        # R(t) = (1 - f_R) delta(t) + f_R h_R(t) exact at DC. If the finite
-        # window (or a low-frequency mode) makes the trapezoid non-positive,
-        # fall back to the analytic mode-sum normaliser.
+        # Pure Lorentzians retain the legacy grid normalisation bit-for-bit.
+        # A Voigt response instead uses its closed-form infinite-time integral,
+        # so its unit-area normalization is independent of the supplied grid.
         grid_integral = np.trapezoid(total, t_pos)
-        scale = grid_integral if grid_integral > 0.0 else normalizer
+        scale = (
+            normalizer
+            if has_voigt
+            else (grid_integral if grid_integral > 0.0 else normalizer)
+        )
         if scale > 0.0:
             total /= scale
         result[mask] = total
         return result
+
+    @staticmethod
+    def _mode_integral(omega: float, tau: float, gauss_cm: float) -> float:
+        """Infinite-time integral of one unnormalised causal mode."""
+        if gauss_cm <= 0.0:
+            return omega * tau**2 / (1.0 + (omega * tau) ** 2)
+        from scipy.special import wofz
+
+        sigma = TWO_PI_C_CM * gauss_cm / (2.0 * np.sqrt(2.0 * np.log(2.0)))
+        a = 1.0 / tau
+        # ∫₀∞ exp[-a t - σ²t²/2] sin(ωt) dt = Im J(ω,a).
+        j = np.sqrt(np.pi / 2.0) / sigma * wofz((omega + 1j * a) / (np.sqrt(2.0) * sigma))
+        return float(np.imag(j))
+
+    @staticmethod
+    def _voigt(shift_cm: float, gamma_cm: float, gauss_cm: float, w_cm: NDArray) -> NDArray:
+        """Unit-area Voigt line, evaluated with the Faddeeva function."""
+        from scipy.special import wofz
+
+        sigma = gauss_cm / (2.0 * np.sqrt(2.0 * np.log(2.0)))
+        z = ((w_cm - shift_cm) + 0.5j * gamma_cm) / (sigma * np.sqrt(2.0))
+        return np.asarray(np.real(wofz(z)) / (sigma * np.sqrt(2.0 * np.pi)))
+
+    def _lineshape(self, mode: PhononMode, w_cm: NDArray) -> NDArray:
+        gauss_cm = (
+            0.0 if mode.fwhm_gauss_cm is None else float(mode.fwhm_gauss_cm.as_1_cm)
+        )
+        if gauss_cm <= 0.0:
+            return self._lorentzian(
+                mode.shift_cm.as_1_cm, mode.linewidth_cm.as_1_cm, w_cm
+            )
+        return self._voigt(
+            mode.shift_cm.as_1_cm,
+            mode.linewidth_cm.as_1_cm,
+            gauss_cm,
+            w_cm,
+        )
 
     def _lorentzian(self, shift_cm: float, gamma_cm: float, w_cm: NDArray) -> NDArray:
         """Single Lorentzian lineshape.
@@ -272,10 +335,7 @@ class PhononResponse:
 
         total = np.zeros_like(w_arr, dtype=float)
         for mode in self.modes:
-            lorentzian = self._lorentzian(
-                mode.shift_cm.as_1_cm, mode.linewidth_cm.as_1_cm, w_arr
-            )
-            total += mode.relative_strength * lorentzian
+            total += mode.relative_strength * self._lineshape(mode, w_arr)
 
         # Normalize the lineshape to peak = 1 (shape only; independent of fR).
         if np.max(total) > 0:
@@ -426,9 +486,7 @@ class PhononResponse:
 
         # Plot individual modes
         for mode in self.modes:
-            lorentzian = self._lorentzian(
-                mode.shift_cm.as_1_cm, mode.linewidth_cm.as_1_cm, w_cm
-            )
+            lorentzian = self._lineshape(mode, w_cm)
             ax.plot(
                 w_cm,
                 lorentzian,
@@ -459,9 +517,7 @@ class PhononResponse:
         w_cm = np.linspace(-shift_range_cm, shift_range_cm, n_points)
 
         for mode in self.modes:
-            lorentzian = self._lorentzian(
-                mode.shift_cm.as_1_cm, mode.linewidth_cm.as_1_cm, w_cm
-            )
+            lorentzian = self._lineshape(mode, w_cm)
             fig.add_trace(
                 go.Scatter(
                     x=w_cm,

@@ -45,8 +45,9 @@ Sellmeier coefficients: `material` (PK), `form` (`standard`/`alt`), `a0`,
 `source`, `license`.
 
 ### `phonon_modes`
-Multi-mode phonon data: `material`, `shift_cm`, `linewidth_cm`, `symmetry`,
-`relative_strength`, `lo_phonon_cm`, `to_phonon_cm`, `note`, `license`.
+Multi-mode phonon data: `material`, `shift_cm`, `linewidth_cm`,
+`fwhm_gauss_cm` (NULL = pure Lorentzian), `symmetry`, `relative_strength`,
+`lo_phonon_cm`, `to_phonon_cm`, `note`, `license`.
 Primary key `(material, shift_cm, symmetry)`.
 
 ### `provenance`
