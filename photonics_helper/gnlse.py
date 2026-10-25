@@ -987,7 +987,7 @@ class SplitStepEngine:
         polarisation), which conserves ``∫|A|² dt`` exactly for a real Raman
         response. For a spectrally narrow field this reduces to the scalar
         ``iγ(Ω)|A|²A``. The **naive** ``iγ(Ω)·F{P·A}`` form does not conserve
-        energy (a ~15 % drift on a 20 mm SCG deck) and is reachable
+        energy (~10 % drift on a 20 mm SCG deck, independent of ``dz``) and is reachable
         only through ``gamma_omega_naive=True``, which warns. Combines with
         ``full_beta``, Raman and ``alpha_fn``; ``include_self_steepening`` with
         ``gamma_omega`` is refused (not implemented).
@@ -2020,8 +2020,9 @@ class SplitStepEngine:
         (``uppe_probe.py::GammaOmega``) does.
 
         The single-sided ``iγ(Ω)·F{P_NL·A}`` form is *not* Hermitian (energy
-        drifts by ~15 % on a 20 mm SCG deck, independent of ``dz``); it is
-        reachable only through ``gamma_omega_naive=True`` for comparison.
+        drifts by ~10 % on a 20 mm SCG deck, independent of ``dz``; the
+        project measured 11 % on a 40 mm deck); it is reachable only through
+        ``gamma_omega_naive=True`` for comparison.
         """
         g_w = self._gamma_omega
         assert g_w is not None  # only called when the per-bin γ is set

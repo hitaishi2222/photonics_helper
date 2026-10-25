@@ -444,9 +444,9 @@ def test_etdrk4_agrees_with_strang_on_the_per_bin_gamma_deck():
 
     Same deck (full β + γ(Ω) + Raman) at dz = 2 µm; ETDRK4 must agree with the
     independent Strang composition in the field. Measured 3.7e-8 relative L2
-    (Strang's own dz² error dominates — at γ₀ = 20 the same dz gives 1.5e-5,
-    which is why this deck uses γ₀ = 2.5 so that the comparison is limited by
-    nothing but the two schemes agreeing).
+    (Strang's own dz² error dominates: at γ₀ = 10 on the same dz it is 1.3e-5,
+    which is why this comparison uses γ₀ = 2.5, so that what is measured is
+    the two schemes agreeing rather than Strang's truncation).
     """
     steps = 10000
     fine = _j_engine(steps, gamma0=2.5)
@@ -562,9 +562,9 @@ def test_gamma_omega_none_and_three_photon_zero_are_bit_identical():
 def test_naive_gamma_omega_form_drifts_and_default_is_the_symmetric_one():
     """The non-Hermitian ``iγ(Ω)F{P·A}`` form is diagnostic-only and must drift.
 
-    Measured on the 10 pJ / 20 mm deck at 2000 steps: symmetrised 3.1e-6
-    (4th order), naive 1.48e-1 — and the naive number is *dz-independent*
-    (1.4779e-1 at 2000, 1.4779e-1 at 4000), the signature of a structural
+    Measured on the 10 pJ / 20 mm deck at 2000 steps: symmetrised 3.6e-10
+    (4th order), naive 1.006e-1 — and the naive number is *dz-independent*
+    (1.006e-1 at both 2000 and 4000 steps), the signature of a structural
     non-Hermiticity rather than a truncation error.
     """
     sym = _j_engine(2000, gamma0=10.0)

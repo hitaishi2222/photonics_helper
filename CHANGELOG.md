@@ -66,7 +66,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `grid.w` (or a callable `γ(Ω)`) applies the energy-conserving **symmetrised**
   Kerr/Raman operator `i√γ(Ω)·F{P_NL·F⁻¹[√γ(Ω)·A]}`, whose constant-γ limit is
   the scalar `iγP_NL·A` operator to FFT round-off. The non-Hermitian
-  `iγ(Ω)·F{P_NL·A}` form — ~15 % energy drift on a 20 mm SCG deck, independent
+  `iγ(Ω)·F{P_NL·A}` form — ~10 % energy drift on a 20 mm SCG deck, independent
   of step size — is reachable only through `gamma_omega_naive=True`, which
   warns. Works on the Strang compositions (midpoint RK2 on the nonlinear
   remainder) and on `scheme="etdrk4"`; `include_self_steepening` with
