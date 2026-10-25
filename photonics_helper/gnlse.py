@@ -975,6 +975,42 @@ class SplitStepEngine:
         for the algebra and the trade-offs.
     step_size : Length | None
         Fixed step size (m). If None, adaptive stepping is used.
+    gamma_omega : array_like or callable, optional
+        First-class **per-bin** nonlinear coefficient ``γ(Ω)`` (1/(W·m)): an
+        array sampled on the grid's ``Ω = ω−ω₀`` axis (rad/s) or a callable
+        ``γ(Ω)``. The Kerr/Raman term is then applied in the energy-conserving
+        **symmetrised** form
+
+        ``N(A) = i√γ(Ω)·F{ P_NL(|A|²)·F⁻¹[√γ(Ω)·A] }``
+
+        (Hermitian per bin: ``√γ`` on both sides of the pointwise
+        polarisation), which conserves ``∫|A|² dt`` exactly for a real Raman
+        response. For a spectrally narrow field this reduces to the scalar
+        ``iγ(Ω)|A|²A``. The **naive** ``iγ(Ω)·F{P·A}`` form does not conserve
+        energy (a ~15 % drift on a 20 mm SCG deck) and is reachable
+        only through ``gamma_omega_naive=True``, which warns. Combines with
+        ``full_beta``, Raman and ``alpha_fn``; ``include_self_steepening`` with
+        ``gamma_omega`` is refused (not implemented).
+    gamma_omega_naive : bool
+        Diagnostic only: apply the non-Hermitian ``iγ(Ω)·F{P·A}`` form instead
+        of the default symmetrised one. Default ``False``. Requires
+        ``gamma_omega``; emits a ``UserWarning``.
+    three_photon_alpha_3 : float or callable, optional
+        Three-photon absorption coefficient α₃ with field form
+        ``−α₃|A|⁴A/2`` (``I = |A|²``) — i.e. ``dI/dz = −α₃I³`` per sample, closed
+        form ``I(z) = I₀/√(1+2α₃I₀²z)``. Applied by every scheme: the Strang
+        path solves that per-sample ODE exactly in a sub-step placed
+        symmetrically around the Kerr phase (so the composition stays second
+        order), while ``etdrk4``/``rk4ip`` carry it as the pointwise functional
+        it is. **Residual:** no 3PA-generated free carriers (no FCA, no carrier
+        recombination) — that is ``include_free_carriers``' TPA model, which is
+        separate. A callable α₃(Ω) is applied as the per-bin weight
+        ``−½·F⁻¹[α₃(Ω)·F(|A|⁴A)]``; a float is applied pointwise, exactly as
+        written. ``0.0`` is a no-op (bit-identical to omitting the term). The
+        accumulated integrals are exposed after :meth:`propagate` as
+        :attr:`w3pa` (``∫∫|A|⁴dt dz``, plus :attr:`w3pa_vs_z`) and
+        :attr:`w3pa_energy` (``∫∫|A|⁶dt dz``), which closes the energy budget:
+        ``E_out = E_in − α₃·w3pa_energy``.
     min_shrink_factor : float
         Floor for the gradient-based step shrink factor in z-dependent mode.
         Must be in (0, 1]. Default 0.1.
@@ -1003,6 +1039,9 @@ class SplitStepEngine:
         betas_unit: BetasUnit = "ps^k/m",
         full_beta=None,
         raman_response=None,
+        gamma_omega: NDArray | Callable[[NDArray], NDArray] | None = None,
+        gamma_omega_naive: bool = False,
+        three_photon_alpha_3: float | Callable[[NDArray], NDArray] | None = None,
     ):
         self.pulse = pulse
         self.fiber = fiber
@@ -1076,6 +1115,106 @@ class SplitStepEngine:
         # Set up temporal grid from pulse
         self.grid: TemporalGrid = pulse.grid
         self.omega0 = pulse.central_frequency
+
+        #: Frequency-dependent nonlinear coefficient γ(Ω), resolved on
+        #: ``grid.w`` (rad/s); ``None`` keeps the scalar-γ path untouched.
+        self.gamma_omega = gamma_omega
+        self._gamma_omega: NDArray | None = None
+        if gamma_omega is not None:
+            if include_self_steepening:
+                raise NotImplementedError(
+                    "gamma_omega= with include_self_steepening=True is not "
+                    "implemented: the shock operator (1 + (i/ω₀)∂t) needs the "
+                    "γ-weighted split form applied to its ∂_t source as well, "
+                    "and no test pins that composition. Run the shock deck "
+                    "with a scalar γ (omit gamma_omega=)."
+                )
+            g_w = (
+                np.asarray(gamma_omega(self.grid.w), dtype=float)
+                if callable(gamma_omega)
+                else np.asarray(gamma_omega, dtype=float)
+            )
+            if g_w.shape != self.grid.w.shape:
+                raise ValueError(
+                    "gamma_omega must match the grid "
+                    f"({self.grid.w.shape}), got {g_w.shape}; pass a callable "
+                    "γ(Ω) or an array sampled on grid.w."
+                )
+            if not np.all(np.isfinite(g_w)) or np.any(g_w < 0.0):
+                raise ValueError(
+                    "gamma_omega must be finite and non-negative (the "
+                    "symmetrised split operator takes √γ per bin)."
+                )
+            self._gamma_omega = g_w
+        #: Diagnostic-only opt-in for the *naive* (non-Hermitian)
+        #: ``iγ(Ω)·F{P·A}`` form; the default symmetrised form is the one
+        #: that conserves energy.
+        self._gamma_omega_naive = bool(gamma_omega_naive)
+        if self._gamma_omega_naive:
+            if self._gamma_omega is None:
+                raise ValueError(
+                    "gamma_omega_naive=True requires gamma_omega=...; it only "
+                    "selects between two forms of the per-bin γ operator."
+                )
+            warnings.warn(
+                "gamma_omega_naive=True applies the non-Hermitian "
+                "iγ(Ω)·F{P·A} form, which does not conserve energy (the "
+                "project measured an 11% drift on a 40 mm SCG deck). It is a "
+                "diagnostic, not a physical operator: use the default "
+                "symmetrised i√γ·F{P·F⁻¹[√γ·A]} form for production runs.",
+                UserWarning,
+                stacklevel=2,
+            )
+
+        #: Three-photon absorption coefficient α₃ (float or callable α₃(Ω)),
+        #: with field form ``−α₃|A|⁴A/2`` and no free carriers (the residual:
+        #: 3PA-generated carriers/FCA are not modelled). Recorded on the
+        #: engine as part of the run's operator set.
+        self.three_photon_alpha_3 = three_photon_alpha_3
+        self._alpha3_scalar: float | None = None
+        self._alpha3_w: NDArray | None = None
+        if three_photon_alpha_3 is not None:
+            if callable(three_photon_alpha_3) or np.ndim(three_photon_alpha_3) > 0:
+                a3_w = np.asarray(
+                    three_photon_alpha_3(self.grid.w)
+                    if callable(three_photon_alpha_3)
+                    else three_photon_alpha_3,
+                    dtype=float,
+                )
+                if a3_w.shape != self.grid.w.shape:
+                    raise ValueError(
+                        "three_photon_alpha_3 must match the grid "
+                        f"({self.grid.w.shape}), got {a3_w.shape}; pass a "
+                        "callable α₃(Ω) or an array sampled on grid.w."
+                    )
+                if not np.all(np.isfinite(a3_w)) or np.any(a3_w < 0.0):
+                    raise ValueError(
+                        "three_photon_alpha_3 must be finite and non-negative "
+                        "(it is an absorption coefficient)."
+                    )
+                if np.any(a3_w != 0.0):
+                    self._alpha3_w = a3_w
+            else:
+                a3 = float(three_photon_alpha_3)
+                if not np.isfinite(a3) or a3 < 0.0:
+                    raise ValueError(
+                        "three_photon_alpha_3 must be finite and non-negative "
+                        f"(it is an absorption coefficient), got {a3!r}."
+                    )
+                # α₃ = 0 is a no-op: bit-identical to omitting the term.
+                if a3 != 0.0:
+                    self._alpha3_scalar = a3
+        #: Three-photon absorption ledger ``∫∫|A|⁴ dt dz`` (the brief's
+        #: ``∫∫I²dt dz``) accumulated by :meth:`propagate` (0.0 when the term is
+        #: off).
+        self.w3pa: float = 0.0
+        #: The integral that closes the **energy** budget for the field form
+        #: ``−α₃|A|⁴A/2``: ``dE/dz = −α₃∫|A|⁶dt``, so
+        #: ``E_out = E_in − α₃·w3pa_energy`` exactly (``w3pa`` above is the
+        #: intensity-squared action, whose ``exp(−α₃w3pa)`` form holds per
+        #: sample / in the small-loss limit only).
+        self.w3pa_energy: float = 0.0
+        self._w3pa_vs_z: list[float] | None = None
         self._full_beta_curve: NDArray | None = None
         self._full_phi: NDArray | None = None
         self._full_beta2_si: float | None = None
@@ -1417,7 +1556,28 @@ class SplitStepEngine:
 
         The grid must satisfy ``Ω_max < ω₀`` when self-steepening is enabled;
         :meth:`_validate_shock_grid` enforces this at construction.
+
+        With ``gamma_omega`` the Kerr/Raman action is not a time-domain phase
+        any more (the symmetrised operator is not diagonal), so the step is the
+        explicit midpoint (RK2) advance of :meth:`_gamma_omega_rhs`, which keeps
+        the composition second order; the 3PA loss rides inside that remainder.
         """
+        if self._gamma_omega is not None:
+            gamma_omega = self._get_gamma(self._current_z)  # unused by the form
+
+            def nl(state: NDArray) -> NDArray:
+                return self._nonlinear_rhs(state, gamma_omega)
+
+            A = A + dz * nl(A + 0.5 * dz * nl(A))
+            A, U_new = tpa_step(
+                A, self.fiber, self.grid, dz, self.include_tpa, self._U, self.omega0
+            )
+            if self.include_free_carriers:
+                A, self._N = free_carrier_step(
+                    A, self.fiber, self.grid, dz, self._N, self.omega0
+                )
+            return A, U_new
+
         gamma = self._get_gamma(self._current_z)
         intensity = np.abs(A) ** 2
 
@@ -1432,6 +1592,12 @@ class SplitStepEngine:
             )
 
         P_NL = self._nl_intensity(intensity, h_R_fft)
+
+        if self._three_photon_enabled:
+            # First half of the symmetric (Strang) placement of the 3PA loss
+            # around the exact Kerr phase; the second half follows tpa_step.
+            A = self._three_photon_step(A, 0.5 * dz)
+            P_NL = self._nl_intensity(np.abs(A) ** 2, h_R_fft)
 
         P_inst: NDArray | None
         P_del: NDArray | None
@@ -1526,6 +1692,14 @@ class SplitStepEngine:
                 A = A * np.exp(1j * gamma * P_inst * dz + 1j * abs(gamma) * P_del * dz)
             else:
                 A = A * np.exp(1j * gamma * P_NL * dz)
+
+        if self._three_photon_enabled:
+            # Symmetric (Strang) placement of the loss around the exact Kerr
+            # phase: exp(−α₃I²dz/4) · exp(iγP dz) · exp(−α₃I²dz/4). A single
+            # trailing loss sub-step would compose with the phase at first
+            # order (Lie), costing the field a scheme order — as the TPA path
+            # does; this keeps the composition second order.
+            A = self._three_photon_step(A, 0.5 * dz)
 
         A, U_new = tpa_step(
             A, self.fiber, self.grid, dz, self.include_tpa, self._U, self.omega0
@@ -1678,28 +1852,55 @@ class SplitStepEngine:
             return 1.0
 
     def _etdrk_linear(self, dz: float) -> NDArray:
-        """Diagonal linear operator per bin, ``L(Ω) = i·φ(Ω) − α/2`` (per m).
+        """Diagonal linear operator per bin, ``L(Ω) = i·φ(Ω) − α(z)/2`` (per m).
 
         The dispersion phase is the same ``φ(Ω) = Σ_{k≥2} βₖΩᵏ/k!`` that
-        :meth:`_linear_step` applies, and the loss enters as a constant real
-        part ``−α/2`` (matching ``exp(−α·dz/2)`` there) so that ``exp(L·dz)``
-        carries both. Raised for z-dependent hooks — Stage S3's conditional
-        scope (``formal/PLAN.md`` §17.6).
+        :meth:`_linear_step` applies — or, for a static ``full_beta`` curve,
+        the precomputed retarded-frame phase — and the loss enters as a real
+        part ``−α/2`` at the current ``z`` (matching ``exp(−α·dz/2)`` there) so
+        that ``exp(L·dz)`` carries both.
+
+        **Scope (narrowed 2026-10-25, Gap J).** ETDRK4 needs only a *diagonal*
+        ``L`` and a nonlinear functional ``N(A)`` evaluable at arbitrary stage
+        states. Both hold for a static ``full_beta`` curve, a per-bin
+        ``gamma_omega``, ``gamma_fn``/``a_eff_fn`` (γ frozen at ``z``) and
+        ``alpha_fn`` (α frozen at ``z``), so those are allowed. What is still
+        refused, and why:
+
+        * ``dispersion_profile`` — the φ-function weights assume ``L`` is
+          constant along a step; this path changes β(ω,z) (with its own
+          adaptive gradient shrink) every step, so the exponential-integrator
+          error analysis does not apply. Use ``full_beta`` for a static curve.
+        * ``include_tpa`` — the legacy TPA step carries a spatially averaged
+          carrier density ``U`` from *previous* steps (see :func:`tpa_step`),
+          so it is not a pointwise functional of the current state and cannot
+          be evaluated at an RK stage. The pointwise intensity-nonlinear loss
+          is the ``three_photon_alpha_3`` term, which *is* supported.
+        * ``include_free_carriers`` — the carrier population ``N(t)`` is a
+          history-dependent state advanced by the split-step stage.
         """
-        if (
-            self._is_z_dependent
-            or self.include_tpa
-            or self.include_free_carriers
-            or self.gamma_fn is not None
-            or self._a_eff_fn is not None
-            or self._alpha_fn is not None
-        ):
+        reason: str | None = None
+        if self._is_z_dependent:
+            reason = (
+                "dispersion_profile= (z-dependent β(ω,z)): the φ-function "
+                "weights assume a step-constant linear operator"
+            )
+        elif self.include_tpa:
+            reason = (
+                "include_tpa=True: the legacy TPA step carries a spatially "
+                "averaged carrier density from previous steps, so it is not "
+                "a pointwise functional of the current state"
+            )
+        elif self.include_free_carriers:
+            reason = (
+                "include_free_carriers=True: the carrier population N(t) is a "
+                "history-dependent state advanced by the split-step stage"
+            )
+        if reason is not None:
             raise NotImplementedError(
-                "scheme='etdrk4' currently requires the uniform GNLSE core "
-                "(Taylor betas, constant γ/α, no TPA and no free carriers). "
-                "The stiff regimes it targets — Raman cascades over km and "
-                "loss-limited fibers — are exactly those; the TPA/free-carrier "
-                "opt-ins still ride on the Strang compositions."
+                f"scheme='etdrk4' cannot advance {reason}. Static full_beta, "
+                "gamma_omega/gamma_fn, alpha_fn and three_photon_alpha_3 are "
+                "supported; use scheme='strang' for the feature named above."
             )
         if self._full_phi is not None:
             phi = np.asarray(self._full_phi, dtype=float)
@@ -1708,7 +1909,8 @@ class SplitStepEngine:
             phi = np.zeros_like(omega_ps, dtype=float)
             for k, beta_k in enumerate(self.betas, start=2):
                 phi += beta_k * omega_ps**k / factorial(k)
-        return np.asarray(1j * phi - 0.5 * float(self.fiber.alpha), dtype=complex)
+        alpha = float(self._get_alpha(self._current_z))
+        return np.asarray(1j * phi - 0.5 * alpha, dtype=complex)
 
     def _nonlinear_rhs(self, A: NDArray, gamma: float) -> NDArray:
         """The full nonlinear remainder ``N(A)`` of the GNLSE RHS (time domain).
@@ -1719,6 +1921,12 @@ class SplitStepEngine:
         ``conserving_shock`` (pcGNLSE) the instantaneous and delayed arms
         carry the signed ``γ`` and ``|γ|`` respectively, matching
         :meth:`_nonlinear_step`.
+
+        With ``gamma_omega`` the scalar ``gamma`` is ignored and the
+        symmetrised per-bin form is used instead (see
+        :meth:`_gamma_omega_rhs`); with ``three_photon_alpha_3`` the pointwise
+        loss ``−α₃|A|⁴A/2`` is added — both are legitimate ``N(A)``: a
+        diagonal operator plus a functional of the current state.
 
         This is the exponential integrator's counterpart of the ``N`` of
         ``∂_zA = L·A + N(A)``; the stiff linear part is carried entirely by
@@ -1739,7 +1947,9 @@ class SplitStepEngine:
             tau = self.tau_shock
             kernel = 1j * tau * self.grid.w
 
-        if self.conserving_shock:
+        if self._gamma_omega is not None:
+            rhs = self._gamma_omega_rhs(A, intensity, h_R_fft)
+        elif self.conserving_shock:
             # pcGNLSE arms, mirroring _nonlinear_step: signed γ on the pure-SS
             # (instantaneous) arm, |γ| on the SS–Raman (delayed) arm.
             fR0 = float(_response_fR(self.raman_response))
@@ -1752,15 +1962,104 @@ class SplitStepEngine:
                     (1j * gamma * tau * self.grid.w) * self.grid.fft(P_inst * A)
                     + (1j * g_r * tau * self.grid.w) * self.grid.fft(P_del * A)
                 )
-            return np.asarray(rhs, dtype=complex)
-
-        P_NL = self._nl_intensity(intensity, h_R_fft)
-        rhs = 1j * gamma * P_NL * A
-        if kernel is not None:
-            rhs = rhs + self.grid.ifft(
-                (1j * gamma * tau * self.grid.w) * self.grid.fft(P_NL * A)
-            )
+        else:
+            P_NL = self._nl_intensity(intensity, h_R_fft)
+            rhs = 1j * gamma * P_NL * A
+            if kernel is not None:
+                rhs = rhs + self.grid.ifft(
+                    (1j * gamma * tau * self.grid.w) * self.grid.fft(P_NL * A)
+                )
+        if self._three_photon_enabled:
+            rhs = rhs + self._three_photon_rhs(A)
         return np.asarray(rhs, dtype=complex)
+
+    @property
+    def _three_photon_enabled(self) -> bool:
+        """Whether the 3PA term is active (α₃ > 0)."""
+        return self._alpha3_scalar is not None or self._alpha3_w is not None
+
+    def _three_photon_rhs(self, A: NDArray) -> NDArray:
+        """3PA source ``−α₃|A|⁴A/2`` (``I = |A|²``), pointwise in time.
+
+        The scalar α₃ path is literally the field form ``−α₃I²/2·A`` (no
+        transform). A callable α₃(Ω) is applied as the per-bin weight
+        ``−½·F⁻¹[α₃(Ω)·F(I²A)]``; for a spectrally narrow field that is
+        exactly the per-bin coefficient, and its energy loss is real
+        (``2Re⟨A,N⟩ = −⟨|A|², α₃-weighted I²⟩``), so it cannot drift.
+
+        Residual (documented, not modelled): 3PA-generated free carriers and
+        their FCA/recombination. That is ``include_free_carriers``' separate
+        TPA-based model.
+        """
+        src = np.abs(A) ** 2
+        src = (src * src) * A
+        if self._alpha3_scalar is not None:
+            return np.asarray(-0.5 * self._alpha3_scalar * src, dtype=complex)
+        assert self._alpha3_w is not None  # narrowed by _three_photon_enabled
+        return np.asarray(
+            -0.5 * self.grid.ifft(self._alpha3_w * self.grid.fft(src)),
+            dtype=complex,
+        )
+
+    def _gamma_omega_rhs(
+        self, A: NDArray, intensity: NDArray, h_R_fft: NDArray | None
+    ) -> NDArray:
+        """Per-bin Kerr/Raman remainder ``N(A)`` in the symmetrised split form.
+
+        ``N(A) = i√γ(Ω)·F{ P_NL(|A|²)·F⁻¹[√γ(Ω)·A] }`` — the
+        energy-conserving operator of Gap I.2. ``√γ`` (diagonal and real in the
+        Fourier basis) is applied to the field *inside* the polarisation and
+        again outside it, which makes the operator Hermitian, so
+        ``∫|A|²dt`` is conserved by the ODE for a real Raman response:
+        ``⟨A, N⟩ = i⟨F⁻¹[√γÂ], P_NL·F⁻¹[√γÂ]⟩ = i∫P_NL|B|²dt`` is pure
+        imaginary. The polarisation ``P_NL`` is evaluated at the **state's own**
+        intensity ``|A|²``, not at the √γ-scaled ``|B|²``: with the constant-γ
+        limit ``A`` bin-aligned this gives ``N = iγ|A|²A`` — the physical
+        ``γ``, not ``γ²`` — and for a narrow field it reduces to the per-bin
+        ``iγ(Ω)|A|²A``. That is also what the project's reference subclass
+        (``uppe_probe.py::GammaOmega``) does.
+
+        The single-sided ``iγ(Ω)·F{P_NL·A}`` form is *not* Hermitian (energy
+        drifts by ~15 % on a 20 mm SCG deck, independent of ``dz``); it is
+        reachable only through ``gamma_omega_naive=True`` for comparison.
+        """
+        g_w = self._gamma_omega
+        assert g_w is not None  # only called when the per-bin γ is set
+        if self._gamma_omega_naive:
+            P_naive = self._nl_intensity(intensity, h_R_fft)
+            return np.asarray(
+                1j * self.grid.ifft(g_w * self.grid.fft(P_naive * A)),
+                dtype=complex,
+            )
+        sq_g = np.sqrt(g_w)
+        A_s = np.asarray(self.grid.ifft(sq_g * self.grid.fft(A)), dtype=complex)
+        P_NL = self._nl_intensity(intensity, h_R_fft)
+        return np.asarray(
+            1j * self.grid.ifft(sq_g * self.grid.fft(P_NL * A_s)), dtype=complex
+        )
+
+    def _three_photon_step(self, A: NDArray, dz: float) -> NDArray:
+        """Split-step 3PA sub-step: per-sample ODE ``dI/dz = −α₃I³``.
+
+        The field form ``−α₃I²A/2`` with ``I = |A|²`` gives, per sample,
+        ``dI/dz = 2Re(A* ∂_zA) = −α₃I³`` — i.e. the standard three-photon
+        absorption equation, whose exact solution is
+
+        ``I(z) = I₀ / sqrt(1 + 2α₃I₀²z)``,  ``A(z) = A₀/(1 + 2α₃I₀²z)^{1/4}``
+
+        (the phase is untouched). A scalar α₃ is solved *exactly* per sample
+        with that closed form, so a pure-3PA deck carries no step error — the
+        Strang composition still limits the scheme to second order through the
+        splitting. A callable α₃(Ω) uses midpoint RK2 on
+        :meth:`_three_photon_rhs`, which is second-order accurate, so the
+        composition stays second order.
+        """
+        if self._alpha3_scalar is not None:
+            intensity = np.abs(A) ** 2
+            denom = 1.0 + 2.0 * self._alpha3_scalar * intensity**2 * dz
+            return np.asarray(A / np.sqrt(np.sqrt(denom)), dtype=complex)
+        A_mid = A + 0.5 * dz * self._three_photon_rhs(A)
+        return np.asarray(A + dz * self._three_photon_rhs(A_mid), dtype=complex)
 
     def _etdrk4_step(self, A: NDArray, dz: float) -> NDArray:
         """One full ETDRK4 step (Cox & Matthews 2002; Kassam–Trefethen 2005).
@@ -2044,6 +2343,9 @@ class SplitStepEngine:
         self._energy_vs_z = None
         self._photon_vs_z = None
         self._z_positions = [0.0]
+        self.w3pa = 0.0
+        self.w3pa_energy = 0.0
+        self._w3pa_vs_z = [] if self._three_photon_enabled else None
 
         pbar = None
         if show_progress:
@@ -2088,6 +2390,8 @@ class SplitStepEngine:
                 if self._photon_vs_z is None:
                     self._photon_vs_z = []
                 self._photon_vs_z.append(self._photon_number(self.A))
+            if self._w3pa_vs_z is not None:
+                self._w3pa_vs_z.append(self.w3pa)
 
         def _maybe_save(current_z: float) -> None:
             nonlocal next_save_idx
@@ -2147,7 +2451,22 @@ class SplitStepEngine:
             self._current_z = z
 
             # Advance one step of length `dz` under the configured scheme.
+            # 3PA ledger: trapezoid of ∫I²dt (and of ∫I³dt, the energy-closing
+            # moment) over the step — second-order accurate and
+            # scheme-independent, so every scheme reports the same quantity.
+            if self._three_photon_enabled:
+                absA = np.abs(self.A)
+                f2_before = float(np.sum(absA**4) * self.grid.dt)
+                f3_before = float(np.sum(absA**6) * self.grid.dt)
             self.A = self._advance(A=self.A, dz=dz)
+            if self._three_photon_enabled:
+                absA = np.abs(self.A)
+                self.w3pa += (
+                    0.5 * dz * (f2_before + float(np.sum(absA**4) * self.grid.dt))
+                )
+                self.w3pa_energy += (
+                    0.5 * dz * (f3_before + float(np.sum(absA**6) * self.grid.dt))
+                )
 
             if noise_rng is not None:
                 from .noise import raman_noise_field
@@ -2257,7 +2576,11 @@ class SplitStepEngine:
                 return
             drift = abs(e1 / e0 - 1.0)
             what = "energy"
-        lossless = (self._get_alpha(self._current_z) == 0.0) and not self.include_tpa
+        lossless = (
+            self._get_alpha(self._current_z) == 0.0
+            and not self.include_tpa
+            and not self._three_photon_enabled
+        )
         if lossless and drift > 0.01:
             warnings.warn(
                 f"GNLSE {what} drift {drift * 100:.2f}% exceeds 1% with "
@@ -2305,6 +2628,23 @@ class SplitStepEngine:
         if self._energy_vs_z is None:
             raise RuntimeError("Call propagate() first.")
         return np.asarray(self._energy_vs_z, dtype=float)
+
+    @property
+    def w3pa_vs_z(self) -> NDArray:
+        """Cumulative 3PA ledger ``∫∫|A|⁴ dt dz`` at each saved step.
+
+        Same length as :attr:`z_array`; starts at 0 at ``z = 0``. Only
+        recorded when ``three_photon_alpha_3`` is set (otherwise the term is
+        not in the model and the ledger raises rather than reporting a
+        meaningless zero). For the scalar α₃ operator the energy budget is
+        closed by :attr:`w3pa_energy` (``E_out = E_in − α₃·w3pa_energy``).
+        """
+        if self._w3pa_vs_z is None:
+            raise RuntimeError(
+                "w3pa_vs_z is only recorded when three_photon_alpha_3 > 0; "
+                "call propagate() first."
+            )
+        return np.asarray(self._w3pa_vs_z, dtype=float)
 
 
 # ---------------------------------------------------------------------------

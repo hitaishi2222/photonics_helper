@@ -62,6 +62,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   keyword is a `SyntaxError` below 3.15.
 - **`photonics_helper.__version__`.** Resolved lazily from installed-package
   metadata on first access so the eager import surface stays unchanged.
+- **`SplitStepEngine(gamma_omega=…)` — first-class per-bin γ(Ω).** An array on
+  `grid.w` (or a callable `γ(Ω)`) applies the energy-conserving **symmetrised**
+  Kerr/Raman operator `i√γ(Ω)·F{P_NL·F⁻¹[√γ(Ω)·A]}`, whose constant-γ limit is
+  the scalar `iγP_NL·A` operator to FFT round-off. The non-Hermitian
+  `iγ(Ω)·F{P_NL·A}` form — ~15 % energy drift on a 20 mm SCG deck, independent
+  of step size — is reachable only through `gamma_omega_naive=True`, which
+  warns. Works on the Strang compositions (midpoint RK2 on the nonlinear
+  remainder) and on `scheme="etdrk4"`; `include_self_steepening` with
+  `gamma_omega` is refused rather than silently dropping the shock.
+  Tests: `tests/test_gnlse_etdrk4.py` (Gap-J section).
+- **`scheme="etdrk4"` on the dispersive-model path (Gap J).** The scope guard
+  was testing *feature names*, not the structure ETDRK4 needs, so it refused a
+  static `full_beta` curve, `gamma_omega`, `gamma_fn`, `a_eff_fn` and
+  `alpha_fn` — every route to the exponential integrator. It now refuses only
+  what is genuinely not a diagonal-plus-pointwise pair, and the error names the
+  exact feature: `dispersion_profile` (the φ-weights assume a step-constant
+  `L`), `include_tpa` (the legacy step carries a spatially averaged carrier
+  density from earlier steps) and `include_free_carriers` (history-dependent
+  `N(t)`). The `−α₂/2` loss term now enters through `alpha_fn(z)` as well.
+  Measured on a 20 mm, 10 pJ, 200 fs full-β + γ(Ω) + Raman deck: energy drift
+  8.5e-8 → 2.2e-11 over 1000 → 8000 steps (fitted order 3.98), and ETDRK4
+  agrees with Strang in the field to 3.7e-8 at dz = 2 µm.
+- **`SplitStepEngine(three_photon_alpha_3=…)` and the `w3pa` ledger (Gap K).**
+  Three-photon absorption with the field form `−α₃|A|⁴A/2` (`I = |A|²`, i.e.
+  `dI/dz = −α₃I³`, closed form `I₀/√(1+2α₃I₀²z)`), available on **every**
+  scheme (Strang applies the exact per-sample sub-step symmetrically around the
+  Kerr phase, so the composition stays second order; ETDRK4/rk4ip carry it as
+  the pointwise functional it is). No free carriers: 3PA-generated carriers are
+  not modelled. `engine.w3pa = ∫∫|A|⁴dt dz` and
+  `engine.w3pa_energy = ∫∫|A|⁶dt dz` (`E_out = E_in − α₃·w3pa_energy`) plus
+  `w3pa_vs_z` are exposed after `propagate`; `α₃ = 0` is bit-identical to
+  omitting the term. Tests: `tests/test_gnlse_three_photon.py`.
 
 ### Fixed
 

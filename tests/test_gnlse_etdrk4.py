@@ -354,3 +354,275 @@ def test_gnlse_solver_scheme_passthrough():
             betas=np.array([BETA2 * 1e24]),
             scheme="rk4",
         )
+
+
+# ---------------------------------------------------------------------------
+# Gap J — static full-β + per-bin γ(Ω) + Raman under ETDRK4 (2026-10-25)
+#
+# ETDRK4 needs exactly two things: a diagonal linear operator in the
+# transform basis and a nonlinear functional evaluable at arbitrary stage
+# states. A static ``full_beta`` curve (a per-bin phase array) and the
+# *symmetrised* per-bin γ(Ω) operator both qualify, so the guard that refused
+# the whole dispersive configuration is narrowed to the features that are
+# genuinely not pointwise (z-dependent β(ω,z), the legacy history-dependent
+# TPA carrier density, and the time-resolved free-carrier state).
+# ---------------------------------------------------------------------------
+
+J_WL0 = 1550e-9
+J_LEN = 20e-3  # ≥ 20 mm deck
+J_B2, J_B3, J_B4 = -2.0e-26, 1.0e-40, -1.0e-55
+J_GAMMA0 = 20.0  # 1/(W·m)
+
+
+def _j_raman(grid):
+    from photonics_helper.raman import RamanSpec
+
+    spec = RamanSpec(name="Silica", raman_shift_cm=440, raman_linewidth_cm=45, fR=0.18)
+    return spec.response(grid)
+
+
+def _j_engine(
+    steps: int,
+    gamma0: float = J_GAMMA0,
+    n: int = 1024,
+    energy: float = 10e-12,
+    scheme: str = "etdrk4",
+    gamma_omega: object = "default",
+    **kw,
+):
+    """10 pJ, 200 fs, 20 mm on a static full-β curve + per-bin γ(Ω) + Raman."""
+    grid = TemporalGrid(N=n, Tmax=Time(8e-12, "s"))
+    env = Envelope.from_energy(shape="sech", energy=energy, fwhm=Time(200e-15, "s"))
+    pulse = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(J_WL0, "m"))
+    fiber = Fiber(
+        gamma=gamma0,
+        alpha=0.0,
+        A_eff=Area(0.5e-12, "m^2"),
+        length=Length(J_LEN, "m"),
+        raman_response=_j_raman(grid),
+    )
+    w = np.asarray(grid.w, dtype=float)
+    curve = J_B2 * w**2 / 2.0 + J_B3 * w**3 / 6.0 + J_B4 * w**4 / 24.0
+    if isinstance(gamma_omega, str) and gamma_omega == "default":
+        gamma_omega = gamma0 * (1.0 + 0.3 * np.tanh(w / 2e13))
+    engine = SplitStepEngine(
+        pulse=pulse,
+        fiber=fiber,
+        betas=None,
+        full_beta=curve,
+        include_raman=True,
+        gamma_omega=gamma_omega,
+        step_size=Length(J_LEN / steps, "m"),
+        scheme=scheme,
+        **kw,
+    )
+    engine.propagate(steps)
+    return engine
+
+
+def test_etdrk4_full_beta_gamma_omega_raman_is_fourth_order():
+    """The dispersive-model deck (full β + γ(Ω) + Raman) at 10 pJ / 200 fs / 20 mm.
+
+    The conserved quantity is the unweighted energy (α = 0, real Raman
+    response, no shock), so the worst-case relative drift over the run is an
+    O(dz⁴) scheme quantity. Measured 8.5e-8 … 2.2e-11 over 1000 → 8000 steps,
+    fitted order 3.98 — the same 4th-order rate the uniform-core path has.
+    """
+    steps = (1000, 2000, 4000, 8000)
+    drifts = []
+    for num_steps in steps:
+        engine = _j_engine(num_steps)
+        energy = np.asarray(engine.energy_vs_z, dtype=float)
+        drifts.append(float(np.max(np.abs(energy / energy[0] - 1.0))))
+    order = float(-np.polyfit(np.log(steps), np.log(drifts), 1)[0])
+    assert drifts[-1] < 1e-6, f"drift at 8000 steps {drifts[-1]:.2e}"
+    assert order >= 3.5, f"measured order {order:.2f} (drifts {drifts})"
+
+
+def test_etdrk4_agrees_with_strang_on_the_per_bin_gamma_deck():
+    """Correctness gate: an order test can pass on a wrong operator.
+
+    Same deck (full β + γ(Ω) + Raman) at dz = 2 µm; ETDRK4 must agree with the
+    independent Strang composition in the field. Measured 3.7e-8 relative L2
+    (Strang's own dz² error dominates — at γ₀ = 20 the same dz gives 1.5e-5,
+    which is why this deck uses γ₀ = 2.5 so that the comparison is limited by
+    nothing but the two schemes agreeing).
+    """
+    steps = 10000
+    fine = _j_engine(steps, gamma0=2.5)
+    strang = _j_engine(steps, gamma0=2.5, scheme="strang")
+    a = np.asarray(fine.A, dtype=complex)
+    b = np.asarray(strang.A, dtype=complex)
+    rel = float(np.linalg.norm(a - b) / np.linalg.norm(a))
+    assert rel <= 1e-6, f"ETDRK4 vs Strang field difference {rel:.2e}"
+
+
+def _beat_grid():
+    """Grid on which 1.499 µm and 2.398 µm are *exact* FFT bins.
+
+    ``Tmax = 8 ps`` makes ``c·Tmax/λ`` an integer for both wavelengths, so the
+    two lines land on bins 2048 ± 300 with no spectral leakage.
+    """
+    grid = TemporalGrid(N=4096, Tmax=Time(8e-12, "s"))
+    w0 = 1300.0 * grid.dw  # 1.84 µm, midway in frequency
+    return grid, w0, 2048 + 300, 2048 - 300
+
+
+def test_gamma_omega_per_bin_calibration_on_two_wavelengths():
+    """A per-bin γ must reproduce the γ(1.5 µm)/γ(2.4 µm) ratio to ≤2 %.
+
+    Two 1 pJ single-tone runs on a dispersion-free 4 mm deck: the accumulated
+    SPM phase of a line is ``γ(Ω)·P·L`` exactly (measured deviation from that
+    closed form: 5e-14 and 1.2e-11), so the ratio of the two phases is the
+    applied γ ratio. With the scalar-γ path the same two lines come out at
+    ratio 1.000 — a 44 % error, i.e. the gate measures the weight, not the
+    code running.
+    """
+    grid, w0, n1, n2 = _beat_grid()
+    exponent = 1.236
+    gamma0 = 10.0
+    gamma_w = gamma0 * (np.maximum(w0 + np.asarray(grid.w), 1.0) / w0) ** exponent
+    nominal = float(gamma_w[n1] / gamma_w[n2])
+    assert 1.5 <= nominal <= 2.4, f"deck's γ ratio {nominal:.3f} out of range"
+
+    fiber = Fiber(
+        gamma=gamma0,
+        alpha=0.0,
+        A_eff=Area(1e-12, "m^2"),
+        length=Length(4e-3, "m"),
+    )
+    env = Envelope(shape="sech", peak_amplitude=0.125, pulse_width=Time(1e-12, "s"))
+    a0 = 1e-12 / grid.time_window  # 1 pJ in the window
+
+    def phase(bin_index: int, gamma_omega) -> float:
+        field = np.sqrt(a0) * np.exp(-1j * grid.w[bin_index] * grid.t)
+        pulse = Wave(
+            grid=grid, envelope=env, central_wavelength=Wavelength(1.84e-6, "m")
+        )
+        pulse.with_field(field)
+        engine = SplitStepEngine(
+            pulse=pulse,
+            fiber=fiber,
+            betas=np.array([0.0]),
+            gamma_omega=gamma_omega,
+            step_size=Length(2e-6, "m"),
+            scheme="etdrk4",
+        )
+        engine.propagate(2000)
+        a_w = grid.fft(engine.A)
+        return float(np.angle(a_w[bin_index] / grid.fft(field)[bin_index]))
+
+    ph1 = phase(n1, gamma_w)
+    ph2 = phase(n2, gamma_w)
+    ratio = ph1 / ph2
+    # The per-bin weight is applied exactly: the phase equals γ(Ω)PL per line.
+    assert abs(ph1 / (gamma_w[n1] * a0 * 4e-3) - 1.0) < 1e-8
+    assert abs(ph2 / (gamma_w[n2] * a0 * 4e-3) - 1.0) < 1e-8
+    assert abs(ratio / nominal - 1.0) <= 0.02, f"γ ratio {ratio:.4f} vs {nominal:.4f}"
+    # ...and without the per-bin weight both lines get the same γ: the ratio
+    # comes out 1.000, i.e. 44 % below the 1.79 the deck asks for.
+    scalar_ratio = phase(n1, None) / phase(n2, None)
+    assert abs(scalar_ratio / nominal - 1.0) > 0.2, scalar_ratio
+
+
+def test_constant_gamma_omega_is_the_scalar_operator():
+    """γ(Ω) ≡ γ must reduce to the scalar ``iγP_NL A`` operator exactly.
+
+    ``√γ·F·P_NL·F⁻¹·√γ`` with constant γ is ``γ·F·P_NL·F⁻¹`` identically — up
+    to FFT round-off. This pins the symmetrisation *and* that ``P_NL`` is
+    evaluated at the state's own intensity: weighting the inner state by √γ
+    would give ``γ²|A|²A`` instead (a 20× error at γ = 20).
+    """
+    engine_om = _j_engine(50, gamma_omega=np.full(1024, GAMMA))
+    engine_sc = _j_engine(50, gamma_omega=None)
+    state = np.asarray(engine_sc.A, dtype=complex)
+    n_om = engine_om._nonlinear_rhs(state, GAMMA)
+    n_sc = engine_sc._nonlinear_rhs(state, GAMMA)
+    err = float(np.max(np.abs(n_om - n_sc)) / np.max(np.abs(n_sc)))
+    assert err < 1e-13, (
+        f"constant γ(Ω) operator differs from the scalar one by {err:.2e}"
+    )
+
+
+def test_gamma_omega_none_and_three_photon_zero_are_bit_identical():
+    """Feature-off gate: the new keywords must not perturb the legacy path."""
+    base = _j_engine(200, gamma_omega=None)
+    explicit = _j_engine(200, gamma_omega=None, gamma_omega_naive=False)
+    assert np.array_equal(np.asarray(base.A), np.asarray(explicit.A))
+    zero_a3 = _j_engine(200, gamma_omega=None, three_photon_alpha_3=0.0)
+    assert np.array_equal(np.asarray(base.A), np.asarray(zero_a3.A))
+    assert np.array_equal(
+        np.asarray(base.A),
+        np.asarray(
+            _j_engine(200, gamma_omega=None, three_photon_alpha_3=np.zeros(1024)).A
+        ),
+    )
+
+
+def test_naive_gamma_omega_form_drifts_and_default_is_the_symmetric_one():
+    """The non-Hermitian ``iγ(Ω)F{P·A}`` form is diagnostic-only and must drift.
+
+    Measured on the 10 pJ / 20 mm deck at 2000 steps: symmetrised 3.1e-6
+    (4th order), naive 1.48e-1 — and the naive number is *dz-independent*
+    (1.4779e-1 at 2000, 1.4779e-1 at 4000), the signature of a structural
+    non-Hermiticity rather than a truncation error.
+    """
+    sym = _j_engine(2000, gamma0=10.0)
+    naive = _j_engine(2000, gamma0=10.0, gamma_omega_naive=True)
+    e_sym = np.asarray(sym.energy_vs_z, dtype=float)
+    e_naive = np.asarray(naive.energy_vs_z, dtype=float)
+    d_sym = abs(float(e_sym[-1] / e_sym[0] - 1.0))
+    d_naive = abs(float(e_naive[-1] / e_naive[0] - 1.0))
+    assert d_sym < 1e-5, f"symmetrised drift {d_sym:.2e}"
+    assert d_naive > 1e-2, f"naive form drift {d_naive:.2e} (expected a large drift)"
+    with pytest.raises(ValueError, match="gamma_omega_naive"):
+        _j_engine(1, gamma_omega=None, gamma_omega_naive=True)
+
+
+def test_etdrk4_guard_names_only_the_features_it_cannot_carry():
+    """The narrowed guard must name the exact unsupported feature."""
+    grid = TemporalGrid(N=64, Tmax=Time(8e-12, "s"))
+    env = Envelope(shape="sech", peak_amplitude=1.0, pulse_width=Time(200e-15, "s"))
+    pulse = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(J_WL0, "m"))
+    fiber = Fiber.from_gamma(gamma=GAMMA, length=Length(1e-3, "m"))
+    betas = np.array([BETA2 * 1e24])
+
+    tpa = SplitStepEngine(
+        pulse=pulse, fiber=fiber, betas=betas, include_tpa=True, scheme="etdrk4"
+    )
+    with pytest.raises(NotImplementedError, match="include_tpa"):
+        tpa._etdrk_linear(1e-5)
+    fc = SplitStepEngine(
+        pulse=pulse,
+        fiber=fiber,
+        betas=betas,
+        include_free_carriers=True,
+        scheme="etdrk4",
+    )
+    with pytest.raises(NotImplementedError, match="include_free_carriers"):
+        fc._etdrk_linear(1e-5)
+
+    # ...while the static full-β / γ(z) / α(z) hooks are accepted.
+    ok = SplitStepEngine(
+        pulse=pulse,
+        fiber=fiber,
+        betas=None,
+        full_beta=0.0 * np.asarray(grid.w) + 5.0,
+        gamma_fn=lambda z: GAMMA,
+        alpha_fn=lambda z: 0.0,
+        scheme="etdrk4",
+        step_size=Length(1e-4, "m"),
+    )
+    ok.propagate(10)
+    assert np.all(np.isfinite(np.asarray(ok.A)))
+
+    # gamma_omega + shock is refused at construction (not silently dropped).
+    with pytest.raises(NotImplementedError, match="self_steepening"):
+        SplitStepEngine(
+            pulse=pulse,
+            fiber=fiber,
+            betas=betas,
+            include_self_steepening=True,
+            gamma_omega=np.full(64, GAMMA),
+            scheme="etdrk4",
+        )
