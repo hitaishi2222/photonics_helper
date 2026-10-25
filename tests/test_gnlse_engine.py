@@ -37,7 +37,7 @@ def test_engine_propagate_returns_evolution(setup):
     """propagate() populates evolution list."""
     pulse, fiber, betas = setup
     engine = SplitStepEngine(pulse=pulse, fiber=fiber, betas=betas)
-    engine.propagate(num_steps=5)
+    engine.propagate(num_steps=5, nsaves=None)
     assert len(engine.evolution) == 6  # initial + 5 steps
 
 
@@ -45,7 +45,7 @@ def test_engine_propagate_produces_spectra(setup):
     """propagate() produces spectra_vs_z."""
     pulse, fiber, betas = setup
     engine = SplitStepEngine(pulse=pulse, fiber=fiber, betas=betas)
-    engine.propagate(num_steps=5)
+    engine.propagate(num_steps=5, nsaves=None)
     omega, spectra = engine.spectra_vs_z
     assert omega.shape[0] == 256
     assert spectra.shape == (6, 256)

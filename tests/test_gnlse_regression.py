@@ -189,7 +189,7 @@ class TestRamanFullResponse:
             include_self_steepening=False,
             include_tpa=False,
         )
-        solver.propagate(num_steps=10)
+        solver.propagate(num_steps=10, nsaves=None)
 
         # With Raman, the pulse should experience some phase modulation
         # The key test: propagation completes without error and produces results

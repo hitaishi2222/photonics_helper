@@ -2507,7 +2507,7 @@ class SplitStepEngine:
         self,
         num_steps: int,
         *,
-        nsaves: int | None = None,
+        nsaves: int | None = 2,
         show_progress: bool = False,
         raman_noise: bool = False,
         noise_seed: int | None = None,
@@ -2522,9 +2522,10 @@ class SplitStepEngine:
             ``length/num_steps``).
         nsaves : int, optional
             Number of evenly spaced snapshots to retain along ``z`` (including
-            ``z=0`` and ``z=L``). If None, every integration step is stored
-            (can use many GB for long runs). Use ~200 for contour plots, as in
-            laserfun's ``NLSE(..., nsaves=200)``.
+            ``z=0`` and ``z=L``); default 2 keeps peak memory flat in step count.
+            ``None`` is the expensive diagnostic that stores every step (measured
+            1016 MB at 2000 steps, 1777 MB at 4000, 3278 MB at 8000). Use ~200
+            for contour plots, as in laserfun's ``NLSE(..., nsaves=200)``.
         show_progress : bool
             If True, show a ``tqdm`` progress bar over propagation distance.
             Requires ``tqdm`` (``pip install tqdm``).
@@ -3157,7 +3158,7 @@ class GNLSESolver:
         #: Records of the most recent :meth:`propagate` call, used by
         #: :meth:`verify_convergence` to reconstruct a matching probe run.
         self._last_num_steps: int = 100
-        self._last_nsaves: int | None = None
+        self._last_nsaves: int | None = 2
         self._last_raman_noise: bool = False
 
     def _make_engine(self, step_size: Length | None) -> SplitStepEngine:
@@ -3186,7 +3187,7 @@ class GNLSESolver:
         self,
         num_steps: int = 100,
         *,
-        nsaves: int | None = None,
+        nsaves: int | None = 2,
         show_progress: bool = False,
         raman_noise: bool = False,
         noise_seed: int | None = None,
@@ -3844,7 +3845,7 @@ class TaperedGNLSESolver:
         num_steps: int = 100,
         strict: bool = False,
         *,
-        nsaves: int | None = None,
+        nsaves: int | None = 2,
         show_progress: bool = False,
         raman_noise: bool = False,
         noise_seed: int | None = None,

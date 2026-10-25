@@ -56,7 +56,7 @@ def test_solver_propagate_populates_evolution(setup):
     """propagate() populates evolution list."""
     pulse, fiber, betas = setup
     solver = GNLSESolver(pulse=pulse, fiber=fiber, betas=betas, include_raman=False)
-    solver.propagate(num_steps=5)
+    solver.propagate(num_steps=5, nsaves=None)
     assert len(solver.evolution) == 6
 
 
@@ -64,7 +64,7 @@ def test_solver_spectra_vs_z(setup):
     """spectra_vs_z returns correct shape after propagation."""
     pulse, fiber, betas = setup
     solver = GNLSESolver(pulse=pulse, fiber=fiber, betas=betas, include_raman=False)
-    solver.propagate(num_steps=10)
+    solver.propagate(num_steps=10, nsaves=None)
     omega, spectra = solver.spectra_vs_z
     assert len(omega) == 256
     assert spectra.shape == (11, 256)
