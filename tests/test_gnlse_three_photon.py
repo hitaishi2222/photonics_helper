@@ -192,6 +192,8 @@ def test_three_photon_zero_is_bit_identical_to_omitting_it():
     assert np.array_equal(np.asarray(reference.A), np.asarray(zero.A))
     assert np.array_equal(np.asarray(reference.A), np.asarray(zero_callable.A))
     assert reference.w3pa == 0.0
+    assert reference.w3pa_energy == 0.0
+    assert reference.w3pa_spectral == 0.0
     with_term, _ = _cw_engine(50, a3=A3)
     assert not np.array_equal(np.asarray(reference.A), np.asarray(with_term.A))
 
@@ -255,3 +257,47 @@ def test_mixed_deck_runs_and_the_ledger_closes():
         assert np.all(np.isfinite(np.asarray(engine.A)))
         assert engine.w3pa > 0.0
         assert engine.w3pa_vs_z[-1] == engine.w3pa
+
+
+@pytest.mark.parametrize("scheme", ["strang", "etdrk4"])
+@pytest.mark.parametrize("spectral_input", [False, True])
+def test_w3pa_spectral_matches_constant_alpha3_ledger(scheme, spectral_input):
+    a3 = np.full(64, A3) if spectral_input else A3
+    engine, _ = _cw_engine(1000, scheme=scheme, a3=a3)
+    expected = A3 * engine.w3pa_energy
+    assert abs(engine.w3pa_spectral / expected - 1.0) <= 1e-10
+
+
+def _spectral_alpha3(engine):
+    w = np.asarray(engine.grid.w)
+    return 2e-4 * (1.0 + 0.8 * np.tanh(w / 2e13))
+
+
+def test_spectral_alpha3_energy_closure_and_legacy_residual():
+    probe = _mixed_engine(10, "etdrk4", None)
+    a3_w = _spectral_alpha3(probe)
+    a3_center = float(a3_w[np.argmin(np.abs(probe.grid.w))])
+    engine = _mixed_engine(4000, "etdrk4", a3_w)
+    energy = np.asarray(engine.energy_vs_z)
+    delta = float(energy[-1] - energy[0])
+    spectral_residual = abs((delta + engine.w3pa_spectral) / energy[0])
+    legacy_residual = abs(
+        (delta + a3_center * engine.w3pa_energy) / energy[0]
+    )
+    assert spectral_residual <= 1e-6
+    # Demonstration that the old constant-coefficient closure is not spectral.
+    assert legacy_residual > 1e-6
+    assert legacy_residual > 10.0 * spectral_residual
+
+
+def test_etdrk4_full_beta_gamma_omega_spectral_alpha3_is_fourth_order():
+    probe = _mixed_engine(10, "etdrk4", None)
+    a3_w = _spectral_alpha3(probe)
+    reference = np.asarray(_mixed_engine(8000, "etdrk4", a3_w).A)
+    steps = (250, 500, 1000, 2000)
+    errors = []
+    for n_steps in steps:
+        field = np.asarray(_mixed_engine(n_steps, "etdrk4", a3_w).A)
+        errors.append(float(np.linalg.norm(field - reference) / np.linalg.norm(reference)))
+    order = float(-np.polyfit(np.log(steps), np.log(errors), 1)[0])
+    assert order >= 3.9, f"order {order:.3f}; field errors {errors}"

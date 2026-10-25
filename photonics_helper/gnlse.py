@@ -1090,8 +1090,10 @@ class SplitStepEngine:
         written. ``0.0`` is a no-op (bit-identical to omitting the term). The
         accumulated integrals are exposed after :meth:`propagate` as
         :attr:`w3pa` (``∫∫|A|⁴dt dz``, plus :attr:`w3pa_vs_z`) and
-        :attr:`w3pa_energy` (``∫∫|A|⁶dt dz``), which closes the energy budget:
-        ``E_out = E_in − α₃·w3pa_energy``.
+        :attr:`w3pa_energy` (``∫∫|A|⁶dt dz``), whose constant-α₃ closure is
+        ``E_out = E_in − α₃·w3pa_energy``. :attr:`w3pa_spectral` additionally
+        accumulates ``∫ -2 Re⟨A, N_3PA(A)⟩ dt dz`` and closes the energy budget
+        for both scalar and spectral α₃ as ``E_out = E_in − w3pa_spectral``.
 
         **Units:** the value acts on ``|A|²`` in watts, so it must be
         ``α₃/A_eff²``. Pass the *physical* α₃ (m³/W²) with
@@ -1369,6 +1371,10 @@ class SplitStepEngine:
         #: intensity-squared action, whose ``exp(−α₃w3pa)`` form holds per
         #: sample / in the small-loss limit only).
         self.w3pa_energy: float = 0.0
+        #: Coefficient-weighted energy-loss ledger. For scalar α₃ this equals
+        #: ``α₃*w3pa_energy``; for spectral α₃ it accumulates the exact
+        #: instantaneous loss ``-2 Re⟨A, N_3PA(A)⟩`` of the per-bin operator.
+        self.w3pa_spectral: float = 0.0
         self._w3pa_vs_z: list[float] | None = None
         self._full_beta_curve: NDArray | None = None
         self._full_phi: NDArray | None = None
@@ -2213,6 +2219,20 @@ class SplitStepEngine:
             dtype=complex,
         )
 
+    def _three_photon_energy_moment(self, A: NDArray) -> float:
+        """Instantaneous 3PA energy-loss rate, including spectral weighting."""
+        intensity = np.abs(A) ** 2
+        if self._alpha3_scalar is not None:
+            return float(
+                self._alpha3_scalar * np.sum(intensity**3) * self.grid.dt
+            )
+        return float(
+            -2.0
+            * np.real(
+                np.sum(np.conj(A) * self._three_photon_rhs(A)) * self.grid.dt
+            )
+        )
+
     def _gamma_omega_rhs(
         self, A: NDArray, intensity: NDArray, h_R_fft: NDArray | None
     ) -> NDArray:
@@ -2559,6 +2579,7 @@ class SplitStepEngine:
         self._z_positions = [0.0]
         self.w3pa = 0.0
         self.w3pa_energy = 0.0
+        self.w3pa_spectral = 0.0
         self._w3pa_vs_z = [] if self._three_photon_enabled else None
 
         pbar = None
@@ -2672,6 +2693,7 @@ class SplitStepEngine:
                 absA = np.abs(self.A)
                 f2_before = float(np.sum(absA**4) * self.grid.dt)
                 f3_before = float(np.sum(absA**6) * self.grid.dt)
+                spectral_before = self._three_photon_energy_moment(self.A)
             self.A = self._advance(A=self.A, dz=dz)
             if self._three_photon_enabled:
                 absA = np.abs(self.A)
@@ -2680,6 +2702,9 @@ class SplitStepEngine:
                 )
                 self.w3pa_energy += (
                     0.5 * dz * (f3_before + float(np.sum(absA**6) * self.grid.dt))
+                )
+                self.w3pa_spectral += 0.5 * dz * (
+                    spectral_before + self._three_photon_energy_moment(self.A)
                 )
 
             if noise_rng is not None:
