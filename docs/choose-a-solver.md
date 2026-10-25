@@ -69,6 +69,7 @@ engine only when you need direct control of `evolution` and `z_array`.
 | Self-steepening | ✅ `include_self_steepening` | ⏳ | ✅ `include_shock` | ✅ |
 | TPA / free carriers | ✅ `include_tpa` / `include_free_carriers` | ⏳ | ✅ same flags | ✅ |
 | Full β(ω) | ✅ static `full_beta` | ⏳ | ✅ per mode | ✅ z-dependent only |
+| Linear field-amplitude loss | ✅ scalar `fiber.alpha` / `alpha_fn` or per-bin `alpha_w` | ✅ scalar | ✅ per-channel scalar `channel_alpha` | ✅ scalar `alpha_fn` or per-bin `alpha_w` |
 | FWM between propagated fields | ⏳ | ✅ `coupling="coherent"` (polarization) | ✅ `include_fwm` plus pump depletion | ⏳ |
 | OAM selection gate / per-ℓ budget | ⏳ | ⏳ | ✅ `oam_l`, `power_by_l` | ⏳ |
 | Cavity round trips | ⏳ | ⏳ | ✅ `cavity_iterate` | ⏳ |

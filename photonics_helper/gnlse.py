@@ -1067,6 +1067,15 @@ class SplitStepEngine:
         Diagnostic only: apply the non-Hermitian ``iγ(Ω)·F{P·A}`` form instead
         of the default symmetrised one. Default ``False``. Requires
         ``gamma_omega``; emits a ``UserWarning``.
+    alpha_w : float, array_like or callable, optional
+        Per-bin linear field-amplitude loss α(Ω) in 1/m, sampled on
+        ``grid.w`` or returned by a callable α(Ω). It is applied exactly as
+        ``exp(-alpha_w*dz/2)`` in the linear operator, including ETDRK4.
+        This is an amplitude coefficient exactly like ``fiber.alpha``: do not
+        double it when converting a power attenuation or ``loss_db_cm``.
+        Combining it with nonzero ``fiber.alpha`` is refused to prevent double
+        counting. The public ``alpha_w`` field records that spectral loss was
+        accounted for in the run.
     three_photon_alpha_3 : float or callable, optional
         Three-photon absorption coefficient α₃ with field form
         ``−α₃|A|⁴A/2`` (``I = |A|²``) — i.e. ``dI/dz = −α₃I³`` per sample, closed
@@ -1119,6 +1128,9 @@ class SplitStepEngine:
         gamma_omega: NDArray | Callable[[NDArray], NDArray] | None = None,
         gamma_omega_naive: bool = False,
         three_photon_alpha_3: float | Callable[[NDArray], NDArray] | None = None,
+        alpha_w: (
+            float | NDArray | Callable[[NDArray], NDArray] | None
+        ) = None,
     ):
         self.pulse = pulse
         self.fiber = fiber
@@ -1212,6 +1224,35 @@ class SplitStepEngine:
         # Set up temporal grid from pulse
         self.grid: TemporalGrid = pulse.grid
         self.omega0 = pulse.central_frequency
+
+        #: Per-bin field-amplitude loss in 1/m; its presence names spectral
+        #: loss in the run record. ``None`` keeps the legacy scalar-loss path.
+        self.alpha_w = alpha_w
+        self._alpha_w: NDArray | None = None
+        if alpha_w is not None:
+            if fiber.alpha != 0.0:
+                raise ValueError(
+                    "alpha_w cannot be combined with nonzero fiber.alpha: "
+                    "both account for linear loss and would double count it."
+                )
+            a_w = np.asarray(
+                alpha_w(self.grid.w) if callable(alpha_w) else alpha_w,
+                dtype=float,
+            )
+            if a_w.ndim == 0:
+                a_w = np.full(self.grid.w.shape, float(a_w))
+            if a_w.shape != self.grid.w.shape:
+                raise ValueError(
+                    "alpha_w must match the grid "
+                    f"({self.grid.w.shape}), got {a_w.shape}; pass a scalar, "
+                    "a callable α(Ω), or an array sampled on grid.w."
+                )
+            if not np.all(np.isfinite(a_w)) or np.any(a_w < 0.0):
+                raise ValueError(
+                    "alpha_w must be finite and non-negative (it is a linear "
+                    "field-amplitude absorption coefficient)."
+                )
+            self._alpha_w = a_w
 
         #: Frequency-dependent nonlinear coefficient γ(Ω), resolved on
         #: ``grid.w`` (rad/s); ``None`` keeps the scalar-γ path untouched.
@@ -1508,7 +1549,8 @@ class SplitStepEngine:
         before the dispersion-sign flip; the plus sign is the physically
         correct propagator and pairs with the ``exp(−iωt)`` forward FFT
         convention, as the note below describes.)
-        Also applies loss: multiply by exp(-α·Δz/2).
+        Also applies scalar and per-bin field-amplitude loss as
+        ``exp(-α·Δz/2)`` and ``exp(-alpha_w(Ω)·Δz/2)`` respectively.
         Dispersion Taylor expansion starts at k=2 (β₂, β₃, ...).
         β₁ (group velocity) is not included — pulse stays in group-velocity frame.
 
@@ -1579,6 +1621,8 @@ class SplitStepEngine:
                 loss_factor = np.exp(-alpha * dz / 2)
                 A_w = A_w * loss_factor
 
+        if self._alpha_w is not None:
+            A_w = A_w * np.exp(-self._alpha_w * dz / 2)
         A_w = A_w * np.exp(1j * phi)
         return np.asarray(self.grid.ifft(A_w))
 
@@ -2077,7 +2121,8 @@ class SplitStepEngine:
             for k, beta_k in enumerate(self.betas, start=2):
                 phi += beta_k * omega_ps**k / factorial(k)
         alpha = float(self._get_alpha(self._current_z))
-        return np.asarray(1j * phi - 0.5 * alpha, dtype=complex)
+        loss = alpha if self._alpha_w is None else alpha + self._alpha_w
+        return np.asarray(1j * phi - 0.5 * loss, dtype=complex)
 
     def _nonlinear_rhs(self, A: NDArray, gamma: float) -> NDArray:
         """The full nonlinear remainder ``N(A)`` of the GNLSE RHS (time domain).
@@ -3036,6 +3081,9 @@ class GNLSESolver:
         Three-photon absorption coefficient α₃ (engine units ``α₃/A_eff²``,
         or physical m³/W² with ``Fiber(a_eff=...)``), passed straight to
         :class:`SplitStepEngine`. Default ``None``.
+    alpha_w : float, array_like or callable, optional
+        Per-bin field-amplitude loss α(Ω) in 1/m, passed straight to
+        :class:`SplitStepEngine`. Default ``None``.
     """
 
     def __init__(
@@ -3058,6 +3106,9 @@ class GNLSESolver:
         gamma_omega: NDArray | Callable[[NDArray], NDArray] | None = None,
         gamma_omega_naive: bool = False,
         three_photon_alpha_3: float | Callable[[NDArray], NDArray] | None = None,
+        alpha_w: (
+            float | NDArray | Callable[[NDArray], NDArray] | None
+        ) = None,
     ):
         self.pulse = pulse
         self.fiber = fiber
@@ -3096,6 +3147,7 @@ class GNLSESolver:
         self.gamma_omega = gamma_omega
         self.gamma_omega_naive = gamma_omega_naive
         self.three_photon_alpha_3 = three_photon_alpha_3
+        self.alpha_w = alpha_w
         self._evolution: list[Wave] = []
         self._z_positions: NDArray | None = None
         self._spectra_vs_z: tuple[NDArray, NDArray] | None = None
@@ -3127,6 +3179,7 @@ class GNLSESolver:
             gamma_omega=self.gamma_omega,
             gamma_omega_naive=self.gamma_omega_naive,
             three_photon_alpha_3=self.three_photon_alpha_3,
+            alpha_w=self.alpha_w,
         )
 
     def propagate(
@@ -3712,6 +3765,9 @@ class TaperedGNLSESolver:
     three_photon_alpha_3 : float or callable, optional
         Three-photon absorption coefficient α₃ (engine units ``α₃/A_eff²``, or
         physical m³/W² with ``Fiber(a_eff=...)``).
+    alpha_w : float, array_like or callable, optional
+        Per-bin field-amplitude loss α(Ω) in 1/m, combined with the scalar
+        z-dependent loss and passed to :class:`SplitStepEngine`.
     """
 
     def __init__(
@@ -3735,6 +3791,9 @@ class TaperedGNLSESolver:
         gamma_omega: NDArray | Callable[[NDArray], NDArray] | None = None,
         gamma_omega_naive: bool = False,
         three_photon_alpha_3: float | Callable[[NDArray], NDArray] | None = None,
+        alpha_w: (
+            float | NDArray | Callable[[NDArray], NDArray] | None
+        ) = None,
     ):
         self.pulse = pulse
         self.fiber = fiber
@@ -3770,6 +3829,7 @@ class TaperedGNLSESolver:
         self.gamma_omega = gamma_omega
         self.gamma_omega_naive = gamma_omega_naive
         self.three_photon_alpha_3 = three_photon_alpha_3
+        self.alpha_w = alpha_w
         self._engine: SplitStepEngine | None = None
         self._evolution: list[Wave] = []
         self._z_positions: NDArray | None = None
@@ -3847,6 +3907,7 @@ class TaperedGNLSESolver:
             gamma_omega=self.gamma_omega,
             gamma_omega_naive=self.gamma_omega_naive,
             three_photon_alpha_3=self.three_photon_alpha_3,
+            alpha_w=self.alpha_w,
         )
         self._engine.propagate(
             num_steps,
