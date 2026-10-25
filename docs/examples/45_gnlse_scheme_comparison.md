@@ -4,7 +4,7 @@ quadrant: reference
 
 # GNLSE solver scheme comparison (strang / yoshida4 / etdrk4 / rk4ip)
 
-`examples/45_gnlse_scheme_comparison.py` (687 lines)
+`examples/45_gnlse_scheme_comparison.py` (691 lines)
 
 ## What it produces
 
@@ -25,6 +25,10 @@ deck (835 nm, 15 cm PCF, 10 kW peak, Raman + self-steepening):
 * ``"etdrk4"`` — 4th order, Cox & Matthews exponential RK4 (no splitting)
 * ``"rk4ip"`` — 4th order, Hult's Runge–Kutta in the interaction picture
   (no splitting; 8 FFTs per step)
+
+With ``gamma_omega``, ledger-grade runs are ETDRK4: the Strang nonlinear
+sub-step is an explicit midpoint (RK2) advance and carries ~2e-3 in the energy
+at production step counts (measured: 4 pJ / 20 mm / 4000 steps).
 
 At fine ``dz`` all four schemes converge to the same result (verified against
 laserfun's LSODA reference). At coarse ``dz`` **none** of them does: on the

@@ -351,6 +351,15 @@ class Fiber:
             time-resolved free-carrier model. Default 0.
         group_velocity: Envelope group velocity v (m/s) converting the carrier
             lifetime to a propagation length. Default None → C_MS.
+        a_eff: Reference effective mode area for the **nonlinear absorption
+            coefficients**. When given, ``beta_tpa`` / ``sigma_tpa`` (and the
+            engine's ``three_photon_alpha_3``) are interpreted as *physical*
+            coefficients in ``m/W`` / ``m²/W`` / ``m³/W²`` and converted to the
+            engine's power convention internally (``β/A_eff``, ``σ/A_eff``,
+            ``α₃/A_eff²``). When ``None`` (default) every coefficient is taken
+            as **already engine-normalised** — ``|A|²`` in watts — exactly as
+            before this field existed. Deliberately separate from
+            :attr:`A_eff`, which only feeds the ``n₂`` → γ derivation.
     """
 
     n2: float = 0.0
@@ -365,6 +374,34 @@ class Fiber:
     beta_tpa: float = 0.0
     sigma_fca: float = 0.0
     group_velocity: float | None = None
+    #: Opt-in area hook: when set, ``beta_tpa``/``sigma_tpa`` (and the engine's
+    #: ``three_photon_alpha_3``) are *physical* coefficients and are divided by
+    #: ``a_eff**1`` / ``a_eff**2`` internally. ``None`` → engine-normalised.
+    a_eff: Area | None = None
+
+    def _nl_area_factor(self, power: int) -> float:
+        """``1/a_eff**power``, or exactly ``1.0`` when no area hook is set."""
+        if self.a_eff is None:
+            return 1.0
+        a = self.a_eff.as_m2
+        if a <= 0:
+            raise ValueError(f"Fiber.a_eff must be positive, got {a!r} m^2")
+        return a ** -power
+
+    @property
+    def beta_tpa_engine(self) -> float:
+        """β_TPA in the engine convention (W⁻¹m⁻¹): ``beta_tpa/a_eff``.
+
+        ``a_eff=None`` returns ``beta_tpa`` unchanged (bit-identical), i.e. the
+        stored value is already ``β_TPA/A_eff``.
+        """
+        return self.beta_tpa * self._nl_area_factor(1)
+
+    @property
+    def sigma_tpa_engine(self) -> float:
+        """σ_TPA in the engine convention: ``sigma_tpa/a_eff`` (see
+        :attr:`beta_tpa_engine`)."""
+        return self.sigma_tpa * self._nl_area_factor(1)
 
     def effective_gamma(self, omega0: float | AngularFrequency) -> float:
         """Nonlinear coefficient γ in 1/(W·m).
@@ -399,6 +436,7 @@ class Fiber:
         sigma_fca: float = 0.0,
         group_velocity: float | None = None,
         A_eff: Area | None = None,
+        a_eff: Area | None = None,
     ) -> Fiber:
         """Create a Fiber from a target nonlinear coefficient γ.
 
@@ -433,6 +471,10 @@ class Fiber:
         group_velocity : float | None — envelope group velocity v in m/s used
             to convert the retarded-time carrier lifetime into a propagation
             length. Default ``None`` → the vacuum-light-speed constant.
+        a_eff : Area | None — nonlinear-coefficient area hook (see
+            :class:`Fiber`): when given, ``beta_tpa``/``sigma_tpa`` are
+            *physical* (m/W, m²/W) and are converted to the engine convention
+            internally. Default ``None`` → engine-normalised.
 
         Returns
         -------
@@ -454,6 +496,7 @@ class Fiber:
                 beta_tpa=beta_tpa,
                 sigma_fca=sigma_fca,
                 group_velocity=group_velocity,
+                a_eff=a_eff,
             )
         if n2 is not None and omega0 is not None:
             warnings.warn(
@@ -477,6 +520,7 @@ class Fiber:
                 beta_tpa=beta_tpa,
                 sigma_fca=sigma_fca,
                 group_velocity=group_velocity,
+                a_eff=a_eff,
             )
         # Gamma-only: no n2, no A_eff needed for propagation.
         return cls(
@@ -492,6 +536,7 @@ class Fiber:
             beta_tpa=beta_tpa,
             sigma_fca=sigma_fca,
             group_velocity=group_velocity,
+            a_eff=a_eff,
         )
 
     @classmethod
@@ -508,6 +553,7 @@ class Fiber:
         beta_tpa: float = 0.0,
         sigma_fca: float = 0.0,
         group_velocity: float | None = None,
+        a_eff: Area | None = None,
     ) -> Fiber:
         """Create a Fiber from ``n2`` + ``A_eff`` (γ derived at run time)."""
         if length is None:
@@ -525,6 +571,7 @@ class Fiber:
             beta_tpa=beta_tpa,
             sigma_fca=sigma_fca,
             group_velocity=group_velocity,
+            a_eff=a_eff,
         )
 
 
@@ -766,7 +813,7 @@ def free_carrier_step(
     -------
     (A, N) — updated field and carrier states.
     """
-    beta = fiber.beta_tpa
+    beta = fiber.beta_tpa_engine
     sigma = fiber.sigma_fca
     omega0_f = _coerce_omega0(omega0)
     if beta <= 0 and sigma <= 0:
@@ -814,6 +861,10 @@ def tpa_step(
     dA/dz = -σ·U·A
     dU/dz = σ·|A|²/(2ħω) - U/τ_c
 
+    Applies ``fiber.sigma_tpa`` only. ``fiber.beta_tpa`` is **not** consumed
+    here — β_TPA is carried by :func:`free_carrier_step`, i.e. by
+    ``include_free_carriers=True``, not by ``include_tpa``.
+
     Parameters
     ----------
     A : complex array — pulse envelope.
@@ -822,7 +873,8 @@ def tpa_step(
     dz : float — step size (m).
     include_tpa : bool — whether to include TPA.
     U : float — current carrier density (W⁻¹·m⁻³). Default 0.
-    omega0 : float — carrier angular frequency (rad/s). Required when include_tpa=True.
+    omega0 : float — carrier angular frequency (rad/s). Required only when the
+        step actually acts (``sigma_tpa > 0``).
 
     Returns
     -------
@@ -831,9 +883,17 @@ def tpa_step(
 
     Raises
     ------
-    ValueError : if include_tpa=True and omega0 <= 0.
+    ValueError : if the step is active (``sigma_tpa > 0``) and omega0 <= 0.
     """
     if not include_tpa:
+        return A, U
+
+    sigma = fiber.sigma_tpa_engine
+    tau_c = fiber.carrier_lifetime.as_s if fiber.carrier_lifetime is not None else 1e-9
+
+    # Inactive step: no carrier frequency is needed for an operation that
+    # does nothing (the check used to precede this return).
+    if sigma <= 0:
         return A, U
 
     omega0_f = _coerce_omega0(omega0)
@@ -841,12 +901,6 @@ def tpa_step(
         raise ValueError(
             "tpa_step: omega0 (carrier angular frequency in rad/s) is required when include_tpa=True"
         )
-
-    sigma = fiber.sigma_tpa
-    tau_c = fiber.carrier_lifetime.as_s if fiber.carrier_lifetime is not None else 1e-9
-
-    if sigma <= 0:
-        return A, U
 
     hbar = 1.0545718e-34  # J·s
     hbar_omega = hbar * omega0_f
@@ -938,6 +992,10 @@ class SplitStepEngine:
         (iii) energy is conserved.
     include_tpa : bool
         Include TPA (legacy spatially-averaged carrier model). Default False.
+        This flag applies ``fiber.sigma_tpa`` only; ``fiber.beta_tpa`` is
+        carried by ``include_free_carriers`` (see below), so a fiber with
+        ``beta_tpa > 0`` and ``sigma_tpa == 0`` warns instead of silently
+        doing nothing.
     include_free_carriers : bool
         Include the opt-in time-resolved TPA / free-carrier model: the carrier
         population ``N(t)`` is resolved over the retarded-time grid instead of
@@ -947,6 +1005,15 @@ class SplitStepEngine:
         (Soref & Bennett 1987; Cowan et al. 2003; Yin & Agrawal 2007). Requires
         ``fiber.beta_tpa`` / ``fiber.sigma_fca``; free-carrier refraction (μ),
         diffusion and drift are out of scope. Default False.
+
+    Coefficient units
+        The engine takes ``|A|²`` in **watts**, so ``fiber.beta_tpa`` and
+        ``fiber.sigma_tpa`` must be normalised values ``β_TPA/A_eff`` and
+        ``σ_TPA/A_eff`` and ``three_photon_alpha_3`` must be ``α₃/A_eff²``.
+        Pass a *physical* coefficient (m/W, m²/W, m³/W²) together with
+        ``Fiber(a_eff=Area(...))`` and the conversion happens internally;
+        without ``a_eff`` the stored numbers are used as they are. Field
+        amplitudes follow the same rule through ``Wave.to_engine_units``.
     tau_shock : float | None
         Shock (self-steepening) timescale in seconds (SI). ``None``
         (default) uses ``1/ω₀`` at the pulse carrier frequency, matching
@@ -972,7 +1039,10 @@ class SplitStepEngine:
         fourth-order Runge–Kutta in the interaction picture (2007) — also
         no splitting, with the linear propagator applied exactly and the
         nonlinear remainder advanced by classical RK4. See :meth:`_advance`
-        for the algebra and the trade-offs.
+        for the algebra and the trade-offs. With ``gamma_omega`` the Strang
+        nonlinear sub-step is an explicit midpoint (RK2) advance, so
+        ledger-grade ``gamma_omega`` runs are ``"etdrk4"`` (Strang carries
+        ~2e-3 in the energy at production step counts).
     step_size : Length | None
         Fixed step size (m). If None, adaptive stepping is used.
     gamma_omega : array_like or callable, optional
@@ -990,7 +1060,9 @@ class SplitStepEngine:
         energy (~10 % drift on a 20 mm SCG deck, independent of ``dz``) and is reachable
         only through ``gamma_omega_naive=True``, which warns. Combines with
         ``full_beta``, Raman and ``alpha_fn``; ``include_self_steepening`` with
-        ``gamma_omega`` is refused (not implemented).
+        ``gamma_omega`` is refused (not implemented). ``gamma_fn`` / ``a_eff_fn``
+        are **ignored** when ``gamma_omega`` is given (the per-bin operator takes
+        precedence), and the engine warns rather than dropping them silently.
     gamma_omega_naive : bool
         Diagnostic only: apply the non-Hermitian ``iγ(Ω)·F{P·A}`` form instead
         of the default symmetrised one. Default ``False``. Requires
@@ -1011,6 +1083,11 @@ class SplitStepEngine:
         :attr:`w3pa` (``∫∫|A|⁴dt dz``, plus :attr:`w3pa_vs_z`) and
         :attr:`w3pa_energy` (``∫∫|A|⁶dt dz``), which closes the energy budget:
         ``E_out = E_in − α₃·w3pa_energy``.
+
+        **Units:** the value acts on ``|A|²`` in watts, so it must be
+        ``α₃/A_eff²``. Pass the *physical* α₃ (m³/W²) with
+        ``Fiber(a_eff=Area(...))`` and the engine divides by ``A_eff²`` for
+        you; without ``a_eff`` the number is used exactly as given.
     min_shrink_factor : float
         Floor for the gradient-based step shrink factor in z-dependent mode.
         Must be in (0, 1]. Default 0.1.
@@ -1080,6 +1157,26 @@ class SplitStepEngine:
         self.include_self_steepening = include_self_steepening
         self.include_tpa = include_tpa
         self.include_free_carriers = include_free_carriers
+        if (
+            self.include_tpa
+            and self.fiber.beta_tpa > 0.0
+            and self.fiber.sigma_tpa <= 0.0
+            and not self.include_free_carriers
+        ):
+            # Gap M (§17.1): include_tpa consumes sigma_tpa only, so the flag a
+            # user reaches for when they mean "TPA on" was a silent no-op.
+            warnings.warn(
+                "include_tpa=True applies fiber.sigma_tpa only and this fiber "
+                "has sigma_tpa == 0, so it is a no-op: fiber.beta_tpa is not "
+                "consumed by this flag. beta_tpa is carried by "
+                "include_free_carriers=True (the time-resolved TPA/FCA "
+                "model). Set include_free_carriers=True to get the beta_tpa "
+                "absorption you asked for, give the fiber a sigma_tpa, or "
+                "drop include_tpa.",
+                UserWarning,
+                stacklevel=2,
+            )
+
         # Opt-in photon-conserving nonlinear operator (pcGNLSE; time-domain
         # form, Huang et al. arXiv:2607.05244): |γ| in the delayed-Raman
         # phase arm and in the SS–Raman dissipative cross term (ISSUES.md #1).
@@ -1146,6 +1243,23 @@ class SplitStepEngine:
                     "symmetrised split operator takes √γ per bin)."
                 )
             self._gamma_omega = g_w
+            # Same defect shape as Gap M: a hook that reads active but is
+            # ignored, because the per-bin operator takes precedence.
+            ignored = [
+                name
+                for name, hook in (("gamma_fn", gamma_fn), ("a_eff_fn", a_eff_fn))
+                if hook is not None
+            ]
+            if ignored:
+                warnings.warn(
+                    f"gamma_omega= is set, so {', '.join(ignored)} "
+                    f"{'is' if len(ignored) == 1 else 'are'} ignored: the "
+                    "per-bin γ(Ω) operator takes precedence over the scalar "
+                    "γ hooks. Pass the z-dependence in γ(Ω) (or drop "
+                    f"gamma_omega=) if you meant {', '.join(ignored)} to act.",
+                    UserWarning,
+                    stacklevel=2,
+                )
         #: Diagnostic-only opt-in for the *naive* (non-Hermitian)
         #: ``iγ(Ω)·F{P·A}`` form; the default symmetrised form is the one
         #: that conserves energy.
@@ -1193,7 +1307,7 @@ class SplitStepEngine:
                         "(it is an absorption coefficient)."
                     )
                 if np.any(a3_w != 0.0):
-                    self._alpha3_w = a3_w
+                    self._alpha3_w = a3_w * self.fiber._nl_area_factor(2)
             else:
                 a3 = float(three_photon_alpha_3)
                 if not np.isfinite(a3) or a3 < 0.0:
@@ -1203,7 +1317,7 @@ class SplitStepEngine:
                     )
                 # α₃ = 0 is a no-op: bit-identical to omitting the term.
                 if a3 != 0.0:
-                    self._alpha3_scalar = a3
+                    self._alpha3_scalar = a3 * self.fiber._nl_area_factor(2)
         #: Three-photon absorption ledger ``∫∫|A|⁴ dt dz`` (the brief's
         #: ``∫∫I²dt dz``) accumulated by :meth:`propagate` (0.0 when the term is
         #: off).
@@ -1239,6 +1353,48 @@ class SplitStepEngine:
 
         if self.include_self_steepening:
             self._validate_shock_grid()
+        self._warn_z_dependent_hooks_etdrk4()
+
+    def _warn_z_dependent_hooks_etdrk4(self) -> None:
+        """Warn when ETDRK4 freezes a z-varying hook (Gap N, §18.4).
+
+        ``gamma_fn`` / ``alpha_fn`` / ``a_eff_fn`` are evaluated once per step
+        and held across the φ-function stages. That is exact for a static hook
+        and silently drops the scheme below fourth order for a z-dependent one;
+        ``dispersion_profile`` and ``include_free_carriers`` are *refused* for
+        the same class of reason, but a constant callable is a legitimate
+        input, so these only warn. The hooks are probed at three positions —
+        a hook that raises is left alone.
+        """
+        if self.scheme != "etdrk4":
+            return
+        length = float(self.fiber.length.as_m)
+        zs = (0.0, 0.5 * length, length)
+        varying: list[str] = []
+        for name, hook in (
+            ("gamma_fn", self.gamma_fn),
+            ("alpha_fn", self._alpha_fn),
+            ("a_eff_fn", self._a_eff_fn),
+        ):
+            if hook is None:
+                continue
+            try:
+                vals = [float(hook(z)) for z in zs]
+            except Exception:
+                continue
+            if max(vals) - min(vals) > 1e-12 * max(abs(v) for v in vals):
+                varying.append(name)
+        if varying:
+            warnings.warn(
+                f"scheme='etdrk4' freezes {', '.join(varying)} at the step's "
+                "z: the φ-function weights hold a z-dependent hook constant "
+                "across a step, so the scheme silently drops below fourth "
+                "order (dispersion_profile and include_free_carriers are "
+                "refused for the same reason). Use scheme='strang' or "
+                "'yoshida4' for a z-dependent hook, or pass a static value.",
+                UserWarning,
+                stacklevel=3,
+            )
 
     def _photon_number(self, A: NDArray) -> float:
         """Blow & Wood (1989) photon number: the Appendix Eq. (A5) invariant
@@ -1258,6 +1414,17 @@ class SplitStepEngine:
         """
         w_abs = self.omega0 + self.grid.w
         return float(np.sum(np.abs(self.grid.fft(A)) ** 2 / w_abs) * self.grid.dw)
+
+    def photon_number(self, A: NDArray | None = None) -> float:
+        """Blow & Wood (1989) Eq. (A5) photon number of ``A``.
+
+        The per-run ``Q_in``/``Q_out`` a validation gate needs; see
+        :meth:`_photon_number` for the invariant and its domain. ``A=None``
+        (default) uses the engine's current field, so after :meth:`propagate`
+        this is ``Q_out``; pass the launch field for ``Q_in``.
+        """
+        field = self.A if A is None else A
+        return self._photon_number(np.asarray(field, dtype=complex))
 
     @property
     def tau_shock(self) -> float:
@@ -2857,6 +3024,18 @@ class GNLSESolver:
         reproducible step counts, or when the adaptive heuristic is
         inappropriate (e.g. CW/finite-background fields where the pulse-width
         based dispersion limit is not meaningful).
+    gamma_omega : array_like or callable, optional
+        Per-bin nonlinear coefficient γ(Ω) (1/(W·m)), passed straight to
+        :class:`SplitStepEngine` (see there for the symmetrised form). Default
+        ``None`` → scalar γ. There is no ``gamma_fn``/``a_eff_fn`` here; the
+        engine would ignore them anyway when ``gamma_omega`` is set (it warns).
+    gamma_omega_naive : bool
+        Diagnostic-only non-Hermitian form of ``gamma_omega``. Default False
+        (warns when enabled).
+    three_photon_alpha_3 : float or callable, optional
+        Three-photon absorption coefficient α₃ (engine units ``α₃/A_eff²``,
+        or physical m³/W² with ``Fiber(a_eff=...)``), passed straight to
+        :class:`SplitStepEngine`. Default ``None``.
     """
 
     def __init__(
@@ -2876,6 +3055,9 @@ class GNLSESolver:
         scheme: Scheme = "strang",
         full_beta=None,
         raman_response=None,
+        gamma_omega: NDArray | Callable[[NDArray], NDArray] | None = None,
+        gamma_omega_naive: bool = False,
+        three_photon_alpha_3: float | Callable[[NDArray], NDArray] | None = None,
     ):
         self.pulse = pulse
         self.fiber = fiber
@@ -2909,6 +3091,11 @@ class GNLSESolver:
                 f"tau_shock must be positive (seconds, SI), got {tau_shock!r}"
             )
         self.tau_shock = float(tau_shock) if tau_shock is not None else None
+        # Gap N (§18.1): the two Gaps J/K keywords must be reachable from the
+        # documented wrapper, not only from SplitStepEngine.
+        self.gamma_omega = gamma_omega
+        self.gamma_omega_naive = gamma_omega_naive
+        self.three_photon_alpha_3 = three_photon_alpha_3
         self._evolution: list[Wave] = []
         self._z_positions: NDArray | None = None
         self._spectra_vs_z: tuple[NDArray, NDArray] | None = None
@@ -2937,6 +3124,9 @@ class GNLSESolver:
             scheme=self.scheme,
             full_beta=self.full_beta,
             raman_response=self.raman_response,
+            gamma_omega=self.gamma_omega,
+            gamma_omega_naive=self.gamma_omega_naive,
+            three_photon_alpha_3=self.three_photon_alpha_3,
         )
 
     def propagate(
@@ -3511,6 +3701,17 @@ class TaperedGNLSESolver:
         dispersion from *dispersion_profile* (β(ω, z), SI), so this flag is
         validated for consistency with the other solvers but does not rescale a
         coefficient array. Default ``"ps^k/m"``.
+    gamma_omega : array_like or callable, optional
+        Per-bin nonlinear coefficient γ(Ω) (1/(W·m)), passed to
+        :class:`SplitStepEngine`. Default ``None`` → scalar γ (from
+        ``gamma_fn``/``a_eff_fn``/``fiber.gamma``). When set, ``gamma_fn`` and
+        ``a_eff_fn`` are **ignored** (the per-bin operator takes precedence) and
+        the engine warns instead of dropping them silently.
+    gamma_omega_naive : bool
+        Diagnostic-only non-Hermitian form of ``gamma_omega``. Default False.
+    three_photon_alpha_3 : float or callable, optional
+        Three-photon absorption coefficient α₃ (engine units ``α₃/A_eff²``, or
+        physical m³/W² with ``Fiber(a_eff=...)``).
     """
 
     def __init__(
@@ -3531,6 +3732,9 @@ class TaperedGNLSESolver:
         betas_unit: BetasUnit = "ps^k/m",
         tau_shock: float | None = None,
         raman_response=None,
+        gamma_omega: NDArray | Callable[[NDArray], NDArray] | None = None,
+        gamma_omega_naive: bool = False,
+        three_photon_alpha_3: float | Callable[[NDArray], NDArray] | None = None,
     ):
         self.pulse = pulse
         self.fiber = fiber
@@ -3563,6 +3767,9 @@ class TaperedGNLSESolver:
                 f"tau_shock must be positive (seconds, SI), got {tau_shock!r}"
             )
         self.tau_shock = float(tau_shock) if tau_shock is not None else None
+        self.gamma_omega = gamma_omega
+        self.gamma_omega_naive = gamma_omega_naive
+        self.three_photon_alpha_3 = three_photon_alpha_3
         self._engine: SplitStepEngine | None = None
         self._evolution: list[Wave] = []
         self._z_positions: NDArray | None = None
@@ -3637,6 +3844,9 @@ class TaperedGNLSESolver:
             tau_shock=self.tau_shock,
             step_size=self.step_size,
             raman_response=self.raman_response,
+            gamma_omega=self.gamma_omega,
+            gamma_omega_naive=self.gamma_omega_naive,
+            three_photon_alpha_3=self.three_photon_alpha_3,
         )
         self._engine.propagate(
             num_steps,

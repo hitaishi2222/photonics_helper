@@ -11,6 +11,10 @@ deck (835 nm, 15 cm PCF, 10 kW peak, Raman + self-steepening):
 * ``"rk4ip"`` — 4th order, Hult's Runge–Kutta in the interaction picture
   (no splitting; 8 FFTs per step)
 
+With ``gamma_omega``, ledger-grade runs are ETDRK4: the Strang nonlinear
+sub-step is an explicit midpoint (RK2) advance and carries ~2e-3 in the energy
+at production step counts (measured: 4 pJ / 20 mm / 4000 steps).
+
 At fine ``dz`` all four schemes converge to the same result (verified against
 laserfun's LSODA reference). At coarse ``dz`` **none** of them does: on the
 Dudley deck the default scheme comparison is under-resolved, so the

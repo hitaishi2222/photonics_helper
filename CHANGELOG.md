@@ -11,6 +11,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`Fiber(a_eff=Area(...))`: measured nonlinear coefficients, converted
+  once.** With `a_eff` set, `beta_tpa`, `sigma_tpa` (and the engine's
+  `three_photon_alpha_3`) are read as **physical** coefficients (`m/W`,
+  `m²/W`, `m³/W²`) and applied as `β/A_eff`, `σ/A_eff`, `α₃/A_eff²`; the
+  engine's `|A|²` is in watts, so a bare measured coefficient used to be weak
+  by `A_eff` (or `A_eff²`) and read as "negligible". With `a_eff=None`
+  (default) the numbers are used exactly as before, bit-identically: those are
+  engine-normalised coefficients. Deliberately separate from the existing
+  `A_eff`, which only feeds the `n₂` → γ derivation. `Fiber.beta_tpa_engine` /
+  `Fiber.sigma_tpa_engine` expose the resolved values. Tests:
+  `tests/test_gnlse_tpa_units.py`.
+- **`GNLSESolver` and `TaperedGNLSESolver` accept `gamma_omega`,
+  `gamma_omega_naive` and `three_photon_alpha_3`.** Gaps J/K landed those on
+  `SplitStepEngine` only, so the documented wrapper path could not reach the
+  dispersive-γ model or the 3PA term. Bit-identical to the engine on the same
+  deck. Test: `tests/test_gnlse_tpa_units.py`.
+- **`SplitStepEngine.photon_number(A=None)`.** Public Blow & Wood (1989)
+  Eq. (A5) invariant for the per-run `Q_in` / `Q_out` a validation gate needs
+  (`A=None` uses the current field); `_photon_number` stays the
+  implementation.
+- **`UserWarning` on the ETDRK4 z-dependent-hook trap.** `scheme="etdrk4"`
+  evaluates `gamma_fn` / `alpha_fn` / `a_eff_fn` once per step, so a hook that
+  varies in z silently costs the scheme its fourth order. It now warns (the
+  hooks stay allowed, a static callable being legitimate); the order is
+  regression-tested at ≥ 3.5 for a static hook.
+
+### Fixed
+
+- **`include_tpa=True` was a silent no-op for `fiber.beta_tpa`**
+  (correctness fix, not a behaviour change for existing numbers):
+  `tpa_step` consumes `sigma_tpa` only, while `beta_tpa` is carried by
+  `include_free_carriers`. `include_tpa=True` with `beta_tpa > 0` and
+  `sigma_tpa == 0` now warns and names `include_free_carriers=True` instead of
+  propagating with no absorption at all. Also, the `omega0 <= 0` demand in
+  `tpa_step` moved after the `sigma_tpa <= 0` early return, so an inactive TPA
+  call no longer demands a carrier frequency. `include_tpa` docstring, the
+  GNLSE physics page and a new units table say which flag applies which
+  coefficient and in whose units.
+
+
 - **OAM measurement in `mode_analysis`.** `azimuthal_spectrum`,
   `spin_azimuthal_spectrum`, `azimuthal_purity` and `azimuthal_charge`
   (the spin-resolved `(σ, ℓ)` spectrum and the phase-winding number). The

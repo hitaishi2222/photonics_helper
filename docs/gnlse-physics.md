@@ -96,6 +96,23 @@ per step). SplitStepEngine additionally offers
 
 each integrated exactly per sample within a step. The legacy
 `include_tpa` path is untouched; both models are documented side by side.
+
+**Which flag applies which coefficient, and in whose units.** The engine takes
+`|A|²` in watts, so the absorption coefficients it acts on are *normalised*:
+`β_TPA/A_eff`, `σ/A_eff`, `α₃/A_eff²`. Pass a measured (physical) coefficient
+together with `Fiber(a_eff=Area(...))` and the conversion is internal; without
+`a_eff` the numbers are used exactly as given (engine-normalised).
+
+| Coefficient | Physical unit | Applied by | Engine symbol |
+|---|---|---|---|
+| `beta_tpa` | m/W | `include_free_carriers=True` (**not** `include_tpa`) | `β_TPA/A_eff` |
+| `sigma_tpa` | m²/W | `include_tpa=True` | `σ/A_eff` |
+| `sigma_fca` | m² | `include_free_carriers=True` | `σ_FCA` (no area) |
+| `three_photon_alpha_3` | m³/W² | `three_photon_alpha_3=` (any scheme) | `α₃/A_eff²` |
+
+`include_tpa=True` with `beta_tpa > 0` and `sigma_tpa == 0` warns: that flag
+carries no β_TPA, so it used to be a silent no-op (GAP §17).
+
 Out of scope by design: free-carrier **refraction** (the `μ` index term),
 carrier diffusion and drift, all listed as follow-ups.
 
