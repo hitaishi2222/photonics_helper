@@ -6,6 +6,7 @@ multiple Raman-active phonon modes into a unified response function.
 
 from __future__ import annotations
 
+import warnings
 from typing import Literal
 
 import matplotlib.pyplot as plt
@@ -121,10 +122,21 @@ class PhononResponse:
         List of phonon modes.
     fR : float
         Total Raman fraction. If None, computed as sum of relative strengths.
+    integral_error : float
+        Relative deviation of the true (continuous) integral of the most
+        recent :meth:`h_R` call from 1. Zero when the closed-form
+        normalization was used (Voigt modes); for pure Lorentzian modes the
+        legacy supplied-grid normalization is retained bit-for-bit, and this
+        is ``|grid_integral/analytic_integral - 1|`` — a :class:`UserWarning`
+        is emitted when it exceeds 1e-5.
     """
 
     modes: list[PhononMode]
     fR: float | None = None
+    # Relative deviation of the true (continuous) integral of the last h_R
+    # call from 1. Zero when the closed-form normalization was used; nonzero
+    # only for the legacy supplied-grid normalization of pure Lorentzians.
+    integral_error: float = 0.0
 
     def __post_init__(self):
         # fR is the Raman fraction, NOT the sum of mode strengths.  Relative
@@ -210,6 +222,7 @@ class PhononResponse:
         t = np.asarray(t, dtype=float)
         result = np.zeros_like(t, dtype=float)
         if not self.modes:
+            self.integral_error = 0.0
             return result
 
         mask = t >= 0
@@ -252,6 +265,27 @@ class PhononResponse:
             if has_voigt
             else (grid_integral if grid_integral > 0.0 else normalizer)
         )
+        if has_voigt or normalizer <= 0.0:
+            # Closed-form normalization: the returned function has unit
+            # continuous area by construction, independent of the grid.
+            self.integral_error = 0.0
+        else:
+            # Legacy grid normalization: the continuous integral of the
+            # returned function is normalizer/grid_integral, not exactly 1
+            # (trapezoid discretisation, Euler–Maclaurin: the residual grows
+            # ~ dt^2). Expose it and warn when the grid is too coarse.
+            self.integral_error = abs(grid_integral / normalizer - 1.0)
+            if self.integral_error > 1e-5:
+                warnings.warn(
+                    "PhononResponse.h_R normalised on the supplied grid: the "
+                    f"true integral of the returned response deviates from 1 "
+                    f"by {self.integral_error:.3e} (grid integral "
+                    f"{grid_integral:.6e} vs closed-form {normalizer:.6e}). "
+                    "Use a finer time grid, or set fwhm_gauss_cm for a "
+                    "grid-independent closed-form normalisation.",
+                    UserWarning,
+                    stacklevel=2,
+                )
         if scale > 0.0:
             total /= scale
         result[mask] = total
