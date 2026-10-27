@@ -4,7 +4,7 @@ quadrant: reference
 
 # NLSE_dudley (photonics_helper)
 
-`examples/21_gnlse_nlse_dudley.py` (288 lines)
+`examples/21_gnlse_nlse_dudley.py` (291 lines)
 
 ## What it produces
 
@@ -30,16 +30,18 @@ Self-steepening (shock term) is enabled to match laserfun's ``NLSE`` default
 same self-steepening setting; a mismatch (one on, one off) produces 10s of dB
 of spectral difference and dominates any solver-level comparison.
 
-Step count is chosen automatically from adaptive dispersion / nonlinear length
-limits (no fixed floor). Only ``nsaves`` field snapshots are kept for plotting
-(laserfun Dudley uses 200), while the integrator may take tens of thousands of
-internal steps for accuracy. Propagation may take several minutes; plotting RAM
-is ~``nsaves × N × 16`` bytes for stored fields.
+Step count is chosen from the adaptive dispersion / nonlinear length limits
+(no fixed floor), divided by ``--safety-factor`` (default 8 → ≈3.2k steps).
+This deck is shock-limited, not dispersion-limited: at the coarse default the
+spectrum sits ≈8 dB RMS away from converged, at 3.2k steps it agrees with
+laserfun to ≈2 dB (peak 944 nm vs 943.6 nm). Only ``nsaves`` field snapshots
+are kept for plotting (laserfun Dudley uses 200). Propagation takes ≈30 s;
+plotting RAM is ~``nsaves × N × 16`` bytes for stored fields.
 
 Usage::
 
     python examples/21_gnlse_nlse_dudley.py
-    python examples/21_gnlse_nlse_dudley.py --safety-factor 4   # even finer steps
+    python examples/21_gnlse_nlse_dudley.py --safety-factor 16  # even finer steps
     python examples/21_gnlse_nlse_dudley.py --no-progress       # plain text only
 """
 
@@ -180,10 +182,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--safety-factor",
         type=float,
-        default=2.0,
+        default=8.0,
         metavar="F",
-        help="Step-density multiplier passed to estimate_num_steps (default: 2.0; "
-        "larger → more steps, higher accuracy, longer runtime).",
+        help="Step-density multiplier passed to estimate_num_steps (default: 8.0 "
+        "→ ≈3.2k steps, the converged ladder; larger → more steps, higher "
+        "accuracy, longer runtime).",
     )
     parser.add_argument(
         "--num-steps",
