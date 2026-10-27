@@ -39,6 +39,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`gnlse_spectrogram` and the SCG-dashboard hover labels used the wrong
+  transform sign.** Both called a raw `np.fft.fft` (`e^{−iΩt}`) on a centred
+  field after the 2026-09 `TemporalGrid` convention swap (ISSUES.md #0), which
+  registers a complex field at `−Ω`: the spectrogram was **mirrored in
+  wavelength** (a 1616 nm soliton peak appeared at 1489 nm) and every
+  `plotly` hover cell was labelled with the mirror-image band (a 1140 nm Raman
+  soliton read as a blue dispersive wave). Both now use the engine's paired
+  transform (`grid.fft` / `grid.ifft`, `e^{+iΩt}`), matching
+  `reproductions/dudley_2006_scg/common.py`, which already carried the fix.
+  `gnlse_spectrogram`'s docstring now states the kernel and the
+  `λ = 2πc/(ω₀+Ω)` map. Test:
+  `tests/test_gnlse_visualize.py::test_spectrogram_axis_matches_field_spectrum`
+  (a symmetric test field cannot see this, so the regression uses an offset
+  complex field and requires the trace peak to stay on the field's side).
+- **`propagate_auto` estimated its starting step count without the deck's own
+  operators.** It called `estimate_num_steps(...)` with default flags, so a
+  self-steepening deck started at `1/(1+Ω_max/ω₀)` of the steps the engine's
+  own adaptive cap allows (the shock factor is the stricter nonlinear-phase
+  limit). On the Dudley 835 nm/10 kW deck that meant 442 steps instead of 804,
+  and the under-resolved field's numerical spill tripped the edge detector:
+  `propagate_auto` then doubled `N` and `Tmax` three times (8192 → 65536,
+  12.5 → 100 ps, 8× the cost) and returned a spectrum 13.7 dB RMS away from
+  laserfun versus 7.6 dB for the plain 804-step run. It now passes
+  `include_self_steepening` / `include_raman` through.
 - **`include_tpa=True` was a silent no-op for `fiber.beta_tpa`**
   (correctness fix, not a behaviour change for existing numbers):
   `tpa_step` consumes `sigma_tpa` only, while `beta_tpa` is carried by

@@ -140,6 +140,41 @@ def test_spectrogram_peaks_at_zero_delay_for_initial_pulse(solver):
     assert abs(delays[i]) < 0.5
 
 
+def test_spectrogram_axis_matches_field_spectrum():
+    """The trace's λ axis must be the engine's, not its mirror.
+
+    A complex field whose spectrum (``grid.fft``) peaks on the red side must
+    peak on the red side of the spectrogram too. Regression for the raw
+    ``np.fft`` (e^{−iΩt}) kernel, which registered a field at −Ω and mirrored
+    the whole trace in λ (ISSUES.md #0); a symmetric (real) test field cannot
+    see it.
+    """
+    from photonics_helper.gnlse import gnlse_spectrogram
+
+    grid = TemporalGrid(N=8192, Tmax=Time(20e-12, "s"))
+    env = Envelope.from_fwhm("sech", peak_amplitude=np.sqrt(100.0), fwhm=Time(1e-12, "s"))
+    pulse = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(1550.0, "nm"))
+    fiber = Fiber.from_gamma(gamma=1e-6, length=Length(1e-5, "m"))
+    solver = GNLSESolver(pulse, fiber, betas=np.array([-20.0]), include_raman=False)
+    solver.propagate(num_steps=2, nsaves=2)
+
+    for omega_env in (+30e12, -30e12):
+        field = (1.0 / np.cosh(grid.t / 2e-13)) * np.exp(1j * omega_env * grid.t)
+        solver._evolution[-1]._pulse_train_field = field
+        spectrum = np.abs(grid.fft(field)) ** 2
+        wl_field = (
+            2 * np.pi * 299792458.0
+            / (pulse.central_frequency + grid.w[int(np.argmax(spectrum))])
+            * 1e9
+        )
+        delays, wl, trace = gnlse_spectrogram(
+            solver, n_delays=9, wl_bounds=(1100.0, 2200.0), n_wavelength=2201
+        )
+        wl_spec = float(wl[np.unravel_index(np.argmax(trace), trace.shape)[1]])
+        assert (wl_spec > 1550.0) == (wl_field > 1550.0), (omega_env, wl_field, wl_spec)
+        assert wl_spec == pytest.approx(wl_field, abs=10.0)
+
+
 def test_spectrogram_gate_shape_validation(solver):
     """A gate of the wrong length raises a clear error."""
     from photonics_helper.gnlse import gnlse_spectrogram

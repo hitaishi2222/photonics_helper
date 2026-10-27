@@ -3474,8 +3474,16 @@ class GNLSESolver:
             if start_steps is not None
             else max(
                 10,
+                # Must use THIS deck's operator set: the self-steepening
+                # factor is the stricter nonlinear-phase limit, so skipping
+                # it starts the run at half the steps the engine's own
+                # adaptive cap allows (and half the printed estimate).
                 type(self).estimate_num_steps(
-                    self.pulse, self.fiber, np.asarray(self.betas)
+                    self.pulse,
+                    self.fiber,
+                    np.asarray(self.betas),
+                    include_self_steepening=self.include_self_steepening,
+                    include_raman=self.include_raman,
                 ),
             )
         )
@@ -4488,14 +4496,25 @@ def _field_feature_labels(
     n_z = len(snapshots)
     n_t = np.asarray(snapshots[0], dtype=complex).shape[0]
     labels: NDArray[np.object_] = np.empty((n_z, n_t), dtype=object)
+
+    # Paired transform pair of ``TemporalGrid.fft`` / ``.ifft`` (e^{+iΩt}
+    # analysis, no ``dt`` scaling): the band masks are built on
+    # ``ω₀ + grid.w``, so a raw np.fft (e^{−iΩt}) would mirror the spectrum
+    # and mislabel every cell (ISSUES.md #0).
+    def _analysis(x: NDArray) -> NDArray:
+        return np.conj(np.fft.fftshift(np.fft.fft(np.conj(np.fft.ifftshift(x)))))
+
+    def _synthesis(x_w: NDArray) -> NDArray:
+        return np.conj(np.fft.fftshift(np.fft.ifft(np.conj(np.fft.ifftshift(x_w)))))
+
     for iz, snapshot in enumerate(snapshots):
-        spectrum = np.fft.fftshift(np.fft.fft(np.asarray(snapshot, dtype=complex)))
+        spectrum = _analysis(np.asarray(snapshot, dtype=complex))
         best = np.full(n_t, -np.inf)
         best_band = np.zeros(n_t, dtype=int)
         for b, mask in enumerate(band_masks):
             if not mask.any():
                 continue
-            profile = np.abs(np.fft.ifft(np.fft.ifftshift(spectrum * mask))) ** 2
+            profile = np.abs(_synthesis(spectrum * mask)) ** 2
             update = profile > best
             best[update] = profile[update]
             best_band[update] = b
@@ -5002,7 +5021,7 @@ def gnlse_spectrogram(
 
     Computes
 
-    ``Σ(Ω, τ) = |∫ E(t) g(t − τ) e^{−iΩt} dt|²``
+    ``Σ(Ω, τ) = |∫ E(t) g(t − τ) e^{+iΩt} dt|²``
 
     with the complex envelope ``E(t)`` taken from the last stored field (or
     ``snapshot``) and a real gate ``g`` (by default the input pulse envelope,
@@ -5010,6 +5029,14 @@ def gnlse_spectrogram(
     is the cross-correlation FROG trace, not a conventional STFT: the gate is
     the actual pulse rather than a fixed window, and the trace preserves the
     relative phase information of the pulse.
+
+    The kernel is the engine's paired analysis transform
+    (:meth:`~photonics_helper.pulse.TemporalGrid.fft`), so ``Ω`` is the same
+    offset as ``grid.w`` and the trace maps to
+    ``λ = 2πc/(ω₀ + Ω)``: a Raman red shift appears on the long-wavelength
+    side, as in the paper. (Dudley's Eq. 4 writes the conjugate exponential
+    because it factors the carrier as ``e^{+iω₀t}``; a raw ``np.fft`` here
+    registers a complex field at ``−Ω`` and mirrors the trace in ``λ``.)
 
     Parameters
     ----------
@@ -5068,7 +5095,10 @@ def gnlse_spectrogram(
     trace: NDArray[np.float64] = np.empty((n_delays, t.size), dtype=float)
     for i, tau in enumerate(delays):
         gated = field * np.interp(t - tau, t, gate)
-        trace[i] = np.abs(np.fft.fftshift(np.fft.fft(gated))) ** 2
+        # Paired analysis transform (``grid.fft``, e^{+iΩt}): a raw np.fft
+        # (e^{−iΩt}) registers a complex field at −Ω and mirrors the trace in
+        # λ (ISSUES.md #0; cf. reproductions/dudley_2006_scg/common.py).
+        trace[i] = np.abs(grid.fft(gated)) ** 2
 
     wl_native = 2 * np.pi * C_MS / (solver.omega0 + omega) * 1e9
     order = np.argsort(wl_native)
