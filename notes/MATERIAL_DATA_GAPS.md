@@ -38,7 +38,7 @@ entry, yet it is not solid data either:
 
 | Field | Stored | What the source actually supports |
 |---|---|---|
-| `fR` | 0.4615 | the published Kramers-Kronig value; the same inversion run with Peng 2017's measured gain and Wang 2014's measured n2 gives **0.170**, so the working bracket is **0.17–0.46** (a factor 2.7). `DATABASE.md` §1b makes this explicit and tells users to pass `PhononResponse(PHONON_MATERIALS["GeSbSe"], fR=0.17)`; `PhononResponse.from_material` builds from the mode list alone and leaves fR `None`, so the stored 0.4615 enters only through the `RamanSpec`/`raman_specs` path |
+| `fR` | 0.4615 | the published Kramers-Kronig value from the measured Raman spectrum — the one fR number for this glass that a source actually states. A bracket of 0.17–0.46 used to be advertised here from inverting `fR = g_R·Γ_R/(Ω_R·γ)`; that 0.170 is **withdrawn**, because the relation does not reproduce silica (0.049 against a known 0.18) and the two conventions at stake move the answer by exactly the factor 2.7 that separates the two ends. 0.4615 stands, with an unquantified uncertainty |
 | `n2` | 8.7e-18 | z-scan of *neighbouring* Ge-Sb-Se compositions (Ge15Sb15Se70 / Ge15Sb10Se75), bracket 7.4–10.0e-18; the 2 µm number is an extrapolation |
 | `raman_shift_cm` / `raman_linewidth_cm` | 198.1 / 9.33 | only the dominant band of a 7-mode spectrum, so they are not a single-Lorentzian description (the `phonon_modes` list is) |
 
@@ -48,9 +48,10 @@ Express* **4**, 1011 (2014), [10.1364/OME.4.001011](https://doi.org/10.1364/OME.
 Peng et al., *Appl. Phys. B* **123**, 261 (2017),
 [10.1007/s00340-017-6832-6](https://doi.org/10.1007/s00340-017-6832-6).
 
-Nothing here is wrong; the point is that the bracket lives in free-text `references` and in
-`DATABASE.md`, not in a column, so a reader of `raman_specs` alone will read 0.4615 as fact.
-The same situation applies to any value in §2a below where a range is quoted.
+The lesson generalises: a column value is only as strong as its weakest sourced input, and a
+bracket recovered by an inversion is evidence only once the inversion has been validated
+against a case whose answer is known. That check is what 0.4615 passes and 0.170 failed.
+It also applies to any value in §2a below where a range is quoted.
 
 ---
 

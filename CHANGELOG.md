@@ -114,10 +114,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   three engine pages.
 - **GeSbSe (Ge₁₂.₅Sb₁₅Se₇₂.₅) material.** Sellmeier (Wu, Ding & Peng,
   *Appl. Sci.* 13, 12923 (2023), Table 2), a seven-mode Hollenbeck–Cantrell
-  phonon model, and a Raman spec with published `f_R = 0.4615` (bracket
-  0.17–0.46 recorded); `n₂` from Wang et al., *Opt. Mater. Express* 4, 1011
-  (2014). Golden/drift tests updated. Tests:
-  `tests/test_material_data_golden.py`, `tests/test_raman.py`.
+  phonon model, and a Raman spec with published `f_R = 0.4615`; `n₂` from
+  Wang et al., *Opt. Mater. Express* 4, 1011 (2014). Golden/drift tests
+  updated. Tests: `tests/test_material_data_golden.py`,
+  `tests/test_raman.py`. *(Later correction: the 0.17–0.46 bracket recorded
+  here was withdrawn — the inversion behind it is convention-sensitive and
+  unreproduced, see `DATABASE.md` §1b.)*
 - **Documented PEP 810 (Python 3.15) lazy-import path.** `docs/install.md` now
   covers `lazy from photonics_helper import …` and the process-wide
   `-X lazy_imports=all` / `sys.set_lazy_imports("all")` opt-ins, which defer the

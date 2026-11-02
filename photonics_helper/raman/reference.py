@@ -428,9 +428,10 @@ RAMAN_MATERIALS: dict[str, dict] = {
         "n2": 8.7e-18,
         "raman_shift_cm": 198.1,
         "raman_linewidth_cm": 9.33,
-        # Published KK value. The same inversion run with Peng 2017's gain and
-        # Wang 2014's n2 gives 0.170, so the working bracket is 0.17-0.46; use
-        # phonon_response(fR=...) to select a bracket case.
+        # Published Kramers-Kronig value (Wu 2023). An earlier inversion from
+        # Peng 2017's gain and Wang 2014's n2 gave 0.170, but that inversion is
+        # convention-sensitive and was never reproduced: the relation it used
+        # yields 0.049 for silica, whose fR is 0.18. Do not use the 0.170.
         "fR": 0.4615,
         "gain_coeff": 2.9e-11,
         "lo_phonon_cm": None,
@@ -439,8 +440,7 @@ RAMAN_MATERIALS: dict[str, dict] = {
             "Sellmeier + 7-mode Raman + fR: Wu, Ding & Peng, Appl. Sci. 13, 12923 "
             "(2023) doi:10.3390/app132312923. n2/Eg/beta_TPA: Wang et al., Opt. "
             "Mater. Express 4, 1011 (2014) doi:10.1364/OME.4.001011. Raman gain "
-            "cross-check: Peng et al., Appl. Phys. B 123, 261 (2017). "
-            "fR bracket 0.17-0.46 (published 0.4615; gain+n2 inversion 0.170)."
+            "cross-check: Peng et al., Appl. Phys. B 123, 261 (2017)."
         ),
     },
 }
