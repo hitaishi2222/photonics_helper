@@ -404,3 +404,88 @@ closed, and what is not a library task. Openspec change:
 `tests/test_vector_modes.py`, `tests/test_mode_projection.py`,
 `tests/test_oam_power.py`, `tests/test_mode_azimuthal.py`, and the new
 beat-length cases in `tests/test_phase_matching.py`.
+
+---
+
+## 10. External gap audit, 2026-11-05 (`sim/multimode_scg/GAPS.md`, `solve/naskar/GAPS.md`)
+
+Two reproduction projects filed gap ledgers against this library. Both name the
+same commit (`d08ca6b`), which is still `HEAD`, so every line-number claim could
+be checked directly rather than taken on trust. What survived the check is
+section 10.1–10.3; what did not is 10.4. Everything else in those two files is
+project-side (their own scripts, decks, wrappers) and stays there.
+
+Openspec changes: `close-gnlse-correctness-gaps` (10.1),
+`close-gnlse-capability-gaps` (10.2), `close-gnlse-ergonomics-gaps` (10.3).
+
+### 10.1 Correctness — wrong numbers if you run it (`A`)
+
+| Gap | Claim, checked against `d08ca6b` | Verdict |
+| --- | --- | --- |
+| **A1** retarded frame missing in the z-dependent linear step | `gnlse.py:1604-1610` builds `φ = [β(ω,z) − β(ω₀,z)]·dz` with no `β₁(ω₀,z)·Ω` term; the static path (`_full_beta_phase`, `gnlse.py:174-185`) subtracts it. For a 3 mm device `β₁L ≈ 29 ps`, most of a 32 ps window | **Genuine, P1.** One missing term; the two paths must agree |
+| **A2** shock symbol `1 + Ω·τ` can go negative with a `tau_shock` override | `gnlse.py:1512-1531` tests only `Ω_max < ω₀` (correct only for `τ = 1/ω₀`); the kernel is `1j·γ·τ·Ω` (`gnlse.py:1847`), so the guard must be on `min(1 + Ω·τ) > 0` | **Genuine, P1 — but not as proposed.** A hard raise would reject the documented Dudley reference case: `tests/test_gnlse_unitarity.py::_walker` uses `τ = 0.56 fs` on an 8192/14 ps grid (`τ·Ω_max = 1.03`), i.e. its innermost red bin is already negative, and `test_guard_accepts_grid_within_omega0` asserts that this is used unclamped, with no clip/alias warning. Landing: report the count of negative bins and what it means (sign-flipped shock weight), never silently. Flipping that to an error is the author's call, not the report's |
+| **A3** `interpolated_spectrum_db` has no Jacobian | `gnlse.py:3661-3668`: `S_ν` is interpolated onto the λ axis and `10log10`-ed with no `|dω/dλ|`. The offset reaches `10log10((9/2)²) ≈ 13 dB` at 9 µm | **Genuine, P1.** Add the numeraire as an explicit argument; per-λ density is the honest default |
+| **A4** `D` from `n_eff` reports no σ and disables its own tripwire | `fiber.py:126-134` has the one-sided `np.all(np.diff(D*1e6) < 50)` guard and no uncertainty; `WaveguideMode.to_dispersion` defaults `ignore_fit_error=True` (`fiber.py:555`) | **Genuine, P2, narrower than claimed.** `Dispersion.from_neff` already defaults `ignore_fit_error=False`; only the `WaveguideMode` bridge flips it. Add `σ_D` and flip the bridge default |
+| **A5** `ZDependentDispersion` returns NaN outside its table and the engine silently clips | `fiber.py:700-712` (`fill_value=np.nan`); `gnlse.py:1585-1603` replaces out-of-range frequencies with the nearest edge and warns. The NaN contract is deliberate and load-bearing (`phase_matching.py:246-261`, `get_betas_at_z` at `fiber.py:758` masks on it) | **Genuine, P2.** Fix at the engine, not in `fn`: raise by default with the clipped fraction in the message, `clip=True` to opt into the old behaviour |
+
+### 10.2 Capability — cannot be expressed at all (`B`)
+
+| Gap | Claim, checked against `d08ca6b` | Verdict |
+| --- | --- | --- |
+| **B1** no one-photon-per-mode seed, although the docs advertise one | `noise.py` exposes six callables (`complex_gaussian_noise`, `add_noise`, `ase_noise_field`, `add_ase_noise`, `raman_noise_field`, `coherence_g12`), none with `|q_n|² = ħω_n/Δν`; `docs/api/noise.md:7` promises "Quantised shot-noise / one-photon-per-mode initial conditions" | **Genuine, P1. Landed.** `opm_noise_field` / `add_opm_noise` (`|q_n|² = ħω_n/Δν`, full `ħω` per mode, DC zeroed, seedable); `docs/api/noise.md` now names it and distinguishes it from the `ħω/2` `raman_noise_field`. Tests: `tests/test_noise_opm.py` |
+| **B2** `gamma_omega` cannot be combined with self-steepening | `gnlse.py:1265-1272` raises `NotImplementedError` by name | **Genuine, P2. Landed.** The shock factor joined the outer `√γ` of the symmetrised operator (and the naive form); constant `γ(Ω)` reduces to the scalar shock remainder to 1e-16; `conserving_shock` + `gamma_omega` now raises instead of dropping the pcGNLSE arms. Tests: `tests/test_gnlse_gamma_omega_shock.py` |
+| **B3** no `AsSe2` row and no way to say "extrapolate, and tell me" | `core/materials.py:193` has no `AsSe2`; `materials.py:280-283` raises `Index valid only between … and 7.0 μm` for `MgF2` at 9 µm | **Genuine, P2 (API) / data-blocked (row). Landed (API only).** `extrapolate="raise"|"warn"|"allow"` on `n_func`/`k_func`/`nk_func`/`dn_dlambda`/`group_index` plus `valid_range_um` on `RefractiveIndex`, `Material` and the `OpticalMaterial` protocol; strict stays the default. Tests: `tests/test_materials_extrapolation.py`. The `AsSe2` row remains absent: no primary index source exists, so it is a **data gap** (a fitted row would be calibration, not data), and the lookup error now says so |
+
+> **Landed**: B1, B2 and B3 in `360f7ee`; the three suites above are the
+> regression gates. B3's data half is closed as an absence, not filled.
+
+### 10.3 Ergonomics (`C`)
+
+| Gap | Claim, checked against `d08ca6b` | Verdict |
+| --- | --- | --- |
+| **C1** no −N dB span / octave metric | `octave` appears only in comments (`gnlse.py:954`, `multimode_gnlse.py:356`) | **Genuine, P2.** One callable, numeraire and interpolation rule stated in the return |
+| **C2** no z-table builder from per-section `n_eff(λ)` | no `from_sections` anywhere | **Genuine, P2.** Blocked ergonomics for tapers, not physics |
+| **C3** taper solver's inert `betas_unit` and missing `verify_convergence` | `gnlse.py:3786-3790` documents "does not rescale any coefficient array here"; `:3838-3846` warns the same; only `GNLSESolver.verify_convergence` (`:3267`) exists | **Genuine, P3.** Internal consistency |
+| **C4** `Fiber(include_raman=True)` fails at engine build, not construction | raised at `gnlse.py:752-755` (standalone) and `:1805-1809` (nonlinear step) — one layer away from the object missing the data | **Genuine, P3.** Validate in `Fiber.__post_init__` |
+| **C5** chalcogenide Raman rows are rounded single-Lorentzian | `raman/reference.py:71-83`: `As2Se3` is `fR = 0.55`, one line 310/60 cm⁻¹; `RamanResponse` already implements the bimodal form | **Data-blocked.** The paper's `(0.148, 23 fs, 164.5 fs)` is one citing paper's value for a *different* composition, not a catalogue measurement. Carry it as a named `RamanSpec`, do not overwrite `As2Se3` |
+
+### 10.4 From `sim/multimode_scg/GAPS.md` that is library work
+
+| Item | Claim, checked against `d08ca6b` | Verdict |
+| --- | --- | --- |
+| §3 item 16 | the conservation guard decides "lossless" from `_get_alpha` + `include_tpa` + 3PA only (`gnlse.py:2818-2822`), so an `alpha_w` or `β_TPA` run warns "with loss/TPA disabled" | **Genuine, P2.** Mis-reports its own cause; fix the test, not the wording |
+| §1b PR rec 2 | pointwise `β_TPA` attenuation lives only in `include_free_carriers` (+ carrier state), and ETDRK4 refuses both (`gnlse.py:2104-2121`) | **Genuine, P3.** A history-free `β|A|²A` term would let ledger-grade ETDRK4 runs carry 2PA |
+| §1b PR rec 1 | shock × `gamma_omega` | same item as **B2** |
+| shock-validity note | `τ·Ω_max > 1/3` degrades the derivation | already a `UserWarning` at `_SHOCK_TAYLOR_LIMIT = 0.2`; nothing to do |
+
+### 10.5 Claims in those files that are stale — do not re-report
+
+- **`sim/multimode_scg` §3 item 1** ("`photonics_helper`'s `As2S3` entry is placeholder
+  garbage", "`MgF2` stores pole wavelengths where `Bⱼ = λⱼ²` is expected"). Measured
+  now: `n(1.55) = 2.4373`, `n(As2Se3, 2 µm) = 2.8082`, `n(MgF2, 2 µm) = 1.3678`,
+  `As2S3` window 0.6–11.0 µm. The row is correct. `solve/naskar` §2 already
+  withdraws the same claim; item 1 in the neighbouring file was never retracted.
+- **`sim/multimode_scg` §4 item 12** ("no upstream gap is open against us").
+  Was true for that project's *wrappers* on 2026-11-02; superseded by this audit.
+- **`solve/naskar` A4** ("defaults to disabling its own noise tripwire"). True of
+  `WaveguideMode.to_dispersion` only; `Dispersion.from_neff` defaults to raising.
+- **`solve/naskar` §2** already records two earlier self-corrections
+  (`materials.db` not broken; `WaveguideMode` *is* the external-solver bridge) —
+  both confirmed here.
+
+### 10.6 Not library tasks
+
+`run_uppe` hardcoding `include_tpa=False`, `band_metrics` clipping, the deck
+builders, the digitisation scripts, `S30`'s resolution dependence, the missing
+`f_R`/`α₃(λ)`/GeSbS index data and the graded-stack hybrid are project or data
+items in `multimode_scg` / `naskar`. No library change addresses them, and
+inventing a Sellmeier or an `f_R` to make a device run would be calibration
+dressed as validation.
+
+### 10.7 Regression suite
+
+`tests/test_tapered_gnlse_engine.py` (A1 frame),
+`tests/test_gnlse_unitarity.py` + `tests/test_gnlse_shock_energy.py` (A2 report),
+`tests/test_gnlse_spectral_numeraire.py` (A3), `tests/test_fiber.py` (A4 σ_D),
+`tests/test_z_dependent_dispersion.py` + `tests/test_gnlse_loss_spectrum.py`
+(A5, item 16), plus the new suites named by the three openspec changes.
