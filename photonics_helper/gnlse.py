@@ -1056,11 +1056,16 @@ class SplitStepEngine:
         (Hermitian per bin: ``√γ`` on both sides of the pointwise
         polarisation), which conserves ``∫|A|² dt`` exactly for a real Raman
         response. For a spectrally narrow field this reduces to the scalar
-        ``iγ(Ω)|A|²A``. The **naive** ``iγ(Ω)·F{P·A}`` form does not conserve
-        energy (~10 % drift on a 20 mm SCG deck, independent of ``dz``) and is reachable
-        only through ``gamma_omega_naive=True``, which warns. Combines with
-        ``full_beta``, Raman and ``alpha_fn``; ``include_self_steepening`` with
-        ``gamma_omega`` is refused (not implemented). ``gamma_fn`` / ``a_eff_fn``
+        ``iγ(Ω)|A|²A``. With ``include_self_steepening`` the shock factor
+        ``(1 + τ·Ω)`` joins the **outer** ``√γ`` (see
+        :meth:`~SplitStepEngine._gamma_omega_rhs`), so ``γ(Ω) = const``
+        reduces to the scalar-γ shock remainder. The **naive** ``iγ(Ω)·F{P·A}``
+        form does not conserve energy (~10 % drift on a 20 mm SCG deck,
+        independent of ``dz``) and is reachable only through
+        ``gamma_omega_naive=True``, which warns. Combines with ``full_beta``,
+        Raman, ``alpha_fn`` and ``include_self_steepening``;
+        ``conserving_shock=True`` is refused (the per-bin branch would drop
+        the pcGNLSE arms silently). ``gamma_fn`` / ``a_eff_fn``
         are **ignored** when ``gamma_omega`` is given (the per-bin operator takes
         precedence), and the engine warns rather than dropping them silently.
     gamma_omega_naive : bool
@@ -1261,13 +1266,12 @@ class SplitStepEngine:
         self.gamma_omega = gamma_omega
         self._gamma_omega: NDArray | None = None
         if gamma_omega is not None:
-            if include_self_steepening:
-                raise NotImplementedError(
-                    "gamma_omega= with include_self_steepening=True is not "
-                    "implemented: the shock operator (1 + (i/ω₀)∂t) needs the "
-                    "γ-weighted split form applied to its ∂_t source as well, "
-                    "and no test pins that composition. Run the shock deck "
-                    "with a scalar γ (omit gamma_omega=)."
+            if conserving_shock:
+                raise ValueError(
+                    "conserving_shock=True and gamma_omega= cannot be "
+                    "combined: the per-bin γ(Ω) branch is taken first in "
+                    "_nonlinear_rhs, so the pcGNLSE arms would be silently "
+                    "dropped. Choose one shock model."
                 )
             g_w = (
                 np.asarray(gamma_omega(self.grid.w), dtype=float)
@@ -2251,24 +2255,44 @@ class SplitStepEngine:
         ``iγ(Ω)|A|²A``. That is also what the project's reference subclass
         (``uppe_probe.py::GammaOmega``) does.
 
+        With ``include_self_steepening`` the shock factor ``(1 + τ·Ω)`` is
+        folded into the **outer** ``√γ`` weight, giving
+        ``N = i√γ(Ω)(1 + τ·Ω)·F{P_NL·F⁻¹[√γ(Ω)A]}``. That is the composition
+        the GNLS derivation asks for: the frequency dependence of the
+        nonlinearity weights the shock source too, instead of a scalar-γ source
+        being corrected afterwards. For constant γ it reduces to the scalar
+        remainder ``iγ·F{(1 + τΩ)F{P_NL·A}}`` to round-off (not bit-identically:
+        the composed form scales once inside the outer inverse transform). The
+        Hermiticity argument above is stated for the shock-free operator;
+        neither operator conserves the *unweighted* energy once the shock is on
+        — the conserved quantity is Blow & Wood's photon number.
+
         The single-sided ``iγ(Ω)·F{P_NL·A}`` form is *not* Hermitian (energy
         drifts by ~10 % on a 20 mm SCG deck, independent of ``dz``; the
         project measured 11 % on a 40 mm deck); it is reachable only through
-        ``gamma_omega_naive=True`` for comparison.
+        ``gamma_omega_naive=True`` for comparison, and takes the same shock
+        factor.
         """
         g_w = self._gamma_omega
         assert g_w is not None  # only called when the per-bin γ is set
+        shock = (
+            1.0 + float(self.tau_shock) * self.grid.w
+            if self.include_self_steepening
+            else None
+        )
         if self._gamma_omega_naive:
             P_naive = self._nl_intensity(intensity, h_R_fft)
+            weight = g_w if shock is None else g_w * shock
             return np.asarray(
-                1j * self.grid.ifft(g_w * self.grid.fft(P_naive * A)),
+                1j * self.grid.ifft(weight * self.grid.fft(P_naive * A)),
                 dtype=complex,
             )
         sq_g = np.sqrt(g_w)
         A_s = np.asarray(self.grid.ifft(sq_g * self.grid.fft(A)), dtype=complex)
         P_NL = self._nl_intensity(intensity, h_R_fft)
+        weight = sq_g if shock is None else sq_g * shock
         return np.asarray(
-            1j * self.grid.ifft(sq_g * self.grid.fft(P_NL * A_s)), dtype=complex
+            1j * self.grid.ifft(weight * self.grid.fft(P_NL * A_s)), dtype=complex
         )
 
     def _three_photon_step(self, A: NDArray, dz: float) -> NDArray:
@@ -3098,7 +3122,9 @@ class GNLSESolver:
     gamma_omega : array_like or callable, optional
         Per-bin nonlinear coefficient γ(Ω) (1/(W·m)), passed straight to
         :class:`SplitStepEngine` (see there for the symmetrised form). Default
-        ``None`` → scalar γ. There is no ``gamma_fn``/``a_eff_fn`` here; the
+        ``None`` → scalar γ. Composes with ``include_self_steepening`` (the
+        shock factor rides the outer ``√γ``); ``conserving_shock=True`` is
+        refused. There is no ``gamma_fn``/``a_eff_fn`` here; the
         engine would ignore them anyway when ``gamma_omega`` is set (it warns).
     gamma_omega_naive : bool
         Diagnostic-only non-Hermitian form of ``gamma_omega``. Default False

@@ -203,6 +203,50 @@ def validate_nk_dataset(entry: Any) -> list[str]:
     return errors
 
 
+#: Accepted extrapolation policies for scalar index lookups.
+_EXTRAPOLATION_POLICIES: tuple[str, ...] = ("raise", "warn", "allow")
+
+
+def _as_um(wavelength: Any) -> float:
+    """Numeric wavelength in μm, accepting ``Wavelength`` objects."""
+    return (
+        float(wavelength.as_um) if hasattr(wavelength, "as_um") else float(wavelength)
+    )
+
+
+def _check_extrapolation(
+    valid_range_um: tuple[float, float],
+    wavelength_um: float,
+    extrapolate: str,
+    name: str | None = None,
+) -> None:
+    """Apply the extrapolation policy to one wavelength lookup.
+
+    The message names the window (and ``name``, when the caller knows it) but
+    **not** the wavelength, so it is constant per object and Python's default
+    filter registry collapses a wavelength sweep into a single line; with
+    ``simplefilter("always")`` it fires per call.
+
+    ``stacklevel=4`` points the warning at the user's call: the frames are this
+    function, ``RefractiveIndex._validate_range`` (or ``Material._value``), the
+    public method, and the caller.
+    """
+    if extrapolate not in _EXTRAPOLATION_POLICIES:
+        raise ValueError(
+            f"extrapolate must be one of {_EXTRAPOLATION_POLICIES}, got {extrapolate!r}"
+        )
+    lo, hi = valid_range_um
+    if lo <= wavelength_um <= hi:
+        return
+    msg = f"Index valid only between {lo} μm and {hi} μm"
+    if name:
+        msg = f"{name}: {msg}"
+    if extrapolate == "raise":
+        raise ValueError(msg)
+    if extrapolate == "warn":
+        warnings.warn(msg, UserWarning, stacklevel=4)
+
+
 @dataclass(config={"arbitrary_types_allowed": True})
 class RefractiveIndex:
     """Wavelength-dependent complex refractive index (n + ik).
@@ -268,50 +312,57 @@ class RefractiveIndex:
         """Construct from a complex refractive index array."""
         return cls(n=np.real(nk), k=np.imag(nk), wl=wl)
 
-    def _validate_range(self, wavelength: float):
-        # Accept Wavelength objects by extracting the numeric value in μm
-        if hasattr(wavelength, "as_um"):
-            wavelength = wavelength.as_um
-        if not (self._wl_min <= wavelength <= self._wl_max):
-            raise ValueError(
-                f"Index valid only between {self._wl_min} μm and {self._wl_max} μm"
-            )
+    def _validate_range(self, wavelength: float, extrapolate: str = "raise") -> float:
+        """Apply the extrapolation policy; return the wavelength in μm."""
+        wl = _as_um(wavelength)
+        _check_extrapolation(self.valid_range_um, wl, extrapolate)
+        return wl
 
-    def n_func(self, wavelength: float) -> float:
-        """Interpolated real refractive index n at wavelength (μm)."""
-        if hasattr(wavelength, "as_um"):
-            wavelength = wavelength.as_um
-        self._validate_range(wavelength)
-        return float(self._n_spline(wavelength).item())
+    @property
+    def valid_range_um(self) -> tuple[float, float]:
+        """``(min, max)`` wavelengths of the underlying table, in μm.
 
-    def k_func(self, wavelength: float) -> float:
-        """Interpolated extinction coefficient k at wavelength (μm)."""
-        if hasattr(wavelength, "as_um"):
-            wavelength = wavelength.as_um
-        self._validate_range(wavelength)
-        return float(self._k_spline(wavelength).item())
+        Data, not a message: a caller that extrapolated (``extrapolate="allow"``)
+        can tag the value by comparing its wavelength against this window.
+        """
+        return (self._wl_min, self._wl_max)
 
-    def nk_func(self, wavelength: float) -> complex:
-        """Interpolated complex refractive index n+ik at wavelength (μm)."""
-        if hasattr(wavelength, "as_um"):
-            wavelength = wavelength.as_um
-        self._validate_range(wavelength)
-        return complex(
-            self._n_spline(wavelength).item(), self._k_spline(wavelength).item()
-        )
+    def n_func(self, wavelength: float, *, extrapolate: str = "raise") -> float:
+        """Interpolated real refractive index n at wavelength (μm).
 
-    def dn_dlambda(self, wavelength: float) -> float:
+        ``extrapolate`` sets what happens outside :attr:`valid_range_um`:
+        ``"raise"`` (default, a ``ValueError`` naming the window), ``"warn"``
+        (return the value, one ``UserWarning``) or ``"allow"`` (silent).
+        """
+        wl = self._validate_range(wavelength, extrapolate)
+        return float(self._n_spline(wl).item())
+
+    def k_func(self, wavelength: float, *, extrapolate: str = "raise") -> float:
+        """Interpolated extinction coefficient k at wavelength (μm).
+
+        See :meth:`n_func` for the ``extrapolate`` policy.
+        """
+        wl = self._validate_range(wavelength, extrapolate)
+        return float(self._k_spline(wl).item())
+
+    def nk_func(self, wavelength: float, *, extrapolate: str = "raise") -> complex:
+        """Interpolated complex refractive index n+ik at wavelength (μm).
+
+        See :meth:`n_func` for the ``extrapolate`` policy.
+        """
+        wl = self._validate_range(wavelength, extrapolate)
+        return complex(self._n_spline(wl).item(), self._k_spline(wl).item())
+
+    def dn_dlambda(self, wavelength: float, *, extrapolate: str = "raise") -> float:
         """Derivative dn/dλ at a scalar wavelength (μm). Returns value in μm⁻¹."""
-        if hasattr(wavelength, "as_um"):
-            wavelength = wavelength.as_um
-        self._validate_range(wavelength)
-        return float(self._dn_spline(wavelength).item())
+        wl = self._validate_range(wavelength, extrapolate)
+        return float(self._dn_spline(wl).item())
 
-    def group_index(self, wavelength: float) -> float:
+    def group_index(self, wavelength: float, *, extrapolate: str = "raise") -> float:
         """Group index n_g = n - λ·(dn/dλ) at a scalar wavelength (μm). Dimensionless."""
-        self._validate_range(wavelength)
-        n_val = self.n_func(wavelength)
-        return n_val - wavelength * self.dn_dlambda(wavelength)
+        wl = self._validate_range(wavelength, extrapolate)
+        n_val = float(self._n_spline(wl).item())
+        return n_val - wl * float(self._dn_spline(wl).item())
 
     def group_index_array(self) -> NDArray:
         """Group index n_g across the full wavelength grid. Dimensionless."""
@@ -320,13 +371,13 @@ class RefractiveIndex:
         dn_dl_arr = np.asarray(self._dn_spline(wl_um), dtype=float)
         return np.asarray(n_arr - wl_um * dn_dl_arr, dtype=float)
 
-    def group_velocity(self, wavelength: float) -> float:
+    def group_velocity(self, wavelength: float, *, extrapolate: str = "raise") -> float:
         """Group velocity v_g = c / n_g at a scalar wavelength (μm). Returns m/s.
 
         Warns if n_g approaches zero (division-by-zero guard).
         """
-        self._validate_range(wavelength)
-        n_g = self.group_index(wavelength)
+        wl = self._validate_range(wavelength, extrapolate)
+        n_g = self.group_index(wl, extrapolate="allow")
         if abs(n_g) < 1e-10:
             warnings.warn(
                 f"group_index ≈ 0 at {wavelength} μm — group_velocity will diverge",
@@ -594,6 +645,9 @@ class RefractiveIndex:
             hint = f" Did you mean: {', '.join(suggestions)}?" if suggestions else ""
             raise ValueError(
                 f"No Sellmeier data for {material!r} in materials.db.{hint} "
+                "The catalogue carries an entry only when a primary index "
+                "source exists; a composition with no such source is absent "
+                "rather than filled with an untraceable fit. "
                 "Available materials: RamanDatabase().list_materials(); a "
                 "specific tabulated dataset is loaded with the "
                 "'material-author' key (e.g. 'si-aspnes')."

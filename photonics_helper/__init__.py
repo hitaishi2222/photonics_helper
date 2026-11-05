@@ -108,8 +108,10 @@ if TYPE_CHECKING:  # pragma: no cover - static analyzers/IDEs only
     from .noise import (
         add_ase_noise,
         add_noise,
+        add_opm_noise,
         ase_noise_field,
         complex_gaussian_noise,
+        opm_noise_field,
     )
     from .phase_matching import (
         DispersionAdaptor,
@@ -264,6 +266,7 @@ __all__ = [
     "ZDependentDispersionAdaptor",
     "add_ase_noise",
     "add_noise",
+    "add_opm_noise",
     "akhmediev_breather",
     "app",
     "ase_noise_field",
@@ -302,6 +305,7 @@ __all__ = [
     "mi_gain_spectrum_extended",
     "mi_sideband_frequencies",
     "nonlinear_length",
+    "opm_noise_field",
     "overlap",
     "peregrine_soliton",
     "plot_2d",
@@ -477,8 +481,10 @@ _LAZY_MODULES: dict[str, str] = {
         for n in (
             "add_ase_noise",
             "add_noise",
+            "add_opm_noise",
             "ase_noise_field",
             "complex_gaussian_noise",
+            "opm_noise_field",
         )
     },
     # .phase_matching

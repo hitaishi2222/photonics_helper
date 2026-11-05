@@ -68,6 +68,11 @@ class CauchyGlass:
         return 0.0
 
     @property
+    def valid_range_um(self) -> tuple[float, float]:
+        """Validity window of the fit, in um."""
+        return (1.0, 2.0)
+
+    @property
     def wl(self) -> units.WavelengthArray:
         """Sampled wavelengths over which the arrays are tabulated."""
         return units.WavelengthArray(np.linspace(1.0, 2.0, 11), "um")

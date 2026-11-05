@@ -56,6 +56,10 @@ class CauchyGlass:
         return 0.0
 
     @property
+    def valid_range_um(self) -> tuple[float, float]:
+        return (1.0, 2.0)
+
+    @property
     def wl(self) -> units.WavelengthArray:
         return units.WavelengthArray(np.linspace(1.0, 2.0, 11), "um")
 

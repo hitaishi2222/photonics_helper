@@ -42,14 +42,17 @@ import numpy as np
 from numpy.typing import NDArray
 
 if TYPE_CHECKING:
+    from .base import Wavelength
     from .pulse import TemporalGrid, Wave
 
 __all__ = [
     "add_ase_noise",
     "add_noise",
+    "add_opm_noise",
     "ase_noise_field",
     "coherence_g12",
     "complex_gaussian_noise",
+    "opm_noise_field",
     "raman_noise_field",
 ]
 
@@ -209,6 +212,108 @@ def add_ase_noise(
         else float(wave.peak_power())
     )
     noise = ase_noise_field(wave.grid, ref, level_dB, rng=rng, seed=seed)
+    out = Wave(
+        grid=wave.grid,
+        envelope=wave.envelope,
+        central_wavelength=wave.central_wavelength,
+        refractive_index=wave.refractive_index,
+        repetition_rate=wave.repetition_rate,
+    )
+    out.with_field(field + noise)
+    return out
+
+
+def opm_noise_field(
+    grid: TemporalGrid,
+    central_wavelength: Wavelength,
+    *,
+    rng: np.random.Generator | None = None,
+    seed: int | None = None,
+) -> NDArray:
+    """One-photon-per-mode (OPM) broadband seed with a uniform random phase.
+
+    Builds a spectral field with one quantum per bin, ``|q_n|² = ℏω_n/Δν``
+    (``Δν = grid.dw/2π`` is the grid's Hz bin spacing, i.e. ``1/Tmax``), and a
+    phase uniform on ``[0, 2π)``, then returns the time-domain field with the
+    grid's (scaled) inverse FFT.  Because ``fft``/``ifft`` are a scaled pair,
+    the injected energy is ``∫|A|²dt = Σ_n |q_n|²·Δν = Σ_n ℏω_n`` over the
+    seeded bins — one photon per mode, as the name says.  Time-domain and DC
+    bins are not seeded: the DC bin (``grid.w`` is FFT-ordered, so index
+    ``N//2``) is zeroed exactly as :func:`ase_noise_field` does, so the field
+    carries no net pump.
+
+    **``ℏω`` is not ``ℏω/2``.**  This seed injects a full quantum per mode,
+    ``ℏω_n``.  :func:`raman_noise_field` (the per-step Raman Langevin source)
+    and the reference ``gnlse.m`` driver use the ``ℏω/2`` vacuum-fluctuation
+    convention instead.  The two differ by 3 dB in variance; pick the one that
+    matches the ensemble you are comparing against, and say which in the write-up.
+
+    The carrier is an explicit argument because ``ℏω_n`` needs the absolute
+    frequency ``ω_n = ω₀ + Ω_n`` while the grid carries only the offset ``Ω``.
+
+    Parameters
+    ----------
+    grid : TemporalGrid — defines ``N``, ``dw`` and the ``fft``/``ifft`` pair.
+    central_wavelength : Wavelength — carrier; sets ``ω₀``.  A ``Wavelength``
+        rather than a bare number because the repo mixes nm and µm.
+    rng, seed : optional generator / seed (at most one, as in the other
+        noise sources).
+
+    Returns
+    -------
+    ndarray — complex time-domain noise field, shape ``(grid.N,)``.
+
+    Raises
+    ------
+    ValueError — if any bin has ``ω₀ + Ω ≤ 0`` (a negative absolute frequency
+        has no photon number), or if both ``rng`` and ``seed`` are given.
+    TypeError — if ``central_wavelength`` is not a ``Wavelength`` (a bare number
+        carries no unit, and the repo mixes nm and µm).
+    """
+    from scipy.constants import hbar
+
+    if not hasattr(central_wavelength, "to_omega"):
+        raise TypeError(
+            "central_wavelength must be a Wavelength (e.g. "
+            "Wavelength(1550, 'nm')), got "
+            f"{type(central_wavelength).__name__}: a bare number carries no "
+            "unit, and this repo mixes nm and µm."
+        )
+    generator = _make_rng(rng, seed)
+    omega0 = float(central_wavelength.to_omega().as_rad_s)
+    omega = omega0 + np.asarray(grid.w, dtype=float)
+    if np.any(omega <= 0.0):
+        raise ValueError(
+            "OPM seed requires positive absolute frequency, but the grid "
+            f"reaches ω₀ + Ω = {float(omega.min()):.4e} rad/s for "
+            f"ω₀ = {omega0:.4e} rad/s and Ω_min = {float(grid.w.min()):.4e} "
+            "rad/s. A negative-frequency bin has no photon number: widen the "
+            "time window (smaller Ω_max) or use a lower carrier."
+        )
+    dnu = float(grid.dw) / (2.0 * np.pi)
+    amplitude = np.sqrt(hbar * omega / dnu)
+    phase = generator.uniform(0.0, 2.0 * np.pi, size=grid.N)
+    spec = amplitude * np.exp(1j * phase)
+    spec[grid.N // 2] = 0.0
+    return np.asarray(grid.ifft(spec), dtype=complex)
+
+
+def add_opm_noise(
+    wave: Wave,
+    *,
+    rng: np.random.Generator | None = None,
+    seed: int | None = None,
+) -> Wave:
+    """Return a copy of ``wave`` with a one-photon-per-mode seed added.
+
+    The carrier is taken from ``wave.central_wavelength``; see
+    :func:`opm_noise_field` for the ``ℏω`` per-mode convention.  The input
+    ``wave`` is not modified.
+    """
+    from .pulse import Wave
+
+    field = np.asarray(wave.envelope_field, dtype=complex)
+    noise = opm_noise_field(wave.grid, wave.central_wavelength, rng=rng, seed=seed)
     out = Wave(
         grid=wave.grid,
         envelope=wave.envelope,

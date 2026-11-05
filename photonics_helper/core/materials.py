@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING, Protocol, runtime_checkable
 from numpy.typing import NDArray
 
 from ..base import WavelengthArray
-from ..materials import RefractiveIndex
+from ..materials import RefractiveIndex, _as_um, _check_extrapolation
 
 if TYPE_CHECKING:
     from .data import MaterialsDatabase
@@ -45,6 +45,11 @@ class OpticalMaterial(Protocol):
     wl: WavelengthArray
     n: NDArray
     k: NDArray
+
+    @property
+    def valid_range_um(self) -> tuple[float, float]:
+        """``(min, max)`` wavelengths the data are valid over, in μm."""
+        ...
 
     def n_func(self, wavelength: float) -> float:
         """Refractive index n at ``wavelength`` (μm)."""
@@ -92,21 +97,51 @@ class Material:
         """Complex refractive index samples (n + ik)."""
         return self.index.nk
 
-    def n_func(self, wavelength: float) -> float:
-        """Refractive index n at ``wavelength`` (μm)."""
-        return self.index.n_func(wavelength)
+    @property
+    def valid_range_um(self) -> tuple[float, float]:
+        """``(min, max)`` wavelengths the data are valid over, in μm."""
+        return self.index.valid_range_um
 
-    def k_func(self, wavelength: float) -> float:
+    def _value(self, method: str, wavelength: float, extrapolate: str):
+        """Apply the policy with the material name, then read the index.
+
+        The policy is resolved here because only the wrapper knows ``name``,
+        and it is forwarded only to an index that implements it
+        (:class:`RefractiveIndex`): a duck-typed :class:`OpticalMaterial` need
+        only provide ``n_func(wavelength)``, as the protocol says.
+        """
+        wl = _as_um(wavelength)
+        _check_extrapolation(self.valid_range_um, wl, extrapolate, name=self.name)
+        fn = getattr(self.index, method)
+        if isinstance(self.index, RefractiveIndex):
+            return fn(wl, extrapolate="allow")
+        return fn(wl)
+
+    def n_func(self, wavelength: float, *, extrapolate: str = "raise") -> float:
+        """Refractive index n at ``wavelength`` (μm).
+
+        ``extrapolate`` is the policy outside :attr:`valid_range_um`:
+        ``"raise"`` (default), ``"warn"`` or ``"allow"``. The wrapper adds the
+        material name to the error/warning; the bare
+        :class:`~photonics_helper.materials.RefractiveIndex` cannot.
+        """
+        return self._value("n_func", wavelength, extrapolate)
+
+    def k_func(self, wavelength: float, *, extrapolate: str = "raise") -> float:
         """Extinction coefficient k at ``wavelength`` (μm)."""
-        return self.index.k_func(wavelength)
+        return self._value("k_func", wavelength, extrapolate)
 
-    def nk_func(self, wavelength: float) -> complex:
+    def nk_func(self, wavelength: float, *, extrapolate: str = "raise") -> complex:
         """Complex index n + ik at ``wavelength`` (μm)."""
-        return self.index.nk_func(wavelength)
+        return self._value("nk_func", wavelength, extrapolate)
 
-    def group_index(self, wavelength: float) -> float:
+    def group_index(self, wavelength: float, *, extrapolate: str = "raise") -> float:
         """Group index at ``wavelength`` (μm)."""
-        return self.index.group_index(wavelength)
+        return self._value("group_index", wavelength, extrapolate)
+
+    def group_velocity(self, wavelength: float, *, extrapolate: str = "raise") -> float:
+        """Group velocity (m/s) at ``wavelength`` (μm)."""
+        return self._value("group_velocity", wavelength, extrapolate)
 
 
 def _text(value: object) -> str | None:

@@ -616,13 +616,26 @@ def test_etdrk4_guard_names_only_the_features_it_cannot_carry():
     ok.propagate(10)
     assert np.all(np.isfinite(np.asarray(ok.A)))
 
-    # gamma_omega + shock is refused at construction (not silently dropped).
-    with pytest.raises(NotImplementedError, match="self_steepening"):
+    # gamma_omega + shock now composes (the frequency weight rides the outer
+    # √γ), so it constructs and propagates on ETDRK4 as well.
+    composed = SplitStepEngine(
+        pulse=pulse,
+        fiber=fiber,
+        betas=betas,
+        include_self_steepening=True,
+        gamma_omega=np.full(64, GAMMA),
+        scheme="etdrk4",
+        step_size=Length(1e-4, "m"),
+    )
+    composed.propagate(10)
+    assert np.all(np.isfinite(np.asarray(composed.A)))
+    # The third shock flavour is refused rather than silently dropped.
+    with pytest.raises(ValueError, match="conserving_shock"):
         SplitStepEngine(
             pulse=pulse,
             fiber=fiber,
             betas=betas,
-            include_self_steepening=True,
             gamma_omega=np.full(64, GAMMA),
+            conserving_shock=True,
             scheme="etdrk4",
         )

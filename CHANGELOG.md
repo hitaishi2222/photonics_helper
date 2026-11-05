@@ -11,6 +11,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **One-photon-per-mode seed: `opm_noise_field` / `add_opm_noise`.** A
+  broadband input seed with one quantum per frequency bin (`|q_n|² = ħω_n/Δν`,
+  `Δν = grid.dw/2π`) and a uniform random phase, in the module's existing
+  `grid.fft`/`grid.ifft` convention with the DC bin zeroed; reproducible under
+  `rng`/`seed`. The carrier is an explicit `Wavelength` (the grid carries only
+  the offset `Ω`), the per-mode energy is a full `ħω` (not the `ħω/2`
+  vacuum-fluctuation convention of `raman_noise_field` and the reference
+  driver, a 3 dB difference the docstrings now state), and grids reaching
+  negative absolute frequency are refused. `docs/api/noise.md` no longer
+  advertises a seed the module did not provide. Tests:
+  `tests/test_noise_opm.py`.
+- **`gamma_omega` composes with `include_self_steepening`.** The shock factor
+  `(1 + τ·Ω)` now joins the **outer** `√γ` of the symmetrised operator,
+  `N = i√γ(Ω)(1 + τΩ)·F{P_NL·F⁻¹[√γ(Ω)A]}`, so the frequency dependence of
+  the nonlinearity weights the shock source instead of being applied to it
+  afterwards; the naive diagnostic form takes the same factor. Constant
+  `γ(Ω)` reduces to the scalar-γ shock *remainder* to round-off (on ETDRK4 the
+  two propagated runs agree to 3e-15; on Strang the scalar path's exact
+  `exp(iγτΩΔz)` shock stage integrates the remainder differently, so a
+  constant-γ deck is not bit-comparable at the same `dz`). The
+  `NotImplementedError` that refused the pair is gone, and
+  `conserving_shock=True` together with `gamma_omega` is now rejected at
+  construction (the pcGNLSE arms used to be silently dropped). Tests:
+  `tests/test_gnlse_gamma_omega_shock.py`.
+- **Tagged extrapolation: `n_func(…, extrapolate=…)` and `valid_range_um`.**
+  `RefractiveIndex.n_func`/`k_func`/`nk_func`/`dn_dlambda`/`group_index`/
+  `group_velocity` and the `Material` wrappers take a policy for lookups
+  outside the fitted window:
+  `"raise"` (default, unchanged), `"warn"` (the value plus one deduplicated
+  `UserWarning`) or `"allow"` (silent). `valid_range_um` exposes the `(min, max)`
+  bounds in μm on both objects and on the `OpticalMaterial` protocol, so a caller
+  can tag an extrapolated value instead of guessing. The strict message keeps
+  "Index valid only between … μm" and the wrapper adds the material name. The
+  catalogue still has no `AsSe2` row (no primary index source), and the
+  unknown-material error now says so instead of only listing near matches.
+  `docs/api/materials.md` documents both. Tests:
+  `tests/test_materials_extrapolation.py`.
 - **`Fiber(a_eff=Area(...))`: measured nonlinear coefficients, converted
   once.** With `a_eff` set, `beta_tpa`, `sigma_tpa` (and the engine's
   `three_photon_alpha_3`) are read as **physical** coefficients (`m/W`,
