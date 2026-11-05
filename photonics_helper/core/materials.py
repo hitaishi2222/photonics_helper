@@ -125,23 +125,23 @@ class Material:
         material name to the error/warning; the bare
         :class:`~photonics_helper.materials.RefractiveIndex` cannot.
         """
-        return self._value("n_func", wavelength, extrapolate)
+        return float(self._value("n_func", wavelength, extrapolate))
 
     def k_func(self, wavelength: float, *, extrapolate: str = "raise") -> float:
         """Extinction coefficient k at ``wavelength`` (μm)."""
-        return self._value("k_func", wavelength, extrapolate)
+        return float(self._value("k_func", wavelength, extrapolate))
 
     def nk_func(self, wavelength: float, *, extrapolate: str = "raise") -> complex:
         """Complex index n + ik at ``wavelength`` (μm)."""
-        return self._value("nk_func", wavelength, extrapolate)
+        return complex(self._value("nk_func", wavelength, extrapolate))
 
     def group_index(self, wavelength: float, *, extrapolate: str = "raise") -> float:
         """Group index at ``wavelength`` (μm)."""
-        return self._value("group_index", wavelength, extrapolate)
+        return float(self._value("group_index", wavelength, extrapolate))
 
     def group_velocity(self, wavelength: float, *, extrapolate: str = "raise") -> float:
         """Group velocity (m/s) at ``wavelength`` (μm)."""
-        return self._value("group_velocity", wavelength, extrapolate)
+        return float(self._value("group_velocity", wavelength, extrapolate))
 
 
 def _text(value: object) -> str | None:

@@ -4,7 +4,7 @@ quadrant: reference
 
 # Build on the core: group-velocity dispersion from a material you define
 
-`examples/33_build_on_core.py` (172 lines)
+`examples/33_build_on_core.py` (177 lines)
 
 This script produces no figure. It prints its result, launches a server, or writes data for another example.
 
@@ -79,6 +79,11 @@ class CauchyGlass:
     def k_func(self, wavelength_um: float) -> float:
         """Extinction coefficient (lossless)."""
         return 0.0
+
+    @property
+    def valid_range_um(self) -> tuple[float, float]:
+        """Validity window of the fit, in um."""
+        return (1.0, 2.0)
 
     @property
     def wl(self) -> units.WavelengthArray:
