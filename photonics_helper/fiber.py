@@ -33,12 +33,17 @@ class Dispersion:
     wavelengths : wavelength array.
     values : dispersion values in s/m².
     central_wavelength : design central wavelength.
+    sigma : optional 1-D uncertainty on ``values`` (same unit, same length).
+        Propagated by :meth:`from_neff` from a known ``neff_sigma`` through
+        ``σ_D = (λ/c)·4σ_n/Δλ²``; ``None`` means no uncertainty is known, which
+        is *not* the same as zero.
     """
 
     values: NDArray
     unit: Literal["ps/nm.km", "s/m^2"]
     wavelengths: WavelengthArray
     central_wavelength: Wavelength
+    sigma: NDArray | None = None
 
     @model_validator(mode="after")
     def _normalize_units(self) -> "Dispersion":
@@ -103,10 +108,19 @@ class Dispersion:
         wavelengths: WavelengthArray,
         central_wavelength: Wavelength,
         ignore_fit_error: bool = False,
+        neff_sigma: float | NDArray | None = None,
     ) -> Self:
         """Compute dispersion D(λ) from effective index neff(λ).
 
         D = -λ/c × d²neff/dλ²
+
+        ``neff_sigma`` (optional) is the 1-σ uncertainty of ``neff``. When given,
+        the returned :class:`Dispersion` carries ``σ_D = (λ/c)·4σ_n/Δλ²`` per
+        point — the closed form measured in the naskar-scg replication
+        (σ_n = 1e-5 at Δλ = 100 nm ⇒ σ_D ≈ 75 ps nm⁻¹ km⁻¹). Without it the
+        object's ``sigma`` is ``None``: a D value from a noisy n_eff table cannot
+        then be distinguished from a converged one, which is the caller's
+        problem to state, not the library's to hide.
         """
 
         if not isinstance(wavelengths, WavelengthArray):
@@ -132,11 +146,17 @@ class Dispersion:
                 raise ValueError(
                     "Can't perform numerical differentiation with small error..."
                 )
+        sigma = None
+        if neff_sigma is not None:
+            wl_m = np.asarray(wl_eq, dtype=float)
+            d_lam = float(np.mean(np.diff(wl_m)))
+            sigma = (wl_m / C_MS) * 4.0 * float(np.mean(np.asarray(neff_sigma))) / d_lam**2
         return cls(
             wavelengths=WavelengthArray(wl_eq, "m"),
             values=dispersion,
             unit="s/m^2",
             central_wavelength=central_wavelength,
+            sigma=sigma,
         )
 
     @classmethod
@@ -553,21 +573,42 @@ class WaveguideMode:
         """Build a :class:`PropagationConstant` with ``β = n_eff·ω/c``."""
         return PropagationConstant.beta_from_neff(self.neff, self.wavelengths)
 
-    def to_dispersion(self, ignore_fit_error: bool = True) -> Dispersion:
+    def to_dispersion(self, ignore_fit_error: bool | None = None) -> Dispersion:
         """Build a :class:`Dispersion` ``D(λ)`` from ``n_eff(λ)``.
 
-        ``ignore_fit_error`` defaults to ``True`` because FEM exports are often
-        coarse and the smoothness guard in :meth:`Dispersion.from_neff` can
-        otherwise reject a perfectly usable table.
+        ``ignore_fit_error`` bypasses the smoothness guard in
+        :meth:`Dispersion.from_neff`. It used to default to ``True``, which
+        turned the guard off for exactly the noisy FEM tables it was written
+        for, silently. Now: ``None`` (default) keeps the bypass — FEM exports
+        are often coarse and the guard would reject a usable table — but it
+        **warns** that the guard was bypassed and that ``False`` would have
+        raised. ``True`` bypasses silently (old behaviour, explicit), ``False``
+        raises as the guard intends.
         """
         if self.central_wavelength is None:  # pragma: no cover - validator sets it
             raise ValueError("central_wavelength is not set")
-        return Dispersion.from_neff(
+        kw: dict[str, Any] = dict(
             neff=self.neff,
             wavelengths=self.wavelengths,
             central_wavelength=self.central_wavelength,
-            ignore_fit_error=ignore_fit_error,
         )
+        if ignore_fit_error is True:
+            return Dispersion.from_neff(ignore_fit_error=True, **kw)
+        try:
+            return Dispersion.from_neff(ignore_fit_error=False, **kw)
+        except ValueError:
+            if ignore_fit_error is False:
+                raise
+            warnings.warn(
+                "n_eff(λ) fails the smoothness guard in Dispersion.from_neff and "
+                "the fit error is being ignored (the historical default), so the "
+                "returned D(λ) may be numerical noise rather than physics. Pass "
+                "ignore_fit_error=False to raise, True to silence this warning, "
+                "and neff_sigma to carry an uncertainty.",
+                UserWarning,
+                stacklevel=2,
+            )
+            return Dispersion.from_neff(ignore_fit_error=True, **kw)
 
     @classmethod
     def from_csv(
@@ -660,9 +701,16 @@ class ZDependentDispersion:
     betas_taylor: NDArray | None = None
     beta_orders: NDArray | None = None
     omega0_fit: float | None = None
+    #: Out-of-table policy for :meth:`fn`. ``"nan"`` is the historical default
+    #: (the caller decides); ``"raise"`` names the offending fraction and bounds;
+    #: ``"clip"`` clamps to the table edges and records
+    #: :attr:`last_clipped_fraction`. ``_linear_step`` clips before it queries, so
+    #: the engine path does not depend on this; direct callers do.
+    out_of_range: Literal["nan", "raise", "clip"] = "nan"
 
     def __post_init__(self) -> None:
         """Validate shapes and build the interpolant."""
+        self._last_clipped_fraction = 0.0
         self.omegas = np.asarray(self.omegas, dtype=float)
         self.z_positions = np.asarray(self.z_positions, dtype=float)
         self.beta = np.asarray(self.beta, dtype=float)
@@ -698,6 +746,81 @@ class ZDependentDispersion:
             f"z from {self.z_positions[0]:.3e} to {self.z_positions[-1]:.3e} m"
         )
 
+    @property
+    def last_clipped_fraction(self) -> float:
+        """Fraction of the last :meth:`fn` query that fell outside the table."""
+        return float(self._last_clipped_fraction)
+
+    @classmethod
+    def from_sections(
+        cls,
+        z_positions: NDArray,
+        sections: list,
+        *,
+        central_wavelength: Wavelength | None = None,
+        n_lambda: int | None = None,
+        centered: bool = False,
+        out_of_range: Literal["nan", "raise", "clip"] = "nan",
+    ) -> "ZDependentDispersion":
+        """Assemble β[ω, z] from one mode per taper section.
+
+        ``sections`` are :class:`WaveguideMode`-like objects (anything with
+        ``neff`` and a ``wavelengths`` :class:`WavelengthArray`), one per entry in
+        ``z_positions``. Each section's ``n_eff(λ)`` is interpolated onto a common
+        wavelength grid, then ``β = n_eff·ω/c``.
+
+        ``centered=True`` subtracts ``β₀ + β₁(ω−ω₀)`` per section — for callers
+        that feed the table to a solver doing **no** retarded-frame subtraction.
+        :class:`SplitStepEngine`'s z-dependent path does subtract β₁(ω₀,z)·Ω
+        itself, so leave this ``False`` (the default) with that engine, or the
+        shift is applied twice.
+        """
+        sections = list(sections)
+        if len(sections) != len(z_positions):
+            raise ValueError(
+                f"got {len(sections)} sections for {len(z_positions)} z positions"
+            )
+        lam_lo = max(float(s.wavelengths.as_m.min()) for s in sections)
+        lam_hi = min(float(s.wavelengths.as_m.max()) for s in sections)
+        if not lam_lo < lam_hi:
+            raise ValueError("the sections share no common wavelength range")
+        n_lam = int(n_lambda) if n_lambda is not None else max(
+            len(s.wavelengths.as_m) for s in sections
+        )
+        lam = np.linspace(lam_lo, lam_hi, n_lam)
+        omega = 2.0 * PI * C_MS / lam
+        beta = np.empty((n_lam, len(sections)), dtype=float)
+        for j, sec in enumerate(sections):
+            n_eff = np.interp(
+                lam, np.asarray(sec.wavelengths.as_m, float), np.asarray(sec.neff, float)
+            )
+            beta[:, j] = n_eff * omega / C_MS
+        if centered:
+            w0 = (
+                float(central_wavelength.to_omega().as_rad_s)
+                if central_wavelength is not None
+                else float(omega[n_lam // 2])
+            )
+            asc = np.argsort(omega)  # omega descends as lambda ascends
+            for j in range(beta.shape[1]):
+                b_asc = beta[asc, j]
+                b0 = float(np.interp(w0, omega[asc], b_asc))
+                b1 = float(
+                    np.gradient(b_asc, omega[asc])[np.argmin(np.abs(omega[asc] - w0))]
+                )
+                beta[:, j] -= b0 + b1 * (omega - w0)
+        return cls(
+            omegas=omega,
+            z_positions=np.asarray(z_positions, dtype=float),
+            beta=beta,
+            central_wavelength=(
+                float(central_wavelength.as_m)
+                if central_wavelength is not None
+                else float(lam[n_lam // 2])
+            ),
+            out_of_range=out_of_range,
+        )
+
     def fn(self, omega: float | NDArray, z: float) -> float | NDArray:
         """Interpolate β(ω, z) via the 2-D table.
 
@@ -709,9 +832,26 @@ class ZDependentDispersion:
         Returns
         -------
         β interpolated at (omega, z). Scalar if omega is scalar, array otherwise.
-        Out-of-range values return NaN (not an error).
+        Out-of-range values follow :attr:`out_of_range` (default ``"nan"``, the
+        historical behaviour: ``fill_value=None`` for the interpolant).
         """
         omega_arr = np.atleast_1d(np.asarray(omega, dtype=float))
+        if self.out_of_range != "nan":
+            lo, hi = float(self.omegas[0]), float(self.omegas[-1])
+            outside = (omega_arr < lo) | (omega_arr > hi)
+            n_out = int(np.count_nonzero(outside))
+            self._last_clipped_fraction = n_out / omega_arr.size
+            if n_out:
+                if self.out_of_range == "raise":
+                    raise ValueError(
+                        f"{n_out} of {omega_arr.size} queried frequencies "
+                        f"({100.0 * n_out / omega_arr.size:.2f}%) lie outside the "
+                        f"β(ω, z) table [{lo:.4e}, {hi:.4e}] rad/s and would be "
+                        "filled with NaN. Widen the table, or pass "
+                        'out_of_range="clip"|"nan" if flattening the edge bins is '
+                        "what you mean."
+                    )
+                omega_arr = np.clip(omega_arr, lo, hi)
         result = self._interpolator(
             np.column_stack([omega_arr, np.full_like(omega_arr, z)])
         )
@@ -794,6 +934,8 @@ class ZDependentDispersion:
         z_positions: NDArray,
         beta: NDArray,
         central_wavelength: float,
+        *,
+        out_of_range: Literal["nan", "raise", "clip"] = "nan",
     ) -> "ZDependentDispersion":
         """Construct from raw arrays.
 
@@ -803,6 +945,10 @@ class ZDependentDispersion:
         z_positions : 1-D array — propagation positions (m).
         beta : 2-D array — shape (n_omega, n_z).
         central_wavelength : float — design central wavelength (m).
+        out_of_range : out-of-table policy for :meth:`fn` (``"nan"`` default).
+            Without this argument the factory path could only produce the
+            permissive default, so a caller who built a table here could not ask
+            :meth:`fn` to refuse an out-of-table query.
         """
         # Convert to meters if needed (detect by checking magnitude)
         cw = float(central_wavelength)
@@ -813,6 +959,7 @@ class ZDependentDispersion:
             z_positions=np.asarray(z_positions, dtype=float),
             beta=np.asarray(beta, dtype=float),
             central_wavelength=cw,
+            out_of_range=out_of_range,
         )
 
     @classmethod

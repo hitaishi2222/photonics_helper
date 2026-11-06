@@ -79,7 +79,34 @@ RAMAN_MATERIALS: dict[str, dict] = {
         "gain_coeff": None,
         "lo_phonon_cm": None,
         "to_phonon_cm": None,
+        # Explicit bimodal h_R(t) of Eq. below; the inherited defaults are the
+        # silica 12.2/32 fs pair, and applying those to a chalcogenide is wrong
+        # by an order of magnitude in the oscillation period.
+        "tau1": 23e-15,
+        "tau2": 164.5e-15,
         "references": "Richardson, Chalcogenide glass fibers for nonlinear optics",
+    },
+    "AsSe2 (Raman only)": {
+        # The glass the 2.90-octave taper paper (Phys. Scr. 101, 385502, 2026)
+        # names for its core. Raman only: no refractive-index row exists, and
+        # none may be invented (see the material-catalogue provenance policy).
+        "name": "AsSe2 (Raman only)",
+        "crystal": "Amorphous",
+        "bandgap_eV": None,
+        "n2": None,
+        "raman_shift_cm": 310,
+        "raman_linewidth_cm": 60,
+        "fR": 0.148,
+        "gain_coeff": None,
+        "lo_phonon_cm": None,
+        "to_phonon_cm": None,
+        "tau1": 23e-15,
+        "tau2": 164.5e-15,
+        "references": (
+            "f_R = 0.148, tau1 = 23 fs, tau2 = 164.5 fs: Phys. Scr. 101, 385502 "
+            "(2026) Eq. (10) and its ref [39] (Gao et al., Jpn. J. Appl. Phys. "
+            "55, 122201 (2016)). Raman parameters only -- no refractive-index data."
+        ),
     },
     "Si": {
         "name": "Si",

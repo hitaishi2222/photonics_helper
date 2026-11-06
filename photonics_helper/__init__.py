@@ -75,6 +75,7 @@ if TYPE_CHECKING:  # pragma: no cover - static analyzers/IDEs only
         WaveguideMode,
         ZDependentDispersion,
     )
+    from .metrics import Span, span_at_level
     from .gnlse import (
         Fiber,
         FiberProfile,
@@ -216,6 +217,8 @@ __all__ = [
     "Frequency",
     "FrequencyArray",
     "GNLSESolver",
+    "Span",
+    "span_at_level",
     "ObservableReport",
     "ValidationFailure",
     "LaguerreGaussianMode",
@@ -426,6 +429,8 @@ _LAZY_MODULES: dict[str, str] = {
             "ZDependentDispersion",
         )
     },
+    # .metrics — spectral span on a stated numeraire
+    **{n: ".metrics" for n in ("Span", "span_at_level")},
     # .gnlse
     **{
         n: ".gnlse"

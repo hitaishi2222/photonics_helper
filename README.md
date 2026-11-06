@@ -201,7 +201,7 @@ See `reproductions/` for literature reproductions (27 papers reproduced).
 
 ## Material Database
 
-The SQLite material database (`materials.db`) ships with 45 materials,
+The SQLite material database (`materials.db`) ships with 46 materials,
 41 Sellmeier equations, and 30 tabulated n/k datasets.
 All 30 source keys are loadable through `RefractiveIndex.from_material_database`.
 

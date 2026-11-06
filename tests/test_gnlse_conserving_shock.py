@@ -63,8 +63,10 @@ def _engine(wave: Wave, fiber: Fiber, conserving: bool) -> SplitStepEngine:
 def test_conserving_shock_requires_raman():
     wave = _shock_wave()
     fiber = Fiber.from_gamma(gamma=0.11, length=Length(1e-3, "m"))
-    eng = _engine(wave, fiber, conserving=True)
+    # The refusal moved one layer earlier (construction, not first step) — the
+    # engine is where the flag is now checked before anything is computed.
     with pytest.raises(ValueError, match="Raman response|set include_raman=False"):
+        eng = _engine(wave, fiber, conserving=True)
         eng.propagate(num_steps=2)
 
 

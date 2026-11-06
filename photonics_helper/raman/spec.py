@@ -554,6 +554,13 @@ class RamanSpec:
             db = RamanDatabase(db_path=db_path)
             row = db.get_material(name)
             if row:
+                # The DB predates the explicit bimodal the chalcogenides need:
+                # fill a missing tau from the reference table instead of letting
+                # the silica defaults through.
+                ref = RAMAN_MATERIALS.get(name, {})
+                for key in ("tau1", "tau2"):
+                    if row.get(key) is None and ref.get(key) is not None:
+                        row[key] = ref[key]
                 return cls(**row)  # type: ignore[arg-type]
         except Exception:
             pass

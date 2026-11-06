@@ -58,6 +58,30 @@ When self-steepening is enabled the engine therefore requires
 or disable self-steepening). The grid must resolve only physical frequencies;
 nothing is silently discarded.
 
+Two knobs exist for a grid that cannot be changed, and both are policy only —
+the operator is the same either way:
+
+* `allow_out_of_band_shock=True` (default `False`) downgrades that hard bound
+to a loud `UserWarning`, so a published grid can be reproduced for comparison.
+The run then flags itself: `SplitStepEngine.shock_domain_ok` is `False` and
+`photon_number_vs_z` reports `nan`, because Blow & Wood's (A5) invariant has no
+meaning where `ω₀ + Ω ≤ 0` is sampled. `GNLSESolver.verify_convergence`
+reports the conservation gate as `n/a` and the verdict as
+`CONVERGED (conservation n/a)` rather than letting that `nan` read as a failed
+run, and `propagate_auto` keeps the grid you asked for instead of widening it.
+Never use it for production numbers.
+* `shock_bandwidth_limit=` (default `0.2`) sets the *soft* `τ_shock·Ω_max`
+bound — the small-bandwidth regime the GNLS is derived in. It warns when
+exceeded; raising it is the honest way to silence the warning for a deck that
+intentionally lives near `Ω ~ ω₀/3`.
+
+Both knobs are on every engine that carries a shock term — `SplitStepEngine`,
+`GNLSESolver`, `TaperedGNLSESolver` (which builds the first) and
+`MultimodeSplitStepEngine` — and they share one implementation,
+`gnlse._enforce_shock_grid`, so the four cannot drift apart in policy,
+threshold or message. `MultimodeSplitStepEngine.shock_domain_ok` and its (A5)
+`nan` behave exactly as the scalar engine's.
+
 References: Blow & Wood (1989); Agrawal, *Nonlinear Fiber Optics*, 5th ed.,
 §2.3; Hult (2007).
 

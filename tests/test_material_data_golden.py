@@ -34,7 +34,7 @@ def test_row_counts_are_stable() -> None:
         con.close()
     assert counts["nk_data"] == 24767
     assert counts["sellmeier"] == 41
-    assert counts["raman_specs"] == 45
+    assert counts["raman_specs"] == 46
     assert counts["phonon_modes"] == 59
 
 

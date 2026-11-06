@@ -478,8 +478,12 @@ class TestRAMAN_MATERIALS:
             assert spec.name == name
 
     def test_material_count(self):
-        """Test that RAMAN_MATERIALS has the expected number of entries (31 + Si3N4-Ligentec)."""
-        assert len(RAMAN_MATERIALS) == 33
+        """Test that RAMAN_MATERIALS has the expected number of entries.
+
+        31 original + Si3N4-Ligentec + AsSe2 (the 2.90-octave taper paper's core
+        glass, Raman parameters only, Phys. Scr. 101, 385502 (2026) Eq. (10)).
+        """
+        assert len(RAMAN_MATERIALS) == 34
 
     def test_all_original_materials_present(self):
         """Test original 8 materials are still present."""
@@ -2538,3 +2542,76 @@ class TestDashApp:
             or "Compare" in layout_str
             or "add" in layout_str.lower()
         )
+
+
+# ─── G7: Raman normalization vs the paper's eq. (10) as printed ───────────────
+
+
+class TestRamanNormalization:
+    """Pin ``∫h_R dt = 1`` and ``∫delayed_response dt = f_R``.
+
+    Naskar et al., *Phys. Scr.* **101** 385502 (2026) print eq. (10) as::
+
+        h_R(t) = (τ₁² + τ₂²)/(τ₁·τ₂) · e^{−t/τ₂} · sin(t/τ₁)
+
+    which integrates to **τ₂ = 164.5 fs**, not 1 — the denominator needs a
+    second τ₂ (Agrawal, *Nonlinear Fiber Optics*, 5th ed., Sec. 2.3.2):
+
+        h_R(t) = (τ₁² + τ₂²)/(τ₁·τ₂²) · e^{−t/τ₂} · sin(t/τ₁),   ∫ = 1.
+
+    ``photonics_helper`` implements the standard form, and
+    :meth:`RamanResponse.delayed_response` already carries f_R, so
+    ``∫delayed_response dt = f_R``. Both facts are asserted here, and the
+    literal transcription is asserted to *fail* them, so a future edit that
+    copies the paper's printed prefactor is caught rather than silently
+    changing every simulated Raman gain by 1.6e-13.
+    """
+
+    TAU1, TAU2, FR = 23e-15, 164.5e-15, 0.148
+
+    @staticmethod
+    def _grid():
+        from photonics_helper.pulse import TemporalGrid
+
+        # dt ≈ 0.98 fs resolves the 23 fs oscillation; 8 ps ≫ τ₂ = 164.5 fs.
+        return TemporalGrid(N=8192, Tmax=Time(8e-12, "s"))
+
+    def _spec(self):
+        return RamanSpec(
+            name="AsSe2",
+            raman_shift_cm=230,
+            raman_linewidth_cm=30,
+            fR=self.FR,
+            tau1=Time(self.TAU1, "s"),
+            tau2=Time(self.TAU2, "s"),
+        )
+
+    def test_h_R_has_unit_integral_and_delayed_carries_fR(self):
+        grid = self._grid()
+        t = np.asarray(grid.t, dtype=float)
+        resp = self._spec().response(grid, tau1=self.TAU1, tau2=self.TAU2)
+
+        h = np.asarray(resp.h_R(t), dtype=float)
+        delayed = np.asarray(resp.delayed_response(t), dtype=float)
+        assert np.trapezoid(h, t) == pytest.approx(1.0, abs=1e-9)
+        assert np.trapezoid(delayed, t) == pytest.approx(self.FR, abs=1e-9)
+        # f_R is the only difference between the two kernels.
+        assert np.allclose(delayed, self.FR * h)
+        # ... and the paper's own recipe (a rectangular sum on the grid) agrees.
+        assert float(delayed.sum()) * grid.dt == pytest.approx(self.FR, rel=1e-9)
+
+    def test_literal_eq_10_would_miss_by_tau2(self):
+        """The printed prefactor integrates to τ₂, not 1 — by 1.6e-13 s."""
+        grid = self._grid()
+        t = np.asarray(grid.t, dtype=float)
+        t_pos = t[t >= 0]
+        kernel = np.exp(-t_pos / self.TAU2) * np.sin(t_pos / self.TAU1)
+        standard = (self.TAU1**2 + self.TAU2**2) / (self.TAU1 * self.TAU2**2)
+        literal = (self.TAU1**2 + self.TAU2**2) / (self.TAU1 * self.TAU2)
+
+        assert np.trapezoid(standard * kernel, t_pos) == pytest.approx(1.0, rel=1e-3)
+        assert np.trapezoid(literal * kernel, t_pos) == pytest.approx(
+            self.TAU2, rel=1e-3
+        )
+        ratio = literal / standard
+        assert ratio == pytest.approx(self.TAU2, rel=1e-12)

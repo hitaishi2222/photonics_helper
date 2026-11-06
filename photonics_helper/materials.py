@@ -312,6 +312,56 @@ class RefractiveIndex:
         """Construct from a complex refractive index array."""
         return cls(n=np.real(nk), k=np.imag(nk), wl=wl)
 
+    @classmethod
+    def from_samples(
+        cls,
+        wl_um: ArrayLike,
+        n: ArrayLike,
+        k: ArrayLike | float | None = None,
+    ) -> Self:
+        """Construct from a tabulated ``(λ [μm], n[, k])`` dataset.
+
+        This is the registration path for an index source the bundled
+        ``materials.db`` does not carry: hold the numbers you can cite, wrap
+        them here, and the result is a first-class, splined, range-checked
+        index — usable directly or as ``Material(name=…, index=…)`` with a
+        provenance string. Nothing is written to the database, so a user table
+        can never be mistaken for a catalogue entry.
+
+        Parameters
+        ----------
+        wl_um : wavelengths in μm; at least 4, strictly increasing (the spline
+            and ":attr:`valid_range_um`" need both, and both are validated).
+        n : real refractive index at each ``wl_um``.
+        k : extinction coefficient — array matching ``n``, or a scalar for an
+            index-only table (default ``None`` → zero absorption).
+
+        Notes
+        -----
+        An absent catalogue entry means "no primary index source was found",
+        not "the library forgot": ``material("AsSe2")`` fails by name for that
+        reason. A table passed here is the caller's data, and the citation the
+        caller attaches is the only provenance it has.
+
+        Examples
+        --------
+        >>> idx = RefractiveIndex.from_samples([1.5, 2.0, 3.0, 4.0], [2.90, 2.818, 2.79, 2.76])
+        >>> round(idx.n_func(2.0), 3)
+        2.818
+        """
+        n_arr = np.asarray(n, dtype=float)
+        if k is None:
+            k_arr = np.zeros_like(n_arr)
+        else:
+            k_arr = np.asarray(k, dtype=float)
+            if k_arr.ndim == 0:
+                k_arr = np.full(n_arr.shape, float(k_arr))
+        return cls(
+            n=n_arr,
+            k=k_arr,
+            wl=WavelengthArray(np.asarray(wl_um, dtype=float), "um"),
+        )
+
     def _validate_range(self, wavelength: float, extrapolate: str = "raise") -> float:
         """Apply the extrapolation policy; return the wavelength in μm."""
         wl = _as_um(wavelength)

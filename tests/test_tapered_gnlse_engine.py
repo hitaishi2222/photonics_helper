@@ -148,7 +148,11 @@ class TestTaperedGNLSESolver:
         )
         assert solver.pulse is pulse
         assert solver.fiber is fiber
-        assert solver.include_raman is True
+        # `include_raman` defaults to None = "on when the fiber has a response".
+        # This fiber has none, so Raman is off rather than a solver that cannot
+        # build an engine (the failure mode `include_raman=True` now raises on).
+        assert solver.raman_response is None
+        assert solver.include_raman is False
 
     def test_propagate_populates_evolution(self):
         """propagate() populates evolution list."""

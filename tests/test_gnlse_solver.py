@@ -31,7 +31,11 @@ def test_solver_construction(setup):
     solver = GNLSESolver(pulse=pulse, fiber=fiber, betas=betas)
     assert solver.pulse is pulse
     assert solver.fiber is fiber
-    assert solver.include_raman is True
+    # `include_raman=None` (the default) resolves to "on when the fiber has a
+    # response"; this fiber has none, so Raman is off instead of a solver that
+    # cannot build an engine. Explicit True raises at construction.
+    assert solver.raman_response is None
+    assert solver.include_raman is False
     assert solver.include_self_steepening is False
     assert solver.include_tpa is False
 

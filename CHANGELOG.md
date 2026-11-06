@@ -9,7 +9,129 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+_nothing yet_
+
+## [0.1.12] - 2026-11-06
+
 ### Added
+
+- **`photonics_helper.metrics.span_at_level` — a span metric that carries its
+  level and its numeraire.** Returns `Span(short_nm, long_nm, octaves,
+  level_db, numeraire)` with the crossing interpolated linearly in dB, and
+  applies the Jacobian `S_λ = S_ν·|dω/dλ|` when the input density is per Hz.
+  Without it every group writes "N octaves at −M dB" differently; with it the
+  three choices travel with the number. `None` crossings come back as `nan`,
+  never as a guess. Tests: `tests/test_upstream_gap_fixes.py`.
+- **`ZDependentDispersion.from_sections(z_positions, sections)`** — assemble a
+  β(ω, z) table from one `WaveguideMode` per taper section. `centered=True`
+  subtracts `β₀ + β₁(ω−ω₀)` for callers whose solver does *no* retarded-frame
+  subtraction; `SplitStepEngine`'s z-dependent path does its own, so the
+  default is `False` (double subtraction is a silent β₁L walk).
+- **`TaperedGNLSESolver.verify_convergence`** — the scalar solver's
+  conservation + self-convergence table, for a taper. It re-runs at
+  `probe_factor` steps, compares the two output spectra, and restores the coarse
+  run afterwards. The note it emits says exactly what it certifies: the step
+  count, not the section discretisation.
+- **`Dispersion.sigma` and `Dispersion.from_neff(neff_sigma=…)`** — propagate a
+  known `n_eff` uncertainty into `σ_D = (λ/c)·4σ_n/Δλ²`. `sigma=None` means
+  unknown, which is not the same as zero, and that distinction is now expressible.
+- **`ZDependentDispersion.out_of_range`** — `"nan"` (historical default),
+  `"raise"` (names the offending fraction and the table bounds) or `"clip"`
+  (flattens to the edges and reports `last_clipped_fraction`).
+  `SplitStepEngine` honours `"raise"` and records the clipped fraction either
+  way.
+- **Bimodal chalcogenide Raman rows.** `RAMAN_MATERIALS["AsSe2"]`
+  (`f_R = 0.148, τ₁ = 23 fs, τ₂ = 164.5 fs`, Phys. Scr. 101, 385502 (2026)
+  Eq. (10) and its ref [39]) and explicit τ's on `As2Se3`, so the rounded
+  single-Lorentzian `f_R = 0.55` entry is no longer the only thing a caller can
+  pick. `RamanSpec.from_database` fills a missing τ from the reference table
+  instead of letting the silica defaults through.
+- **`allow_out_of_band_shock` — an explicit opt-in past the hard shock-grid
+  bound.** The `Ω_max < ω₀` guard (Blow & Wood: the shock symbol `1 + Ω·τ` is
+  only meaningful for positive absolute frequency) raised unconditionally, so a
+  *published* grid could not be reproduced at all — the Naskar 2026 deck
+  (64 000 points / 32 ps) sits at `Ω_max/ω₀ = 6.67`. `SplitStepEngine` and
+  `GNLSESolver` now take `allow_out_of_band_shock: bool = False`; the default
+  still raises, and `True` emits a loud `UserWarning` naming the ratio instead.
+  The override cannot hide its own cost: `SplitStepEngine.shock_domain_ok` goes
+  `False`, `photon_number_vs_z` reports `nan` (the (A5) invariant does not exist
+  where `ω₀ + Ω ≤ 0` is sampled) and `GNLSESolver.verify_convergence` reports
+  the conservation gate as `n/a` instead of turning that `nan` into an `inf`
+  drift. Tests: `tests/test_gnlse_shock_override.py`.
+- **`shock_bandwidth_limit=` — the soft GNLS bandwidth bound is per run.**
+  `τ_shock·Ω_max ≤ 0.2` (`Ω_max ≤ ω₀/5`, the small-bandwidth regime Blow & Wood
+  derive the GNLS in) was a module constant, so a deck that intentionally lives
+  near `Ω ~ ω₀/3` had no honest way to acknowledge it. Keyword on both solvers,
+  default unchanged at `_SHOCK_TAYLOR_LIMIT = 0.2`; the warning now names the
+  configured bound. Tests: `tests/test_gnlse_shock_override.py`.
+- **The two shock knobs reach every engine, through one implementation.**
+  `TaperedGNLSESolver` — the class an actual taper replication runs — did not
+  forward them and still refused the paper's grid; it now takes
+  `allow_out_of_band_shock` / `shock_bandwidth_limit`, validates the bound at
+  construction, forwards both to its `SplitStepEngine` and reports the
+  conservation gate as `n/a` in :meth:`TaperedGNLSESolver.verify_convergence`
+  (plus a grid-derived `shock_domain_ok`). `MultimodeSplitStepEngine` had a
+  *second, divergent copy* of the guard (short message, hard-coded `0.2`, no
+  domain flag, no `nan` photon number); its `_validate_shock_grid` now delegates
+  to the same `gnlse._enforce_shock_grid`, so policy, thresholds and messages
+  are one object. `propagate_auto` no longer widens a grid the caller
+  deliberately kept, and reports which invariant it actually checked. Tests:
+  `tests/test_gnlse_shock_override.py` (parity: both engines raise, warn and
+  silence identically).
+- **`ConvergenceDiagnostics.verdict` carries the conservation state.** A bare
+  `verdict: CONVERGED` on a run whose invariant does not exist (an
+  `allow_out_of_band_shock` grid) was the misleading line in the table people
+  skim. New `invariant_undefined` field and `verdict` property yield
+  `CONVERGED (conservation n/a)`; `CONVERGED`, `NOT CONVERGED` and the lossy
+  run's plain `CONVERGED` are unchanged, and the field defaults to `False`.
+  Tests: `tests/test_gnlse_shock_override.py`.
+- **`RefractiveIndex.from_samples(wl_um, n, k=None)` — register a custom
+  `n(λ)` table.** The catalogue ships an entry only when a primary index source
+  exists, so `AsSe2` (Naskar 2026's core: one calibration point `n(2 µm) =
+  2.818`, no published Sellmeier coefficients, cf. its refs [25, 34]) has no
+  row. This is the one-call path for a table a user *can* cite: it validates
+  `≥ 4` points and a strictly increasing `λ`, defaults `k` to zero, and returns
+  a normal `RefractiveIndex` — so `Material(name=…, index=…)`, the
+  `extrapolate=` policy and `Dispersion.from_neff(index.n, index.wl, …)` all
+  work on it. Nothing is written to `materials.db`, so a user table can never
+  be mistaken for a catalogue entry. `docs/api/materials.md` records the data
+  gap next to the new path. Tests: `tests/test_materials_custom_dataset.py`.
+- **Raman normalization is pinned against the paper's printed eq. (10).**
+  Naskar et al. print `h_R = (τ₁²+τ₂²)/(τ₁τ₂)·e^{−t/τ₂}·sin(t/τ₁)`, which
+  integrates to `τ₂ = 164.5 fs`, not 1 — a missing `τ₂` in the denominator. The
+  implemented standard (Agrawal) form is asserted to give `∫h_R dt = 1` and
+  `∫delayed_response dt = f_R` on a real grid, and the literal transcription is
+  asserted to *miss* by exactly `τ₂`. A future edit that copies the paper now
+  fails a test instead of rescaling every Raman gain by 1.6e-13. Tests:
+  `tests/test_raman.py::TestRamanNormalization`.
+
+### Fixed
+
+- **The z-dependent linear step was not in the retarded frame.** It formed
+  `φ = [β(ω₀+Ω,z) − β(ω₀,z)]·dz` with no `β₁(ω₀,z)·Ω` subtraction, so a taper run
+  walked out of the time window at `β₁L` — 28.78 ps over 3 mm for a
+  chalcogenide rib, i.e. **most of a 32 ps window, which then wraps and
+  self-interacts**. The two paths disagreed on the temporal centroid while
+  their spectra matched to 4e-11 dB, so no spectrum plot could see it. Fixed to
+  match `_full_beta_phase`. Tests:
+  `tests/test_gnlse_frame_and_shock_guard.py`.
+- **`min(1 + Ω·τ_shock) ≤ 0` was silent.** The guard tested `Ω_max < ω₀`, which
+  is the correct condition *only* for `τ = 1/ω₀`; with a τ override the operator
+  `1 + Ωτ` can change sign bin by bin (701 of 8192 bins at `τ = 1.5 fs` on
+  N=8192/T=32 ps) and nothing said so. It now warns with the bin count and
+  `1/τ`. It warns rather than raises because an override above `1/ω₀` (Dudley's
+  0.56 fs) is a documented extrapolation the caller may make on purpose.
+- **`interpolated_spectrum_db` had no Jacobian.** It interpolated `S_ν` onto a
+  wavelength axis and took `10·log10`, so a −50 dB crossing moved by up to 13 dB
+  between 2 µm and 9 µm. Now `per="wavelength"` (default) returns the per-nm
+  density; `per="frequency"` reproduces the old curve deliberately.
+- **`WaveguideMode.to_dispersion()` disabled its own guard silently.** The
+  `ignore_fit_error=True` default now warns when the bypass actually mattered
+  (the fit would have failed the guard), with `None` as the "default + warn"
+  sentinel and `True`/`False` unchanged.
+- **`include_raman=True` with no response failed at engine build**, one layer
+  away from the object carrying the flag. Both solvers now raise at
+  construction, naming the three ways to fix it.
 
 - **One-photon-per-mode seed: `opm_noise_field` / `add_opm_noise`.** A
   broadband input seed with one quantum per frequency bin (`|q_n|² = ħω_n/Δν`,

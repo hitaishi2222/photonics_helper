@@ -61,6 +61,17 @@ converged: True
 A run is `converged` only when the drift is inside its tolerance and all three of
 the other metrics are inside theirs. One green column does not carry the others.
 
+The last line carries the state, not just the word. There are three verdicts:
+
+| verdict | means |
+| --- | --- |
+| `CONVERGED` | every gate passed, and the conservation gate was a real invariant |
+| `CONVERGED (conservation n/a)` | every metric passed, but **no invariant exists** on this grid — a run built with `allow_out_of_band_shock=True` samples `ω ≤ 0`, where the Blow & Wood (A5) photon number is undefined. Read it as "the edges are clean and the steps converged", never as "conservation passed" |
+| `NOT CONVERGED` | at least one gate failed (this wins over the `n/a` state) |
+
+`diag.verdict` returns the same string, and `diag.invariant_undefined` is the
+boolean behind the middle row.
+
 ## If you want to see it fail
 
 Coarsen `num_steps` until `converged` is `False`. Which metric moves first

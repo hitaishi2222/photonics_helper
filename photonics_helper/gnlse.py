@@ -28,6 +28,9 @@ _BETAS_UNITS: tuple[str, ...] = ("ps^k/m", "s^k/m", "SI")
 # `SplitStepEngine._validate_shock_grid`. Renamed in spirit 2026-10-25: this
 # is not a Taylor-truncation limit — (1+Ωτ) IS ω/ω₀ bin-by-bin — it guards the
 # small-bandwidth regime the equation was derived in.
+#
+# This is the *default*; per run it is overridable with the
+# `shock_bandwidth_limit=` keyword (see `SplitStepEngine.__init__`).
 _SHOCK_TAYLOR_LIMIT = 0.2
 
 # Suzuki triple-jump weights for a 4th-order symmetric composition of Strang
@@ -920,6 +923,153 @@ def tpa_step(
 
 
 # ---------------------------------------------------------------------------
+# Shock-grid policy (one implementation, shared by every engine with a shock)
+# ---------------------------------------------------------------------------
+
+
+def _enforce_shock_grid(
+    *,
+    grid: Any,
+    omega0: float,
+    tau_shock: float,
+    allow_out_of_band_shock: bool = False,
+    shock_bandwidth_limit: float = _SHOCK_TAYLOR_LIMIT,
+    stacklevel: int = 3,
+) -> bool:
+    """The one shock-grid policy: reject/warn where ``ω/ω₀`` leaves its domain.
+
+    Shared by every engine that carries a shock term
+    (:class:`SplitStepEngine`, :class:`TaperedGNLSESolver` through it, and
+    :class:`~photonics_helper.multimode_gnlse.MultimodeSplitStepEngine`) so the
+    two implementations cannot drift apart again — one policy, one set of
+    messages.
+
+    Two independent conditions, both from the primary source (Blow & Wood
+    1989):
+
+    1. **Positivity of the optical frequency (hard).** The shock operator
+       ``(1 + (i/ω₀)∂_t)`` has symbol ``ω/ω₀ = (ω₀ + Ω)/ω₀`` — exact, with no
+       Taylor expansion in this realization. It is only meaningful for
+       channels with positive *absolute* frequency, ``ω = ω₀ + Ω > 0``. On a
+       symmetric grid spanning ``±Ω_max`` this requires ``Ω_max < ω₀``. Bins
+       beyond that alias onto negative optical frequencies where the factor has
+       no physical meaning; the historical code clamped them to zero, which
+       silently corrupted the shock physics. Failing loudly is the honest
+       alternative (design decision D2). A caller who must reproduce a
+       published grid can opt out with ``allow_out_of_band_shock=True``; the
+       same message is then emitted as a loud ``UserWarning`` rather than a
+       ``ValueError``.
+
+    2. **Bandwidth of the GNLS derivation (soft, warned).** Blow & Wood derive
+       the GNLS assuming "the bandwidth of U(ω') is less than ω₀/3" — a
+       small-fractional-bandwidth expansion of the wave equation, not a
+       property of any integrator. ``τ_shock·Ω_max ≤ shock_bandwidth_limit``
+       (default :data:`_SHOCK_TAYLOR_LIMIT = 0.2`) keeps the simulated
+       bandwidth at ω₀/5, inside that bound with margin. This is a warning, not
+       a rejection: exceeding it widens the band past the equation's
+       derivation, it does not make the operator ill-defined. The bound is per
+       run, which is the honest way to acknowledge a deck that lives near
+       ``Ω ~ ω₀/3``.
+
+    The shock symbol actually applied is ``1 + i·τ·Ω``, so a bin with
+    ``1 + Ωτ < 0`` is a sign flip, not a steepening. With ``τ = 1/ω₀`` that is
+    exactly the ``Ω_max < ω₀`` test; a τ override has to be tested on its own.
+    A negative factor on the innermost red bins is an extrapolation the caller
+    is allowed to make (``tests/test_gnlse_unitarity.py``: Dudley's 0.56 fs
+    exceeds ``1/ω₀``), so it warns instead of raising — but never silently.
+
+    What this guard is *not* about (a corrected misdiagnosis, ``CHANGELOG.md``
+    2026-10-27): a ``≤0.3 % … −5.2 %`` table of "photon-number drift vs
+    τ·Ω_max" was once quoted as evidence of a first-order-truncation grid
+    artifact. That drift was the *unweighted* energy ``Σ|A|²dt`` changing,
+    which the GNLSE does not conserve — the conserved quantity is Blow & Wood's
+    Eq. (A5) photon number ``Σ|Â(ω)|²/(ω₀+ω)dω`` (see
+    :meth:`SplitStepEngine._photon_number`). Tracking (A5) instead, the same
+    runs conserve to ≲5×10⁻⁵ relative even at τ·Ω_max = 0.88.
+
+    Returns
+    -------
+    bool
+        ``domain_ok`` — ``True`` when every bin satisfies ``ω₀ + Ω > 0``. When
+        ``False`` the (A5) photon number is undefined, so engines report it as
+        ``nan`` and their convergence gate as ``n/a`` rather than inventing a
+        number on a sign-flipped bin.
+    """
+    omega_max = float(grid.omega_max)
+    omega0 = float(omega0)
+    domain_ok = omega_max < omega0
+    if not domain_ok:
+        ratio = omega_max / omega0
+        message = (
+            "self-steepening requires the grid to resolve only positive "
+            "absolute frequencies, i.e. Ω_max < ω₀, but got "
+            f"Ω_max = {omega_max:.4e} rad/s >= ω₀ = {omega0:.4e} rad/s "
+            f"(Ω_max/ω₀ = {ratio:.3f}). The grid has N = {grid.N} "
+            f"samples over Tmax = {grid.Tmax.as_s:.4e} s. Fix by "
+            f"increasing the time window Tmax by at least {ratio:.3f}× "
+            "(equivalently reducing N for the same Tmax), or by disabling "
+            "self-steepening."
+        )
+        if not allow_out_of_band_shock:
+            raise ValueError(message)
+        # Opt-in override (the published-grid case): say it loudly on every
+        # build, and say what stops being valid — the (A5) photon number, not
+        # the operator. The soft bound below is untouched by this.
+        warnings.warn(
+            message + "\nCONTROLLED OVERRIDE: allow_out_of_band_shock=True, "
+            f"so {ratio:.2f}× the carrier frequency is sampled, i.e. the "
+            "shock symbol is applied where ω = ω₀ + Ω is not positive and "
+            "those bins carry no physical steepening. Blow & Wood's (A5) "
+            "photon number is undefined on this grid, so photon_number_vs_z "
+            "reports nan and any drift derived from it is n/a. Use this to "
+            "reproduce a published grid for comparison only, never for "
+            "production numbers.",
+            UserWarning,
+            stacklevel=stacklevel,
+        )
+    tau_omega = float(tau_shock) * omega_max
+    grid_omega = np.asarray(grid.w, dtype=float)
+    factor = 1.0 + float(tau_shock) * grid_omega
+    n_flipped = int(np.count_nonzero(factor <= 0.0))
+    if n_flipped:
+        warnings.warn(
+            "self-steepening with τ_shock = "
+            f"{float(tau_shock):.4e} s flips the sign of the shock "
+            f"operator (1 + Ω·τ) on {n_flipped} of {grid_omega.size} grid "
+            "bins, i.e. Ω < −1/τ = "
+            f"{-1.0 / float(tau_shock):.4e} rad/s is sampled. On those "
+            "bins the operator is a sign reversal, not a steepening, so the "
+            "model is being extrapolated outside its derivation domain "
+            "there. τ = 1/ω₀ = "
+            f"{1.0 / omega0:.4e} s makes the factor exactly ω/ω₀, which the "
+            "Ω_max < ω₀ guard keeps positive; otherwise widen Tmax so "
+            f"Ω_max < 1/τ = {1.0 / float(tau_shock):.4e} rad/s.",
+            UserWarning,
+            stacklevel=stacklevel,
+        )
+    limit = float(shock_bandwidth_limit)
+    if tau_omega > limit:
+        fix = tau_omega / limit
+        warnings.warn(
+            "self-steepening is being run outside the GNLS derivation "
+            f"regime: τ_shock·Ω_max = {tau_omega:.3f} puts the simulated "
+            f"bandwidth above ω₀/3, the small-bandwidth assumption Blow & "
+            "Wood (1989) derive the GNLS under (bound: "
+            f"shock_bandwidth_limit = {limit:g}). The shock symbol "
+            "ω/ω₀ = 1 + Ω·τ_shock remains exact; what degrades is the "
+            "equation's own validity. The conserved quantity in this "
+            "regime is the photon number Σ|Â(ω)|²/(ω₀+ω)dω (Blow & Wood "
+            "App. Eq. A5), not the unweighted energy. Fix by increasing "
+            f"Tmax by at least {fix:.2f}× (equivalently reducing N), or "
+            "by disabling self-steepening.",
+            UserWarning,
+            stacklevel=stacklevel,
+        )
+    return domain_ok
+
+
+
+# ---------------------------------------------------------------------------
 # SplitStepEngine
 # ---------------------------------------------------------------------------
 
@@ -990,6 +1140,24 @@ class SplitStepEngine:
         develops a blue-shifted centroid and positive spectral skew with
         ``1 + Ω·τ`` and the mirror-image red shift with ``1 − Ω·τ``, and
         (iii) energy is conserved.
+    tau_shock : float | None
+        Shock timescale override in seconds (SI); ``None`` uses ``1/ω₀``.
+    allow_out_of_band_shock : bool
+        Opt-in override of the **hard** ``Ω_max < ω₀`` guard. Default
+        ``False``: a grid whose half-bandwidth reaches the carrier frequency
+        raises :class:`ValueError`, because the shock symbol ``ω/ω₀ = 1 +
+        Ω·τ_shock`` is only meaningful for positive absolute frequency. Set
+        ``True`` to run such a grid anyway — it emits a loud ``UserWarning``
+        naming ``Ω_max/ω₀`` and the (A5) photon-number consequence instead of
+        raising. Intended to reproduce a published grid for comparison, never
+        for production numbers: :attr:`shock_domain_ok` records the state and
+        :attr:`photon_number_vs_z` reports ``nan``.
+    shock_bandwidth_limit : float
+        The **soft** bound on ``τ_shock·Ω_max`` — the small-bandwidth regime
+        Blow & Wood (1989) derive the GNLS under. Default
+        ``_SHOCK_TAYLOR_LIMIT = 0.2`` (``Ω_max ≤ ω₀/5``). Exceeding it warns and
+        does not raise; raise this value to silence the warning honestly for a
+        deck that lives near ``Ω ~ ω₀/3``.
     include_tpa : bool
         Include TPA (legacy spatially-averaged carrier model). Default False.
         This flag applies ``fiber.sigma_tpa`` only; ``fiber.beta_tpa`` is
@@ -1120,6 +1288,8 @@ class SplitStepEngine:
         include_free_carriers: bool = False,
         conserving_shock: bool = False,
         tau_shock: float | None = None,
+        allow_out_of_band_shock: bool = False,
+        shock_bandwidth_limit: float = _SHOCK_TAYLOR_LIMIT,
         step_size: Length | None = None,
         scheme: Scheme = "strang",
         dispersion_profile: (
@@ -1173,6 +1343,14 @@ class SplitStepEngine:
         self.raman_response = (
             raman_response if raman_response is not None else fiber.raman_response
         )
+        # Fail here, not two layers down at engine build: the object that carries
+        # include_raman is this one, so this is where the missing data belongs.
+        if self.include_raman and self.raman_response is None:
+            raise ValueError(
+                "include_raman=True but fiber.raman_response is None. Provide a "
+                "RamanResponse, give the Fiber a raman_response, or set "
+                "include_raman=False."
+            )
         self.include_self_steepening = include_self_steepening
         self.include_tpa = include_tpa
         self.include_free_carriers = include_free_carriers
@@ -1205,6 +1383,25 @@ class SplitStepEngine:
                 f"tau_shock must be positive (seconds, SI), got {tau_shock!r}"
             )
         self._tau_shock_override = float(tau_shock) if tau_shock is not None else None
+        #: Opt-in escape from the hard ``Ω_max < ω₀`` bound. It is *not* a fix:
+        #: with the flag on, the shock symbol ``1 + Ω·τ`` is evaluated on bins
+        #: whose *absolute* frequency is not positive, so the model is being
+        #: extrapolated where it has no meaning. ``_validate_shock_grid`` warns
+        #: loudly instead of raising, so a published grid can be reproduced and
+        #: compared against a grid-legal run.
+        self.allow_out_of_band_shock = bool(allow_out_of_band_shock)
+        if not (shock_bandwidth_limit > 0.0):
+            raise ValueError(
+                "shock_bandwidth_limit must be positive (it bounds "
+                f"τ_shock·Ω_max), got {shock_bandwidth_limit!r}"
+            )
+        #: The soft bandwidth bound ``τ_shock·Ω_max`` of the GNLS derivation;
+        #: exceeding it warns. Defaults to :data:`_SHOCK_TAYLOR_LIMIT` (0.2).
+        self.shock_bandwidth_limit = float(shock_bandwidth_limit)
+        #: Cleared by :meth:`_validate_shock_grid` when ``ω₀ + Ω ≤ 0`` is
+        #: sampled: the Blow & Wood (A5) photon number, and every drift derived
+        #: from it, is then undefined rather than merely imprecise.
+        self._shock_domain_ok = True
         self.step_size = step_size
 
         if not (0.0 < min_shrink_factor <= 1.0):
@@ -1397,8 +1594,11 @@ class SplitStepEngine:
         self._energy_vs_z: list[float] | None = None
         #: Blow & Wood (1989) App. Eq. (A5) photon number Σ|Â(ω)|²/(ω₀+ω)dω at
         #: each saved step; only recorded with self-steepening, where the grid
-        #: validation guarantees ω₀+Ω > 0 (see :meth:`_photon_number`).
+        #: validation guarantees ω₀+Ω > 0 — unless ``allow_out_of_band_shock``
+        #: opted out, in which case every entry is ``nan`` (see
+        #: :meth:`_photon_number`).
         self._photon_vs_z: list[float] | None = None
+        self.last_clipped_fraction: float = 0.0
         self._U = 0.0  # carrier density for TPA
         self._N: NDArray | None = None  # time-resolved carrier population
 
@@ -1461,9 +1661,16 @@ class SplitStepEngine:
         stimulated Raman scattering".
 
         Only meaningful when every bin satisfies ``ω₀ + Ω > 0``, which
-        :meth:`_validate_shock_grid` enforces whenever self-steepening is on.
+        :meth:`_validate_shock_grid` enforces whenever self-steepening is on —
+        unless the caller opted out with ``allow_out_of_band_shock=True``, in
+        which case this returns ``nan`` (see :attr:`shock_domain_ok`).
         """
         w_abs = self.omega0 + self.grid.w
+        if not self._shock_domain_ok:
+            # allow_out_of_band_shock: ω = ω₀ + Ω ≤ 0 is sampled, where (A5) has
+            # no meaning. nan is the honest value; a number here would be
+            # arithmetic on a sign-flipped bin.
+            return float("nan")
         return float(np.sum(np.abs(self.grid.fft(A)) ** 2 / w_abs) * self.grid.dw)
 
     def photon_number(self, A: NDArray | None = None) -> float:
@@ -1484,72 +1691,32 @@ class SplitStepEngine:
             return self._tau_shock_override
         return 1.0 / float(self.omega0)
 
-    def _validate_shock_grid(self) -> None:
-        """Reject grids that push the ``ω/ω₀`` shock factor outside its domain.
+    @property
+    def shock_domain_ok(self) -> bool:
+        """Whether every bin satisfies ``ω₀ + Ω > 0`` (the shock/``A5`` domain).
 
-        Two independent conditions, both from the primary source (Blow & Wood
-        1989):
-
-        1. **Positivity of the optical frequency (hard).** The shock operator
-           ``(1 + (i/ω₀)∂_t)`` has symbol ``ω/ω₀ = (ω₀ + Ω)/ω₀`` — exact, with no
-           Taylor expansion in this realization. It is only meaningful for
-           channels with positive *absolute* frequency, ``ω = ω₀ + Ω > 0``. On
-           a symmetric grid spanning ``±Ω_max`` this requires ``Ω_max < ω₀``.
-           Bins beyond that would alias onto negative optical frequencies where
-           the factor has no physical meaning; the historical code clamped
-           them to zero, which silently corrupted the shock physics. Failing
-           loudly is the honest alternative (design decision D2).
-
-        2. **Bandwidth of the GNLS derivation (soft, warned).** Blow & Wood
-           derive the GNLS assuming "the bandwidth of U(ω') is less than
-           ω₀/3" — a small-fractional-bandwidth expansion of the wave
-           equation, not a property of any integrator. ``τ_shock·Ω_max ≤
-           _SHOCK_TAYLOR_LIMIT = 0.2`` keeps the simulated bandwidth at
-           ω₀/5, inside that bound with margin. This is a warning, not a
-           rejection: exceeding it widens the band past the equation's
-           derivation, it does not make the operator ill-defined.
-
-        What this guard is *not* about (a corrected misdiagnosis,
-        ``CHANGELOG.md`` 2026-10-27): a ``≤0.3 % … −5.2 %`` table of
-        "photon-number drift vs τ·Ω_max" was once quoted here as evidence of a
-        first-order-truncation grid artifact. That drift was the *unweighted*
-        energy ``Σ|A|²dt`` changing, which the GNLSE does not conserve — the
-        conserved quantity is Blow & Wood's Eq. (A5) photon number
-        ``Σ|Â(ω)|²/(ω₀+ω)dω`` (see :meth:`_photon_number`). Tracking (A5)
-        instead, the same runs conserve to ≲5×10⁻⁵ relative even at
-        τ·Ω_max = 0.88.
+        ``False`` means ``allow_out_of_band_shock=True`` let a grid through on
+        which the shock symbol is extrapolated onto non-positive absolute
+        frequencies; the (A5) photon number is then undefined and reported as
+        ``nan``.
         """
-        omega_max = float(self.grid.omega_max)
-        omega0 = float(self.omega0)
-        if omega_max >= omega0:
-            ratio = omega_max / omega0
-            raise ValueError(
-                "self-steepening requires the grid to resolve only positive "
-                "absolute frequencies, i.e. Ω_max < ω₀, but got "
-                f"Ω_max = {omega_max:.4e} rad/s >= ω₀ = {omega0:.4e} rad/s "
-                f"(Ω_max/ω₀ = {ratio:.3f}). The grid has N = {self.grid.N} "
-                f"samples over Tmax = {self.grid.Tmax.as_s:.4e} s. Fix by "
-                f"increasing the time window Tmax by at least {ratio:.3f}× "
-                "(equivalently reducing N for the same Tmax), or by disabling "
-                "self-steepening."
-            )
-        tau_omega = float(self.tau_shock) * omega_max
-        if tau_omega > _SHOCK_TAYLOR_LIMIT:
-            fix = tau_omega / _SHOCK_TAYLOR_LIMIT
-            warnings.warn(
-                "self-steepening is being run outside the GNLS derivation "
-                f"regime: τ_shock·Ω_max = {tau_omega:.3f} puts the simulated "
-                f"bandwidth above ω₀/3, the small-bandwidth assumption Blow & "
-                "Wood (1989) derive the GNLS under. The shock symbol "
-                "ω/ω₀ = 1 + Ω·τ_shock remains exact; what degrades is the "
-                "equation's own validity. The conserved quantity in this "
-                "regime is the photon number Σ|Â(ω)|²/(ω₀+ω)dω (Blow & Wood "
-                "App. Eq. A5), not the unweighted energy. Fix by increasing "
-                f"Tmax by at least {fix:.2f}× (equivalently reducing N), or "
-                "by disabling self-steepening.",
-                UserWarning,
-                stacklevel=3,
-            )
+        return self._shock_domain_ok
+
+    def _validate_shock_grid(self) -> None:
+        """Apply the shock-grid policy; see :func:`_enforce_shock_grid`.
+
+        Kept as the engine's hook so the policy lives in exactly one place
+        (:func:`_enforce_shock_grid`, shared with the tapered and multimode
+        engines) and the (A5) domain flag is recorded on this instance.
+        """
+        self._shock_domain_ok = _enforce_shock_grid(
+            grid=self.grid,
+            omega0=self.omega0,
+            tau_shock=self.tau_shock,
+            allow_out_of_band_shock=self.allow_out_of_band_shock,
+            shock_bandwidth_limit=self.shock_bandwidth_limit,
+            stacklevel=3,
+        )
 
     def _linear_step(self, A: NDArray, dz: float) -> NDArray:
         """Apply dispersion via FFT: A(ω) ← A(ω) · exp(+i·Σ β_k(Ω)·Δz).
@@ -1595,6 +1762,19 @@ class SplitStepEngine:
                 )
                 clipped_mask = (omega_abs < omega_min) | (omega_abs > omega_max)
                 fraction_clipped = clipped_mask.sum() / len(omega_abs)
+                self.last_clipped_fraction = float(fraction_clipped)
+                if fraction_clipped > 0 and getattr(
+                    self._dispersion_profile, "out_of_range", "nan"
+                ) == "raise":
+                    raise ValueError(
+                        f"{fraction_clipped * 100:.2f}% of the simulation grid "
+                        f"frequencies ({int(clipped_mask.sum())} of "
+                        f"{omega_abs.size}) lie outside the β(ω, z) table "
+                        f"[{omega_min:.2e}, {omega_max:.2e}] rad/s, and the table "
+                        'asks for out_of_range="raise". Widen the table past the '
+                        "grid, or set out_of_range to 'clip'/'nan' to flatten the "
+                        "edge bins on purpose."
+                    )
                 if fraction_clipped > 0:
                     warnings.warn(
                         f"{fraction_clipped * 100:.1f}% of simulation grid frequencies are clipped "
@@ -1610,8 +1790,23 @@ class SplitStepEngine:
             beta_carrier = self._eval_dispersion(
                 np.array([self.omega0]), self._current_z
             )
-            # Phase: [β(ω₀+Ω, z) - β(ω₀, z)] * Δz
-            phi = (beta_at_z - beta_carrier[0]) * dz
+            # Retarded frame: [β(ω₀+Ω, z) − β(ω₀, z) − β₁(ω₀, z)·Ω]·Δz, exactly
+            # as _full_beta_phase builds the static one.  Without the β₁Ω term
+            # the pulse walks out of the time window at β₁L (29 ps over 3 mm for
+            # a chalcogenide rib, i.e. most of a 32 ps window) and, being
+            # periodic, re-enters and self-interacts.  β₁ here is a central
+            # difference over one grid step, which is exact for the linear
+            # interpolant the z-table uses.
+            d_omega = float(self.grid.dw)
+            probe = np.array([self.omega0 + d_omega, self.omega0 - d_omega])
+            if self._dispersion_profile is not None and hasattr(
+                self._dispersion_profile, "omegas"
+            ):
+                probe = np.clip(probe, omega_min, omega_max)
+            beta_probe = self._eval_dispersion(probe, self._current_z)
+            beta1_z = float((beta_probe[0] - beta_probe[1]) / (probe[0] - probe[1]))
+            # Phase: [β(ω₀+Ω, z) - β(ω₀, z) - β₁(ω₀,z)·Ω] * Δz
+            phi = (beta_at_z - beta_carrier[0] - beta1_z * self.grid.w) * dz
 
             # z-dependent loss
             alpha = self._get_alpha(self._current_z)
@@ -2862,7 +3057,9 @@ class SplitStepEngine:
         Recorded only when ``include_self_steepening=True`` (the condition this
         invariant applies to, and the case where
         :meth:`_validate_shock_grid` guarantees ``ω₀ + Ω > 0``). Same length as
-        ``z_array``. See :meth:`_photon_number`.
+        ``z_array``. See :meth:`_photon_number`. Every entry is ``nan`` when
+        ``allow_out_of_band_shock=True`` let a grid through on which ``ω₀ + Ω ≤
+        0`` is sampled — the invariant does not exist there.
         """
         if self._photon_vs_z is None:
             raise RuntimeError(
@@ -3017,6 +3214,12 @@ class ConvergenceDiagnostics:
     energy otherwise). The convergence columns compare the run against a
     second run at ``probe_steps`` steps: ``rms_db`` (in-band, smoothed),
     ``peak_shift_nm`` and ``overlap``.
+
+    ``invariant_undefined`` distinguishes "no drift to report" from "the
+    invariant does not exist on this grid": with ``allow_out_of_band_shock=True``
+    the (A5) photon number is meaningless, so the verdict reads
+    ``CONVERGED (conservation n/a)`` instead of a bare ``CONVERGED``. The other
+    verdict values are unchanged, and the flag defaults to ``False``.
     """
 
     scheme: str
@@ -3033,6 +3236,7 @@ class ConvergenceDiagnostics:
     peak_tol_nm: float
     overlap_tol: float
     notes: list[str] = field(default_factory=list)
+    invariant_undefined: bool = False
 
     @property
     def converged(self) -> bool:
@@ -3045,10 +3249,24 @@ class ConvergenceDiagnostics:
             and self.overlap >= self.overlap_tol
         )
 
+    @property
+    def verdict(self) -> str:
+        """One line, and the state travels with it.
+
+        ``NOT CONVERGED``, ``CONVERGED``, or ``CONVERGED (conservation n/a)``
+        when the conservation gate could not be evaluated at all (see
+        :attr:`invariant_undefined`). A bare ``CONVERGED`` on a run whose
+        invariant does not exist is the misleading case this guards.
+        """
+        if not self.converged:
+            return "NOT CONVERGED"
+        if self.invariant_undefined:
+            return "CONVERGED (conservation n/a)"
+        return "CONVERGED"
+
     def summary(self) -> str:
         """Human-readable multi-line table; ends with the verdict."""
         probe_factor = self.probe_steps / max(self.num_steps, 1)
-        verdict = "CONVERGED" if self.converged else "NOT CONVERGED"
         lines = [
             "GNLSE conservation + convergence diagnostics",
             f"  scheme={self.scheme}  steps={self.num_steps}  "
@@ -3062,7 +3280,7 @@ class ConvergenceDiagnostics:
             f"(tol {self.overlap_tol:g})",
         ]
         lines.extend(f"  note: {note}" for note in self.notes)
-        lines.append(f"  verdict: {verdict}")
+        lines.append(f"  verdict: {self.verdict}")
         return "\n".join(lines)
 
 
@@ -3107,6 +3325,18 @@ class GNLSESolver:
         Include the opt-in time-resolved TPA/free-carrier model (see
         :class:`SplitStepEngine`). Requires ``fiber.beta_tpa`` /
         ``fiber.sigma_fca``. Default False.
+    tau_shock : float | None
+        Shock timescale override in seconds (SI); ``None`` uses ``1/ω₀``.
+        Passed straight to :class:`SplitStepEngine`.
+    allow_out_of_band_shock : bool
+        Opt-in override of the hard ``Ω_max < ω₀`` guard, passed straight to
+        :class:`SplitStepEngine`. Default ``False`` (raise). ``True`` warns
+        loudly instead, for reproducing a published grid whose half-bandwidth
+        reaches the carrier frequency; see there for the consequence on the
+        conserved photon number.
+    shock_bandwidth_limit : float
+        The soft ``τ_shock·Ω_max`` bound of the GNLS derivation, passed straight
+        to :class:`SplitStepEngine`. Default 0.2.
     check_phase_matching : bool
         Run the phase-matching preflight and emit warnings before propagating.
     scheme : {"strang", "yoshida4", "etdrk4", "rk4ip"}
@@ -3143,7 +3373,7 @@ class GNLSESolver:
         pulse: Wave,
         fiber: FiberProfile,
         betas: NDArray | None = None,
-        include_raman: bool = True,
+        include_raman: bool | None = None,
         include_self_steepening: bool = False,
         include_tpa: bool = False,
         include_free_carriers: bool = False,
@@ -3151,6 +3381,8 @@ class GNLSESolver:
         step_size: Length | None = None,
         betas_unit: BetasUnit = "ps^k/m",
         tau_shock: float | None = None,
+        allow_out_of_band_shock: bool = False,
+        shock_bandwidth_limit: float = _SHOCK_TAYLOR_LIMIT,
         conserving_shock: bool = False,
         scheme: Scheme = "strang",
         full_beta=None,
@@ -3177,7 +3409,19 @@ class GNLSESolver:
         self.raman_response = (
             raman_response if raman_response is not None else fiber.raman_response
         )
-        self.include_raman = include_raman
+        # None = "on when there is a response to convolve with", which is what
+        # the old `True` default meant in practice (the engine quietly dropped
+        # Raman when the response was missing). An explicit True now fails here
+        # instead of two layers down at engine build.
+        self.include_raman = (
+            self.raman_response is not None if include_raman is None else include_raman
+        )
+        if self.include_raman and self.raman_response is None:
+            raise ValueError(
+                "include_raman=True but fiber.raman_response is None. Provide a "
+                "RamanResponse, give the Fiber a raman_response, or set "
+                "include_raman=False."
+            )
         self.include_self_steepening = include_self_steepening
         self.include_tpa = include_tpa
         self.include_free_carriers = include_free_carriers
@@ -3194,6 +3438,13 @@ class GNLSESolver:
                 f"tau_shock must be positive (seconds, SI), got {tau_shock!r}"
             )
         self.tau_shock = float(tau_shock) if tau_shock is not None else None
+        self.allow_out_of_band_shock = bool(allow_out_of_band_shock)
+        if not (shock_bandwidth_limit > 0.0):
+            raise ValueError(
+                "shock_bandwidth_limit must be positive (it bounds "
+                f"τ_shock·Ω_max), got {shock_bandwidth_limit!r}"
+            )
+        self.shock_bandwidth_limit = float(shock_bandwidth_limit)
         # Gap N (§18.1): the two Gaps J/K keywords must be reachable from the
         # documented wrapper, not only from SplitStepEngine.
         self.gamma_omega = gamma_omega
@@ -3224,6 +3475,8 @@ class GNLSESolver:
             include_free_carriers=self.include_free_carriers,
             conserving_shock=self.conserving_shock,
             tau_shock=self.tau_shock,
+            allow_out_of_band_shock=self.allow_out_of_band_shock,
+            shock_bandwidth_limit=self.shock_bandwidth_limit,
             step_size=step_size,
             scheme=self.scheme,
             full_beta=self.full_beta,
@@ -3328,7 +3581,11 @@ class GNLSESolver:
         Returns
         -------
         ConvergenceDiagnostics
-            Also printed via :meth:`ConvergenceDiagnostics.summary`.
+            Also printed via :meth:`ConvergenceDiagnostics.summary`. Its
+            ``verdict`` carries the state: ``NOT CONVERGED``, ``CONVERGED``, or
+            ``CONVERGED (conservation n/a)`` when the grid was run with
+            ``allow_out_of_band_shock=True`` and the (A5) invariant therefore
+            does not exist (``invariant_undefined=True``).
         """
         if not self._evolution:
             raise RuntimeError("Call propagate() before verify_convergence().")
@@ -3374,10 +3631,24 @@ class GNLSESolver:
             and not self.include_free_carriers
         )
         notes: list[str] = []
+        invariant_undefined = self.include_self_steepening and (
+            float(self.pulse.grid.omega_max) >= float(self.pulse.central_frequency)
+        )
         if lossless:
             if self.include_self_steepening:
-                invariant = "photon number (Blow & Wood A5)"
-                drift = _max_drift_pct(self.photon_number_vs_z)
+                if invariant_undefined:
+                    # allow_out_of_band_shock grids: (A5) has no meaning there, so
+                    # reporting inf/nan drift would read as a failed run.
+                    invariant = "n/a (shock samples ω ≤ 0)"
+                    drift = 0.0
+                    notes.append(
+                        "the Blow & Wood (A5) photon number is undefined on "
+                        "this grid (allow_out_of_band_shock samples ω ≤ 0), so "
+                        "the conservation gate is n/a"
+                    )
+                else:
+                    invariant = "photon number (Blow & Wood A5)"
+                    drift = _max_drift_pct(self.photon_number_vs_z)
             else:
                 invariant = "energy"
                 drift = _max_drift_pct(self.energy_vs_z)
@@ -3409,6 +3680,7 @@ class GNLSESolver:
             peak_tol_nm=float(peak_tol_nm),
             overlap_tol=float(overlap_tol),
             notes=notes,
+            invariant_undefined=invariant_undefined,
         )
         print(diag.summary())
         if warn and not diag.converged:
@@ -3461,16 +3733,44 @@ class GNLSESolver:
         (``Ω_max >= ω₀``) is widened at fixed ``N`` (``Tmax`` grows, ``dt``
         grows) so the shock operator stays defined; Raman ``h_R(t)`` is
         analytic and re-evaluated on the new grid, so this is exact.
+
+        With ``allow_out_of_band_shock=True`` the caller has asked for *that*
+        grid, so it is **not** widened: silently resizing it would discard the
+        published grid the flag exists to reproduce. The (A5) photon number is
+        then undefined, ``report["invariant"]`` says so
+        (``"n/a (A5 undefined: shock samples ω ≤ 0)"``) and ``drift_metric``
+        falls back to the unweighted energy — which self-steepening does not
+        conserve, so read that round's ``converged`` as "edges are clean", not
+        "conservation passed".
+
         Returns a report dict
-        with ``converged``, ``steps``, ``rounds``, ``drift``, ``edge_frac``
-        and ``widened``. Warns instead of raising when ``max_rounds`` is
-        exhausted, so a long run's data is never thrown away.
+        with ``converged``, ``steps``, ``rounds``, ``drift``, ``edge_frac``,
+        ``invariant`` and ``widened``. Warns instead of raising when
+        ``max_rounds`` is exhausted, so a long run's data is never thrown away.
         """
         from photonics_helper.core.grids import TemporalGrid
         from photonics_helper.pulse import Wave
 
         widened = False
-        if self.include_self_steepening:
+        if self.include_self_steepening and self.allow_out_of_band_shock:
+            # The caller opted into an out-of-band grid on purpose: widening it
+            # here would silently undo that. Say what the drift check loses.
+            if float(self.pulse.grid.omega_max) >= float(
+                self.pulse.central_frequency
+            ):
+                warnings.warn(
+                    "propagate_auto: allow_out_of_band_shock=True, so the "
+                    f"out-of-band grid (Ω_max/ω₀ = "
+                    f"{float(self.pulse.grid.omega_max) / float(self.pulse.central_frequency):.3f}) "
+                    "is kept as given and not widened. The Blow & Wood (A5) "
+                    "photon number is undefined on it, so the drift gate falls "
+                    "back to the unweighted energy, which self-steepening does "
+                    "not conserve: read `converged` as \"edges are clean\", not "
+                    "as \"conservation passed\".",
+                    UserWarning,
+                    stacklevel=2,
+                )
+        elif self.include_self_steepening:
             for _ in range(5):
                 omega_max = float(self.pulse.grid.omega_max)
                 omega0 = float(self.pulse.central_frequency)
@@ -3544,6 +3844,15 @@ class GNLSESolver:
                         abs(phot[-1] - phot[0]) / max(phot[0], 1e-300)
                     )
             metric = photon_drift if photon_drift is not None else drift
+            invariant = (
+                "photon (A5)"
+                if photon_drift is not None
+                else (
+                    "n/a (A5 undefined: shock samples ω ≤ 0)"
+                    if self.include_self_steepening
+                    else "energy"
+                )
+            )
             final_A = np.asarray(self._evolution[-1].envelope_field)
             edge_n = max(1, int(0.05 * final_A.shape[0]))
             edge_frac = float(
@@ -3562,6 +3871,7 @@ class GNLSESolver:
                 "drift_metric": "photon"
                 if photon_drift is not None
                 else "energy",
+                "invariant": invariant,
                 "edge_frac": edge_frac,
                 "widened": widened,
                 "N": int(self.pulse.grid.N),
@@ -3660,6 +3970,7 @@ class GNLSESolver:
         n_wl: int,
         *,
         step_index: int = -1,
+        per: Literal["wavelength", "frequency"] = "wavelength",
     ) -> tuple[NDArray, NDArray]:
         """Return spectrum (dB) on a uniform wavelength grid (nm).
 
@@ -3674,6 +3985,13 @@ class GNLSESolver:
             Number of wavelength samples.
         step_index : int
             Evolution index (default -1 = final step).
+        per : {"wavelength", "frequency"}
+            Which spectral density the dB values describe. ``"wavelength"``
+            (default) gives ``S_λ = S_ν·|dω/dλ| = S_ν·2πc/λ²`` — the density that
+            belongs on a λ axis, and the one a "−50 dB at 9 µm" claim needs.
+            ``"frequency"`` is the historical behaviour (``S_ν`` interpolated onto
+            a λ axis), which is off by up to 13 dB near 9 µm and is kept only so
+            old figures can be reproduced deliberately.
 
         Returns
         -------
@@ -3689,7 +4007,17 @@ class GNLSESolver:
         wavelength_nm = wavelength_nm[sort_idx]
         spec = spec[sort_idx]
         wl_grid = np.linspace(wl_min, wl_max, n_wl)
-        spec_interp = np.interp(wl_grid, wavelength_nm, spec, left=0.0, right=0.0)
+        if per == "wavelength":
+            # Jacobian |dω/dλ| = 2πc/λ², applied on the *sampled* axis before
+            # interpolation so the per-nm density is what gets resampled.
+            density = spec * (2.0 * np.pi * C_MS / wavelength_nm**2)
+        elif per == "frequency":
+            density = spec
+        else:
+            raise ValueError(
+                f"per must be 'wavelength' or 'frequency', got {per!r}"
+            )
+        spec_interp = np.interp(wl_grid, wavelength_nm, density, left=0.0, right=0.0)
         spec_db = 10 * np.log10(spec_interp + 1e-30)
         spec_db -= spec_db.max()
         return wl_grid, spec_db
@@ -3828,6 +4156,14 @@ class TaperedGNLSESolver:
     alpha_w : float, array_like or callable, optional
         Per-bin field-amplitude loss α(Ω) in 1/m, combined with the scalar
         z-dependent loss and passed to :class:`SplitStepEngine`.
+    allow_out_of_band_shock : bool
+        Opt-in override of the hard ``Ω_max < ω₀`` guard, forwarded to
+        :class:`SplitStepEngine`. Default ``False`` (raise); ``True`` warns
+        loudly instead. This class is what a taper replication actually runs,
+        so the flag has to be here too, not only on the uniform solvers.
+    shock_bandwidth_limit : float
+        The soft ``τ_shock·Ω_max`` bound of the GNLS derivation, forwarded to
+        :class:`SplitStepEngine`. Default ``0.2``.
     """
 
     def __init__(
@@ -3838,7 +4174,7 @@ class TaperedGNLSESolver:
         a_eff_fn: Callable[[float], float] | None = None,
         alpha_fn: Callable[[float], float] | None = None,
         gamma_fn: Callable[[float], float] | None = None,
-        include_raman: bool = True,
+        include_raman: bool | None = None,
         include_self_steepening: bool = False,
         include_tpa: bool = False,
         include_free_carriers: bool = False,
@@ -3847,6 +4183,8 @@ class TaperedGNLSESolver:
         step_size: Length | None = None,
         betas_unit: BetasUnit = "ps^k/m",
         tau_shock: float | None = None,
+        allow_out_of_band_shock: bool = False,
+        shock_bandwidth_limit: float = _SHOCK_TAYLOR_LIMIT,
         raman_response=None,
         gamma_omega: NDArray | Callable[[NDArray], NDArray] | None = None,
         gamma_omega_naive: bool = False,
@@ -3875,7 +4213,15 @@ class TaperedGNLSESolver:
         self.a_eff_fn = a_eff_fn
         self.alpha_fn = alpha_fn
         self.gamma_fn = gamma_fn
-        self.include_raman = include_raman
+        self.include_raman = (
+            self.raman_response is not None if include_raman is None else include_raman
+        )
+        if self.include_raman and self.raman_response is None:
+            raise ValueError(
+                "include_raman=True but fiber.raman_response is None. Provide a "
+                "RamanResponse, give the Fiber a raman_response, or set "
+                "include_raman=False."
+            )
         self.include_self_steepening = include_self_steepening
         self.include_tpa = include_tpa
         self.include_free_carriers = include_free_carriers
@@ -3886,6 +4232,13 @@ class TaperedGNLSESolver:
                 f"tau_shock must be positive (seconds, SI), got {tau_shock!r}"
             )
         self.tau_shock = float(tau_shock) if tau_shock is not None else None
+        self.allow_out_of_band_shock = bool(allow_out_of_band_shock)
+        if not (shock_bandwidth_limit > 0.0):
+            raise ValueError(
+                "shock_bandwidth_limit must be positive (it bounds "
+                f"τ_shock·Ω_max), got {shock_bandwidth_limit!r}"
+            )
+        self.shock_bandwidth_limit = float(shock_bandwidth_limit)
         self.gamma_omega = gamma_omega
         self.gamma_omega_naive = gamma_omega_naive
         self.three_photon_alpha_3 = three_photon_alpha_3
@@ -3919,6 +4272,7 @@ class TaperedGNLSESolver:
         show_progress : bool — if True, show ``tqdm`` progress bars (requires tqdm).
         """
         self._strict_mode = strict
+        self._last_num_steps = int(num_steps)
 
         if strict:
             # Pre-flight check: verify dispersion coverage
@@ -3962,6 +4316,8 @@ class TaperedGNLSESolver:
             gamma_fn=self.gamma_fn,
             min_shrink_factor=self.min_shrink_factor,
             tau_shock=self.tau_shock,
+            allow_out_of_band_shock=self.allow_out_of_band_shock,
+            shock_bandwidth_limit=self.shock_bandwidth_limit,
             step_size=self.step_size,
             raman_response=self.raman_response,
             gamma_omega=self.gamma_omega,
@@ -3985,6 +4341,137 @@ class TaperedGNLSESolver:
             if self._engine.include_self_steepening
             else None
         )
+
+    def verify_convergence(
+        self,
+        *,
+        num_steps: int | None = None,
+        probe_factor: int = 2,
+        drift_tol_pct: float = DRIFT_WARN_PCT,
+        rms_tol_db: float = 0.5,
+        peak_tol_nm: float = 2.0,
+        overlap_tol: float = 0.99,
+        floor_db: float = -40.0,
+        smooth_window: int = 9,
+        warn: bool = True,
+    ) -> ConvergenceDiagnostics:
+        """Same contract as :meth:`GNLSESolver.verify_convergence`, for a taper.
+
+        Re-runs this solver at ``probe_factor`` times the step count, compares the
+        two output spectra, then restores the coarse run so the object still holds
+        it. The comparison is uniform-step refinement of the whole taper: it
+        certifies the step count, not the section discretisation — that is what
+        the section-count sweep is for (and the note says so).
+
+        The verdict carries the conservation state exactly as the scalar
+        solver's does: on a grid run with ``allow_out_of_band_shock=True`` the
+        gate is ``n/a`` and the verdict reads ``CONVERGED (conservation n/a)``.
+        """
+        if not self._evolution:
+            raise RuntimeError("Call propagate() before verify_convergence().")
+        if probe_factor < 2:
+            raise ValueError(f"probe_factor must be >= 2, got {probe_factor!r}")
+
+        n_coarse = int(num_steps if num_steps is not None else self._last_num_steps)
+        saved = (
+            self._evolution,
+            self._engine,
+            self._z_positions,
+            self._spectra_vs_z,
+            self._energy_vs_z,
+            self._photon_vs_z,
+            self._last_num_steps,
+        )
+        A_coarse = np.asarray(saved[0][-1].envelope_field, dtype=complex)
+        energy_coarse = saved[4]
+        grid = self.pulse.grid
+        omega0 = float(self.pulse.central_frequency)
+        wl, S_coarse = _sorted_spectrum(grid, A_coarse, omega0)
+        n_fine = max(n_coarse * int(probe_factor), n_coarse + 1)
+
+        try:
+            self.propagate(num_steps=n_fine)
+            A_fine = np.asarray(self._evolution[-1].envelope_field, dtype=complex)
+            _, S_fine = _sorted_spectrum(grid, A_fine, omega0)
+        finally:
+            (
+                self._evolution,
+                self._engine,
+                self._z_positions,
+                self._spectra_vs_z,
+                self._energy_vs_z,
+                self._photon_vs_z,
+                self._last_num_steps,
+            ) = saved
+
+        rms_db, peak_shift, overlap = _self_convergence_metrics(
+            wl,
+            S_coarse,
+            S_fine,
+            A_coarse,
+            A_fine,
+            floor_db=floor_db,
+            smooth_window=smooth_window,
+        )
+        notes: list[str] = []
+        lossless = float(self.fiber.alpha) == 0.0 and not self.include_tpa
+        invariant_undefined = self.include_self_steepening and (
+            float(self.pulse.grid.omega_max) >= float(self.pulse.central_frequency)
+        )
+        if invariant_undefined:
+            # allow_out_of_band_shock: no invariant exists on this grid, so the
+            # gate is n/a rather than "energy" (which self-steepening does not
+            # conserve) or a nan drift.
+            invariant = "n/a (shock samples ω ≤ 0)"
+            drift = 0.0
+            notes.append(
+                "the Blow & Wood (A5) photon number is undefined on this grid "
+                "(allow_out_of_band_shock samples ω ≤ 0), so the conservation "
+                "gate is n/a"
+            )
+        elif lossless:
+            invariant = "energy"
+            drift = _max_drift_pct(np.asarray(energy_coarse, dtype=float))
+        else:
+            invariant = "n/a (loss/gain/TPA/free-carrier run)"
+            drift = 0.0
+            notes.append(
+                "drift is not an error proxy here: loss/gain/TPA/free "
+                "carriers change the invariant by design"
+            )
+        notes.append(
+            "uniform-step refinement of the whole taper: certifies the step "
+            "count, not the section discretisation"
+        )
+        diag = ConvergenceDiagnostics(
+            scheme="tapered",
+            num_steps=n_coarse,
+            dz_m=float(self.fiber.length.as_m) / max(n_coarse, 1),
+            probe_steps=n_fine,
+            invariant=invariant,
+            drift_pct=float(drift),
+            drift_tol_pct=float(drift_tol_pct),
+            rms_db=float(rms_db),
+            peak_shift_nm=float(peak_shift),
+            overlap=float(overlap),
+            rms_tol_db=float(rms_tol_db),
+            peak_tol_nm=float(peak_tol_nm),
+            overlap_tol=float(overlap_tol),
+            notes=notes,
+            invariant_undefined=invariant_undefined,
+        )
+        print(diag.summary())
+        if warn and not diag.converged:
+            warnings.warn(
+                f"tapered run at {n_coarse} steps is not self-converged: "
+                f"drift {diag.drift_pct:.3f}% ({diag.invariant}), rms "
+                f"{diag.rms_db:.3f} dB, peak shift {diag.peak_shift_nm:.3f} nm, "
+                f"overlap {diag.overlap:.4f}. Refine the step count before "
+                "trusting spectral detail.",
+                UserWarning,
+                stacklevel=2,
+            )
+        return diag
 
     @property
     def evolution(self) -> list[Wave]:
@@ -4034,6 +4521,16 @@ class TaperedGNLSESolver:
                 "include_self_steepening=True; call propagate() first."
             )
         return self._photon_vs_z
+
+    @property
+    def shock_domain_ok(self) -> bool:
+        """Whether the grid samples only ``ω₀ + Ω > 0`` (see
+        :attr:`SplitStepEngine.shock_domain_ok`).
+
+        Derived from the grid rather than from the last engine, so it can be
+        read before :meth:`propagate` has built one.
+        """
+        return float(self.pulse.grid.omega_max) < float(self.pulse.central_frequency)
 
     @property
     def preflight_report(self) -> SimulationReadinessReport | None:

@@ -60,6 +60,7 @@
   "SimulationReadinessReport",
   "SolitonAnalyzer",
   "SolitonOnBackground",
+  "Span",
   "SplitStepEngine",
   "StructuredField",
   "TMM",
@@ -144,5 +145,6 @@
   "solve_sfg",
   "solve_shg",
   "solve_three_wave",
+  "span_at_level",
   "wave_breaking_distance"
 ]

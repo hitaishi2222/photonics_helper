@@ -73,7 +73,13 @@ import numpy as np
 from numpy.typing import NDArray
 
 from photonics_helper.base import Length
-from photonics_helper.gnlse import BetasUnit, FiberProfile, _normalize_betas
+from photonics_helper.gnlse import (
+    _SHOCK_TAYLOR_LIMIT,
+    BetasUnit,
+    FiberProfile,
+    _enforce_shock_grid,
+    _normalize_betas,
+)
 
 if TYPE_CHECKING:  # pragma: no cover
     from photonics_helper.pulse import TemporalGrid, Wave
@@ -561,6 +567,18 @@ class MultimodeSplitStepEngine:
         RK4 round-off and strong pumps show the parametric
         back-conversion oscillation. Default False (pump-driven
         approximation: the pump evolves only through SPM/XPM).
+    allow_out_of_band_shock : bool
+        Opt-in override of the hard ``Ω_max < ω₀`` guard on the shock term
+        (``include_shock=True``). Default ``False`` (raise); ``True`` warns
+        loudly instead. Same policy object, kwargs and messages as
+        :class:`~photonics_helper.gnlse.SplitStepEngine`, so both engines
+        behave identically. On such a grid
+        :attr:`shock_domain_ok` is ``False`` and
+        :meth:`_photon_number` reports ``nan`` (the (A5) invariant does not
+        exist there).
+    shock_bandwidth_limit : float
+        The soft ``τ_shock·Ω_max`` bound of the GNLS derivation; exceeding it
+        warns. Default ``0.2``.
     step_size : Length | None
         Fixed step size (m); ``None`` uses ``length/num_steps``.
     cavity_reflectivity_input : sequence of float, optional
@@ -609,6 +627,8 @@ class MultimodeSplitStepEngine:
         raman_tensors=None,
         include_shock: bool = False,
         tau_shock: float | None = None,
+        allow_out_of_band_shock: bool = False,
+        shock_bandwidth_limit: float = _SHOCK_TAYLOR_LIMIT,
         conserving_shock: bool = False,
         include_tpa: bool = False,
         include_free_carriers: bool = False,
@@ -734,6 +754,20 @@ class MultimodeSplitStepEngine:
                 f"tau_shock must be positive (seconds, SI), got {tau_shock!r}"
             )
         self._tau_shock_override = float(tau_shock) if tau_shock is not None else None
+        #: Opt-in escape from the hard ``Ω_max < ω₀`` bound; same policy object
+        #: as the scalar engine (:func:`~photonics_helper.gnlse._enforce_shock_grid`),
+        #: so the two cannot drift apart.
+        self.allow_out_of_band_shock = bool(allow_out_of_band_shock)
+        if not (shock_bandwidth_limit > 0.0):
+            raise ValueError(
+                "shock_bandwidth_limit must be positive (it bounds "
+                f"τ_shock·Ω_max), got {shock_bandwidth_limit!r}"
+            )
+        #: Soft ``τ_shock·Ω_max`` bound of the GNLS derivation.
+        self.shock_bandwidth_limit = float(shock_bandwidth_limit)
+        #: Cleared by :meth:`_validate_shock_grid` when ``ω₀ + Ω ≤ 0`` is
+        #: sampled; the (A5) photon number is then undefined and reported nan.
+        self._shock_domain_ok = True
         self.conserving_shock = bool(conserving_shock)
         if self.conserving_shock and not self.include_shock:
             raise ValueError(
@@ -947,29 +981,35 @@ class MultimodeSplitStepEngine:
             return self._tau_shock_override
         return 1.0 / float(self.omega0)
 
-    def _validate_shock_grid(self) -> None:
-        """Port of the scalar shock-grid guard (task 1.3).
+    @property
+    def shock_domain_ok(self) -> bool:
+        """Whether every bin satisfies ``ω₀ + Ω > 0`` (the shock/``A5`` domain).
 
-        Hard: ``Ω_max < ω₀`` (positive absolute frequencies only) — raises.
-        Soft: ``τ_shock·Ω_max ≤ 0.2`` (Blow & Wood GNLS bandwidth) — warns.
+        ``False`` means ``allow_out_of_band_shock=True`` let a grid through on
+        which the shock symbol is extrapolated onto non-positive absolute
+        frequencies; the (A5) photon number is then undefined and reported as
+        ``nan``. Mirrors
+        :attr:`~photonics_helper.gnlse.SplitStepEngine.shock_domain_ok`.
         """
-        omega_max = float(self.grid.omega_max)
-        omega0 = float(self.omega0)
-        if omega_max >= omega0:
-            raise ValueError(
-                "self-steepening requires Ω_max < ω₀, but got "
-                f"Ω_max = {omega_max:.4e} >= ω₀ = {omega0:.4e}. Increase "
-                "Tmax (or reduce N), or disable self-steepening."
-            )
-        if float(self.tau_shock) * omega_max > 0.2:
-            warnings.warn(
-                "self-steepening outside the GNLS derivation regime "
-                f"(τ_shock·Ω_max = {float(self.tau_shock) * omega_max:.3f} > 0.2); "
-                "the ω/ω₀ symbol stays exact, only the equation's bandwidth "
-                "assumption degrades.",
-                UserWarning,
-                stacklevel=3,
-            )
+        return self._shock_domain_ok
+
+    def _validate_shock_grid(self) -> None:
+        """Apply the shared shock-grid policy (task 1.3, unified 2026-11-06).
+
+        Delegates to :func:`~photonics_helper.gnlse._enforce_shock_grid` — the
+        same code, kwargs and messages the scalar engine uses, so a change to
+        the policy reaches every engine at once. Hard ``Ω_max < ω₀`` raises
+        unless the caller opted out; the soft ``τ_shock·Ω_max`` bound and the
+        sign-flip test warn.
+        """
+        self._shock_domain_ok = _enforce_shock_grid(
+            grid=self.grid,
+            omega0=self.omega0,
+            tau_shock=self.tau_shock,
+            allow_out_of_band_shock=self.allow_out_of_band_shock,
+            shock_bandwidth_limit=self.shock_bandwidth_limit,
+            stacklevel=3,
+        )
 
     def _photon_number(self, A: list[NDArray]) -> float:
         """Blow & Wood App. Eq. (A5) photon number summed over channels.
@@ -979,6 +1019,11 @@ class MultimodeSplitStepEngine:
         recorded number off by a constant ``dω`` factor (relative drift
         was unaffected, absolute values were not).
         """
+        if not self._shock_domain_ok:
+            # Same contract as the scalar engine: ω = ω₀ + Ω ≤ 0 is sampled, so
+            # (A5) has no meaning; a number here would be arithmetic on a
+            # sign-flipped bin.
+            return float("nan")
         omega0 = float(self.omega0)
         dw = float(self.grid.dw)
         tot = 0.0
