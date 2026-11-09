@@ -281,3 +281,30 @@ def test_save_summary_html(tmp_path, solver):
     text = out.read_text(encoding="utf-8")
     assert "plotly" in text.lower()
     assert "Feature:" in text or "customdata" in text
+
+
+def test_output_profile_carries_the_per_wavelength_jacobian(solver):
+    """Panel (a) and panel (c) of one figure must show one numeraire (A3).
+
+    Panel (c) is resampled by ``spectral_evolution_on_wavelength_grid``, whose
+    default is the per-λ density ``S_ν·2πc/λ²``. Panel (a) plots the stored
+    field's own spectrum, so it needs the same Jacobian or the two panels sit
+    up to 13 dB apart near 9 µm.
+    """
+    from photonics_helper.gnlse import plot_spectral_temporal_summary
+    from photonics_helper.metrics import to_wavelength_density
+
+    fig = plot_spectral_temporal_summary(solver)
+    wl_plot, db_plot = fig.axes[0].lines[0].get_data()
+    plt.close(fig)
+
+    grid = solver.pulse.grid
+    field = np.asarray(solver.evolution[-1].envelope_field, dtype=complex)
+    raw = np.abs(grid.fft(field)) ** 2
+    wl = 2.0 * np.pi * 299792458.0 / (solver.omega0 + grid.w) * 1e9
+    order = np.argsort(wl)
+    density = to_wavelength_density(wl[order], raw[order])
+    expected = 10.0 * np.log10(density / density.max() + 1e-30)
+
+    assert np.allclose(np.asarray(wl_plot, dtype=float), wl[order])
+    assert np.allclose(np.asarray(db_plot, dtype=float), expected, atol=1e-9)

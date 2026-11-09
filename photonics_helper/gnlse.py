@@ -1173,6 +1173,17 @@ class SplitStepEngine:
         (Soref & Bennett 1987; Cowan et al. 2003; Yin & Agrawal 2007). Requires
         ``fiber.beta_tpa`` / ``fiber.sigma_fca``; free-carrier refraction (μ),
         diffusion and drift are out of scope. Default False.
+    beta_tpa_pointwise : bool
+        Apply the two-photon absorption attenuation ``−(β_TPA/2)|A|²A`` with
+        **no carrier state** — the ``N(t)``-free half of the model above.
+        Available on *every* scheme: an exact per-sample sub-step
+        (``I → I/(1+βI·dz)``) on the split-step schemes, and part of ``N(A)``
+        for ``etdrk4``/``rk4ip``, which is the only route to 2PA on an
+        exponential integrator (it refuses the history-dependent carrier
+        model). Reads ``fiber.beta_tpa`` in the engine convention
+        (``β_TPA/A_eff``; the physical m/W coefficient with ``Fiber(a_eff=...)``).
+        Refused together with ``include_free_carriers=True`` (the same β_TPA
+        twice) and a no-op warning when ``fiber.beta_tpa == 0``. Default False.
 
     Coefficient units
         The engine takes ``|A|²`` in **watts**, so ``fiber.beta_tpa`` and
@@ -1249,6 +1260,16 @@ class SplitStepEngine:
         Combining it with nonzero ``fiber.alpha`` is refused to prevent double
         counting. The public ``alpha_w`` field records that spectral loss was
         accounted for in the run.
+    clip_dispersion : bool, optional
+        What to do when the grid spans frequencies outside the ``β(ω, z)``
+        table. ``None`` (default) follows the table's own ``out_of_range``
+        attribute, so an existing table that raises still raises. ``False``
+        raises on **any** out-of-table sample, naming the clipped fraction and
+        both ω ranges — the mode a taper run wants, because a sub-5 % clip is
+        exactly how a dispersive wave's band edge is lost. ``True`` holds the
+        out-of-range samples at the table edge and warns once. A callable
+        ``β(ω, z)`` has no edge to hold: a non-finite value raises in every
+        mode.
     three_photon_alpha_3 : float or callable, optional
         Three-photon absorption coefficient α₃ with field form
         ``−α₃|A|⁴A/2`` (``I = |A|²``) — i.e. ``dI/dz = −α₃I³`` per sample, closed
@@ -1286,6 +1307,7 @@ class SplitStepEngine:
         include_self_steepening: bool = False,
         include_tpa: bool = False,
         include_free_carriers: bool = False,
+        beta_tpa_pointwise: bool = False,
         conserving_shock: bool = False,
         tau_shock: float | None = None,
         allow_out_of_band_shock: bool = False,
@@ -1295,6 +1317,7 @@ class SplitStepEngine:
         dispersion_profile: (
             ZDependentDispersion | Callable[[NDArray, float], NDArray] | None
         ) = None,
+        clip_dispersion: bool | None = None,
         a_eff_fn: Callable[[float], float] | None = None,
         alpha_fn: Callable[[float], float] | None = None,
         gamma_fn: Callable[[float], float] | None = None,
@@ -1327,6 +1350,10 @@ class SplitStepEngine:
                 "full_beta is the static scalar β(ω) operator, while "
                 "dispersion_profile is the z-dependent β(ω,z) path."
             )
+        #: Out-of-table β(ω, z) policy: ``None`` follows the table's own
+        #: ``out_of_range`` attribute, ``False`` raises on any out-of-table
+        #: sample, ``True`` holds the edge bins and warns.
+        self.clip_dispersion = clip_dispersion
         if betas is None and full_beta is None:
             raise ValueError("pass either betas or full_beta")
         self.full_beta = full_beta
@@ -1373,6 +1400,31 @@ class SplitStepEngine:
                 UserWarning,
                 stacklevel=2,
             )
+
+        #: Carrier-free 2PA: the pointwise ``−(β_TPA/2)|A|²A`` attenuation with
+        #: no ``N(t)`` state, so the exponential integrators can carry it.
+        self.beta_tpa_pointwise = bool(beta_tpa_pointwise)
+        if self.beta_tpa_pointwise:
+            if self.include_free_carriers:
+                raise ValueError(
+                    "beta_tpa_pointwise=True cannot be combined with "
+                    "include_free_carriers=True: free_carrier_step already "
+                    "attenuates by fiber.beta_tpa, so the same coefficient "
+                    "would be applied twice. Use beta_tpa_pointwise=True for "
+                    "the carrier-free 2PA loss alone, or "
+                    "include_free_carriers=True for the TPA/FCA carrier "
+                    "model."
+                )
+            if not self.fiber.beta_tpa_engine > 0.0:
+                warnings.warn(
+                    "beta_tpa_pointwise=True applies fiber.beta_tpa, which is "
+                    "zero for this fiber, so it is a no-op: no absorption "
+                    "will be applied. Set Fiber(beta_tpa=...) (engine units "
+                    "β_TPA/A_eff, or the physical m/W coefficient with "
+                    "Fiber(a_eff=...)), or drop the flag.",
+                    UserWarning,
+                    stacklevel=2,
+                )
 
         # Opt-in photon-conserving nonlinear operator (pcGNLSE; time-domain
         # form, Huang et al. arXiv:2607.05244): |γ| in the delayed-Raman
@@ -1752,7 +1804,10 @@ class SplitStepEngine:
             # at the current propagation position.
             # grid.w is the offset Ω (centered at 0), so absolute frequency is ω₀ + grid.w.
             omega_abs = self.omega0 + self.grid.w  # absolute angular frequency (rad/s)
-            # Clip to dispersion profile's valid omega range to avoid NaN from extrapolation
+            # Outside the β(ω, z) table: which way to resolve it. ``None`` (the
+            # default) follows the table's own ``out_of_range`` policy, so a
+            # table that opts into raising still raises; ``False`` raises on any
+            # out-of-table sample; ``True`` holds the edge and warns.
             if self._dispersion_profile is not None and hasattr(
                 self._dispersion_profile, "omegas"
             ):
@@ -1763,17 +1818,29 @@ class SplitStepEngine:
                 clipped_mask = (omega_abs < omega_min) | (omega_abs > omega_max)
                 fraction_clipped = clipped_mask.sum() / len(omega_abs)
                 self.last_clipped_fraction = float(fraction_clipped)
-                if fraction_clipped > 0 and getattr(
-                    self._dispersion_profile, "out_of_range", "nan"
-                ) == "raise":
+                clip = self.clip_dispersion
+                if clip is None:
+                    clip = (
+                        getattr(self._dispersion_profile, "out_of_range", "nan")
+                        != "raise"
+                    )
+                if fraction_clipped > 0 and not clip:
+                    # Name the policy that actually applied, not a default the
+                    # caller may never have passed.
+                    policy = (
+                        "clip_dispersion=False"
+                        if self.clip_dispersion is False
+                        else 'the table\'s out_of_range="raise"'
+                    )
                     raise ValueError(
                         f"{fraction_clipped * 100:.2f}% of the simulation grid "
                         f"frequencies ({int(clipped_mask.sum())} of "
-                        f"{omega_abs.size}) lie outside the β(ω, z) table "
-                        f"[{omega_min:.2e}, {omega_max:.2e}] rad/s, and the table "
-                        'asks for out_of_range="raise". Widen the table past the '
-                        "grid, or set out_of_range to 'clip'/'nan' to flatten the "
-                        "edge bins on purpose."
+                        f"{omega_abs.size}) would be clipped: they lie outside "
+                        f"the β(ω, z) table [{omega_min:.2e}, {omega_max:.2e}] "
+                        f"rad/s while the grid spans "
+                        f"[{omega_abs.min():.2e}, {omega_abs.max():.2e}] rad/s, "
+                        f"and {policy}. Widen the table past the grid, or pass "
+                        "clip_dispersion=True to hold the edge bins and warn."
                     )
                 if fraction_clipped > 0:
                     warnings.warn(
@@ -1786,6 +1853,19 @@ class SplitStepEngine:
                 omega_abs = np.clip(omega_abs, omega_min, omega_max)
             # Evaluate β at current z for all frequencies
             beta_at_z = self._eval_dispersion(omega_abs, self._current_z)
+            # A callable β(ω, z) has no table edge to clip to: a non-finite
+            # value there is a broken model, and clipping it would hide that.
+            non_finite = ~np.isfinite(beta_at_z)
+            if non_finite.any():
+                fraction_bad = non_finite.sum() / beta_at_z.size
+                raise ValueError(
+                    f"β(ω, z) is not finite for {fraction_bad * 100:.2f}% of the "
+                    f"grid ({int(non_finite.sum())} of {beta_at_z.size} samples) "
+                    f"at z = {self._current_z:.6g} m, so the run cannot be "
+                    "clipped to a table edge: there is no edge. Fix the "
+                    "β(ω, z) profile (a NaN region, or a table evaluated "
+                    "outside its support), or narrow the grid."
+                )
             # Carrier phase at current z
             beta_carrier = self._eval_dispersion(
                 np.array([self.omega0]), self._current_z
@@ -1995,6 +2075,11 @@ class SplitStepEngine:
             return A, U_new
 
         gamma = self._get_gamma(self._current_z)
+        if self._tpa_pointwise_enabled:
+            # Opening half of the symmetric 2PA placement (the closing half is
+            # after the phase below), so the Kerr/Raman polarisation is
+            # evaluated at the attenuated intensity of the same half-step.
+            A = self._tpa_pointwise_step(A, 0.5 * dz)
         intensity = np.abs(A) ** 2
 
         h_R_fft: NDArray | None = None
@@ -2116,6 +2201,13 @@ class SplitStepEngine:
             # order (Lie), costing the field a scheme order — as the TPA path
             # does; this keeps the composition second order.
             A = self._three_photon_step(A, 0.5 * dz)
+
+        if self._tpa_pointwise_enabled:
+            # Closing half of the symmetric 2PA placement. Note the 3PA call
+            # above applies a single trailing step, which does not match its
+            # own "symmetric" comment; that asymmetry is pre-existing and is
+            # deliberately not changed here (it would move stored 3PA numbers).
+            A = self._tpa_pointwise_step(A, 0.5 * dz)
 
         A, U_new = tpa_step(
             A, self.fiber, self.grid, dz, self.include_tpa, self._U, self.omega0
@@ -2315,8 +2407,9 @@ class SplitStepEngine:
         if reason is not None:
             raise NotImplementedError(
                 f"scheme='etdrk4' cannot advance {reason}. Static full_beta, "
-                "gamma_omega/gamma_fn, alpha_fn and three_photon_alpha_3 are "
-                "supported; use scheme='strang' for the feature named above."
+                "gamma_omega/gamma_fn, alpha_fn, three_photon_alpha_3 and "
+                "beta_tpa_pointwise are supported; use scheme='strang' for the "
+                "feature named above."
             )
         if self._full_phi is not None:
             phi = np.asarray(self._full_phi, dtype=float)
@@ -2343,7 +2436,11 @@ class SplitStepEngine:
         symmetrised per-bin form is used instead (see
         :meth:`_gamma_omega_rhs`); with ``three_photon_alpha_3`` the pointwise
         loss ``−α₃|A|⁴A/2`` is added — both are legitimate ``N(A)``: a
-        diagonal operator plus a functional of the current state.
+        diagonal operator plus a functional of the current state. With
+        ``beta_tpa_pointwise`` the carrier-free 2PA loss ``−β_TPA|A|²A/2`` is
+        added the same way; that also covers the ``gamma_omega`` RK2 branch of
+        :meth:`_nonlinear_step`, which calls this function — so no separate
+        2PA sub-step is applied there.
 
         This is the exponential integrator's counterpart of the ``N`` of
         ``∂_zA = L·A + N(A)``; the stiff linear part is carried entirely by
@@ -2388,6 +2485,8 @@ class SplitStepEngine:
                 )
         if self._three_photon_enabled:
             rhs = rhs + self._three_photon_rhs(A)
+        if self._tpa_pointwise_enabled:
+            rhs = rhs + self._tpa_pointwise_rhs(A)
         return np.asarray(rhs, dtype=complex)
 
     @property
@@ -2512,6 +2611,38 @@ class SplitStepEngine:
             return np.asarray(A / np.sqrt(np.sqrt(denom)), dtype=complex)
         A_mid = A + 0.5 * dz * self._three_photon_rhs(A)
         return np.asarray(A + dz * self._three_photon_rhs(A_mid), dtype=complex)
+
+    @property
+    def _tpa_pointwise_enabled(self) -> bool:
+        """Whether the carrier-free 2PA term is armed and absorbs."""
+        return self.beta_tpa_pointwise and self.fiber.beta_tpa_engine > 0.0
+
+    def _tpa_pointwise_rhs(self, A: NDArray) -> NDArray:
+        """2PA loss ``−β_TPA|A|²A/2``, pointwise in time (``I = |A|²``).
+
+        The carrier-free half of :func:`free_carrier_step`: same coefficient
+        (``fiber.beta_tpa_engine``), no ``N(t)`` state. Because it is a
+        functional of the current field only, it is legitimate ``N(A)`` for the
+        exponential integrators — which is the whole point of the flag.
+        """
+        return np.asarray(
+            -0.5 * self.fiber.beta_tpa_engine * (np.abs(A) ** 2) * A, dtype=complex
+        )
+
+    def _tpa_pointwise_step(self, A: NDArray, dz: float) -> NDArray:
+        """Exact per-sample 2PA sub-step ``A → A/√(1 + β·I·dz)``.
+
+        ``dI/dz = −βI²`` integrates to ``I(z) = I₀/(1 + βI₀z)``, so the
+        split-step schemes carry this term with no step error of its own; the
+        composition is what limits them. Called twice at ``dz/2`` around the
+        Kerr/Raman phase (a single trailing call would compose at first order).
+        ``dz`` is negative on a Yoshida4 back-step, where the closed form is a
+        gain; the denominator is floored like :func:`free_carrier_step` so that
+        branch cannot produce a NaN.
+        """
+        intensity = np.abs(A) ** 2
+        denom = 1.0 + self.fiber.beta_tpa_engine * intensity * dz
+        return np.asarray(A / np.sqrt(np.maximum(denom, 1e-300)), dtype=complex)
 
     def _etdrk4_step(self, A: NDArray, dz: float) -> NDArray:
         """One full ETDRK4 step (Cox & Matthews 2002; Kassam–Trefethen 2005).
@@ -3034,10 +3165,14 @@ class SplitStepEngine:
                 return
             drift = abs(e1 / e0 - 1.0)
             what = "energy"
-        lossless = (
-            self._get_alpha(self._current_z) == 0.0
-            and not self.include_tpa
-            and not self._three_photon_enabled
+        lossless = not _absorption_is_active(
+            alpha=float(self._get_alpha(self._current_z)),
+            alpha_w=self._alpha_w is not None,
+            include_tpa=self.include_tpa,
+            sigma_tpa=float(self.fiber.sigma_tpa),
+            include_free_carriers=self.include_free_carriers,
+            three_photon=self._three_photon_enabled,
+            beta_tpa_pointwise=self._tpa_pointwise_enabled,
         )
         if lossless and drift > 0.01:
             warnings.warn(
@@ -3113,6 +3248,83 @@ class SplitStepEngine:
 
 #: Relative drift of the conserved invariant above which a run is flagged.
 DRIFT_WARN_PCT = 1.0
+
+
+def _conservation_gate(
+    *,
+    lossless: bool,
+    invariant_undefined: bool,
+    energy_series,
+    photon_series=None,
+    loss_note: str = (
+        "drift is not an error proxy here: loss/gain/TPA/free carriers change "
+        "the invariant by design"
+    ),
+) -> tuple[str, float, list[str]]:
+    """Which invariant this run conserves, its drift, and the notes explaining it.
+
+    One implementation for both solvers' ``verify_convergence`` (the tapered
+    solver used to carry a second copy whose messages had drifted apart). The
+    probe run and the verdict assembly stay per-solver — they build different
+    engines — but the *meaning* of the conservation gate is decided here.
+
+    ``invariant_undefined`` wins over ``lossless``: on a grid that samples ω ≤ 0
+    the Blow & Wood (A5) photon number does not exist, so the gate is ``n/a``
+    whether or not the run also absorbs.
+    """
+    if invariant_undefined:
+        return (
+            "n/a (shock samples ω ≤ 0)",
+            0.0,
+            [
+                "the Blow & Wood (A5) photon number is undefined on this grid "
+                "(allow_out_of_band_shock samples ω ≤ 0), so the conservation "
+                "gate is n/a"
+            ],
+        )
+    if lossless and photon_series is not None:
+        return "photon number (Blow & Wood A5)", _max_drift_pct(photon_series), []
+    if lossless:
+        return "energy", _max_drift_pct(energy_series), []
+    return "n/a (loss/gain/TPA/free-carrier run)", 0.0, [loss_note]
+
+
+def _absorption_is_active(
+    *,
+    alpha: float = 0.0,
+    alpha_w: bool = False,
+    include_tpa: bool = False,
+    sigma_tpa: float = 0.0,
+    include_free_carriers: bool = False,
+    three_photon: bool = False,
+    beta_tpa_pointwise: bool = False,
+) -> bool:
+    """Is any absorption mechanism that the engine *applies* switched on?
+
+    The conservation guard compares the drift of the invariant this operator
+    set conserves, so its "lossless" test has to be read off the operators,
+    not the flags. Two ways to get it wrong, both observed:
+
+    * a real loss the predicate did not know about — ``alpha_w`` (per-bin
+      spectral loss), ``three_photon_alpha_3`` and the carrier-free
+      ``beta_tpa_pointwise`` term — so a lossy run was reported as
+      "with loss/TPA disabled";
+    * a switch that applies nothing — a bare ``fiber.beta_tpa`` with no TPA
+      path armed, or ``include_tpa`` without ``sigma_tpa`` — which must stay
+      lossless, or it excuses a genuinely under-resolved run.
+
+    All four guard sites (the engine's drift warning, ``verify_convergence`` on
+    the uniform and tapered solvers, and ``propagate_auto``) call this one
+    function so their verdicts cannot disagree.
+    """
+    return bool(
+        alpha != 0.0
+        or alpha_w
+        or (include_tpa and sigma_tpa > 0.0)
+        or include_free_carriers
+        or three_photon
+        or beta_tpa_pointwise
+    )
 
 
 def _max_drift_pct(series: NDArray | list[float]) -> float:
@@ -3325,6 +3537,12 @@ class GNLSESolver:
         Include the opt-in time-resolved TPA/free-carrier model (see
         :class:`SplitStepEngine`). Requires ``fiber.beta_tpa`` /
         ``fiber.sigma_fca``. Default False.
+    beta_tpa_pointwise : bool
+        Apply the carrier-free two-photon absorption ``−(β_TPA/2)|A|²A`` (see
+        :class:`SplitStepEngine`): the exact per-sample attenuation with no
+        ``N(t)`` state, so ``etdrk4``/``rk4ip`` can carry 2PA. Refused together
+        with ``include_free_carriers`` (the same ``fiber.beta_tpa`` twice) and a
+        no-op warning when ``fiber.beta_tpa == 0``. Default False.
     tau_shock : float | None
         Shock timescale override in seconds (SI); ``None`` uses ``1/ω₀``.
         Passed straight to :class:`SplitStepEngine`.
@@ -3377,6 +3595,7 @@ class GNLSESolver:
         include_self_steepening: bool = False,
         include_tpa: bool = False,
         include_free_carriers: bool = False,
+        beta_tpa_pointwise: bool = False,
         check_phase_matching: bool = False,
         step_size: Length | None = None,
         betas_unit: BetasUnit = "ps^k/m",
@@ -3425,6 +3644,15 @@ class GNLSESolver:
         self.include_self_steepening = include_self_steepening
         self.include_tpa = include_tpa
         self.include_free_carriers = include_free_carriers
+        self.beta_tpa_pointwise = bool(beta_tpa_pointwise)
+        if self.beta_tpa_pointwise and self.include_free_carriers:
+            raise ValueError(
+                "beta_tpa_pointwise=True cannot be combined with "
+                "include_free_carriers=True: both apply fiber.beta_tpa, so "
+                "the same coefficient would be applied twice. Use "
+                "beta_tpa_pointwise=True for the carrier-free 2PA loss alone, "
+                "or include_free_carriers=True for the TPA/FCA carrier model."
+            )
         self.check_phase_matching = check_phase_matching
         self.step_size = step_size
         self.conserving_shock = bool(conserving_shock)
@@ -3473,6 +3701,7 @@ class GNLSESolver:
             include_self_steepening=self.include_self_steepening,
             include_tpa=self.include_tpa,
             include_free_carriers=self.include_free_carriers,
+            beta_tpa_pointwise=self.beta_tpa_pointwise,
             conserving_shock=self.conserving_shock,
             tau_shock=self.tau_shock,
             allow_out_of_band_shock=self.allow_out_of_band_shock,
@@ -3625,40 +3854,27 @@ class GNLSESolver:
             smooth_window=smooth_window,
         )
 
-        lossless = (
-            float(self.fiber.alpha) == 0.0
-            and not self.include_tpa
-            and not self.include_free_carriers
+        lossless = not _absorption_is_active(
+            alpha=float(self.fiber.alpha),
+            alpha_w=self.alpha_w is not None,
+            include_tpa=self.include_tpa,
+            sigma_tpa=float(self.fiber.sigma_tpa),
+            include_free_carriers=self.include_free_carriers,
+            three_photon=self.three_photon_alpha_3 is not None,
+            beta_tpa_pointwise=self.beta_tpa_pointwise
+            and self.fiber.beta_tpa_engine > 0.0,
         )
-        notes: list[str] = []
         invariant_undefined = self.include_self_steepening and (
             float(self.pulse.grid.omega_max) >= float(self.pulse.central_frequency)
         )
-        if lossless:
-            if self.include_self_steepening:
-                if invariant_undefined:
-                    # allow_out_of_band_shock grids: (A5) has no meaning there, so
-                    # reporting inf/nan drift would read as a failed run.
-                    invariant = "n/a (shock samples ω ≤ 0)"
-                    drift = 0.0
-                    notes.append(
-                        "the Blow & Wood (A5) photon number is undefined on "
-                        "this grid (allow_out_of_band_shock samples ω ≤ 0), so "
-                        "the conservation gate is n/a"
-                    )
-                else:
-                    invariant = "photon number (Blow & Wood A5)"
-                    drift = _max_drift_pct(self.photon_number_vs_z)
-            else:
-                invariant = "energy"
-                drift = _max_drift_pct(self.energy_vs_z)
-        else:
-            invariant = "n/a (loss/gain/free-carrier run)"
-            drift = 0.0
-            notes.append(
-                "drift is not an error proxy here: loss/gain/TPA/free "
-                "carriers change the invariant by design"
-            )
+        invariant, drift, notes = _conservation_gate(
+            lossless=lossless,
+            invariant_undefined=invariant_undefined,
+            energy_series=self.energy_vs_z,
+            photon_series=(
+                self.photon_number_vs_z if self.include_self_steepening else None
+            ),
+        )
         if self.step_size is None:
             notes.append(
                 "adaptive run: probe uses uniform steps at the nominal "
@@ -3820,10 +4036,15 @@ class GNLSESolver:
                 num_steps=steps, nsaves=nsaves, show_progress=show_progress, **kwargs
             )
             energy = np.asarray(self.energy_vs_z, dtype=float)
-            lossless = (
-                self.fiber.alpha == 0.0
-                and not self.include_tpa
-                and not self.include_free_carriers
+            lossless = not _absorption_is_active(
+                alpha=float(self.fiber.alpha),
+                alpha_w=self.alpha_w is not None,
+                include_tpa=self.include_tpa,
+                sigma_tpa=float(self.fiber.sigma_tpa),
+                include_free_carriers=self.include_free_carriers,
+                three_photon=self.three_photon_alpha_3 is not None,
+                beta_tpa_pointwise=self.beta_tpa_pointwise
+                and self.fiber.beta_tpa_engine > 0.0,
             )
             drift = (
                 float(abs(energy[-1] - energy[0]) / max(energy[0], 1e-300))
@@ -4009,8 +4230,11 @@ class GNLSESolver:
         wl_grid = np.linspace(wl_min, wl_max, n_wl)
         if per == "wavelength":
             # Jacobian |dω/dλ| = 2πc/λ², applied on the *sampled* axis before
-            # interpolation so the per-nm density is what gets resampled.
-            density = spec * (2.0 * np.pi * C_MS / wavelength_nm**2)
+            # interpolation so the per-nm density is what gets resampled. One
+            # shared helper with metrics.span_at_level's numeraire.
+            from .metrics import to_wavelength_density
+
+            density = to_wavelength_density(wavelength_nm, spec)
         elif per == "frequency":
             density = spec
         else:
@@ -4138,10 +4362,11 @@ class TaperedGNLSESolver:
         Must be in (0, 1]. Default 0.1. Raise it (e.g. 0.3) to trade a small
         amount of accuracy for speed on tapers with mild dispersion gradients.
     betas_unit : {"ps^k/m", "s^k/m", "SI"}
-        Unit contract for dispersion coefficients. The tapered solver takes its
-        dispersion from *dispersion_profile* (β(ω, z), SI), so this flag is
-        validated for consistency with the other solvers but does not rescale a
-        coefficient array. Default ``"ps^k/m"``.
+        **Deprecated** (since 0.1.12, removed in 0.3.0): the tapered solver takes
+        its dispersion from *dispersion_profile* (β(ω, z), SI), so this flag
+        cannot rescale anything. It is still accepted and still validated, so no
+        caller breaks, and a non-default value emits one
+        :class:`DeprecationWarning` per process. Default ``"ps^k/m"``.
     gamma_omega : array_like or callable, optional
         Per-bin nonlinear coefficient γ(Ω) (1/(W·m)), passed to
         :class:`SplitStepEngine`. Default ``None`` → scalar γ (from
@@ -4200,13 +4425,20 @@ class TaperedGNLSESolver:
         )
         self.betas_unit = _validate_betas_unit(betas_unit)
         if betas_unit != "ps^k/m":
-            warnings.warn(
-                "TaperedGNLSESolver takes its dispersion from the"
-                " dispersion_profile in SI: `betas_unit` is validated against "
-                "the usual unit strings but does not rescale any "
-                "coefficient array here (inert flag; see REVIEW.md).",
-                UserWarning,
-                stacklevel=2,
+            # Deprecated, not merely inert: the flag cannot do what its name
+            # says on this solver (β comes from the SI dispersion_profile), so
+            # accepting it silently was misleading. Policy: once per process,
+            # with the version that removes it.
+            from ._deprecation import warn_deprecated
+
+            warn_deprecated(
+                "TaperedGNLSESolver(betas_unit=...)",
+                replacement=(
+                    "drop betas_unit: the taper takes β(ω, z) in SI from "
+                    "dispersion_profile, so no coefficient array is rescaled"
+                ),
+                since="0.1.12",
+                removed_in="0.3.0",
             )
         self.step_size = step_size
         self.dispersion_profile = dispersion_profile
@@ -4251,6 +4483,9 @@ class TaperedGNLSESolver:
         self._photon_vs_z: NDArray | None = None
         self._preflight_report: SimulationReadinessReport | None = None
         self._strict_mode = False
+        #: Set by ``propagate(strict=...)``: ``False`` raises, ``None`` follows
+        #: the table (warn-and-continue unless the table asks to raise).
+        self._clip_dispersion: bool | None = None
 
     def propagate(
         self,
@@ -4267,31 +4502,21 @@ class TaperedGNLSESolver:
         Parameters
         ----------
         num_steps : int — number of split-step steps.
-        strict : bool — if True, raise ValueError on excessive β clipping (>5%).
+        strict : bool — if True, map to ``clip_dispersion=False`` on the engine:
+            raise on **any** out-of-table β(ω, z) sample. The old 5 % grace
+            threshold is gone — a sub-5 % clip is exactly how a dispersive
+            wave's band edge is lost.
         nsaves : int, optional — evenly spaced snapshots along z (see SplitStepEngine).
         show_progress : bool — if True, show ``tqdm`` progress bars (requires tqdm).
         """
         self._strict_mode = strict
         self._last_num_steps = int(num_steps)
-
-        if strict:
-            # Pre-flight check: verify dispersion coverage
-            if hasattr(self.dispersion_profile, "omegas"):
-                omega_min, omega_max = (
-                    float(min(self.dispersion_profile.omegas)),
-                    float(max(self.dispersion_profile.omegas)),
-                )
-                omega_abs = self.omega0 + self.pulse.grid.w
-                clipped = (
-                    (omega_abs < omega_min) | (omega_abs > omega_max)
-                ).sum() / len(omega_abs)
-                if clipped > 0.05:
-                    raise ValueError(
-                        f"{clipped * 100:.1f}% of grid frequencies clipped (>5% threshold in strict mode). "
-                        f"Grid: [{omega_abs.min():.2e}, {omega_abs.max():.2e}] rad/s, "
-                        f"Bounds: [{omega_min:.2e}, {omega_max:.2e}] rad/s. "
-                        f"Reduce bandwidth or use broader dispersion table."
-                    )
+        # strict keeps its meaning by selecting the engine's policy: no grace
+        # band. The non-strict default is ``None`` — follow the table — which is
+        # today's warn-and-continue for every ordinary table and still lets a
+        # table that opts into ``out_of_range="raise"`` raise. Mapping the
+        # default to a hard ``True`` would override that opt-in silently.
+        self._clip_dispersion = False if strict else None
 
         if self.check_phase_matching:
             from .phase_matching import emit_readiness_warnings
@@ -4311,6 +4536,7 @@ class TaperedGNLSESolver:
             include_tpa=self.include_tpa,
             include_free_carriers=self.include_free_carriers,
             dispersion_profile=self.dispersion_profile,
+            clip_dispersion=self._clip_dispersion,
             a_eff_fn=self.a_eff_fn,
             alpha_fn=self.alpha_fn,
             gamma_fn=self.gamma_fn,
@@ -4414,31 +4640,27 @@ class TaperedGNLSESolver:
             smooth_window=smooth_window,
         )
         notes: list[str] = []
-        lossless = float(self.fiber.alpha) == 0.0 and not self.include_tpa
+        # The tapered path forwards alpha_w / three_photon_alpha_3 /
+        # include_free_carriers to its engine but has no beta_tpa_pointwise
+        # keyword (not in that solver's scope), so the predicate takes the five
+        # terms it can actually apply.
+        lossless = not _absorption_is_active(
+            alpha=float(self.fiber.alpha),
+            alpha_w=self.alpha_w is not None,
+            include_tpa=self.include_tpa,
+            sigma_tpa=float(self.fiber.sigma_tpa),
+            include_free_carriers=self.include_free_carriers,
+            three_photon=self.three_photon_alpha_3 is not None,
+        )
         invariant_undefined = self.include_self_steepening and (
             float(self.pulse.grid.omega_max) >= float(self.pulse.central_frequency)
         )
-        if invariant_undefined:
-            # allow_out_of_band_shock: no invariant exists on this grid, so the
-            # gate is n/a rather than "energy" (which self-steepening does not
-            # conserve) or a nan drift.
-            invariant = "n/a (shock samples ω ≤ 0)"
-            drift = 0.0
-            notes.append(
-                "the Blow & Wood (A5) photon number is undefined on this grid "
-                "(allow_out_of_band_shock samples ω ≤ 0), so the conservation "
-                "gate is n/a"
-            )
-        elif lossless:
-            invariant = "energy"
-            drift = _max_drift_pct(np.asarray(energy_coarse, dtype=float))
-        else:
-            invariant = "n/a (loss/gain/TPA/free-carrier run)"
-            drift = 0.0
-            notes.append(
-                "drift is not an error proxy here: loss/gain/TPA/free "
-                "carriers change the invariant by design"
-            )
+        invariant, drift, gate_notes = _conservation_gate(
+            lossless=lossless,
+            invariant_undefined=invariant_undefined,
+            energy_series=np.asarray(energy_coarse, dtype=float),
+        )
+        notes.extend(gate_notes)
         notes.append(
             "uniform-step refinement of the whole taper: certifies the step "
             "count, not the section discretisation"
@@ -4563,6 +4785,8 @@ def spectral_evolution_on_wavelength_grid(
     wl_min: float,
     wl_max: float,
     n_wl: int,
+    *,
+    per: Literal["wavelength", "frequency"] = "wavelength",
 ) -> tuple[NDArray, NDArray, NDArray]:
     """Interpolate stored spectra onto a uniform wavelength grid (nm).
 
@@ -4577,18 +4801,37 @@ def spectral_evolution_on_wavelength_grid(
         Wavelength range (nm).
     n_wl : int
         Number of wavelength samples.
+    per : {"wavelength", "frequency"}
+        Which spectral density the dB values describe, on the same contract as
+        :meth:`GNLSESolver.interpolated_spectrum_db`. ``"wavelength"`` (default)
+        gives ``S_λ = S_ν·|dω/dλ| = S_ν·2πc/λ²`` — the density that belongs on a
+        λ axis, and the one a "−50 dB at 9 µm" claim needs;
+        ``"frequency"`` is the un-Jacobianed ``S_ν`` interpolated onto a λ axis,
+        off by up to 13 dB near 9 µm, kept so old figures can be reproduced
+        deliberately.
 
     Returns
     -------
     z_m, wavelength_nm, spectra_dB
         ``z_m`` has shape (n_z,), ``wavelength_nm`` (n_wl,), ``spectra_dB`` (n_z, n_wl).
     """
+    if per not in ("wavelength", "frequency"):
+        raise ValueError(f"per must be 'wavelength' or 'frequency', got {per!r}")
     omega, spectra = solver.spectra_vs_z
     omega_abs = omega + solver.omega0
     wavelength_nm = 2 * np.pi * C_MS / omega_abs * 1e9
     sort_idx = np.argsort(wavelength_nm)
     wavelength_nm = wavelength_nm[sort_idx]
     spectra = spectra[:, sort_idx]
+
+    if per == "wavelength":
+        # One shared Jacobian with metrics.to_wavelength_density and
+        # interpolated_spectrum_db: |dω/dλ| = 2πc/λ², on the sampled axis.
+        from .metrics import to_wavelength_density
+
+        spectra = np.vstack(
+            [to_wavelength_density(wavelength_nm, row) for row in spectra]
+        )
 
     wl_grid = np.linspace(wl_min, wl_max, n_wl)
     n_z = spectra.shape[0]
@@ -5375,6 +5618,12 @@ def plot_spectral_temporal_summary(
     wavelength = 2.0 * np.pi * C_MS / (solver.omega0 + grid.w) * 1e9
     order = np.argsort(wavelength)
     wavelength, spectrum = wavelength[order], spectrum[order]
+    # Panel (c) is a per-λ density (spectral_evolution_on_wavelength_grid's
+    # default), so panel (a) must be too: one figure cannot show two numeraires
+    # that sit ~13 dB apart near 9 µm.
+    from .metrics import to_wavelength_density
+
+    spectrum = to_wavelength_density(wavelength, spectrum)
     spectrum_db = 10.0 * np.log10(spectrum / spectrum.max() + 1e-30)
 
     # Output temporal intensity (b), in the same time convention as panel (d).

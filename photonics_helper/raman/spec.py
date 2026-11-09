@@ -203,11 +203,16 @@ class RamanSpec:
         """
         from .response import RamanResponse
 
+        # Fall back to the spec's own tau (a ``Time``; ``.value`` is seconds), else
+        # the response derives one from the shift/linewidth. Written as an
+        # explicit ternary so the type is ``float | None`` for the checker.
+        own_tau1 = self.tau1.value if self.tau1 is not None else None
+        own_tau2 = self.tau2.value if self.tau2 is not None else None
         return RamanResponse(
             spec=self,
             fR=fR if fR is not None else self.fR,
-            tau1=tau1,
-            tau2=tau2,
+            tau1=tau1 if tau1 is not None else own_tau1,
+            tau2=tau2 if tau2 is not None else own_tau2,
             grid=grid,
         )
 

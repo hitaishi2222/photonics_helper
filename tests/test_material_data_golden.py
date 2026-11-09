@@ -33,7 +33,7 @@ def test_row_counts_are_stable() -> None:
     finally:
         con.close()
     assert counts["nk_data"] == 24767
-    assert counts["sellmeier"] == 41
+    assert counts["sellmeier"] == 42  # +GeSbSe_clad (Ge15Sb10Se75, Wu 2023 Table 2)
     assert counts["raman_specs"] == 46
     assert counts["phonon_modes"] == 59
 
@@ -58,6 +58,9 @@ def test_row_counts_are_stable() -> None:
         ("MgF2", 2.0, 1.367835, 5e-4),  # Dodge 1984 o-ray (B=λ_res^2!)
         # Phase M Ge-Sb-Se pair (Wu/Ding/Peng, Appl. Sci. 13, 12923 (2023))
         ("GeSbSe", 2.0, 2.677601, 5e-4),  # Ge12.5Sb15Se72.5 core
+        ("GeSbSe_clad", 1.55, 2.602137, 5e-4),  # Ge15Sb10Se75 clad, -0.16 % vs Wang 2014 n0=2.598
+        ("GeSbSe_clad", 2.0, 2.592004, 5e-4),
+        ("GeSbSe_clad", 4.0, 2.579385, 5e-4),
     ],
 )
 def test_refractive_index_golden(
@@ -96,6 +99,10 @@ def test_silicon_tabulated_golden() -> None:
         ("Silica", 440.0, 45.0, 0.18),
         ("GeAsSe", 250.0, 50.0, 0.5),
         ("GeSbSe", 198.1, 9.33, 0.4615),
+        # Xiong 2009 (fitted to the measured C-band gain): f_R = 0.10 with the
+        # published 15.5 / 230.5 fs pair. Pinned because the correction from the
+        # old 0.15 moves every As2S3 Raman deck (docs/stability.md's PATCH rule).
+        ("As2S3", 345.0, 56.0, 0.10),
     ],
 )
 def test_raman_spec_golden(

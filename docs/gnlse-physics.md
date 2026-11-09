@@ -121,6 +121,12 @@ per step). SplitStepEngine additionally offers
 each integrated exactly per sample within a step. The legacy
 `include_tpa` path is untouched; both models are documented side by side.
 
+`beta_tpa_pointwise=True` is the **carrier-free half** of that model: the same
+exact TPA attenuation `|A|² → |A|²/(1 + β_TPA|A|²dz)` with no `N(t)` state, so
+it needs no carrier bookkeeping and is available on *every* scheme — including
+`etdrk4`/`rk4ip`, which refuse the history-dependent carrier model. It is
+refused together with `include_free_carriers` (that would apply β_TPA twice).
+
 **Which flag applies which coefficient, and in whose units.** The engine takes
 `|A|²` in watts, so the absorption coefficients it acts on are *normalised*:
 `β_TPA/A_eff`, `σ/A_eff`, `α₃/A_eff²`. Pass a measured (physical) coefficient
@@ -129,7 +135,7 @@ together with `Fiber(a_eff=Area(...))` and the conversion is internal; without
 
 | Coefficient | Physical unit | Applied by | Engine symbol |
 |---|---|---|---|
-| `beta_tpa` | m/W | `include_free_carriers=True` (**not** `include_tpa`) | `β_TPA/A_eff` |
+| `beta_tpa` | m/W | `include_free_carriers=True` or `beta_tpa_pointwise=True` (**not** `include_tpa`) | `β_TPA/A_eff` |
 | `sigma_tpa` | m²/W | `include_tpa=True` | `σ/A_eff` |
 | `sigma_fca` | m² | `include_free_carriers=True` | `σ_FCA` (no area) |
 | `three_photon_alpha_3` | m³/W² | `three_photon_alpha_3=` (any scheme) | `α₃/A_eff²` |

@@ -209,7 +209,7 @@ Found while checking the gaps; each is a separate defect worth fixing regardless
 "N-BK7":          {"fR": 0.22},  # Weber 1978 doi:10.1117/12.7972266, 1 - f_e
 ```
 
-`raman_specs` row count stays 45 and no golden test pins any of these numbers
-(`tests/test_material_data_golden.py` pins only Silica/GeAsSe/GeSbSe `fR`), so re-seeding is
-test-safe; the `0.0 → NULL` change for fR is *not* test-covered either but should be done
-deliberately, since it changes what `PhononResponse` reports to users.
+`raman_specs` row count stays 46 and no golden test pins any of these numbers
+(`tests/test_material_data_golden.py` pins only Silica/GeAsSe/GeSbSe/As2S3 `fR`), so
+re-seeding is test-safe; the `0.0 → NULL` change for fR is *not* test-covered either but
+should be done deliberately, since it changes what `PhononResponse` reports to users.

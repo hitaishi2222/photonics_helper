@@ -141,11 +141,32 @@ RAMAN_MATERIALS: dict[str, dict] = {
         "n2": 4.0e-18,
         "raman_shift_cm": 345,
         "raman_linewidth_cm": 56,
-        "fR": 0.15,
+        "fR": 0.10,
         "gain_coeff": 4.3e-12,
+        "tau1": 15.5e-15,
+        "tau2": 230.5e-15,
         "lo_phonon_cm": None,
         "to_phonon_cm": None,
-        "references": "Xiong et al., Appl. Opt. 48, 5467 (2009); Slusher et al., JOSA B 21, 1146 (2004)",
+        "references": (
+            "Response (tau1, tau2, fR): measured for this glass -- Xiong et al., Appl. "
+            "Opt. 48, 5467 (2009) doi:10.1364/AO.48.005467, Raman gain spectrum of an "
+            "As2S3 single-mode fibre measured across the C-band, response function "
+            "Eq. (1) fitted as a single Lorentzian with tau1 = 15.5 fs, tau2 = 230.5 "
+            "fs and fR = 0.10 (simulation fitted to the measured spectra, +/-10%; their "
+            "Fig. 5 is calculated-vs-measured gain). Those times are now used as "
+            "stored, not re-derived from shift/linewidth. Xiong's displayed gain peak "
+            "is at ~350 cm-1; the row keeps 345 cm-1 / 56 cm-1 and gain_coeff "
+            "4.3e-12 m/W from Slusher et al., JOSA B 21, 1146 (2004), the catalogue's "
+            "single-Lorentzian band. TPA there: alpha2 = 6.2e-15 m/W, measured in "
+            "the S/C band (1.47-1.57 um) -- do NOT reuse it near 2 um, where 2PA is "
+            "forbidden for this gap. Raman band positions/widths: Li et al., J. Appl. "
+            "Phys. 98, 053503 (2005) doi:10.1063/1.2009815, Table I -- As-S bands at 312 "
+            "(24.3 cm-1), 340 (30), 362 (17), 380 (30) cm-1, series-averaged widths, no "
+            "published peak strengths (only Fig. 2), so multi-mode phonon_modes are "
+            "deliberately not seeded. Caution for downstream users: Granzow, Opt. "
+            "Express 21, 10969 (2013) and Karim, Opt. Express 22, 31029 (2014) propagate "
+            "the same 15.5/230.5 fs pair with fR = 0.031, which is NOT Xiong's value."
+        ),
     },
     "Si3N4": {
         "name": "Si3N4",

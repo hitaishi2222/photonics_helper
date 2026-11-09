@@ -7,6 +7,8 @@ See openspec change `add-gnlse-beta-units-validation`:
 * invalid units / non-finite arrays raise clear errors.
 """
 
+import warnings
+
 import numpy as np
 import pytest
 
@@ -183,9 +185,14 @@ def test_tapered_solver_accepts_betas_unit():
         beta=beta,
         central_wavelength=pulse.central_wavelength.as_m,
     )
-    # Non-default units are inert on the tapered solver (dispersion comes from
-    # the SI profile) — must warn, not stay silent (ISSUES.md #3).
-    with pytest.warns(UserWarning, match="betas_unit"):
+    # Non-default units cannot do anything on the tapered solver (dispersion
+    # comes from the SI profile), so the flag is deprecated: one
+    # DeprecationWarning per process, still accepted and still validated
+    # (ISSUES.md #3; ``close-gnlse-ergonomics-gaps`` C3.3).
+    from photonics_helper._deprecation import _reset_warnings
+
+    _reset_warnings()
+    with pytest.warns(DeprecationWarning, match="betas_unit"):
         solver = TaperedGNLSESolver(
             pulse=pulse,
             fiber=fiber,
@@ -193,12 +200,13 @@ def test_tapered_solver_accepts_betas_unit():
             include_raman=False,
             betas_unit="s^k/m",
         )
+
+
     assert solver.betas_unit == "s^k/m"
 
-    import warnings as _w
-
-    with _w.catch_warnings():
-        _w.simplefilter("error", UserWarning)
+    # ...and the default is silent, and a bogus value is still refused.
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
         solver_default = TaperedGNLSESolver(
             pulse=pulse,
             fiber=fiber,
@@ -206,6 +214,7 @@ def test_tapered_solver_accepts_betas_unit():
             include_raman=False,
         )
     assert solver_default.betas_unit == "ps^k/m"
+    assert not [w for w in caught if issubclass(w.category, DeprecationWarning)]
 
     with pytest.raises(ValueError):
         TaperedGNLSESolver(
@@ -215,3 +224,32 @@ def test_tapered_solver_accepts_betas_unit():
             include_raman=False,
             betas_unit="bogus",
         )
+
+
+def test_tapered_solver_default_betas_unit_is_silent():
+    """A default taper run must not emit a DeprecationWarning (noise-free path)."""
+    from photonics_helper._deprecation import _reset_warnings
+
+    pulse, fiber = _setup()
+    omega0 = pulse.central_frequency
+    omegas = np.linspace(omega0 - 6e13, omega0 + 6e13, 50)
+    z_positions = np.linspace(0, 1e-3, 5)
+    beta = np.zeros((len(omegas), len(z_positions)))
+    for j in range(len(z_positions)):
+        beta[:, j] = 1e8 + 0.5 * 0.02e-24 * (omegas - omega0) ** 2
+    profile = ZDependentDispersion.from_arrays(
+        omegas=omegas,
+        z_positions=z_positions,
+        beta=beta,
+        central_wavelength=pulse.central_wavelength.as_m,
+    )
+    _reset_warnings()
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        TaperedGNLSESolver(
+            pulse=pulse,
+            fiber=fiber,
+            dispersion_profile=profile,
+            include_raman=False,
+        )
+    assert not [w for w in caught if issubclass(w.category, DeprecationWarning)]

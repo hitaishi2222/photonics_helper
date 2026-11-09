@@ -22,8 +22,8 @@ in the repository.
 | Table | Rows | Contents | Provenance |
 |---|---|---|---|
 | `nk_data` | 24 767 | tabulated `n`, `k` vs λ (µm) for 12 materials | `source`, `citation` (24 760 / 24 767 populated), `license` |
-| `sellmeier` | 41 | Sellmeier coefficients + validity window | `source` (41 / 41), `license` |
-| `raman_specs` | 45 | Raman shift, linewidth, `f_R`, `n₂`, gain | `references` (45 / 45), `license` |
+| `sellmeier` | 42 | Sellmeier coefficients + validity window | `source` (42 / 42), `license` |
+| `raman_specs` | 46 | Raman shift, linewidth, `f_R`, `n₂`, gain | `references` (46 / 46), `license` |
 | `phonon_modes` | 59 | multi-mode phonon data for 11 crystals | `note`, `license` |
 | `provenance` | 30 | central registry joinable via `nk_data.source` | `source_key`, `citation`, `doi`, `url`, `license` |
 

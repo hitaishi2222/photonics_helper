@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 import pytest
 
@@ -140,3 +142,97 @@ def test_alpha_w_refuses_double_counting_and_bad_bins():
         SplitStepEngine(
             wave, Fiber(gamma=0.0), betas=np.array([0.0]), alpha_w=np.zeros(3)
         )
+
+
+# ─── Conservation-guard predicate (multimode_scg GAPS item 16) ────────────────
+
+
+def _guard_messages(**kwargs) -> list[str]:
+    """Run a deck that drifts >1 % with no loss, plus the given switches.
+
+    The self-steepening RK4 substep is not unitary, so two steps on a strong
+    nonlinearity drift by tens of percent while nothing absorbs. Each guard test
+    below adds exactly one switch to that deck and asks what the guard says.
+    """
+    fiber_kwargs = {
+        key: kwargs.pop(key) for key in ("alpha", "beta_tpa", "sigma_tpa") if key in kwargs
+    }
+    wave, _, _ = _deck(n=256, length=LENGTH)
+    fiber_kwargs.setdefault("alpha", 0.0)
+    fiber = Fiber(gamma=500.0, length=Length(LENGTH, "m"), **fiber_kwargs)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        engine = SplitStepEngine(
+            wave,
+            fiber,
+            betas=np.array([-2e-26]),
+            include_raman=False,
+            include_self_steepening=True,
+            step_size=Length(LENGTH / 2, "m"),
+            **kwargs,
+        )
+        engine.propagate(2, nsaves=2)
+    # or the test proves nothing:
+    energy = np.asarray(engine.energy_vs_z)
+    assert abs(energy[-1] / energy[0] - 1.0) > 0.01
+    return [str(w.message) for w in caught]
+
+
+@pytest.mark.parametrize(
+    "switch",
+    [
+        {"alpha": 0.5},
+        {"alpha_w": 5.0},
+        {"include_tpa": True, "sigma_tpa": 1e-4},
+        {"include_free_carriers": True, "beta_tpa": 1.0},
+        {"three_photon_alpha_3": 1e-3},
+        {"beta_tpa_pointwise": True, "beta_tpa": 1.0},
+    ],
+    ids=[
+        "alpha",
+        "alpha_w",
+        "sigma_tpa",
+        "free_carriers",
+        "three_photon",
+        "pointwise_2pa",
+    ],
+)
+def test_guard_treats_every_active_loss_as_lossy(switch):
+    """A run that absorbs must never be called "with loss/TPA disabled"."""
+    messages = _guard_messages(**switch)
+    assert not any("loss/TPA disabled" in m for m in messages), messages
+
+
+def test_guard_still_warns_on_a_genuinely_lossless_run():
+    assert any("loss/TPA disabled" in m for m in _guard_messages())
+
+
+@pytest.mark.parametrize(
+    "switch",
+    [
+        {"beta_tpa": 1.0},  # bare beta_TPA: no TPA path armed
+        {"include_tpa": True, "beta_tpa": 1.0},  # include_tpa without sigma_tpa
+    ],
+    ids=["inert_beta_tpa", "inert_include_tpa"],
+)
+def test_guard_does_not_excuse_drift_with_an_inert_switch(switch):
+    """A switch that applies nothing must not silence a real drift alarm."""
+    messages = _guard_messages(**switch)
+    assert any("loss/TPA disabled" in m for m in messages), messages
+
+
+def test_verify_convergence_reports_a_lossy_run_as_lossy():
+    """The convergence verdict and the drift warning must agree (task 6.3)."""
+    wave, _, fiber = _deck()
+    solver = GNLSESolver(
+        wave,
+        fiber,
+        betas=np.array([0.0]),
+        include_raman=False,
+        alpha_w=0.3,
+        step_size=Length(LENGTH / 200, "m"),
+    )
+    solver.propagate(200, nsaves=2)
+    report = solver.verify_convergence(num_steps=200, warn=False)
+    assert "loss/gain" in report.invariant
+    assert report.drift_pct == 0.0

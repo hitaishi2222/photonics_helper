@@ -22,6 +22,7 @@ the source of truth and are rendered with
 | [χ⁽²⁾ nonlinear optics (SHG / SFG / DFG)](chi2.md) | `chi2` |
 | [Raman scattering](raman.md) | `raman` |
 | [Soliton analysis](soliton.md) | `soliton` |
+| [Spectral span metrics](metrics.md) | `metrics` |
 | [Breathers and exact solutions](breathers.md) | `breathers` |
 | [Noise sources](noise.md) | `noise` |
 | [Optical wave breaking](wave-breaking.md) | `wave_breaking` |

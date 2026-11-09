@@ -50,6 +50,10 @@ class Span:
         ``"wavelength"`` or ``"frequency"`` — which density the input was.
     interpolation : str
         How the crossing was placed (``"linear-in-db"``).
+    bin_nm : float
+        Median spacing of the axis the crossings were interpolated on. A span is
+        resolution-dependent by construction, so the bin travels with it: two
+        octave numbers taken on different bins are not the same measurement.
     """
 
     short_nm: float
@@ -58,6 +62,7 @@ class Span:
     level_db: float
     numeraire: str
     interpolation: str = "linear-in-db"
+    bin_nm: float = float("nan")
 
 
 def to_wavelength_density(
@@ -110,13 +115,21 @@ def span_at_level(
         raise ValueError(f"need a 1-D axis with >= 8 points, got shape {wl.shape}")
     if np.any(np.diff(wl) <= 0):
         raise ValueError("wavelength_nm must be strictly increasing")
+    spec = np.asarray(spectrum, dtype=float)
+    if spec.shape != wl.shape:
+        raise ValueError(
+            f"spectrum and axis must have the same length, got {spec.size} "
+            f"and {wl.size}"
+        )
+    if not np.isfinite(level_db):
+        raise ValueError(f"level_db must be finite, got {level_db!r}")
     if reference != "peak":
         raise ValueError(f"only reference='peak' is implemented, got {reference!r}")
 
     if numeraire == "frequency":
-        density = to_wavelength_density(wl, spectrum)
+        density = to_wavelength_density(wl, spec)
     elif numeraire == "wavelength":
-        density = np.asarray(spectrum, dtype=float)
+        density = spec
     else:
         raise ValueError(
             f"numeraire must be 'wavelength' or 'frequency', got {numeraire!r}"
@@ -151,4 +164,5 @@ def span_at_level(
         octaves=octaves,
         level_db=float(level_db),
         numeraire=numeraire,
+        bin_nm=float(np.median(np.diff(wl))),
     )

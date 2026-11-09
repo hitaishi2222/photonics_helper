@@ -189,6 +189,26 @@ SELLMEIER_MATERIALS = {
             "n(2 um)=2.6776, material ZDW 4.49 um (recomputed from the coefficients)."
         ),
     },
+    "GeSbSe_clad": {
+        "form": "standard",
+        "a0": 1.0,
+        # Ge15Sb10Se75, the cladding glass of the Wu 2023 core-clad fibre.
+        # Dispersion only: no n2 / Eg / Raman row is claimed for the clad here,
+        # so it never enters a nonlinear model by accident.
+        "coefficients": [5.6454, 1.5523],
+        "wavelengths": [0.0530, 2287.1588],
+        "valid_from_um": 1.0,
+        "valid_to_um": 14.0,
+        "source": (
+            "Ge15Sb10Se75; Wu, Ding & Peng, Appl. Sci. 13, 12923 (2023), "
+            "doi:10.3390/app132312923, Table 2 (IR ellipsometry Sellmeier fit; "
+            "cladding of their Ge12.5Sb15Se72.5 core-clad fibre). n(1.55 um)=2.6021 "
+            "vs Wang et al., Opt. Mater. Express 4, 1011 (2014) Table 1 same-lab "
+            "z-scan n0=2.598 at 1.55 um (-0.16 %). Valid range follows the GeSbSe "
+            "core row's convention; the paper's own verification window is its "
+            "1.5-6 um fibre loss spectrum."
+        ),
+    },
     "As2S3": {
         "form": "standard",
         "a0": 1.0,

@@ -281,3 +281,49 @@ class TestZDependentDispersion:
             np.abs(beta_table[valid]), 1e-30
         )
         assert np.max(rel_err) < 0.01
+
+
+class TestFromSectionsNodes:
+    """C2: the assembled table reproduces each section's own β at its node."""
+
+    @staticmethod
+    def _mode(scale: float):
+        from photonics_helper.base import Wavelength, WavelengthArray
+        from photonics_helper.fiber import WaveguideMode
+
+        wl_um = np.linspace(1.9, 2.1, 21)
+        neff = scale * (2.60 - 0.02 * (wl_um - 2.0) - 0.004 * (wl_um - 2.0) ** 2)
+        return WaveguideMode(
+            neff=neff,
+            wavelengths=WavelengthArray(wl_um, "um"),
+            central_wavelength=Wavelength(2.0, "um"),
+        )
+
+    def test_node_values_are_reproduced_to_round_off(self):
+        import photonics_helper.fiber as fib
+
+        sections = [self._mode(1.0), self._mode(1.0005)]
+        z = np.array([0.0, 1e-3])
+        table = fib.ZDependentDispersion.from_sections(z, sections, n_lambda=21)
+
+        lam_um = np.linspace(1.9, 2.1, 21)
+        omega = 2.0 * np.pi * fib.C_MS / (lam_um * 1e-6)
+        for j, section in enumerate(sections):
+            expected = np.asarray(section.neff, float) * omega / fib.C_MS
+            got = np.asarray(table.fn(omega, z[j]), dtype=float)
+            # The table's own λ grid is this grid, so this is an identity, not a
+            # fit: an interpolation bug shows up immediately.
+            assert np.allclose(got, expected, rtol=1e-12, atol=0.0)  # round-off, relative
+
+    def test_the_table_is_a_z_interpolation_between_the_nodes(self):
+        import photonics_helper.fiber as fib
+
+        sections = [self._mode(1.0), self._mode(1.01)]
+        z = np.array([0.0, 1e-3])
+        table = fib.ZDependentDispersion.from_sections(z, sections, n_lambda=21)
+        omega = 2.0 * np.pi * fib.C_MS / (np.array([2.0]) * 1e-6)
+        mid = float(np.asarray(table.fn(omega, 0.5e-3), dtype=float)[0])
+        ends = [
+            float(np.asarray(table.fn(omega, zz), dtype=float)[0]) for zz in (0.0, 1e-3)
+        ]
+        assert ends[0] < mid < ends[1]

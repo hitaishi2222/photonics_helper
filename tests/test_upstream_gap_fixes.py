@@ -33,7 +33,10 @@ from photonics_helper import (
 )
 from photonics_helper.base import Area, Length, Time, WavelengthArray
 from photonics_helper.fiber import Dispersion, WaveguideMode
-from photonics_helper.gnlse import ConvergenceDiagnostics
+from photonics_helper.gnlse import (
+    ConvergenceDiagnostics,
+    spectral_evolution_on_wavelength_grid,
+)
 from photonics_helper.pulse import Envelope, Wave
 
 C = 299792458.0
@@ -94,6 +97,39 @@ class TestSpectrumNumeraire:
     def test_bad_numeraire_is_rejected_by_name(self):
         with pytest.raises(ValueError, match="per must be"):
             self._run().interpolated_spectrum_db(1000, 4000, 100, per="nm")
+        with pytest.raises(ValueError, match="per must be"):
+            spectral_evolution_on_wavelength_grid(
+                self._run(), 1000, 4000, 100, per="nm"
+            )
+
+    def test_both_wavelength_resamplers_agree_step_by_step(self):
+        """Same contract, same Jacobian: the waterfall and the dB curve."""
+        solver = self._run()
+        wl, db_curve = solver.interpolated_spectrum_db(1000, 4000, 300)
+        _, wl_wf, db_waterfall = spectral_evolution_on_wavelength_grid(
+            solver, 1000, 4000, 300
+        )
+        assert np.allclose(wl, wl_wf)
+        # interpolated_spectrum_db normalises to its own step's peak, the
+        # waterfall to the run's global peak; normalise both and compare.
+        last = np.asarray(db_waterfall[-1], dtype=float)
+        last -= last.max()
+        # Compare where there is signal: the two helpers add their epsilon
+        # (+1e-30) at different points, so their floors differ by ~34 dB while
+        # the curves themselves must agree.
+        band = db_curve > -100.0
+        assert band.sum() > 50
+        assert np.allclose(db_curve[band], last[band], atol=1e-6)
+
+    def test_the_waterfall_default_carries_the_same_jacobian(self):
+        solver = self._run()
+        _, _, with_jac = spectral_evolution_on_wavelength_grid(
+            solver, 1000, 4000, 300
+        )
+        _, _, without = spectral_evolution_on_wavelength_grid(
+            solver, 1000, 4000, 300, per="frequency"
+        )
+        assert not np.allclose(with_jac, without)
 
 
 # ── A4 ─────────────────────────────────────────────────────────────────────
@@ -238,6 +274,81 @@ class TestZTableOutOfRange:
         )
         with pytest.raises(ValueError, match='out_of_range="raise"'):
             solving.propagate(num_steps=2)
+
+    def _narrow(self):
+        """A table 1 % wide around the carrier: any real grid is out of it."""
+        return ZDependentDispersion(
+            omegas=np.linspace(0.99 * OM0, 1.01 * OM0, 11),
+            z_positions=np.array([0.0, 1e-3]),
+            beta=np.column_stack(
+                [
+                    np.linspace(0.99, 1.01, 11) * 2.6 * OM0 / C,
+                    np.linspace(0.99, 1.01, 11) * 2.6 * OM0 / C,
+                ]
+            ),
+            central_wavelength=WL0,
+        )
+
+    def test_strict_raises_on_any_clip_not_five_percent(self):
+        """1 % out of table is enough: the old 5 % grace hid the band edge."""
+        solver = TaperedGNLSESolver(
+            pulse=_wave(), fiber=_fiber(), dispersion_profile=self._narrow(),
+            include_raman=False, include_self_steepening=False,
+        )
+        with pytest.raises(ValueError, match="clipped"):
+            solver.propagate(num_steps=2, strict=True)
+
+    def test_non_strict_keeps_warn_and_continue(self):
+        solver = TaperedGNLSESolver(
+            pulse=_wave(), fiber=_fiber(), dispersion_profile=self._narrow(),
+            include_raman=False, include_self_steepening=False,
+        )
+        with pytest.warns(UserWarning, match="clipped"):
+            solver.propagate(num_steps=2, strict=False)
+        assert solver._engine.last_clipped_fraction > 0.0
+
+    def test_engine_clip_dispersion_false_raises_true_warns(self):
+        """The engine-level policy: ``False`` refuses, ``True`` reports."""
+        from photonics_helper.gnlse import SplitStepEngine
+
+        def _engine(clip):
+            return SplitStepEngine(
+                _wave(),
+                _fiber(),
+                betas=np.array([0.0]),
+                dispersion_profile=self._narrow(),
+                clip_dispersion=clip,
+                include_raman=False,
+                step_size=Length(1e-4, "m"),
+            )
+
+        with pytest.raises(ValueError, match="clipped"):
+            _engine(False).propagate(2, nsaves=2)
+        with pytest.warns(UserWarning, match="clipped"):
+            engine = _engine(True)
+            engine.propagate(2, nsaves=2)
+        assert engine.last_clipped_fraction > 0.0
+
+    def test_callable_non_finite_raises_in_every_mode(self):
+        """A callable β(ω, z) has no edge to clip to: a NaN is a broken model."""
+        from photonics_helper.gnlse import SplitStepEngine
+
+        def beta(omega, z):
+            out = 2.6 * omega / C
+            return np.where(omega < 0.9 * OM0, np.nan, out)
+
+        for clip in (None, False, True):
+            engine = SplitStepEngine(
+                _wave(),
+                _fiber(),
+                betas=np.array([0.0]),
+                dispersion_profile=beta,
+                clip_dispersion=clip,
+                include_raman=False,
+                step_size=Length(1e-4, "m"),
+            )
+            with pytest.raises(ValueError, match="not finite"):
+                engine.propagate(2, nsaves=2)
 
 
 # ── C1 ─────────────────────────────────────────────────────────────────────

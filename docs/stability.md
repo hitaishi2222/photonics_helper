@@ -81,8 +81,10 @@ from photonics_helper._deprecation import deprecated
 def old_grid(*args, **kwargs): ...
 ```
 
-Nothing in the library is deprecated today; the machinery exists so the next
-rename follows the policy instead of breaking callers.
+One deprecation is live today: `TaperedGNLSESolver(betas_unit=...)` (since
+0.1.12, removed in 0.3.0 — the flag cannot rescale anything on that solver,
+whose dispersion arrives in SI through `dispersion_profile`). It is still
+accepted and still validated, so no caller breaks.
 
 ## Support window
 

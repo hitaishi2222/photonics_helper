@@ -9,7 +9,84 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_nothing yet_
+### Added
+
+- **`beta_tpa_pointwise` — carrier-free two-photon absorption** on
+  `SplitStepEngine` and `GNLSESolver` (`openspec/changes/add-pointwise-tpa-term`).
+  Applies `−β_TPA/2·|A|²·A` with **no** carrier state: an exact per-sample
+  sub-step on the split-step schemes and part of `N(A)` for `etdrk4`/`rk4ip`,
+  which is the only route to 2PA on an exponential integrator. Refused together
+  with `include_free_carriers=True` (the same coefficient twice); a no-op warning
+  when `fiber.beta_tpa == 0`. Tests: `tests/test_gnlse_pointwise_tpa.py`.
+
+- **`clip_dispersion` on `SplitStepEngine`** (correctness change, item A5):
+  `False` raises on *any* out-of-table β(ω, z) sample, `True` holds the edge and
+  warns, `None` (default) follows the table's own `out_of_range`. A callable
+  `β(ω, z)` that returns a non-finite value now raises in every mode — there is no
+  edge to clip to.
+
+- **`Span.bin_nm`** — the bin width the crossings were interpolated on, so a span
+  measured on a coarse grid cannot be compared to a fine one without saying why.
+
+- **A new phase-M selenide cladding row: `GeSbSe_clad` (Ge₁₅Sb₁₀Se₇₅).**
+  Sellmeier from Wu, Ding & Peng, *Appl. Sci.* 13, 12923 (2023), Table 2 — the
+  same ellipsometry fit as the `GeSbSe` core, so a core/clad stack can be built
+  from one source. Dispersion only: no `n₂`, `E_g` or Raman row, so it cannot
+  enter a nonlinear model by accident. n(1.55 µm) = 2.6021, −0.16 % against
+  Wang et al., *Opt. Mater. Express* 4, 1011 (2014) n₀ = 2.598. Golden/drift
+  tests updated (`tests/test_material_data_golden.py`), `DATABASE.md` §1b
+  records it as shipped.
+
+### Changed
+
+- **BREAKING (numerical): `spectral_evolution_on_wavelength_grid` takes `per=`**
+  and defaults to the per-wavelength density `S_λ = S_ν·2πc/λ²`, matching
+  `interpolated_spectrum_db`: a waterfall's −50 dB edge moves by up to 13 dB near
+  9 µm relative to the old un-Jacobianed curve. `per="frequency"` reproduces the
+  old figure deliberately. Both functions share `metrics.to_wavelength_density`,
+  and so do both panels of `plot_spectral_temporal_summary` (its output spectrum
+  is a per-λ density too now). Tests: `tests/test_upstream_gap_fixes.py`,
+  `tests/test_gnlse_visualize.py`.
+
+- **BREAKING (behaviour): `TaperedGNLSESolver.propagate(strict=True)`** now maps
+  to `clip_dispersion=False`: it raises on **any** out-of-table sample (1 % is
+  enough) instead of the old 5 % grace threshold, which hid exactly the band edge
+  a dispersive-wave run exists to model. `strict=False` follows the table, so the
+  documented warn-and-continue is unchanged and a table's `out_of_range="raise"`
+  opt-in still raises.
+
+### Changed (Raman catalogue, C5)
+
+- **BREAKING (numerical): `As2S3`'s Raman response moves: `f_R` 0.15 → 0.10**,
+  with the published `tau1 = 15.5 fs`, `tau2 = 230.5 fs` (Xiong 2009, fitted to
+  the measured C-band
+  gain spectrum) now *used* by `RamanResponse` instead of being re-derived from
+  the 345 cm⁻¹ line and its 56 cm⁻¹ width. `As2Se3` gains the same treatment
+  (23 / 164.5 fs) and the paper-specific `AsSe2 (Raman only)` row
+  (f_R 0.148, 23 / 164.5 fs) is added rather than overwriting `As2Se3`. Any deck
+  whose soliton self-frequency shift or Raman gain depends on `f_R` should be
+  re-run; the catalogue integrity is pinned by `tests/test_raman_reference.py`.
+
+### Deprecated
+
+- **`TaperedGNLSESolver(betas_unit=...)`** — the flag cannot rescale anything on
+  that solver (β comes from the SI `dispersion_profile`), so a non-default value
+  now emits one `DeprecationWarning` per process (since 0.1.12, removed in 0.3.0).
+  Still accepted and still validated, so no caller breaks.
+
+### Fixed
+
+- **The conservation guard no longer mis-reports its own cause**
+  (correctness change, item 16). The "lossless" predicate behind the energy-drift
+  warning, `GNLSESolver.verify_convergence`, `propagate_auto` and
+  `TaperedGNLSESolver.verify_convergence` is now one function,
+  `gnlse._absorption_is_active`, read off the armed operators: `alpha`, `alpha_w`,
+  `include_tpa` only with `sigma_tpa > 0`, `include_free_carriers`,
+  `three_photon_alpha_3` and `beta_tpa_pointwise`. An `alpha_w` or 2PA run is no
+  longer reported as "with loss/TPA disabled", and an inert `beta_tpa` switch no
+  longer silences a real drift alarm. Tests:
+  `tests/test_gnlse_loss_spectrum.py`,
+  `tests/test_tapered_gnlse_engine.py::TestTaperedConservationGuardPredicate`.
 
 ## [0.1.12] - 2026-11-06
 

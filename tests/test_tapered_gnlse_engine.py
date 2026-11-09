@@ -489,3 +489,25 @@ class TestSplitStepEngineZDependent:
         # Adaptive stepping may create more steps, but should reach the end
         assert len(engine.evolution) >= 2
         assert engine.z_array[-1] >= fiber.length.as_m * 0.99
+
+
+class TestTaperedConservationGuardPredicate:
+    """The tapered verdict must agree with the engine's drift warning (§10.4 item 16)."""
+
+    @pytest.mark.parametrize("switch", [{"alpha_w": 0.3}, {"three_photon_alpha_3": 1e-6}],
+                             ids=["alpha_w", "three_photon"])
+    def test_active_loss_is_not_reported_as_lossless(self, switch):
+        pulse, fiber = _make_tapered_setup()
+        fiber.alpha = 0.0
+        disp = _make_uniform_beta_table(pulse, fiber_length=fiber.length.as_m)
+        solver = TaperedGNLSESolver(
+            pulse=pulse,
+            fiber=fiber,
+            dispersion_profile=disp,
+            include_raman=False,
+            **switch,
+        )
+        solver.propagate(num_steps=20)
+        report = solver.verify_convergence(num_steps=20, warn=False)
+        assert "loss/gain" in report.invariant
+        assert report.drift_pct == 0.0

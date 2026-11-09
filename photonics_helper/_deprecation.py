@@ -7,8 +7,9 @@ These are the runtime half of the stability contract (see
   replacement and the release in which it will be removed;
 - it stays for at least one minor release before removal.
 
-Nothing in the library is deprecated yet — these helpers exist so the first
-rename or retirement follows the policy instead of breaking callers.
+Current deprecations: ``TaperedGNLSESolver(betas_unit=...)`` (since 0.1.12,
+removed in 0.3.0 — the flag cannot rescale anything on that solver, whose
+dispersion comes from the SI ``dispersion_profile``).
 
 Usage
 -----

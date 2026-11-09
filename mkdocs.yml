@@ -99,6 +99,7 @@ nav:
           - Raman scattering: api/raman.md
           - Raman cascade (CW) & RIN transfer: api/raman-transfer.md
           - Soliton analysis: api/soliton.md
+          - Spectral span metrics: api/metrics.md
           - Breathers and exact solutions: api/breathers.md
           - Noise sources: api/noise.md
           - Optical wave breaking: api/wave-breaking.md

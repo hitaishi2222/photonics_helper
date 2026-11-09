@@ -55,6 +55,24 @@ class TestRamanSpec:
         with pytest.raises(ValueError, match="not found"):
             RamanSpec.from_database("NonExistentMaterial")
 
+    def test_response_uses_the_stored_tau_before_deriving_one(self):
+        """A published bimodal pair in the table must reach h_R(t), not be replaced by the
+        shift/linewidth approximation (regression: response() dropped them)."""
+        as2s3 = RamanSpec.from_database("As2S3").response()  # Xiong 2009, measured
+        assert as2s3.tau1 == pytest.approx(15.5e-15, rel=1e-6)
+        assert as2s3.tau2 == pytest.approx(230.5e-15, rel=1e-6)
+        as2se3 = RamanSpec.from_database("As2Se3").response()  # 23 / 164.5 fs, not 17.1 / 177
+        assert as2se3.tau1 == pytest.approx(23e-15, rel=1e-6)
+        assert as2se3.tau2 == pytest.approx(164.5e-15, rel=1e-6)
+        # an explicit override still wins
+        over = RamanSpec.from_database("As2S3").response(tau1=2e-14, tau2=3e-13)
+        assert over.tau1 == pytest.approx(2e-14)
+        assert over.tau2 == pytest.approx(3e-13)
+        # a material with no published pair still gets the derived one
+        spec = RamanSpec.from_database("GeAsSe")
+        derived = spec.response()
+        assert derived.tau1 == pytest.approx(1 / (2 * 3.141592653589793 * spec.raman_shift_Hz), rel=1e-6)
+
     def test_from_database_with_fallback(self):
         """Test fallback values when material not in database."""
         spec = RamanSpec.from_database(

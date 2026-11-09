@@ -904,7 +904,7 @@ class TestSolverIntegration:
             # We just check it doesn't crash
 
     def test_strict_mode_raises_on_clip(self, omega0):
-        """strict=True raises ValueError on excessive clipping."""
+        """strict=True raises ValueError on any out-of-table β(ω, z) sample."""
         from photonics_helper.base import Area, Length, Time, Wavelength
         from photonics_helper.gnlse import Fiber, TaperedGNLSESolver
         from photonics_helper.pulse import Envelope, TemporalGrid, Wave
