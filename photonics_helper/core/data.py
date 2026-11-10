@@ -34,6 +34,18 @@ if TYPE_CHECKING:
     from ..materials import NKMaterial
 
 
+_INSERT_PHONON_MODE_SQL = """
+    INSERT OR REPLACE INTO phonon_modes
+    (material, shift_cm, linewidth_cm, fwhm_gauss_cm, symmetry,
+     relative_strength, lo_phonon_cm, to_phonon_cm, note, license)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+"""
+
+#: Resolved paths whose schema is already current in this process. Prevents
+#: every new handle (``RamanSpec.nk``, ``material()``, ``from_database``) from
+#: re-running the schema inspection.
+_INITIALIZED_PATHS: set[Path] = set()
+
 # Default/sentinel licences per data table. The sentinels point at the row's
 # citation column rather than asserting a blanket licence for literature data;
 # see docs/data-schema.md. Concrete identifiers (e.g. "CC0-1.0") are only used
@@ -131,25 +143,120 @@ class MaterialsDatabase:
         return self.db_path
 
     def _ensure_initialized(self) -> None:
-        """Create/migrate the schema once, on first use."""
-        if getattr(self, "_initialized", False):
+        """Create/migrate the schema once per instance and per resolved path."""
+        path = self._path.resolve()
+        if getattr(self, "_initialized", False) or path in _INITIALIZED_PATHS:
+            object.__setattr__(self, "_initialized", True)
             return
         # Set the flag before _init_db: the seeding path queries the database,
         # and must not recurse back into this method.
         object.__setattr__(self, "_initialized", True)
         self._init_db()
+        _INITIALIZED_PATHS.add(path)
 
     def _connect(self) -> sqlite3.Connection:
         """Open the database, initialising the schema on first use."""
         self._ensure_initialized()
         return sqlite3.connect(self._path)
 
+    @staticmethod
+    def _missing_schema(conn: sqlite3.Connection) -> list[str]:
+        """Names of schema objects (or backfills) this file still needs.
+
+        Runs on a read-only connection: everything here is a PRAGMA or a
+        SELECT, so a current database is inspected without a write attempt.
+        """
+        missing: list[str] = []
+        tables = {
+            row[0]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            )
+        }
+        for table in ("raman_specs", "nk_data", "sellmeier", "phonon_modes",
+                      "provenance"):
+            if table not in tables:
+                missing.append(f"table {table}")
+
+        def columns(table: str) -> set[str]:
+            return {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+
+        if "phonon_modes" in tables and "fwhm_gauss_cm" not in columns(
+            "phonon_modes"
+        ):
+            missing.append("column phonon_modes.fwhm_gauss_cm")
+        if "nk_data" in tables:
+            for column in ("source", "citation"):
+                if column not in columns("nk_data"):
+                    missing.append(f"column nk_data.{column}")
+        for table in _LICENSE_DEFAULTS:
+            if table not in tables:
+                continue
+            if "license" not in columns(table):
+                missing.append(f"column {table}.license")
+            elif conn.execute(
+                f"SELECT 1 FROM {table} WHERE license IS NULL LIMIT 1"
+            ).fetchone():
+                missing.append(f"license backfill {table}")
+        if "phonon_modes" in tables:
+            indexes = {
+                row[1] for row in conn.execute("PRAGMA index_list(phonon_modes)")
+            }
+            if "phonon_modes_unique" not in indexes:
+                missing.append("index phonon_modes_unique")
+        if "nk_data" in tables:
+            indexes = {row[1] for row in conn.execute("PRAGMA index_list(nk_data)")}
+            if "nk_data_unique" not in indexes:
+                missing.append("index nk_data_unique")
+        if "provenance" in tables and "nk_data" in tables:
+            unregistered = conn.execute(
+                "SELECT COUNT(*) FROM ("
+                "  SELECT DISTINCT source FROM nk_data"
+                "  WHERE source IS NOT NULL"
+                "    AND source NOT IN (SELECT source_key FROM provenance)"
+                ")"
+            ).fetchone()[0]
+            if unregistered:
+                missing.append("provenance rows")
+        return missing
+
     def _init_db(self):
-        """Create tables if they don't exist (idempotent migration)."""
+        """Create/migrate the schema, writing only when something is missing.
+
+        A current database is opened read-only for the inspection and never
+        written, so a root-owned or container-install package stays usable.
+        """
         self._path.parent.mkdir(parents=True, exist_ok=True)
+        if self._path.exists():
+            probe = sqlite3.connect(f"file:{self._path}?mode=ro", uri=True)
+            try:
+                pending = self._missing_schema(probe)
+            finally:
+                probe.close()
+            if not pending:
+                return
+        else:
+            pending = ["new database"]
+
         conn = sqlite3.connect(self._path)
         cursor = conn.cursor()
+        try:
+            self._migrate(conn, cursor)
+            conn.commit()
+        except sqlite3.OperationalError as exc:
+            conn.close()
+            if "readonly" in str(exc).lower():
+                raise sqlite3.OperationalError(
+                    f"{self._path} is not writable but needs migration "
+                    f"({', '.join(pending)}). Install the package writable, or "
+                    "pass db_path=... pointing at a writable copy."
+                ) from exc
+            raise
+        conn.close()
+        self._seed_if_empty()
 
+    def _migrate(self, conn: sqlite3.Connection, cursor: sqlite3.Cursor) -> None:
+        """Apply the schema/backfill steps (caller commits)."""
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS raman_specs (
                 name              TEXT PRIMARY KEY,
@@ -277,9 +384,38 @@ class MaterialsDatabase:
                     (doi, source_key),
                 )
 
-        conn.commit()
-        conn.close()
-        self._seed_if_empty()
+        # One row per (material, shift_cm, symmetry): SQLite treats NULLs as
+        # distinct, so INSERT OR REPLACE duplicated a symmetry=None mode.
+        cursor.execute(
+            """
+            DELETE FROM phonon_modes
+            WHERE rowid NOT IN (
+                SELECT MAX(rowid) FROM phonon_modes
+                GROUP BY material, shift_cm, COALESCE(symmetry, '')
+            )
+            """
+        )
+        cursor.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS phonon_modes_unique "
+            "ON phonon_modes (material, shift_cm, COALESCE(symmetry, ''))"
+        )
+
+        # One row per (material, wavelength_um, source): duplicate pairs make
+        # get_nk_data return repeated wavelengths and break the spline. Keep
+        # the last-written row (highest rowid) for each key.
+        cursor.execute(
+            """
+            DELETE FROM nk_data
+            WHERE rowid NOT IN (
+                SELECT MAX(rowid) FROM nk_data
+                GROUP BY material, wavelength_um, COALESCE(source, '')
+            )
+            """
+        )
+        cursor.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS nk_data_unique "
+            "ON nk_data (material, wavelength_um, COALESCE(source, ''))"
+        )
 
     def _seed_if_empty(self) -> None:
         """Populate an empty user-home DB from RAMAN_MATERIALS (not test/temp paths)."""
@@ -302,44 +438,65 @@ class MaterialsDatabase:
         # empty-home-DB fallback path too.
         self.seed_phonon_data()
 
+    def _upsert_material(self, cursor: sqlite3.Cursor, spec: dict) -> None:
+        """Insert or update only the supplied ``raman_specs`` columns.
+
+        A partial dict must not erase the columns it omits: an existing row
+        is ``UPDATE``d on the supplied fields only, and a new row gets NULL
+        only for fields never supplied. Unknown keys raise ``ValueError``
+        (same contract as :meth:`update_material`).
+        """
+        name = spec.get("name")
+        if not name:
+            raise ValueError("material spec needs a non-empty 'name'")
+        # Values are bound, keys are not: never format a caller key into SQL.
+        valid = {
+            row[1] for row in cursor.execute("PRAGMA table_info(raman_specs)")
+        }
+        unknown = sorted(set(spec) - valid)
+        if unknown:
+            raise ValueError(
+                f"unknown column(s) {unknown}; "
+                f"valid columns are {sorted(valid)}"
+            )
+        fields = {k: v for k, v in spec.items() if k != "name"}
+        exists = cursor.execute(
+            "SELECT 1 FROM raman_specs WHERE name = ?", (name,)
+        ).fetchone()
+        if exists:
+            if not fields:
+                return
+            assignments = ", ".join(f'"{k}" = ?' for k in fields)
+            cursor.execute(
+                f"UPDATE raman_specs SET {assignments} WHERE name = ?",
+                [*fields.values(), name],
+            )
+            return
+        fields.setdefault("license", _LICENSE_DEFAULTS["raman_specs"])
+        columns = ", ".join(f'"{k}"' for k in ("name", *fields))
+        placeholders = ", ".join("?" for _ in range(1 + len(fields)))
+        cursor.execute(
+            f"INSERT INTO raman_specs ({columns}) VALUES ({placeholders})",
+            [name, *fields.values()],
+        )
+
     def add_material(self, spec: dict) -> None:
-        """INSERT or REPLACE a material entry.
+        """Upsert a material entry, touching only the supplied fields.
 
         Parameters
         ----------
-        spec : dict with material properties
+        spec : dict with material properties; must contain ``name``
         """
         conn = self._connect()
         cursor = conn.cursor()
-
-        cursor.execute(
-            """
-            INSERT OR REPLACE INTO raman_specs
-            (name, crystal, bandgap_eV, n2, raman_shift_cm, raman_linewidth_cm,
-             fR, gain_coeff, tau1, tau2, lo_phonon_cm, to_phonon_cm, "references",
-             license)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-            (
-                spec.get("name"),
-                spec.get("crystal"),
-                spec.get("bandgap_eV"),
-                spec.get("n2"),
-                spec.get("raman_shift_cm"),
-                spec.get("raman_linewidth_cm"),
-                spec.get("fR"),
-                spec.get("gain_coeff"),
-                spec.get("tau1"),
-                spec.get("tau2"),
-                spec.get("lo_phonon_cm"),
-                spec.get("to_phonon_cm"),
-                spec.get("references"),
-                spec.get("license", _LICENSE_DEFAULTS["raman_specs"]),
-            ),
-        )
-
-        conn.commit()
-        conn.close()
+        try:
+            self._upsert_material(cursor, spec)
+            conn.commit()
+        except BaseException:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
 
     def get_material(self, name: str) -> dict | None:
         """SELECT one material by name.
@@ -428,6 +585,24 @@ class MaterialsDatabase:
         conn.close()
         return rows
 
+    @staticmethod
+    def _phonon_mode_row(
+        material: str, mode: PhononMode, license: str | None = None
+    ) -> tuple:
+        """Bind values for one ``phonon_modes`` row (shared with the seeder)."""
+        return (
+            material,
+            mode.shift_cm.as_1_cm,
+            mode.linewidth_cm.as_1_cm,
+            mode.fwhm_gauss_cm.as_1_cm if mode.fwhm_gauss_cm is not None else None,
+            mode.symmetry,
+            mode.relative_strength,
+            mode.lo_phonon_cm.as_1_cm if mode.lo_phonon_cm is not None else None,
+            mode.to_phonon_cm.as_1_cm if mode.to_phonon_cm is not None else None,
+            mode.note,
+            license or _LICENSE_DEFAULTS["phonon_modes"],
+        )
+
     def add_phonon_mode(
         self, material: str, mode: PhononMode, license: str | None = None
     ) -> None:
@@ -451,26 +626,7 @@ class MaterialsDatabase:
         conn = self._connect()
         cursor = conn.cursor()
 
-        cursor.execute(
-            """
-            INSERT OR REPLACE INTO phonon_modes
-            (material, shift_cm, linewidth_cm, fwhm_gauss_cm, symmetry,
-             relative_strength, lo_phonon_cm, to_phonon_cm, note, license)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-            (
-                material,
-                mode.shift_cm.as_1_cm,
-                mode.linewidth_cm.as_1_cm,
-                mode.fwhm_gauss_cm.as_1_cm if mode.fwhm_gauss_cm is not None else None,
-                mode.symmetry,
-                mode.relative_strength,
-                mode.lo_phonon_cm.as_1_cm if mode.lo_phonon_cm is not None else None,
-                mode.to_phonon_cm.as_1_cm if mode.to_phonon_cm is not None else None,
-                mode.note,
-                license or _LICENSE_DEFAULTS["phonon_modes"],
-            ),
-        )
+        cursor.execute(_INSERT_PHONON_MODE_SQL, self._phonon_mode_row(material, mode, license))
 
         conn.commit()
         conn.close()
@@ -538,6 +694,13 @@ class MaterialsDatabase:
     def seed_phonon_data(self) -> int:
         """Seed PHONON_MATERIALS data into the phonon_modes table.
 
+        Idempotent: each canonical material's rows are cleared before its modes
+        are written, so a second run reproduces the table instead of growing it.
+        ``add_phonon_mode`` alone cannot do that -- the primary key ends in a
+        nullable ``symmetry`` and SQLite treats NULLs as distinct, so
+        ``INSERT OR REPLACE`` appended a fresh copy of every NULL-symmetry mode
+        on each run (re-running ``seed_db.py`` grew the table 59 -> 66).
+
         Returns
         -------
         int
@@ -545,11 +708,29 @@ class MaterialsDatabase:
         """
         from ..phonon import PHONON_MATERIALS
 
+        # Delete and insert in one transaction: a crash must not leave the
+        # bundled database with a material's modes removed.
+        conn = self._connect()
+        cursor = conn.cursor()
         count = 0
-        for material, modes in PHONON_MATERIALS.items():
-            for mode in modes:
-                self.add_phonon_mode(material, mode)
-                count += 1
+        try:
+            cursor.executemany(
+                "DELETE FROM phonon_modes WHERE material = ?",
+                [(material,) for material in PHONON_MATERIALS],
+            )
+            for material, modes in PHONON_MATERIALS.items():
+                for mode in modes:
+                    cursor.execute(
+                        _INSERT_PHONON_MODE_SQL,
+                        self._phonon_mode_row(material, mode),
+                    )
+                    count += 1
+            conn.commit()
+        except BaseException:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
         return count
 
     def update_material(self, name: str, **kwargs) -> None:
@@ -565,6 +746,18 @@ class MaterialsDatabase:
 
         conn = self._connect()
         cursor = conn.cursor()
+
+        # Values are bound, keys are not: never format a caller key into SQL.
+        valid = {
+            row[1] for row in cursor.execute("PRAGMA table_info(raman_specs)")
+        }
+        unknown = sorted(set(kwargs) - valid)
+        if unknown:
+            conn.close()
+            raise ValueError(
+                f"update_material: unknown column(s) {unknown}; "
+                f"valid columns are {sorted(valid)}"
+            )
 
         # Build UPDATE query dynamically
         columns = ", ".join(f"{k} = ?" for k in kwargs)
@@ -585,11 +778,16 @@ class MaterialsDatabase:
         conn = self._connect()
         cursor = conn.cursor()
 
-        cursor.execute("DELETE FROM raman_specs WHERE name = ?", (name,))
-        cursor.execute("DELETE FROM nk_data WHERE material = ?", (name,))
-
-        conn.commit()
-        conn.close()
+        try:
+            cursor.execute("DELETE FROM raman_specs WHERE name = ?", (name,))
+            for table in ("nk_data", "sellmeier", "phonon_modes"):
+                cursor.execute(f"DELETE FROM {table} WHERE material = ?", (name,))
+            conn.commit()
+        except BaseException:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
 
     def add_nk_data(
         self,
@@ -621,7 +819,7 @@ class MaterialsDatabase:
 
         cursor.execute(
             """
-            INSERT INTO nk_data
+            INSERT OR REPLACE INTO nk_data
             (material, wavelength_um, n, k, source, citation, license)
             VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
@@ -763,6 +961,37 @@ class MaterialsDatabase:
         conn.commit()
         conn.close()
         return removed
+
+    def replace_tabulated_nk(self, rows: list[tuple]) -> int:
+        """Replace every attributed ``nk_data`` row in one transaction.
+
+        Parameters
+        ----------
+        rows : list of ``(material, wavelength_um, n, k, source, citation)``
+
+        Returns
+        -------
+        Number of rows written. Nothing is written if any insert fails.
+        """
+        conn = self._connect()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("DELETE FROM nk_data WHERE source IS NOT NULL")
+            cursor.executemany(
+                """
+                INSERT INTO nk_data
+                (material, wavelength_um, n, k, source, citation, license)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                [(*row, _LICENSE_DEFAULTS["nk_data"]) for row in rows],
+            )
+            conn.commit()
+        except BaseException:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+        return len(rows)
 
     def get_nk_by_source(
         self, material: NKMaterial, source: str
@@ -1002,7 +1231,7 @@ class MaterialsDatabase:
         return {row["name"]: dict(row) for row in rows}
 
     def import_from_dict(self, data: dict[str, dict]) -> None:
-        """Bulk INSERT from a Python dict.
+        """Bulk upsert from a Python dict of partial material specs.
 
         Parameters
         ----------
@@ -1010,31 +1239,12 @@ class MaterialsDatabase:
         """
         conn = self._connect()
         cursor = conn.cursor()
-
-        for name, spec in data.items():
-            cursor.execute(
-                """
-                INSERT OR REPLACE INTO raman_specs
-                (name, crystal, bandgap_eV, n2, raman_shift_cm, raman_linewidth_cm,
-                 fR, gain_coeff, tau1, tau2, lo_phonon_cm, to_phonon_cm, "references")
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-                (
-                    spec.get("name", name),
-                    spec.get("crystal"),
-                    spec.get("bandgap_eV"),
-                    spec.get("n2"),
-                    spec.get("raman_shift_cm"),
-                    spec.get("raman_linewidth_cm"),
-                    spec.get("fR"),
-                    spec.get("gain_coeff"),
-                    spec.get("tau1"),
-                    spec.get("tau2"),
-                    spec.get("lo_phonon_cm"),
-                    spec.get("to_phonon_cm"),
-                    spec.get("references"),
-                ),
-            )
-
-        conn.commit()
-        conn.close()
+        try:
+            for name, spec in data.items():
+                self._upsert_material(cursor, {"name": name, **spec})
+            conn.commit()
+        except BaseException:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()

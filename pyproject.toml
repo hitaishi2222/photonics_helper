@@ -126,11 +126,14 @@ markers = [
     "slow: heavy reproduction runs (minutes); deselect with -m 'not slow'",
 ]
 filterwarnings = [
-    # The dash/plotly/matplotlib stacks emit these from third-party code on
-    # import; they are not ours and would drown real warnings. Narrow to
-    # error-classes when a warning needs investigation.
+    # Third-party import noise only, scoped by the module that emits it. A
+    # blanket "ignore::UserWarning" also hid photonics_helper's own
+    # conservation/step-size warnings.
     "ignore::DeprecationWarning",
-    "ignore::UserWarning",
+    "ignore::UserWarning:dash.*",
+    "ignore::UserWarning:plotly.*",
+    "ignore::UserWarning:matplotlib.*",
+    "ignore::UserWarning:pkg_resources.*",
 ]
 
 [tool.coverage.run]

@@ -39,6 +39,17 @@ Tabulated refractive index vs wavelength: `material`, `wavelength_um`, `n`, `k`,
 `source` (a `material-author` provenance key, e.g. `si-aspnes`), `citation`,
 `license`.
 
+Unique per `(material, wavelength_um, COALESCE(source, ''))` through the
+`nk_data_unique` index, so `get_nk_data` returns one sample per wavelength.
+Re-adding a point replaces it (`add_nk_data` is `INSERT OR REPLACE`); a file
+that predates the index is deduped on first use (highest rowid wins).
+
+### Writing rows
+`add_material` and `import_from_dict` are **partial upserts**: only the supplied
+columns are written, so `add_material({"name": "Silica"})` leaves `fR`,
+`raman_shift_cm` and `n2` intact, and a new row gets NULL only for fields never
+supplied. Unknown keys raise `ValueError` (same contract as `update_material`).
+
 ### `sellmeier`
 Sellmeier coefficients: `material` (PK), `form` (`standard`/`alt`), `a0`,
 `coefficients` (JSON), `wavelengths` (JSON), `valid_from_um`, `valid_to_um`,
@@ -93,6 +104,20 @@ db = RamanDatabase()  # no filesystem access
 db.list_provenance()  # first use: schema ensured, then the query
 ```
 
+## Read-only installs
+
+The migration is check-first: the bundled file is opened with SQLite's
+`mode=ro` and its tables, columns, licence backfills and the
+`phonon_modes_unique` / `nk_data_unique` indexes are inspected. When nothing is
+missing the file is **never written**, so a root-owned conda install, a
+read-only container image
+or an HPC module can serve every read path (`material()`,
+`RamanSpec.from_database`, phonon modes, provenance). Only a file that really
+lacks a schema object is opened read-write; if that is impossible the error
+names the read-only state and the missing object instead of calling the file
+corrupt. Schema work is cached per resolved path for the process, so a second
+`MaterialsDatabase()` for the same file does not repeat it.
+
 ## Discovering the data
 
 The catalogue lists every dataset the database ships, tabulated n/k spectra and
@@ -134,7 +159,10 @@ Step 1 is the safe, routine path: it re-writes `raman_specs` from
 `reference.py`, seeds `phonon_modes` from `PHONON_MATERIALS`, and runs the
 additive schema migration (licence columns + `provenance` registry). Step 2
 requires the `nk_datasets/manifest.json` collection, which is intentionally not
-in the repository; the shipped `nk_data` table is authoritative.
+in the repository; the shipped `nk_data` table is authoritative. The whole
+manifest is validated before anything is deleted, and the surviving rows are
+written in one transaction; if every dataset fails validation the shipped rows
+are left untouched.
 
 After any regeneration, run:
 

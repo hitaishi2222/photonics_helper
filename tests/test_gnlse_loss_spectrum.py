@@ -236,3 +236,56 @@ def test_verify_convergence_reports_a_lossy_run_as_lossy():
     report = solver.verify_convergence(num_steps=200, warn=False)
     assert "loss/gain" in report.invariant
     assert report.drift_pct == 0.0
+
+
+# ── α(z): loss and gain are applied on every scheme ─────────────────────────
+
+
+@pytest.mark.parametrize("scheme", ["strang", "etdrk4"])
+def test_alpha_fn_applies_without_a_dispersion_profile(scheme: str):
+    """`alpha_fn` is resolved by the linear step itself (audit finding 1)."""
+    alpha_fn = lambda z: 0.5  # noqa: E731 — constant loss, 1/m
+    engine, _ = _engine(40, scheme=scheme, alpha_fn=alpha_fn)
+    e_in = float(np.sum(np.abs(engine.A) ** 2) * engine.grid.dt)
+    engine.propagate(40, nsaves=2)
+    e_out = float(np.sum(np.abs(engine.A) ** 2) * engine.grid.dt)
+    assert np.isclose(e_out / e_in, np.exp(-0.5 * LENGTH), rtol=1e-3)
+
+
+@pytest.mark.parametrize("scheme", ["strang", "etdrk4"])
+def test_negative_alpha_is_gain_not_dropped(scheme: str):
+    """α < 0 amplifies; the old `alpha > 0` guard silently ran lossless."""
+    wave, grid, _ = _deck(length=0.02)
+    fiber = Fiber(gamma=0.0, alpha=-2.0, length=Length(0.02, "m"))
+    engine = SplitStepEngine(
+        wave,
+        fiber,
+        betas=np.array([0.0]),
+        include_raman=False,
+        step_size=Length(0.02 / 40, "m"),
+        scheme=scheme,
+    )
+    e_in = float(np.sum(np.abs(engine.A) ** 2) * engine.grid.dt)
+    engine.propagate(40, nsaves=2)
+    e_out = float(np.sum(np.abs(engine.A) ** 2) * engine.grid.dt)
+    assert np.isclose(e_out / e_in, np.exp(2.0 * 0.02), rtol=1e-3)
+
+
+def test_strang_and_etdrk4_agree_on_an_alpha_z_deck():
+    """Same α(z) deck, same final energy on both schemes."""
+    energies = {}
+    for scheme in ("strang", "etdrk4"):
+        engine, _ = _engine(
+            40, scheme=scheme, alpha_fn=lambda z: 1.0 + 0.5 * np.sin(z / 0.005)
+        )
+        engine.propagate(40, nsaves=2)
+        energies[scheme] = float(np.sum(np.abs(engine.A) ** 2) * engine.grid.dt)
+    assert np.isclose(energies["strang"], energies["etdrk4"], rtol=1e-3)
+
+
+def test_zero_alpha_stays_lossless():
+    engine, _ = _engine(20)
+    engine.propagate(20, nsaves=2)
+    e_in = float(np.sum(np.abs(engine.evolution[0].envelope_field) ** 2) * engine.grid.dt)
+    e_out = float(np.sum(np.abs(engine.A) ** 2) * engine.grid.dt)
+    assert np.isclose(e_out, e_in, rtol=1e-12)

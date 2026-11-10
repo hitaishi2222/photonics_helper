@@ -77,7 +77,7 @@ def build_layout(*, dcc, html):
     Requires `dash` to be installed. Run with::
 
         if __name__ == "__main__":
-            app().run(debug=True)
+            app().run()  # debug=True is localhost-only; opt in explicitly
     """
     # ── Build layout ──────────────────────────────────────────────────────────
 
@@ -578,7 +578,7 @@ def app() -> dash.Dash:  # type: ignore[valid-type]
     Requires ``dash`` to be installed. Run with::
 
         if __name__ == "__main__":
-            app().run(debug=True)
+            app().run()  # debug=True is localhost-only; opt in explicitly
     """
     dash, dcc, html, Input, Output, State = _import_dash()
     dash_app = dash.Dash(__name__, title="Photonics Helper — Raman Explorer")

@@ -39,6 +39,81 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **BREAKING (numerical): `α(z)` loss and gain apply on every linear path and
+  every scheme.** `SplitStepEngine._linear_step` now resolves
+  `alpha = _get_alpha(z)` once and applies `exp(−α dz/2)` whenever `α != 0`, in
+  the static `full_beta` branch too. Previously `alpha_fn=` was ignored without
+  a `dispersion_profile`, a negative `alpha` (gain) was dropped, and Strang
+  disagreed with ETDRK4. A gain fiber now amplifies instead of running
+  lossless. Tests: `tests/test_gnlse_loss_spectrum.py`.
+
+- **BREAKING (numerical): the free-carrier model is time-ordered.** The carrier
+  density is now the causal recursion of `∂N/∂t = β_TPA I²/(2ħω₀) − N/τ_c`
+  along retarded time (one `lfilter` pass, SI units, `1/A_eff` when `a_eff` is
+  set), not a per-sample state integrated along `z`. Carriers now persist
+  after the pulse for a long `τ_c` and absorb the trailing edge; silicon
+  waveguide FCA numbers change. `N` is a local diagnostic, not a state carried
+  between steps; `group_velocity` is retained but unused. Tests:
+  `tests/test_gnlse_free_carrier.py`.
+
+- **Snapshots are labelled with the z they were taken at.**
+  `propagate(nsaves=N)` records the real step-end z in `z_array` instead of
+  overwriting it with the nominal save grid, and takes one snapshot per step
+  (no repeated fields when a step spans several save points).
+  `SplitStepEngine.propagate()` also resets `A`, `_U` and `_N`, so a second
+  call starts from the input pulse.
+
+- **BREAKING (numerical): the vector and multimode engines get the same three
+  fixes.** `VectorSplitStepEngine`, `RandomBirefringenceEngine` and
+  `MultimodeSplitStepEngine` apply `exp(−α dz/2)` whenever `α != 0` (gain
+  included, and per-channel `channel_alpha` for the multimode engine), label
+  each snapshot with the real step-end z (one snapshot per step, no
+  `save_z` overwrite), and reset every field and per-run ledger on a second
+  `propagate()`. The vector engine also refuses `amplitude_convention="field"`
+  envelopes, like the scalar and multimode engines already did. Gain decks and
+  any code reading `z_array` on these engines change. Tests:
+  `tests/test_vector_gnlse.py`, `tests/test_multimode_gnlse.py`.
+
+- **`scan_fwm_detuning` reports one efficiency definition.** Every detuning is
+  `sin²(γ·P·L_eff)·fwm_efficiency(Δβ, L, α)` instead of a pump-dependent
+  `sin²` at Δβ = 0 and a pump-independent `sinc²` everywhere else. `P_pump` and
+  `gamma` now act at detuned points too, the notch at perfect phase matching is
+  gone, and the phase-matched peak keeps its old value. `fwm_efficiency` itself
+  is unchanged (phase-only contract). Tests: `tests/test_phase_matching.py`.
+
+- **`nk_data` is unique per `(material, wavelength_um, source)`.** A migration
+  dedupes an older file (highest rowid wins) and creates `nk_data_unique`, so a
+  repeated `add_nk_data` replaces instead of duplicating the wavelength grid
+  (`RefractiveIndex.from_material_database` no longer fails with "wl must be
+  strictly increasing"). `add_material` and `import_from_dict` are partial
+  upserts: unspecified columns keep their value, a new row gets NULL only for
+  fields never supplied, and unknown keys raise `ValueError`. Tests:
+  `tests/test_material_data_integrity.py`.
+
+- **Read-only installs work.** `MaterialsDatabase` inspects the schema first and
+  opens the bundled `materials.db` read-only when nothing needs migrating, so
+  `material()`, `RamanSpec.from_database` and phonon lookups no longer fail with
+  `attempt to write a readonly database` on root-owned/container/HPC installs.
+  The migration is cached per resolved path, and `RamanSpec.from_database` only
+  falls back (with a warning) for a SQLite error on the default path — an
+  explicit `db_path` failure raises.
+
+- **Phonon seeding is transactional and idempotent.** A unique index on
+  `(material, shift_cm, COALESCE(symmetry,''))` (after dedupe) stops a
+  `symmetry=None` mode from being inserted twice, and `seed_phonon_data`
+  deletes and re-inserts in one transaction. `update_material` rejects unknown
+  column keys; `delete_material` clears `nk_data`, `sellmeier` and
+  `phonon_modes`; `seed_db.py --nk` validates the whole manifest before it
+  deletes or writes.
+
+- **Dashboard zeros are honoured** (`gamma=0`, `p0=0`, `length=0` stay zero),
+  step count and length are bounded, and debug mode is opt-in with a
+  localhost-only caveat.
+
+- **Releases are gated by ruff, mypy and pytest**, and a tag that does not match
+  `pyproject.toml`'s version is refused. `pytest` no longer ignores every
+  `UserWarning`, so the library's own conservation/step-size warnings surface.
+
 - **BREAKING (numerical): `spectral_evolution_on_wavelength_grid` takes `per=`**
   and defaults to the per-wavelength density `S_λ = S_ν·2πc/λ²`, matching
   `interpolated_spectrum_db`: a waterfall's −50 dB edge moves by up to 13 dB near

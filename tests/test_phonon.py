@@ -289,6 +289,55 @@ class TestRamanDatabasePhonon:
         materials = self.db.list_phonon_materials()
         assert len(materials) > 0
 
+    def test_seed_phonon_data_is_idempotent(self):
+        """Re-seeding reproduces the table instead of appending to it.
+
+        The PK ends in a nullable ``symmetry`` and SQLite treats NULLs as
+        distinct, so ``INSERT OR REPLACE`` used to append every NULL-symmetry
+        mode again: re-running ``seed_db.py`` grew ``phonon_modes`` 59 -> 66 on
+        a DB that must stay at the canonical 59.
+        """
+        seeded = self.db.seed_phonon_data()
+        before = {
+            material: len(self.db.get_phonon_modes(material))
+            for material in self.db.list_phonon_materials()
+        }
+        self.db.seed_phonon_data()
+        after = {
+            material: len(self.db.get_phonon_modes(material))
+            for material in self.db.list_phonon_materials()
+        }
+        assert after == before
+        assert sum(after.values()) == seeded
+
+    def test_null_symmetry_mode_is_not_duplicated(self):
+        """SQLite treats NULLs as distinct; the unique index must not."""
+        mode = PhononMode(shift_cm=254, linewidth_cm=14, symmetry=None)
+        self.db.add_phonon_mode("LiNbO3", mode)
+        self.db.add_phonon_mode("LiNbO3", mode)
+        modes = self.db.get_phonon_modes("LiNbO3")
+        assert len(modes) == 1
+
+    def test_failed_seed_rolls_back(self, monkeypatch):
+        """A failure mid-seed leaves the previous rows in place."""
+        self.db.seed_phonon_data()
+        before = len(self.db.get_phonon_modes("Si"))
+
+        boom = iter(range(1))
+        original = RamanDatabase._phonon_mode_row
+
+        def failing(material, mode, license=None):
+            try:
+                next(boom)
+            except StopIteration:
+                raise RuntimeError("boom") from None
+            return original(material, mode, license)
+
+        monkeypatch.setattr(RamanDatabase, "_phonon_mode_row", staticmethod(failing))
+        with pytest.raises(RuntimeError, match="boom"):
+            self.db.seed_phonon_data()
+        assert len(self.db.get_phonon_modes("Si")) == before
+
     def test_type_check(self):
         with pytest.raises(TypeError):
             self.db.add_phonon_mode("Test", {"shift_cm": 254})  # Not a PhononMode

@@ -128,3 +128,81 @@ def test_explicit_db_handle_still_works(tmp_path: Path) -> None:
     )
     ri = RefractiveIndex.from_material_database("Silica", db=db)
     assert ri.n_func(1.0) > 1.0
+
+
+# ─── Read-only installs and honest database errors (audit findings 3, 6) ───
+
+
+def _readonly_copy(tmp_path: Path) -> Path:
+    import shutil
+
+    src = Path(__import__("photonics_helper").__file__).parent / "materials.db"
+    dst = tmp_path / "materials.db"
+    shutil.copyfile(src, dst)
+    dst.chmod(0o444)
+    return dst
+
+
+def test_read_only_database_serves_read_paths(tmp_path: Path) -> None:
+    """A current schema is never written, so a read-only file still works."""
+    readonly = _readonly_copy(tmp_path)
+    db = RamanDatabase(db_path=readonly)
+    assert db.list_materials()
+    assert db.get_material("Silica")
+    assert readonly.stat().st_mode & 0o222 == 0
+
+
+def test_read_only_database_that_needs_migration_says_so(tmp_path: Path) -> None:
+    import sqlite3
+
+    readonly = _readonly_copy(tmp_path)
+    readonly.chmod(0o644)
+    conn = sqlite3.connect(readonly)
+    conn.execute("DROP TABLE provenance")
+    conn.commit()
+    conn.close()
+    readonly.chmod(0o444)
+    with pytest.raises(sqlite3.OperationalError, match="not writable|writable copy"):
+        RamanDatabase(db_path=readonly).list_materials()
+
+
+def test_migration_runs_once_per_path(tmp_path: Path, monkeypatch) -> None:
+    from photonics_helper.core.data import MaterialsDatabase
+
+    import shutil
+    from pathlib import Path as _Path
+
+    src = _Path(__import__("photonics_helper").__file__).parent / "materials.db"
+    copied = tmp_path / "cached" / "materials.db"
+    copied.parent.mkdir()
+    shutil.copyfile(src, copied)
+    calls: list[int] = []
+    original = MaterialsDatabase._init_db
+
+    def counted(self) -> None:
+        calls.append(1)
+        original(self)
+
+    monkeypatch.setattr(MaterialsDatabase, "_init_db", counted)
+    MaterialsDatabase(db_path=copied).list_materials()
+    MaterialsDatabase(db_path=copied).list_materials()
+    assert len(calls) == 1
+
+
+def test_from_database_raises_for_an_explicit_path(tmp_path: Path) -> None:
+    from photonics_helper.raman.spec import RamanSpec
+
+    missing = tmp_path / "missing.db"
+    with pytest.raises(ValueError, match="not found in database"):
+        RamanSpec.from_database("Silica", db_path=missing)
+
+
+def test_from_database_propagates_a_corrupt_explicit_path(tmp_path: Path) -> None:
+    import sqlite3
+
+    corrupt = tmp_path / "corrupt.db"
+    corrupt.write_bytes(b"not a database")
+    from photonics_helper.raman.spec import RamanSpec
+
+    with pytest.raises(sqlite3.DatabaseError):
+        RamanSpec.from_database("Silica", db_path=corrupt)

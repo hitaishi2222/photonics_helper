@@ -372,6 +372,75 @@ class TestEnergyConservation:
 
 
 # ---------------------------------------------------------------------------
+# signed loss/gain, snapshot distances, re-propagation
+# ---------------------------------------------------------------------------
+
+
+def _vector_engine(engine_cls, grid, fiber, dz, seed: int = 0):
+    pulse_x = _sech_wave(grid, 1.0)
+    pulse_y = _zero_wave(grid, pulse_x)
+    kwargs = {"seed": seed} if engine_cls is RandomBirefringenceEngine else {}
+    return engine_cls(
+        pulse_x,
+        pulse_y,
+        fiber,
+        np.array([-21.8]),
+        step_size=Length(dz, "m"),
+        **kwargs,
+    )
+
+
+class TestSignedAlphaAndSnapshots:
+    @pytest.mark.parametrize("engine_cls", [VectorSplitStepEngine, RandomBirefringenceEngine])
+    @pytest.mark.parametrize("alpha", [-2.0, 2.0])
+    def test_alpha_is_a_signed_amplitude_factor(self, engine_cls, alpha):
+        grid = _grid()
+        fiber = Fiber(
+            n2=2.6e-20,
+            alpha=alpha,
+            A_eff=Area(80e-12, "m^2"),
+            length=Length(0.07, "m"),
+        )
+        engine = _vector_engine(engine_cls, grid, fiber, 0.01)
+        engine.propagate(7)
+        e = engine.energy_vs_z
+        assert e[-1] / e[0] == pytest.approx(np.exp(-alpha * 0.07), abs=1e-3)
+
+    @pytest.mark.parametrize("engine_cls", [VectorSplitStepEngine, RandomBirefringenceEngine])
+    def test_snapshots_record_the_propagated_distance(self, engine_cls):
+        length, steps, nsaves, alpha = 0.07, 7, 5, 2.0
+        grid = _grid()
+        fiber = Fiber(
+            n2=2.6e-20,
+            alpha=alpha,
+            A_eff=Area(80e-12, "m^2"),
+            length=Length(length, "m"),
+        )
+        engine = _vector_engine(engine_cls, grid, fiber, length / steps)
+        engine.propagate(steps, nsaves=nsaves)
+        z = engine.z_array
+        assert len(z) == len(engine.evolution_x) == len(engine.energy_vs_z)
+        assert np.all(np.diff(z) > 0.0)
+        assert z[-1] == pytest.approx(length)
+        np.testing.assert_allclose(
+            engine.energy_vs_z / engine.energy_vs_z[0], np.exp(-alpha * z), rtol=1e-6
+        )
+
+    @pytest.mark.parametrize("engine_cls", [VectorSplitStepEngine, RandomBirefringenceEngine])
+    def test_second_propagate_restarts_from_the_input(self, engine_cls):
+        grid = _grid()
+        engine = _vector_engine(engine_cls, grid, _fiber(1.0), 0.05)
+        engine.propagate(20)
+        engine.propagate(20)
+        np.testing.assert_allclose(
+            engine.evolution_x[0].envelope_field,
+            engine.pulse_x.envelope_field,
+            atol=0.0,
+        )
+        np.testing.assert_allclose(engine.z_array[0], 0.0)
+
+
+# ---------------------------------------------------------------------------
 # random-birefringence engine → Manakov limit
 # ---------------------------------------------------------------------------
 
@@ -458,3 +527,23 @@ class TestArgumentValidation:
                 fiber,
                 np.array([-21.8]),
             )
+
+    @pytest.mark.parametrize("field_axis", [0, 1])
+    def test_field_unit_envelope_rejected(self, field_axis):
+        grid = _grid()
+        fiber = _fiber(1.0)
+        env = Envelope(
+            shape="sech",
+            peak_amplitude=1.0,
+            pulse_width=Time(10e-12, "s"),
+            amplitude_convention="field",
+        )
+        field_wave = Wave(grid=grid, envelope=env, central_wavelength=WL)
+        power_wave = _sech_wave(grid, 1.0)
+        pulses = (
+            [field_wave, _zero_wave(grid, power_wave)]
+            if field_axis == 0
+            else [power_wave, field_wave]
+        )
+        with pytest.raises(ValueError, match="to_engine_units"):
+            VectorSplitStepEngine(pulses[0], pulses[1], fiber, np.array([-21.8]))

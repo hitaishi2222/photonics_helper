@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import sqlite3
+import warnings
 from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, cast
@@ -554,21 +556,34 @@ class RamanSpec:
         fallback : Optional dict of fallback values if not in DB
         db_path : Optional explicit path to SQLite database
         """
-        # Try SQLite database first
+        # Try SQLite database first. Only a SQLite error on the *default* path
+        # falls back: an explicit db_path that cannot be read, and a row that
+        # fails validation, are errors the caller must see (audit finding 6).
+        explicit = db_path is not None
         try:
             db = RamanDatabase(db_path=db_path)
             row = db.get_material(name)
-            if row:
-                # The DB predates the explicit bimodal the chalcogenides need:
-                # fill a missing tau from the reference table instead of letting
-                # the silica defaults through.
-                ref = RAMAN_MATERIALS.get(name, {})
-                for key in ("tau1", "tau2"):
-                    if row.get(key) is None and ref.get(key) is not None:
-                        row[key] = ref[key]
-                return cls(**row)  # type: ignore[arg-type]
-        except Exception:
-            pass
+        except sqlite3.Error as exc:
+            if explicit:
+                raise
+            warnings.warn(
+                f"materials database unavailable ({exc}); using the built-in "
+                f"reference table for {name!r}.",
+                UserWarning,
+                stacklevel=2,
+            )
+            row = None
+        if row:
+            # The DB predates the explicit bimodal the chalcogenides need:
+            # fill a missing tau from the reference table instead of letting
+            # the silica defaults through.
+            ref = RAMAN_MATERIALS.get(name, {})
+            for key in ("tau1", "tau2"):
+                if row.get(key) is None and ref.get(key) is not None:
+                    row[key] = ref[key]
+            return cls(**row)  # type: ignore[arg-type]
+        if explicit:
+            raise ValueError(f"Material '{name}' not found in database {db_path}")
 
         # Fall back to hardcoded materials
         if name in RAMAN_MATERIALS:

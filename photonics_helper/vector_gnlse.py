@@ -207,6 +207,17 @@ class VectorSplitStepEngine:
                 "include_raman=True but fiber.raman_response is None. "
                 "Provide a RamanResponse or set include_raman=False."
             )
+        for pulse, axis in ((pulse_x, "x"), (pulse_y, "y")):
+            convention = getattr(
+                getattr(pulse, "envelope", None), "amplitude_convention", "power"
+            )
+            if convention == "field":
+                raise ValueError(
+                    f"pulse_{axis} envelope is in field units (V/m), but the "
+                    "vector engine uses |A|² in watts. Convert it first with "
+                    "Wave.to_engine_units(A_eff) (or build it with "
+                    "Envelope.from_energy)."
+                )
         if fiber.length.as_m <= 0.0:
             raise ValueError(f"fiber.length must be positive, got {fiber.length!r}")
         if step_size is not None and step_size.as_m <= 0.0:
@@ -233,6 +244,9 @@ class VectorSplitStepEngine:
                 f"{self.A_y.shape}."
             )
 
+        self._A_x0: NDArray = self.A_x.copy()
+        self._A_y0: NDArray = self.A_y.copy()
+        self._propagated = False
         self.evolution_x: list[Wave] = []
         self.evolution_y: list[Wave] = []
         self._z_positions: list[float] = [0.0]
@@ -275,10 +289,12 @@ class VectorSplitStepEngine:
         *,
         apply_walkoff: bool,
     ) -> NDArray:
-        """Linear step (dispersion + loss + optional walkoff) for one channel.
+        """Linear step (dispersion + signed loss/gain + optional walkoff).
 
         Same dispersion convention as the scalar engine:
         ``(+i) Σ β_k Ω^k/k! · dz`` with Ω in rad/ps and β_k in ps^k/m.
+        The fiber coefficient is a signed amplitude factor ``exp(−α·dz/2)``:
+        positive α is loss, negative α is gain.
         """
         f_w = self.grid.fft(field)
         omega_ps = self.grid.w * 1e-12  # rad/s → rad/ps
@@ -297,7 +313,7 @@ class VectorSplitStepEngine:
         f_w = f_w * np.exp(1j * phi)
 
         alpha = self.fiber.alpha
-        if alpha > 0:
+        if alpha != 0.0:
             f_w = f_w * np.exp(-alpha * dz / 2)
         return np.asarray(self.grid.ifft(f_w), dtype=complex)
 
@@ -429,12 +445,20 @@ class VectorSplitStepEngine:
         else:
             step_iter = range(n_steps)
 
+        if self._propagated:
+            self.A_x = self._A_x0.copy()
+            self.A_y = self._A_y0.copy()
+        else:
+            self._A_x0 = self.A_x.copy()
+            self._A_y0 = self.A_y.copy()
+            self._propagated = True
+
         self.evolution_x = []
         self.evolution_y = []
-        self._z_positions = [0.0]
+        self._z_positions = []
         self._energy_vs_z = []
 
-        def _snapshot() -> None:
+        def _snapshot(z_snap: float) -> None:
             from photonics_helper.pulse import Wave
 
             wx = Wave(
@@ -452,12 +476,31 @@ class VectorSplitStepEngine:
             assert self._energy_vs_z is not None
             self.evolution_x.append(wx)
             self.evolution_y.append(wy)
+            # Record where the field actually is: a step can pass the nominal
+            # save point, and labelling it with the nominal z is wrong.
+            self._z_positions.append(float(z_snap))
             total = float(
                 np.sum(np.abs(self.A_x) ** 2 + np.abs(self.A_y) ** 2) * self.grid.dt
             )
             self._energy_vs_z.append(total)
 
-        _snapshot()  # z = 0
+        def _maybe_save(current_z: float) -> None:
+            nonlocal next_save_idx
+            if save_z is None:
+                _snapshot(current_z)
+                return
+            assert next_save_idx is not None
+            # One snapshot per step even when the step spans several nominal
+            # save points: repeated fields at the same z are not a time series.
+            if next_save_idx < len(save_z) and current_z >= save_z[next_save_idx] - 1e-15:
+                while (
+                    next_save_idx < len(save_z)
+                    and save_z[next_save_idx] <= current_z + 1e-15
+                ):
+                    next_save_idx += 1
+                _snapshot(current_z)
+
+        _snapshot(0.0)  # z = 0
 
         for step in step_iter:
             self._current_z = step * dz
@@ -476,26 +519,15 @@ class VectorSplitStepEngine:
                 self.A_y, dz / 2, self.betas_y, apply_walkoff=True
             )
             z = step * dz + dz
-            self._z_positions.append(z)
 
-            if save_z is None:
-                _snapshot()
-            else:
-                while (
-                    next_save_idx is not None
-                    and next_save_idx < len(save_z)
-                    and z >= save_z[next_save_idx] - 1e-15
-                ):
-                    _snapshot()
-                    next_save_idx += 1
+            _maybe_save(z)
 
-        if save_z is not None:
-            assert next_save_idx is not None
-            assert next_save_idx is not None and nsaves is not None
-            while next_save_idx < nsaves:  # catch the final snapshot at z = L
-                _snapshot()
-                next_save_idx += 1
-            self._z_positions = save_z[: len(self.evolution_x)].tolist()
+        if (
+            save_z is not None
+            and next_save_idx is not None
+            and next_save_idx < len(save_z)
+        ):
+            _snapshot(z)
 
         e0, e1 = self._energy_vs_z[0], self._energy_vs_z[-1]
         if e0 > 0.0 and self.fiber.alpha == 0.0:
@@ -665,12 +697,21 @@ class RandomBirefringenceEngine(VectorSplitStepEngine):
         else:
             step_iter = range(n_steps)
 
+        if self._propagated:
+            self.A_x = self._A_x0.copy()
+            self.A_y = self._A_y0.copy()
+        else:
+            self._A_x0 = self.A_x.copy()
+            self._A_y0 = self.A_y.copy()
+            self._propagated = True
+
         self.evolution_x = []
         self.evolution_y = []
-        self._z_positions = [0.0]
+        self._z_positions = []
         self._energy_vs_z = []
+        self._rotation_history = []
 
-        def _snapshot() -> None:
+        def _snapshot(z_snap: float) -> None:
             from photonics_helper.pulse import Wave
 
             wx = Wave(
@@ -688,13 +729,28 @@ class RandomBirefringenceEngine(VectorSplitStepEngine):
             assert self._energy_vs_z is not None
             self.evolution_x.append(wx)
             self.evolution_y.append(wy)
+            self._z_positions.append(float(z_snap))
             self._energy_vs_z.append(
                 float(
                     np.sum(np.abs(self.A_x) ** 2 + np.abs(self.A_y) ** 2) * self.grid.dt
                 )
             )
 
-        _snapshot()
+        def _maybe_save(current_z: float) -> None:
+            nonlocal next_save_idx
+            if save_z is None:
+                _snapshot(current_z)
+                return
+            assert next_save_idx is not None
+            if next_save_idx < len(save_z) and current_z >= save_z[next_save_idx] - 1e-15:
+                while (
+                    next_save_idx < len(save_z)
+                    and save_z[next_save_idx] <= current_z + 1e-15
+                ):
+                    next_save_idx += 1
+                _snapshot(current_z)
+
+        _snapshot(0.0)
 
         for step in step_iter:
             self._current_z = step * dz
@@ -733,24 +789,15 @@ class RandomBirefringenceEngine(VectorSplitStepEngine):
             )
 
             z = step * dz + dz
-            self._z_positions.append(z)
-            if save_z is None:
-                _snapshot()
-            else:
-                while (
-                    next_save_idx is not None
-                    and next_save_idx < len(save_z)
-                    and z >= save_z[next_save_idx] - 1e-15
-                ):
-                    _snapshot()
-                    next_save_idx += 1
-        if save_z is not None:
-            assert next_save_idx is not None
-            assert next_save_idx is not None and nsaves is not None
-            while next_save_idx < nsaves:  # final snapshot at z = L
-                _snapshot()
-                next_save_idx += 1
-            self._z_positions = save_z[: len(self.evolution_x)].tolist()
+
+            _maybe_save(z)
+
+        if (
+            save_z is not None
+            and next_save_idx is not None
+            and next_save_idx < len(save_z)
+        ):
+            _snapshot(z)
 
         e0, e1 = self._energy_vs_z[0], self._energy_vs_z[-1]
         if e0 > 0.0 and self.fiber.alpha == 0.0:

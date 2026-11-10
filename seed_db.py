@@ -554,10 +554,9 @@ def seed_tabulated_nk(db: RamanDatabase, manifest_path: Path = MANIFEST_PATH) ->
     entries = data.get("datasets", [])
 
     print("\nSeeding tabulated nk_data from manifest...")
-    removed = db.clear_all_tabulated_nk()
-    if removed:
-        print(f"  Cleared {removed} stale tabulated row(s).")
-
+    # Validate the whole manifest before deleting or writing anything: a bad
+    # entry must not wipe the rows that already ship in materials.db.
+    rows: list[tuple] = []
     seeded = 0
     skipped = 0
     for entry in entries:
@@ -567,21 +566,27 @@ def seed_tabulated_nk(db: RamanDatabase, manifest_path: Path = MANIFEST_PATH) ->
             skipped += 1
             continue
         for wl, n, k in zip(entry["wavelengths"], entry["n"], entry["k"]):
-            db.add_nk_data(
-                material=entry["material"],
-                wl_um=wl,
-                n=n,
-                k=k,
-                source=entry["source"],
-                citation=entry.get("citation") or "",
+            rows.append(
+                (
+                    entry["material"],
+                    wl,
+                    n,
+                    k,
+                    entry["source"],
+                    entry.get("citation") or "",
+                )
             )
         seeded += 1
-    total_rows = 0
-    for entry in entries:
-        if validate_nk_dataset(entry) == []:
-            total_rows += len(entry["wavelengths"])
+
+    if entries and not rows:
+        # Every dataset failed validation: keep what already ships rather than
+        # clearing the table on a broken manifest.
+        print("  Nothing validated; existing tabulated rows left untouched.")
+        return
+
+    written = db.replace_tabulated_nk(rows)
     print(
-        f"Done. {seeded} datasets, {total_rows} tabulated rows seeded; {skipped} skipped."
+        f"Done. {seeded} datasets, {written} tabulated rows seeded; {skipped} skipped."
     )
 
 

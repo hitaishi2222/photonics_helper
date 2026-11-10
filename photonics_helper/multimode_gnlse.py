@@ -286,14 +286,14 @@ def _mm_coerce_raman_tensors(
 
 
 def _mm_coerce_channel_alpha(channel_alpha, n: int):
-    """Validate per-channel loss (``None`` stays ``None``)."""
+    """Validate signed per-channel loss/gain (``None`` stays ``None``)."""
     if channel_alpha is None:
         return None
     ca = np.asarray(channel_alpha, dtype=float)
     if ca.shape != (n,):
         raise ValueError(f"channel_alpha must be ({n},), got {ca.shape}.")
-    if not np.all(np.isfinite(ca)) or np.any(ca < 0):
-        raise ValueError("channel_alpha must be finite and non-negative.")
+    if not np.all(np.isfinite(ca)):
+        raise ValueError("channel_alpha must be finite.")
     return np.asarray(channel_alpha, dtype=float)
 
 
@@ -551,9 +551,10 @@ class MultimodeSplitStepEngine:
         given in preference to ``fwm_weights`` (OAM gating still applies
         first). Requires ``include_fwm=True``.
     channel_alpha : array_like, optional
-        Per-channel loss in ``1/m``, length ``N``, overriding the shared
-        ``fiber.alpha``. Raman cascade orders sit at different wavelengths and have
-        genuinely different losses (Mermelstein 2003 Table I: 0.279 / 0.220 / 0.179
+        Per-channel loss (positive) or gain (negative) in ``1/m``, length
+        ``N``, overriding the shared ``fiber.alpha``. Raman cascade orders sit
+        at different wavelengths and have genuinely different losses
+        (Mermelstein 2003 Table I: 0.279 / 0.220 / 0.179
         dB/km at 1375 / 1465 / 1560 nm), so a single scalar cannot represent them.
 
         This is deliberately a *constructor* argument and not part of
@@ -814,6 +815,8 @@ class MultimodeSplitStepEngine:
             self.A.append(f)
 
         self.evolution: list[list[Wave]] = []
+        self._fields0: list[NDArray] = [f.copy() for f in self.A]
+        self._propagated = False
         self._z_positions: list[float] = [0.0]
         self._current_z: float = 0.0
         self._energy_vs_z: list[float] | None = None
@@ -838,8 +841,13 @@ class MultimodeSplitStepEngine:
         return _fiber_gamma(self.fiber, self.omega0)
 
     def _linear_step(self, field: NDArray, dz: float, m: int) -> NDArray:
-        """Linear step (dispersion + group delay + phase offset + shared loss)
-        for mode m.
+        """Linear step (dispersion + group delay + phase offset + signed
+        loss/gain) for mode m.
+
+        The fiber coefficient is applied as a signed amplitude factor
+        ``exp(−α·dz/2)``: positive α is loss, negative α is gain. The
+        channel coefficient is ``channel_alpha[m]`` when supplied, else the
+        shared ``fiber.alpha``.
 
         The dispersion phase `phi(dz) = dz * Σ_k (β_k/k!) ω^k` is linear in
         `dz`, so the ω-polynomial (Taylor terms + group delay) is precomputed
@@ -863,7 +871,7 @@ class MultimodeSplitStepEngine:
         alpha = (
             self.fiber.alpha if self.channel_alpha is None else self.channel_alpha[m]
         )
-        if alpha > 0:
+        if alpha != 0.0:
             f_w = f_w * np.exp(-alpha * dz / 2)
         return np.asarray(self.grid.ifft(f_w), dtype=complex)
 
@@ -1357,8 +1365,9 @@ class MultimodeSplitStepEngine:
             )
             self._U_list[m] = float(U_new)
             if self.include_free_carriers:
+                # N is a local diagnostic profile, not a z-carried state.
                 Bi, N_new = free_carrier_step(
-                    Bi, fb, self.grid, dz, self._N_list[m], self.omega0
+                    Bi, fb, self.grid, dz, None, self.omega0
                 )
                 self._N_list[m] = N_new
             out.append(np.asarray(Bi))
@@ -1709,13 +1718,19 @@ class MultimodeSplitStepEngine:
         else:
             step_iter = range(n_steps)
 
+        if self._propagated:
+            self.A = [f.copy() for f in self._fields0]
+        else:
+            self._fields0 = [f.copy() for f in self.A]
+            self._propagated = True
+
         self.evolution = []
-        self._z_positions = [0.0]
+        self._z_positions = []
         self._energy_vs_z = []
         self._photon_vs_z = [] if self.include_shock else None
         self._power_l_vs_z = [] if self.oam_l is not None else None
 
-        def _snapshot() -> None:
+        def _snapshot(z_snap: float) -> None:
             snaps = []
             for m, wave in enumerate(self.waves):
                 wm = Wave(
@@ -1726,6 +1741,9 @@ class MultimodeSplitStepEngine:
                 wm._pulse_train_field = self.A[m].copy()
                 snaps.append(wm)
             self.evolution.append(snaps)
+            # Record where the field actually is: a step can pass the nominal
+            # save point, and labelling it with the nominal z is wrong.
+            self._z_positions.append(float(z_snap))
             total = sum(float(np.sum(np.abs(Ai) ** 2)) * self.grid.dt for Ai in self.A)
             assert self._energy_vs_z is not None
             self._energy_vs_z.append(total)
@@ -1737,7 +1755,23 @@ class MultimodeSplitStepEngine:
                     np.array([p[label] for label in self.power_l_labels], dtype=float)
                 )
 
-        _snapshot()  # z = 0
+        def _maybe_save(current_z: float) -> None:
+            nonlocal next_save_idx
+            if save_z is None:
+                _snapshot(current_z)
+                return
+            assert next_save_idx is not None
+            # One snapshot per step even when the step spans several nominal
+            # save points: repeated fields at the same z are not a time series.
+            if next_save_idx < len(save_z) and current_z >= save_z[next_save_idx] - 1e-15:
+                while (
+                    next_save_idx < len(save_z)
+                    and save_z[next_save_idx] <= current_z + 1e-15
+                ):
+                    next_save_idx += 1
+                _snapshot(current_z)
+
+        _snapshot(0.0)  # z = 0
 
         for step in step_iter:
             self._current_z = step * dz
@@ -1751,25 +1785,15 @@ class MultimodeSplitStepEngine:
                 self.A = self._apply_rayleigh_backscatter(self.A, dz)
             self.A = [self._linear_step(self.A[m], dz / 2, m) for m in range(self._n)]
             z = step * dz + dz
-            self._z_positions.append(z)
 
-            if save_z is None:
-                _snapshot()
-            else:
-                while (
-                    next_save_idx is not None
-                    and next_save_idx < len(save_z)
-                    and z >= save_z[next_save_idx] - 1e-15
-                ):
-                    _snapshot()
-                    next_save_idx += 1
+            _maybe_save(z)
 
-        if save_z is not None:
-            assert next_save_idx is not None and nsaves is not None
-            while next_save_idx < nsaves:  # final snapshot at z = L
-                _snapshot()
-                next_save_idx += 1
-            self._z_positions = save_z[: len(self.evolution)].tolist()
+        if (
+            save_z is not None
+            and next_save_idx is not None
+            and next_save_idx < len(save_z)
+        ):
+            _snapshot(z)
 
         self._emit_energy_drift_warning()
 

@@ -38,10 +38,9 @@ def main():
     print("Open http://localhost:8050 in your browser.")
     print("Press Ctrl+C to stop.\n")
 
-    # Run the Dash app
-    # In production, disable debug mode:
-    #   app().run(debug=False, port=8050)
-    app().run(debug=True, port=8050)
+    # Run the Dash app. `debug=True` (Werkzeug reloader/debugger) is a
+    # localhost-only opt-in: never enable it on a host bound to 0.0.0.0.
+    app().run(port=8050)
 
 
 if __name__ == "__main__":

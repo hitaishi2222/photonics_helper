@@ -245,6 +245,48 @@ class TestFWM:
         assert result.idler_omega.shape == omega_signal_grid.shape
         assert result.pump_omega == omega0
 
+    def test_scan_efficiency_depends_on_pump_everywhere(self, omega0, beta2, gamma):
+        """One efficiency definition: P_pump acts at every detuning."""
+        from photonics_helper.phase_matching import scan_fwm_detuning
+
+        beta_fn = make_beta2_only(beta2, omega0)
+        grid = np.linspace(omega0 - 2e13, omega0 + 2e13, 51)
+        lo = scan_fwm_detuning(beta_fn, omega0, grid, 1.0, gamma, L=0.01)
+        hi = scan_fwm_detuning(beta_fn, omega0, grid, 1000.0, gamma, L=0.01)
+
+        detuned = np.abs(lo.delta_beta) > 1.0
+        assert detuned.any()
+        assert not np.allclose(
+            lo.efficiency[detuned], hi.efficiency[detuned], rtol=1e-6, atol=1e-12
+        )
+        # At any detuning the ratio is exactly the ratio of the pump factors.
+        ratio = np.sin(gamma * 1000.0 * 0.01) ** 2 / np.sin(gamma * 0.01) ** 2
+        assert hi.efficiency[detuned] == pytest.approx(
+            lo.efficiency[detuned] * ratio, rel=1e-6
+        )
+        for eta in (lo.efficiency, hi.efficiency):
+            assert np.all((eta >= 0.0) & (eta <= 1.0))
+        # Δβ = 0 keeps today's value: sin²(γ·P·L_eff)
+        center = 25
+        assert lo.efficiency[center] == pytest.approx(
+            np.sin(gamma * 1.0 * 0.01) ** 2
+        )
+
+    def test_scan_is_continuous_across_zero_detuning(self, omega0, beta2, gamma):
+        """No power-dependent notch: the peak stays a peak."""
+        from photonics_helper.phase_matching import scan_fwm_detuning
+
+        beta_fn = make_beta2_only(beta2, omega0)
+        grid = np.linspace(omega0 - 2e13, omega0 + 2e13, 51)
+        eta = scan_fwm_detuning(
+            beta_fn, omega0, grid, 1.0, gamma, L=0.01
+        ).efficiency
+        center = 25
+        assert eta[center] >= eta[center - 1]
+        assert eta[center] >= eta[center + 1]
+        assert eta[center - 1] == pytest.approx(eta[center], rel=2e-2)
+        assert eta[center + 1] == pytest.approx(eta[center], rel=2e-2)
+
 
 # ============================================================================
 # 3. MI tests (task 3.4)

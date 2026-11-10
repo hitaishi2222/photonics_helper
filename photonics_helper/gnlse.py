@@ -352,8 +352,9 @@ class Fiber:
             time-resolved free-carrier model. Default 0.
         sigma_fca: Free-carrier absorption cross-section σ_FCA (m²) for the
             time-resolved free-carrier model. Default 0.
-        group_velocity: Envelope group velocity v (m/s) converting the carrier
-            lifetime to a propagation length. Default None → C_MS.
+        group_velocity: Retained for API compatibility. The carrier model now
+            integrates along retarded time, so no propagation length is needed;
+            the value is not read. Default None.
         a_eff: Reference effective mode area for the **nonlinear absorption
             coefficients**. When given, ``beta_tpa`` / ``sigma_tpa`` (and the
             engine's ``three_photon_alpha_3``) are interpreted as *physical*
@@ -471,9 +472,9 @@ class Fiber:
             (``SplitStepEngine(include_free_carriers=True)``). Default 0.
         sigma_fca : float — free-carrier absorption cross-section σ_FCA in m².
             Used by the time-resolved free-carrier model. Default 0.
-        group_velocity : float | None — envelope group velocity v in m/s used
-            to convert the retarded-time carrier lifetime into a propagation
-            length. Default ``None`` → the vacuum-light-speed constant.
+        group_velocity : float | None — retained for API compatibility; the
+            retarded-time carrier model does not use a propagation length.
+            Default ``None``.
         a_eff : Area | None — nonlinear-coefficient area hook (see
             :class:`Fiber`): when given, ``beta_tpa``/``sigma_tpa`` are
             *physical* (m/W, m²/W) and are converted to the engine convention
@@ -781,22 +782,25 @@ def free_carrier_step(
 ) -> tuple[NDArray, NDArray | None]:
     """Time-resolved TPA / free-carrier absorption step (opt-in).
 
-    Models the per-sample carrier population over the retarded-time grid
-    (Soref & Bennett 1987; Cowan, Rieger & Young, *Appl. Phys. Lett.* **82**,
-    1745 (2003); Yin & Agrawal, *Opt. Lett.* **32**, 2951 (2007)):
+    Models the carrier population over the retarded-time grid (Soref &
+    Bennett 1987; Cowan, Rieger & Young, *Appl. Phys. Lett.* **82**, 1745
+    (2003); Yin & Agrawal, *Opt. Lett.* **32**, 2951 (2007)):
 
     ``∂A/∂z|_TPA = −(β_TPA/2) |A|² A`` — the standard TPA attenuation;
     in intensity form ``d|A|²/dz = −β_TPA |A|⁴``, solved *exactly* per
     sample for a constant intensity within the step:
     ``|A|²(z+dz) = |A|² / (1 + β_TPA |A|² dz)``.
 
-    ``∂N/∂z = β_TPA |A|⁴/(2ħω₀) − N/(τ_c v)`` — carrier generation by TPA
-    and recombination (``v`` the envelope group velocity converts the
-    retarded-time lifetime into a propagation length); integrated exactly
-    per sample: ``N = N e^{−dz/L} + S·L·(1 − e^{−dz/L})`` with ``L = τ_c v``.
+    ``∂N/∂t = β_TPA I²/(2ħω₀) − N/τ_c`` at the current position, with
+    ``I = |A|²/A_eff``. The generation rate is convolved *along retarded
+    time* (a causal first-order recursion), so carriers made by the leading
+    edge of a pulse are still present when the trailing edge arrives and
+    survive after the pulse for a long ``τ_c``. ``N`` is in SI units (m⁻³).
+    This is a property of the local position, not a state carried along z:
+    in the co-propagating frame the material at each z sees the pulse once.
 
     ``∂A/∂z|_FCA = −(σ_FCA/2) N A`` — free-carrier absorption, applied with
-    the mid-step carrier density.
+    the local ``N(t)``.
 
     Out of scope (documented, not implemented): free-carrier refraction (the
     ``μ`` index term), carrier diffusion and drift.
@@ -805,25 +809,24 @@ def free_carrier_step(
     ----------
     A : complex array — pulse envelope.
     fiber : FiberProfile — carries ``beta_tpa``, ``sigma_fca``,
-        ``carrier_lifetime`` and ``group_velocity``.
-    grid : TemporalGrid — time grid (defines the sample axis of ``N``).
+        ``carrier_lifetime`` and the optional ``a_eff`` area hook.
+    grid : TemporalGrid — time grid (the sample axis of ``N``).
     dz : float — step size (m).
-    N : NDArray | None — per-sample carrier density state from the previous
-        steps, on the same grid. ``None`` (start of propagation init).
+    N : NDArray | None — background carrier density at the start of the time
+        window (same grid), or ``None`` for an empty plasma. The returned
+        profile is a diagnostic of this position, not a state to carry into
+        the next z step.
     omega0 : float — carrier angular frequency (rad/s).
 
     Returns
     -------
-    (A, N) — updated field and carrier states.
+    (A, N) — updated field and the local carrier profile N(t).
     """
     beta = fiber.beta_tpa_engine
     sigma = fiber.sigma_fca
     omega0_f = _coerce_omega0(omega0)
     if beta <= 0 and sigma <= 0:
         return A, N
-
-    if N is None:
-        N = np.zeros(grid.N, dtype=float)
 
     intensity = np.abs(A) ** 2
 
@@ -834,16 +837,34 @@ def free_carrier_step(
         I_new = intensity / np.maximum(denom, eps)
         A = A * np.sqrt(I_new / np.maximum(intensity, eps))
 
-    # Carrier population: exact integration of dN/dz = S − N/L over the step
-    # with S frozen at the step-opening intensity (operator-split convention).
-    tau_c = fiber.carrier_lifetime.as_s if fiber.carrier_lifetime is not None else 1e-9
-    v = fiber.group_velocity if fiber.group_velocity is not None else C_MS
-    L = max(tau_c * v, 1e-300)  # m — carrier recombination length
-    decay = np.exp(-dz / L)
-    source = beta * intensity**2 / (2.0 * HBAR_J_S * omega0_f) if beta > 0 else 0.0
-    N_mid = N * decay + source * L * (1.0 - decay)
+    # Carrier generation: S = β_TPA·I²/(2ħω₀) with I = |A|²/A_eff. The engine
+    # carries β_TPA/A_eff (beta_tpa_engine), so one 1/A_eff conversion is
+    # enough; with no area hook, A_eff = 1 m² keeps the engine convention.
+    a_eff = fiber.a_eff.as_m2 if fiber.a_eff is not None else 1.0
+    if beta > 0:
+        source = beta * intensity**2 / (2.0 * HBAR_J_S * omega0_f * a_eff)
+    else:
+        source = np.zeros(grid.N, dtype=float)
 
-    # FCA loss with the mid-step carrier density.
+    # Exact first-order recursion of dN/dt = S − N/τ along retarded time:
+    # N[i] = N[i−1]·e^{−dt/τ} + S[i]·τ·(1 − e^{−dt/τ}). lfilter runs it in C.
+    from scipy.signal import lfilter
+
+    tau_c = fiber.carrier_lifetime.as_s if fiber.carrier_lifetime is not None else 1e-9
+    dt = float(grid.dt)
+    decay = float(np.exp(-dt / tau_c))
+    n_bg = float(N[0]) if N is not None else 0.0
+    N_mid = np.asarray(
+        lfilter(
+            [tau_c * (1.0 - decay)],
+            [1.0, -decay],
+            source,
+            zi=[n_bg],
+        )[0],
+        dtype=float,
+    )
+
+    # FCA loss with the local carrier density.
     if sigma > 0:
         A = A * np.exp(-0.5 * sigma * N_mid * dz)
 
@@ -1639,6 +1660,11 @@ class SplitStepEngine:
                 self._full_beta2_si,
             ) = _full_beta_phase(full_beta, self.grid, self.omega0)
         self.A = np.array(pulse.envelope_field, dtype=complex)
+        #: Field a run starts from. Captured at the first ``propagate`` so a
+        #: user override of ``engine.A`` before the first call is honoured,
+        #: and reused so a second call does not continue the first output.
+        self._A0: NDArray = self.A.copy()
+        self._propagated = False
         self.evolution: list[Wave] = []
         self._z_positions: list[float] = [0.0]
         self._current_z: float = 0.0
@@ -1796,8 +1822,8 @@ class SplitStepEngine:
             # Static full-β(ω): the retarded-frame phase is precomputed in
             # rad/m on grid.w; only the dz scaling and loss remain.
             phi = self._full_phi * dz
-            alpha = self.fiber.alpha
-            if alpha > 0:
+            alpha = self._get_alpha(self._current_z)
+            if alpha != 0.0:
                 A_w = A_w * np.exp(-alpha * dz / 2)
         elif self._is_z_dependent:
             # z-dependent path: compute phase from β(ω₀+Ω, z) - β(ω₀, z)
@@ -1888,9 +1914,9 @@ class SplitStepEngine:
             # Phase: [β(ω₀+Ω, z) - β(ω₀, z) - β₁(ω₀,z)·Ω] * Δz
             phi = (beta_at_z - beta_carrier[0] - beta1_z * self.grid.w) * dz
 
-            # z-dependent loss
+            # z-dependent loss/gain
             alpha = self._get_alpha(self._current_z)
-            if alpha > 0:
+            if alpha != 0.0:
                 loss_factor = np.exp(-alpha * dz / 2)
                 A_w = A_w * loss_factor
         else:
@@ -1900,9 +1926,9 @@ class SplitStepEngine:
                 phi += beta_k * omega_ps**k / factorial(k)
             phi *= dz
 
-            # Apply loss: exp(-α·Δz/2)
-            alpha = self.fiber.alpha
-            if alpha > 0:
+            # Apply loss/gain: exp(-α·Δz/2), α < 0 is gain
+            alpha = self._get_alpha(self._current_z)
+            if alpha != 0.0:
                 loss_factor = np.exp(-alpha * dz / 2)
                 A_w = A_w * loss_factor
 
@@ -2069,8 +2095,9 @@ class SplitStepEngine:
                 A, self.fiber, self.grid, dz, self.include_tpa, self._U, self.omega0
             )
             if self.include_free_carriers:
+                # N is a local diagnostic profile, not a z-carried state.
                 A, self._N = free_carrier_step(
-                    A, self.fiber, self.grid, dz, self._N, self.omega0
+                    A, self.fiber, self.grid, dz, None, self.omega0
                 )
             return A, U_new
 
@@ -2213,8 +2240,9 @@ class SplitStepEngine:
             A, self.fiber, self.grid, dz, self.include_tpa, self._U, self.omega0
         )
         if self.include_free_carriers:
+            # N is a local diagnostic profile, not a z-carried state.
             A, self._N = free_carrier_step(
-                A, self.fiber, self.grid, dz, self._N, self.omega0
+                A, self.fiber, self.grid, dz, None, self.omega0
             )
         return A, U_new
 
@@ -2923,10 +2951,19 @@ class SplitStepEngine:
         length = self.fiber.length.as_m
         dz_base = length / num_steps
         z = 0.0
+        # A run starts from the input field, never from the previous call's
+        # output and carrier states (audit finding 5).
+        if self._propagated:
+            self.A = self._A0.copy()
+        else:
+            self._A0 = self.A.copy()
+            self._propagated = True
+        self._U = 0.0
+        self._N = None
         self.evolution = []
         self._energy_vs_z = None
         self._photon_vs_z = None
-        self._z_positions = [0.0]
+        self._z_positions = []
         self.w3pa = 0.0
         self.w3pa_energy = 0.0
         self.w3pa_spectral = 0.0
@@ -2957,7 +2994,7 @@ class SplitStepEngine:
             save_z = None
             next_save_idx = None
 
-        def _append_snapshot() -> None:
+        def _append_snapshot(z_snap: float) -> None:
             wave = Wave(
                 grid=self.grid,
                 envelope=self.pulse.envelope,
@@ -2965,6 +3002,9 @@ class SplitStepEngine:
             )
             wave._pulse_train_field = self.A.copy()
             self.evolution.append(wave)
+            # Record where the field actually is: a step can pass the nominal
+            # save point, and labelling it with the nominal z is wrong.
+            self._z_positions.append(float(z_snap))
             if self._energy_vs_z is None:
                 self._energy_vs_z = []
             self._energy_vs_z.append(float(np.sum(np.abs(self.A) ** 2) * self.grid.dt))
@@ -2981,19 +3021,22 @@ class SplitStepEngine:
         def _maybe_save(current_z: float) -> None:
             nonlocal next_save_idx
             if save_z is None:
-                _append_snapshot()
+                _append_snapshot(current_z)
                 return
             assert next_save_idx is not None
-            while (
-                next_save_idx < len(save_z)
-                and current_z >= save_z[next_save_idx] - 1e-15
-            ):
-                _append_snapshot()
-                next_save_idx += 1
+            # One snapshot per step even when the step spans several nominal
+            # save points: repeated fields at the same z are not a time series.
+            if next_save_idx < len(save_z) and current_z >= save_z[next_save_idx] - 1e-15:
+                while (
+                    next_save_idx < len(save_z)
+                    and save_z[next_save_idx] <= current_z + 1e-15
+                ):
+                    next_save_idx += 1
+                _append_snapshot(current_z)
 
         # Store initial pulse (via _append_snapshot so a field supplied through
         # Wave.with_field / an arbitrary array is preserved in evolution[0]).
-        _append_snapshot()
+        _append_snapshot(0.0)
 
         # Termination tolerance: relative to fiber length with absolute floor.
         # Prevents infinite loop when shrink × remaining < ½ ulp(z).
@@ -3078,9 +3121,6 @@ class SplitStepEngine:
             z = z_new
             self._current_z = z
 
-            if save_z is None:
-                self._z_positions.append(z)
-
             _maybe_save(z)
 
             if pbar is not None:
@@ -3096,16 +3136,13 @@ class SplitStepEngine:
             and next_save_idx is not None
             and next_save_idx < len(save_z)
         ):
-            _append_snapshot()
+            _append_snapshot(z)
 
         if pbar is not None:
             # Cosmetic: fill the bar to 100% if we stopped early via z_tol.
             if z < length:
                 pbar.update(length - z)
             pbar.close()
-
-        if save_z is not None:
-            self._z_positions = save_z[: len(self.evolution)].tolist()
 
         # Energy-conservation monitor (REPORT P2 item 5): with unitary loss
         # mechanisms disabled (α = 0, TPA off), Σ|A|²·dt must be conserved by
@@ -3453,7 +3490,7 @@ class ConvergenceDiagnostics:
     @property
     def converged(self) -> bool:
         """True when conservation and every convergence metric are within tol."""
-        drift_ok = self.invariant == "n/a" or self.drift_pct <= self.drift_tol_pct
+        drift_ok = self.invariant.startswith("n/a") or self.drift_pct <= self.drift_tol_pct
         return bool(
             drift_ok
             and self.rms_db <= self.rms_tol_db

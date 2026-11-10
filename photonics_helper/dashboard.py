@@ -18,7 +18,7 @@ Requires the ``webapp`` extra (``pip install 'photonics-helper[webapp]'``) and
 
     from photonics_helper.dashboard import app
 
-    app().run(debug=True, port=8050)
+    app().run(port=8050)  # debug=True is localhost-only; opt in explicitly
 """
 
 from __future__ import annotations
@@ -36,6 +36,11 @@ from .raman.dashboard import (
 )
 
 __all__ = ["app", "build_layout", "register_gnlse_callbacks"]
+
+#: Upper bounds for the GNLSE viewer, so a mistyped field cannot start an
+#: unbounded run. Reported in the UI when exceeded.
+MAX_STEPS = 10_000
+MAX_LENGTH_M = 10.0
 
 
 def _import_dash():
@@ -250,16 +255,30 @@ def register_gnlse_callbacks(dash_app, *, dcc, html, Input, Output, State):
     ):
         if not n_clicks:
             return html.P("Press “Run GNLSE”.")
+        # An explicit 0 is a value ("no nonlinearity", "no power"), not a
+        # missing field: substitute a default only for None.
+        length_m = length_m if length_m is not None else 0.1
+        steps = int(steps) if steps is not None else 200
+        if not 1 <= steps <= MAX_STEPS:
+            return html.Div(
+                f"Steps must be between 1 and {MAX_STEPS} (got {steps}).",
+                style={"color": "#b00020", "padding": "8px"},
+            )
+        if length_m < 0 or length_m > MAX_LENGTH_M:
+            return html.Div(
+                f"Length must be between 0 and {MAX_LENGTH_M} m (got {length_m}).",
+                style={"color": "#b00020", "padding": "8px"},
+            )
         try:
             fig = _run_gnlse(
-                wl_nm=wl_nm or 1550,
-                t0_fs=t0_fs or 50,
-                p0_w=p0_w or 1000,
-                length_m=length_m or 0.1,
+                wl_nm=wl_nm if wl_nm is not None else 1550,
+                t0_fs=t0_fs if t0_fs is not None else 50,
+                p0_w=p0_w if p0_w is not None else 1000,
+                length_m=length_m,
                 beta2_ps2_km=beta2 if beta2 is not None else -20.0,
-                gamma=gamma or 0.01,
+                gamma=gamma if gamma is not None else 0.01,
                 raman_on=bool(raman),
-                steps=int(steps or 200),
+                steps=steps,
             )
         except Exception as exc:  # surface solver/plotly errors in the UI
             return html.Div(

@@ -82,6 +82,15 @@ pytest tests/test_material_data_drift.py tests/test_material_data_golden.py
 If a corrected value changes a golden test, update the test **and** explain the
 correction in the changelog.
 
+## Repository size
+
+`.git` contains many historical copies of the ~11 MB `materials.db` and a
+59 MB HTML figure, so a fresh clone is large. Do **not** add binary data to
+history: keep new database revisions as release assets (or regenerate them in
+CI) and add large generated figures to `.gitignore`. Shrinking the existing
+history needs a destructive `git filter-repo` force-push, which is deliberately
+not part of routine changes.
+
 ## Adding a reproduction
 
 Reproductions live under `reproductions/<name>/` with a `parameters.json`, a

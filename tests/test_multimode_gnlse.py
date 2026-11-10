@@ -319,6 +319,80 @@ class TestOAMvSelectionRule:
         assert e[-1] == pytest.approx(e[0], rel=1e-3)
 
 
+class TestSignedAlphaAndSnapshots:
+    def _engine(self, alpha: float = 0.0, channel_alpha=None, length: float = 0.07):
+        grid = _grid()
+        fiber = Fiber(
+            n2=2.6e-20,
+            alpha=alpha,
+            A_eff=Area(80e-12, "m^2"),
+            length=Length(length, "m"),
+        )
+        pulse = _sech_wave(grid, 1.0)
+        return MultimodeSplitStepEngine(
+            [pulse, _zero_wave(grid, pulse)],
+            fiber,
+            np.array([-21.8]),
+            channel_alpha=channel_alpha,
+            step_size=Length(length / 7, "m"),
+        )
+
+    @pytest.mark.parametrize("alpha", [-2.0, 2.0])
+    def test_alpha_is_a_signed_amplitude_factor(self, alpha):
+        engine = self._engine(alpha=alpha)
+        engine.propagate(7)
+        e = engine.energy_vs_z
+        assert e[-1] / e[0] == pytest.approx(np.exp(-alpha * 0.07), abs=1e-3)
+
+    def test_channel_alpha_amplifies_one_mode(self):
+        grid = _grid()
+        fiber = Fiber(
+            n2=2.6e-20,
+            alpha=0.0,
+            A_eff=Area(80e-12, "m^2"),
+            length=Length(0.07, "m"),
+        )
+        engine = MultimodeSplitStepEngine(
+            [_sech_wave(grid, 1.0), _sech_wave(grid, 1.0)],
+            fiber,
+            np.array([-21.8]),
+            channel_alpha=[-2.0, 0.0],
+            step_size=Length(0.01, "m"),
+        )
+        engine.propagate(7)
+        first, last = engine.evolution[0], engine.evolution[-1]
+        ratio = [
+            float(np.sum(np.abs(last[m].envelope_field) ** 2))
+            / float(np.sum(np.abs(first[m].envelope_field) ** 2))
+            for m in range(2)
+        ]
+        assert ratio[0] == pytest.approx(np.exp(0.14), abs=1e-3)
+        assert ratio[1] == pytest.approx(1.0, abs=1e-10)
+
+    def test_snapshots_record_the_propagated_distance(self):
+        alpha = 2.0
+        engine = self._engine(alpha=alpha)
+        engine.propagate(7, nsaves=5)
+        z = engine.z_array
+        assert len(z) == len(engine.evolution) == len(engine.energy_vs_z)
+        assert np.all(np.diff(z) > 0.0)
+        assert z[-1] == pytest.approx(0.07)
+        np.testing.assert_allclose(
+            engine.energy_vs_z / engine.energy_vs_z[0], np.exp(-alpha * z), rtol=1e-6
+        )
+
+    def test_second_propagate_restarts_from_the_input(self):
+        engine = self._engine(length=1.0)
+        engine.propagate(20)
+        engine.propagate(20)
+        np.testing.assert_allclose(
+            engine.evolution[0][0].envelope_field,
+            engine.waves[0].envelope_field,
+            atol=0.0,
+        )
+        assert engine.z_array[0] == 0.0
+
+
 class TestArgumentValidation:
     def test_shared_grid_required(self):
         grid_a, grid_b = _grid(), _grid()

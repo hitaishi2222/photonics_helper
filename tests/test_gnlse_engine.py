@@ -128,3 +128,37 @@ def test_confinement_factor_reduces_gamma():
     gamma_partial = _gamma(n2, omega0, A_eff, confinement_factor=0.8)
 
     assert np.isclose(gamma_partial / gamma_full, 0.8, rtol=1e-10)
+
+
+def _alpha_deck(*, alpha: float = 0.0, length_m: float = 10.0):
+    """A loss/gain-only deck where energy is analytic: E(z) = E0·exp(-αz)."""
+    grid = TemporalGrid(N=64, Tmax=Time(10e-12, "s"))
+    env = Envelope(shape="gaussian", peak_amplitude=1.0, pulse_width=Time(1, "ps"))
+    pulse = Wave(grid=grid, envelope=env, central_wavelength=Wavelength(1550, "nm"))
+    fiber = Fiber(gamma=0.0, alpha=alpha, length=Length(length_m, "m"))
+    return SplitStepEngine(
+        pulse, fiber, betas=np.array([0.0]), include_raman=False,
+        step_size=Length(length_m / 7, "m"),
+    )
+
+
+def test_snapshots_record_the_z_they_were_taken_at():
+    """7 steps, nsaves=5: labels are the real step z (audit finding 4)."""
+    engine = _alpha_deck(alpha=0.5)
+    engine.propagate(7, nsaves=5)
+    z = engine.z_array
+    assert len(z) == len(engine.evolution)
+    assert np.all(np.diff(z) > 0.0)
+    energy = np.array(engine.energy_vs_z)
+    assert np.allclose(energy / energy[0], np.exp(-0.5 * z), rtol=1e-9)
+
+
+def test_propagate_twice_starts_from_the_input_pulse():
+    """A second propagate() must not continue from the first run (finding 5)."""
+    engine = _alpha_deck(alpha=0.5)
+    engine.propagate(7, nsaves=5)
+    engine.propagate(7, nsaves=5)
+    a0 = np.asarray(engine.evolution[0].envelope_field)
+    assert np.array_equal(a0, np.asarray(engine.pulse.envelope_field))
+    assert engine.z_array[0] == 0.0
+    assert engine.w3pa == 0.0

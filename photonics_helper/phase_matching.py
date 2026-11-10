@@ -581,6 +581,15 @@ def scan_fwm_detuning(
 ) -> PhaseMatchResult:
     """Scan FWM Δβ and efficiency over a grid of signal frequencies.
 
+    One efficiency definition across the whole scan (design §FWM scan)::
+
+        L_eff = (1 − e^{−αL})/α  (α > 0), else L
+        η(Δβ) = sin²(γ·P·L_eff) · fwm_efficiency(Δβ, L, α)
+
+    At Δβ = 0 this is the pump factor ``sin²(γP·L_eff)`` and
+    ``fwm_efficiency`` is 1, so the phase-matched peak is unchanged; every
+    detuned point now sees ``P_pump`` and ``gamma`` too.
+
     Parameters
     ----------
     beta_fn : callable — β(ω) function.
@@ -598,6 +607,9 @@ def scan_fwm_detuning(
     if L is None:
         L = 1.0 / max(gamma, 1e-30)
 
+    L_eff = (1.0 - np.exp(-alpha * L)) / alpha if alpha > 0 else L
+    pump_factor = np.sin(gamma * P_pump * L_eff) ** 2
+
     n = len(omega_signal_grid)
     delta_beta = np.zeros(n)
     efficiency = np.zeros(n)
@@ -605,18 +617,7 @@ def scan_fwm_detuning(
     for i, omega_s in enumerate(omega_signal_grid):
         db = fwm_delta_beta_degenerate(beta_fn, omega_p, omega_s)
         delta_beta[i] = db
-        gp = gamma * P_pump
-        if np.abs(db) < 1e-15:
-            # Perfect phase matching (Δβ = 0): degenerate FWM efficiency
-            # η = sin²(γP·L_eff) where L_eff = (1 - e^{-αL})/α for α>0, else L
-            if alpha > 0:
-                L_eff = (1 - np.exp(-alpha * L)) / alpha
-            else:
-                L_eff = L
-            arg = gp * L_eff
-            efficiency[i] = np.sin(arg) ** 2
-        else:
-            efficiency[i] = fwm_efficiency(db, L, alpha)
+        efficiency[i] = pump_factor * fwm_efficiency(db, L, alpha)
 
     omega_idler = 2 * omega_p - omega_signal_grid
 

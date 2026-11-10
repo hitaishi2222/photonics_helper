@@ -103,6 +103,17 @@ Blow–Wood `RamanResponse` or a multi-mode `PhononResponse`, so crystalline
 materials (LiNbO₃, YAG, KTP, …) can be propagated with their real multi-mode
 response. Single-mode behaviour is unchanged.
 
+### Linear loss and gain
+
+Every linear step applies the field-amplitude factor
+`exp(−α(z)·Δz/2)` with `α(z)` resolved once per step: the `alpha_fn(z)`
+hook when supplied, else `fiber.alpha`. This holds on every dispersion
+path (`betas`, static `full_beta`, z-dependent `dispersion_profile`) and
+every scheme (`strang`, `rk4ip`, `etdrk4`), so the schemes agree on the
+same deck. A negative α is gain and is applied exactly like loss; a zero
+α applies no factor. The separate per-bin `alpha_w(Ω)` term composes
+additively and still refuses a nonzero scalar α (no double counting).
+
 ## 3. Time-resolved TPA / free carriers (opt-in)
 
 The legacy TPA model spatially averages the carrier density (one scalar `U`
@@ -113,13 +124,22 @@ per step). SplitStepEngine additionally offers
 (2003); Yin & Agrawal, *Opt. Lett.* **32**, 2951 (2007)):
 
 ```text
-|A|²(z+dz) = |A|² / (1 + β_TPA |A|² dz)      (exact TPA attenuation)
-∂N/∂z = β_TPA |A|⁴ / (2 ħω₀) − N / (τ_c v)   (generation − recombination)
-∂A/∂z|_FCA = −(σ_FCA/2) N A                  (free-carrier absorption)
+|A|²(z+dz) = |A|² / (1 + β_TPA |A|² dz)        (exact TPA attenuation)
+∂N/∂t     = β_TPA I²/(2 ħω₀) − N/τ_c           (generation − recombination)
+∂A/∂z|_FCA = −(σ_FCA/2) N A                    (free-carrier absorption)
 ```
 
-each integrated exactly per sample within a step. The legacy
-`include_tpa` path is untouched; both models are documented side by side.
+with `I = |A|²/A_eff`. The carrier equation is integrated **along retarded
+time** at the current position, not along `z`: `N` is the causal,
+unit-normalised convolution of the local generation rate
+(`N[i] = N[i−1]e^{−dt/τ_c} + S[i]τ_c(1 − e^{−dt/τ_c})`, one `lfilter` pass),
+so carriers made by the leading edge of a pulse are still there when the
+trailing edge arrives and a long `τ_c` leaves a plateau after the pulse. In the
+co-propagating frame the material at each `z` sees the pulse once, so `N` is a
+property of that position (a diagnostic on the engine), not a state carried
+between steps. Carrier density is reported in SI units (m⁻³); with `a_eff` set
+the generation term carries the `1/A_eff` conversion. The legacy `include_tpa`
+path is untouched; both models are documented side by side.
 
 `beta_tpa_pointwise=True` is the **carrier-free half** of that model: the same
 exact TPA attenuation `|A|² → |A|²/(1 + β_TPA|A|²dz)` with no `N(t)` state, so

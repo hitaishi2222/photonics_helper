@@ -80,10 +80,7 @@ class Dispersion:
     @cached_property
     def _disp_fn(self) -> BSpline:
         """Return a cubic spline interpolant for dispersion vs wavelength."""
-        try:
-            return make_splrep(self.wavelengths.as_m, self.as_s_m_m)
-        except Exception as e:
-            raise Exception(f"{e}")
+        return make_splrep(self.wavelengths.as_m, self.as_s_m_m)
 
     def _check_wl(self, wavelength: Wavelength):
         """Raise ValueError if wavelength is outside the interpolation range."""

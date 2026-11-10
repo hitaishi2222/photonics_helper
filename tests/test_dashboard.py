@@ -102,3 +102,66 @@ def _collect_ids(component) -> set:
         if hasattr(child, "children") or hasattr(child, "id"):
             found |= _collect_ids(child)
     return found
+
+
+class _CaptureApp:
+    """Minimal Dash stand-in that exposes the registered callback."""
+
+    def __init__(self):
+        self.fn = None
+
+    def callback(self, *args, **kwargs):
+        def register(fn):
+            self.fn = fn
+            return fn
+
+        return register
+
+
+def test_gnlse_viewer_honours_explicit_zero(monkeypatch):
+    """gamma=0, p0=0, length=0 must reach the solver as 0 (audit finding 8)."""
+    from dash import dcc, html
+
+    from photonics_helper import dashboard
+
+    captured = {}
+
+    def fake_run_gnlse(**kwargs):
+        captured.update(kwargs)
+        return object()
+
+    monkeypatch.setattr(dashboard, "_run_gnlse", fake_run_gnlse)
+    stub = _CaptureApp()
+    dashboard.register_gnlse_callbacks(
+        stub,
+        dcc=dcc,
+        html=html,
+        Input=lambda *a, **k: None,
+        Output=lambda *a, **k: None,
+        State=lambda *a, **k: None,
+    )
+    stub.fn(1, 1550, 50, 0, 0, -20.0, 0, False, 200)
+    assert captured["p0_w"] == 0
+    assert captured["gamma"] == 0
+    assert captured["length_m"] == 0
+
+
+def test_gnlse_viewer_bounds_an_oversized_run(monkeypatch):
+    from dash import dcc, html
+
+    from photonics_helper import dashboard
+
+    monkeypatch.setattr(
+        dashboard, "_run_gnlse", lambda **kw: pytest.fail("must not run")
+    )
+    stub = _CaptureApp()
+    dashboard.register_gnlse_callbacks(
+        stub,
+        dcc=dcc,
+        html=html,
+        Input=lambda *a, **k: None,
+        Output=lambda *a, **k: None,
+        State=lambda *a, **k: None,
+    )
+    out = stub.fn(1, 1550, 50, 1000, 0.1, -20.0, 0.01, False, 10**9)
+    assert "between 1 and" in out.children
